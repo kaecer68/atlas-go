@@ -84,6 +84,21 @@ func (c *CycleCalibration) RecordOutcome(sessionID string, date time.Time, layer
 // Weights are normalized to sum to 1.0 after adjustment. The original baseWeights
 // map is NOT mutated; a new calibrated map is returned.
 func (c *CycleCalibration) CalibrateWeights(baseWeights map[string]float64) map[string]float64 {
+	calibrated, _ := c.calibratedWeights(baseWeights)
+	return calibrated
+}
+
+// calibratedWeights returns the calibrated weights plus whether the tracker
+// actually moved a funded layer away from its base share.
+//
+// The two answers are different facts, and callers that report an outward
+// "calibrated" flag need the second one: normalizeWeights rounds every layer to
+// 4 dp, so "the weights were rebuilt" is true even when the tracker had no
+// opinion about any funded layer (issue #1944 Batch A1 — a tracker at 0.50
+// accuracy, below every threshold, still shifted the weights by ~4e-5 of pure
+// rounding residue). "Nudged" is measured after the clamp, so a layer pinned
+// back onto its base share by WeightClampMin/Max also leaves the run a no-op.
+func (c *CycleCalibration) calibratedWeights(baseWeights map[string]float64) (map[string]float64, bool) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
@@ -91,7 +106,7 @@ func (c *CycleCalibration) CalibrateWeights(baseWeights map[string]float64) map[
 	maps.Copy(calibrated, baseWeights)
 
 	if len(c.outcomes) < c.config.MinSamples {
-		return calibrated
+		return calibrated, false
 	}
 
 	// A degenerate clamp window (WeightClampMax <= WeightClampMin, e.g. the
@@ -102,7 +117,7 @@ func (c *CycleCalibration) CalibrateWeights(baseWeights map[string]float64) map[
 	// an all-zero block (internal/config/parameters_merge.go), so this guard only
 	// covers partially-zero or hand-edited configs.
 	if c.config.WeightClampMax <= c.config.WeightClampMin {
-		return calibrated
+		return calibrated, false
 	}
 
 	for layer, m := range c.metrics {
@@ -126,7 +141,7 @@ func (c *CycleCalibration) CalibrateWeights(baseWeights map[string]float64) map[
 		calibrated[layer] = current
 	}
 
-	return normalizeWeights(calibrated)
+	return normalizeWeights(calibrated), !maps.Equal(calibrated, baseWeights)
 }
 
 // GetMetrics returns a snapshot of per-layer accuracy metrics.

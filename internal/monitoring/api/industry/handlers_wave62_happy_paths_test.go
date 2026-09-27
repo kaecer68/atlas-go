@@ -27,10 +27,17 @@ func TestHandleIndustryCalibration_Calibrated(t *testing.T) {
 		WindowSize:     100,
 	}
 	cal := industry.NewCycleCalibration(cfg)
+	// The layer names must be FUNDED card layers (silicon/business_cycle/…):
+	// "calibrated" means the evidence redistributed one of them, so a tracker
+	// whose metrics only name unfunded layers has nothing to redistribute and
+	// must report calibrated=false (issue #1944 Batch A1 — the fixture used
+	// "layer-a"/"layer-b", which are not card layers, and the probe read that as
+	// a redistribution only because rebuilding the weights was enough to shift
+	// them by rounding residue).
 	cal.RecordOutcome("session-1", time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC),
-		map[string]float64{"layer-a": 0.6, "layer-b": -0.2}, 0.05)
+		map[string]float64{"silicon": 0.6, "business_cycle": -0.2}, 0.05)
 	cal.RecordOutcome("session-2", time.Date(2026, 6, 2, 0, 0, 0, 0, time.UTC),
-		map[string]float64{"layer-a": 0.4}, -0.03)
+		map[string]float64{"silicon": 0.4}, -0.03)
 	h.Svc.SetCycleCalibration(cal)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/dashboard/industry-calibration", nil)
@@ -60,13 +67,13 @@ func TestHandleIndustryCalibration_Calibrated(t *testing.T) {
 	}
 	foundLayer := false
 	for _, l := range layers {
-		if l["layer"] == "layer-a" {
+		if l["layer"] == "silicon" {
 			foundLayer = true
 			break
 		}
 	}
 	if !foundLayer {
-		t.Errorf("expected layer-a in layers, got %+v", layers)
+		t.Errorf("expected silicon in layers, got %+v", layers)
 	}
 }
 

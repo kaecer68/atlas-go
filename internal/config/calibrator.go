@@ -198,24 +198,46 @@ func CalibrateParameters(ctx context.Context, calibrator ParameterCalibrator, ev
 		now := time.Now()
 		markCalibrated(params, paramNames, "bayesian_optimization", &now)
 		persistCalibratorChanges(changes, now)
-		report.Verdict = "calibrated"
-		report.Summary = fmt.Sprintf("applied %d/%d parameter changes (baseline=%.4f → optimized=%.4f, %+.1f%%, %d set_parameter failures)",
-			appliedCount, len(paramNames), baseline, optScore, improvement, failedCount)
-	} else if failedCount > 0 {
-		// Nothing was written: do not report a benign "stable"/"unchanged" verdict.
-		report.Verdict = "failed"
-		report.Summary = fmt.Sprintf("0/%d parameter changes applied (%d set_parameter failures)",
-			len(paramNames), failedCount)
-	} else if improvement > 0 {
-		report.Verdict = "stable"
-		report.Summary = fmt.Sprintf("no significant changes (improvement=%+.1f%% below threshold)", improvement)
-	} else {
-		report.Verdict = "unchanged"
-		report.Summary = fmt.Sprintf("current values optimal (baseline=%.4f)", baseline)
 	}
+
+	report.Verdict, report.Summary = calibratorVerdict(
+		appliedCount, failedCount, len(paramNames), baseline, optScore, improvement)
 
 	report.Changes = changes
 	return report, nil
+}
+
+// calibratorVerdict maps what actually happened in one calibration run to the
+// report's verdict and summary.
+//
+// It is a pure function so the decision table is testable on its own: the
+// failure arm below (writes attempted, none applied) cannot be reached through
+// CalibrateParameters. Every name the loop accepts is a name the inference
+// engine can also write — GetParameter resolves either a parameterTable entry or
+// a map sub-key that already exists, and both are settable — so SetParameter
+// never fails there, while an unresolvable name aborts earlier inside the
+// optimizer ("calibrate: optimize: unknown parameter: X") before any report is
+// built (issue #1944 Batch A2, measured 2026-09-27: 245/245 resolvable names
+// were written successfully, 0 refused).
+//
+// The arm still has to be right, and it is the one that matters: reporting the
+// benign "stable"/"unchanged" verdict after failed writes was the defect fixed
+// in #1944 Batch 2 (a run with nothing written claimed the current values were
+// optimal). Keeping it as a branch of a pure function keeps it under test.
+func calibratorVerdict(appliedCount, failedCount, paramCount int, baseline, optScore, improvement float64) (string, string) {
+	switch {
+	case appliedCount > 0:
+		return "calibrated", fmt.Sprintf("applied %d/%d parameter changes (baseline=%.4f → optimized=%.4f, %+.1f%%, %d set_parameter failures)",
+			appliedCount, paramCount, baseline, optScore, improvement, failedCount)
+	case failedCount > 0:
+		// Nothing was written: do not report a benign "stable"/"unchanged" verdict.
+		return "failed", fmt.Sprintf("0/%d parameter changes applied (%d set_parameter failures)",
+			paramCount, failedCount)
+	case improvement > 0:
+		return "stable", fmt.Sprintf("no significant changes (improvement=%+.1f%% below threshold)", improvement)
+	default:
+		return "unchanged", fmt.Sprintf("current values optimal (baseline=%.4f)", baseline)
+	}
 }
 
 // computeImprovementPct returns the signed improvement percentage from baseline
