@@ -24,7 +24,7 @@
 #   H* replay 指標整族缺席 + 服務在跑 —— 第 4 條 firing（`absent()` arm）
 #   I  replay 指標整族缺席 + 服務沒在跑 —— 五條全部沉默
 #      （不與 AtlasGoTargetDown 對同一個根因重複 paging）
-#   J* replay sync 未落地（gauge 4 = degraded）—— 第 5 條 firing
+#   J* replay sync 未落地（gauge 1 = degraded,#2064 前的映射是 4）—— 第 5 條 firing
 #      （gauge 值域:0=ok 1=warn/stale 2=error 3=inactive **4=degraded**;既有規則只比對 ==2,
 #       所以這個值在 2026-09-27 之前完全不觸發任何規則）
 #   K  sync 非 ok 只持續 30 分鐘 —— 五條全部沉默（第 5 條 for: 1h 的負向對照）
@@ -367,7 +367,7 @@ tests:
         alertname: AtlasReplaySyncNotLanding
         exp_alerts: []
 
-  - name: "J replay sync 未落地（gauge 4 = degraded）—— 只有第 5 條 firing"
+  - name: "J replay sync 未落地（gauge 1 = degraded）—— 只有第 5 條 firing"
     interval: 1m
     input_series:
       - series: 'atlas_replay_csv_latest_date_timestamp_seconds'
@@ -393,7 +393,7 @@ tests:
             severity: "warning"
             wave: "9.2"
           exp_annotations:
-            description: "`twse_replay_sync` 的通道狀態非 ok（gauge 值 4:\n1=warn/stale、2=error、3=inactive、**4=degraded/未映射**）。\n「degraded」在寫入端有明確語意:**跑了但沒有資料落地**\n（回應日期與請求日不符 ⇒ 拒絕寫入;或 MI_INDEX 回傳的檔都對不上 target 集合）,\n且刻意**不推進 LastSuccessAt**（避免「沒資料卻顯示成功」的謊言）。\n立即檢查:\n  1. 最後一次執行的判定:\n     docker logs atlas-cron-replay-sync --since 48h 2>&1 | tail -30\n     關鍵字:`refusing to write a mis-dated row`、`none matched the`、\n     `not a Taiwan trading day`、`appended`\n  2. 記錄內容（status / last_error / last_success_at）:\n     python3 -c \"import json;d=json.load(open('/Users/kaecer/workspace/atlas/data/state/channel_health.json'));print(json.dumps(d['channels']['twse_replay_sync'],ensure_ascii=False,indent=1))\"\n  3. 補救:下一次每日 run 會自動 gap backfill（5 個日曆日的視窗）;\n     若是上游 MI_INDEX 形狀變了,需要人工確認 symbol 對應。\n"
+            description: "`twse_replay_sync` 的通道狀態非 ok（gauge 值 4:\n1=warn/stale/**degraded**、2=error、3=inactive、4=其他）。\n「degraded」在寫入端有明確語意:**跑了但沒有資料落地**\n（回應日期與請求日不符 ⇒ 拒絕寫入;或 MI_INDEX 回傳的檔都對不上 target 集合）,\n且刻意**不推進 LastSuccessAt**（避免「沒資料卻顯示成功」的謊言）。\n立即檢查:\n  1. 最後一次執行的判定:\n     docker logs atlas-cron-replay-sync --since 48h 2>&1 | tail -30\n     關鍵字:`refusing to write a mis-dated row`、`none matched the`、\n     `not a Taiwan trading day`、`appended`\n  2. 記錄內容（status / last_error / last_success_at）:\n     python3 -c \"import json;d=json.load(open('/Users/kaecer/workspace/atlas/data/state/channel_health.json'));print(json.dumps(d['channels']['twse_replay_sync'],ensure_ascii=False,indent=1))\"\n  3. 補救:下一次每日 run 會自動 gap backfill（5 個日曆日的視窗）;\n     若是上游 MI_INDEX 形狀變了,需要人工確認 symbol 對應。\n"
             runbook_url: "https://github.com/kaecer68/atlas-go/blob/main/docs/operations/local-deploy.md"
             summary: "每日 replay sync 沒有把資料寫進 CSV（未落地/降級）"
       - eval_time: 2h
