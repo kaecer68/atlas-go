@@ -3,9 +3,9 @@
 | 項目 | 內容 |
 |---|---|
 | 文件角色 | 「producer 有、consumer 無」「狀態宣稱生效但實際 inert」「死碼」的**單一登記處**，避免同一類缺陷（靜默失效）反覆被發現又重新遺忘 |
-| 狀態 | v4（2026-09-25，issue [#1944](https://github.com/kaecer68/atlas-go/issues/1944) Batch 1 + Batch 2 + Batch 3 + **Batch 4**）＋ **Batch A 收尾**（2026-09-27，PR [#2077](https://github.com/kaecer68/atlas-go/pull/2077)） |
+| 狀態 | v4（2026-09-25，issue [#1944](https://github.com/kaecer68/atlas-go/issues/1944) Batch 1 + Batch 2 + Batch 3 + **Batch 4**）＋ **Batch A 收尾**（2026-09-27，PR [#2077](https://github.com/kaecer68/atlas-go/pull/2077)）＋ **Batch B 收斂**（2026-09-27，PR [#2098](https://github.com/kaecer68/atlas-go/pull/2098)） |
 | Batch 2／3／4 權威盤點 | [`../specs/industry-allocation-inert-audit-20260924.md`](../specs/industry-allocation-inert-audit-20260924.md)（Batch 2 §4/§5；Batch 3 §9；**Batch 4 §10**：長尾逐項處置、I29 殘留診斷、ledger/nightly 誠實聲明、可重跑證據） |
-| 靜態閘門一致性 | `scripts/ci/inert-baseline.json` = **179** 筆（Batch 4 前 187）。Batch 4 移除：`config-inert industry.event_sentiment_cap`（已接線）＋7 個 `writer-no-consumer` SAC emitter（`EmitSnapshotStart/Target/Current/Fallback/End`、`EmitPolicyConsumed/Applied`）；`check_inert_closure.sh` exit 0、stale 0 |
+| 靜態閘門一致性 | `scripts/ci/inert-baseline.json` = **179** 筆（Batch 4 前 187）。Batch 4 移除：`config-inert industry.event_sentiment_cap`（已接線）＋7 個 `writer-no-consumer` SAC emitter（`EmitSnapshotStart/Target/Current/Fallback/End`、`EmitPolicyConsumed/Applied`）。**Batch B 複跑**（`bash scripts/ci/check_inert_closure.sh`）：179 筆、new **0**、stale **0**、exit 0（Batch B 未新增也未清除任何 baseline 項） |
 | 判定法 | 對每個欄位／參數／旗標問三題：**有 producer 嗎？有 consumer 讀嗎？有測試嗎？** 三者缺一即列入 |
 | 上游盤查 | `~/workspace/atlas-notes/03-system-health/2026-09-24-industry-hitrate-survey.md` §6（Q6，I1–I36） |
 | 相關規格 | [`../specs/sector-allocation-simulation-closure-spec.md`](../specs/sector-allocation-simulation-closure-spec.md)（§8.3 application truthfulness）、[`../specs/industry-hitrate-metric-spec.md`](../specs/industry-hitrate-metric-spec.md)（命中率口徑） |
@@ -41,7 +41,7 @@
 
 | # | 項目 | 原症狀 | 處置 | 證據 |
 |---|---|---|---|---|
-| I22 | 矽循環三處斷裂：config 被忽略（`_ = cfg`）、capex 訊號硬編碼 ±0.05 永遠跨不過 `< -0.10` 門檻、`window_size=0` 清空相位歷史 | 過熱相位與收縮轉移在生產不可達 | **接線 + 修正**：`getSiliconParams()` 讀 `industry.silicon_cycle`（僅非零覆寫）；capex 優先取 `MacroDataSnapshot.CapexGrowth`（原為有 producer 無 consumer 的欄位），否則用營收 YoY 等比例推估（`capexProxyScale=1.0`、clamp ±0.50）⇒ 衰退 ≥10% 即跨門檻；`HistoryWindowSize<=0` = 不修剪 | `internal/industry/silicon_cycle.go`；測試 `TestGetSiliconParams_ConsumesConfigFile`、`TestExtractSiliconIndicators_CapexReachesCutThreshold`、`TestExtractSiliconIndicators_PrefersSectorDataCapex`、`TestPhaseHistoryWindowZeroDoesNotWipe`、`TestSiliconIndicatorProvenance`。**未修（明示）**：SOX/billings 實為單日變動（`SiliconSOXIndicatorIsYoY=false`）、TW semi index 無 producer（`SiliconTWIndexProducerAvailable=false`） |
+| I22 | 矽循環三處斷裂：config 被忽略（`_ = cfg`）、capex 訊號硬編碼 ±0.05 永遠跨不過 `< -0.10` 門檻、`window_size=0` 清空相位歷史 | 過熱相位與收縮轉移在生產不可達 | **接線 + 修正**：`getSiliconParams()` 讀 `industry.silicon_cycle`（僅非零覆寫）；capex 優先取 `MacroDataSnapshot.CapexGrowth`（原為有 producer 無 consumer 的欄位），否則用營收 YoY 等比例推估（`capexProxyScale=1.0`、clamp ±0.50）⇒ 衰退 ≥10% 即跨門檻；`HistoryWindowSize<=0` = 不修剪 | `internal/industry/silicon_cycle.go`；測試 `TestGetSiliconParams_ConsumesConfigFile`、`TestExtractSiliconIndicators_CapexReachesCutThreshold`、`TestExtractSiliconIndicators_PrefersSectorDataCapex`、`TestPhaseHistoryWindowZeroDoesNotWipe`、`TestSiliconIndicatorProvenance`。**未修（明示）＋敘述更正（Batch B）**：SOX/billings 實為單日變動（`SiliconSOXIndicatorIsYoY=false`）。TW semi index 的 writer **存在且已接線**（`twse_sector_index` channel → `monitoring.applyTWSESectorIndex`，15 分鐘生產任務；`SiliconTWIndexWriterWired=true`），但寫入的是**單日報酬**（`latest.ReturnPct`）而非欄名／門檻假設的「高於 MA 的幅度」（`SiliconTWIndexIsMADeviation=false`）⇒ 1→2 的兩條 trigger 皆不可達，`PhaseOverheat` 在生產不可達。Batch 2 原敘述「TW semi index 無 producer」**與事實不符**（Batch B 更正）；具名缺口登記見 §Batch B 收斂 |
 | I3 | `industry.cycle_calibration` config 全 0，`WindowSize=0` 使 `RecordOutcome` 每次清空視窗 ⇒ metrics 永遠空 | I1 的接線在生產無證據 | **merge 補預設 + 語意修正**：`mergeIndustryDefaults` 新增 all-zero → 預設（10/0.05/0.55/0.45/0.05/0.40/30）；`WindowSize<=0` = 不修剪；`WeightClampMax<=WeightClampMin` 視為未設定校準（回傳 base weights，不清空） | `internal/config/parameters_merge.go`、`internal/industry/cycle_calibration.go`；測試 `TestMergeIndustryDefaults_CycleCalibrationAllZero`、`TestShippedConfigCycleCalibrationIsUsable`、`TestCycleCalibration_ZeroWindowSizeKeepsOutcomes`。**I1 因此在本批後才真正閉環**（生產 producer = `auto_daily_simulation` → `RecordCycleCalibrationOutcome`） |
 | I2 | `cycle_calibrate` 用第三份硬編碼權重呼叫 `CalibrateWeights` 後只 log `len()` 就丟棄 | 算了沒消費 | **明示未啟用（診斷）**：改回報實際生效的 `EffectiveCardConfig()`，log 明寫 `applied=false` / `fallback_reason=diagnostic_only_no_writeback`；刪除硬編碼副本 | `cmd/atlas/calibration_tasks.go`、`internal/industry/cycle_status_card.go`（`EffectiveCardConfig`） |
 | I14 | 四個讀取點各讀不同路徑（`data/state/sector_data`、`<ledgerDir>`、`<workDir>/sector_data.json`），實際檔案在 `data/sector_data/`；bridge 僅測試呼叫；缺檔回零 `err=nil` | 通道靜默死亡 | **修正路徑 + 明示未啟用（bridge）**：新增唯一權威 `marketdata.SectorDataDirRel` / `ResolveSectorDataDir()`，四個讀取點改用；provider 記錄載入狀態（`SectorDataState`），apigateway `HealthCheck` 對缺檔／壞時間戳／超過 72h 回 `degraded`；`SectorDataBridgeWired=false`（理由：唯一輸入是無生產刷新者的人工檔，且會把 `EvidenceTier` 由 `estimated` 洗成 `empirical`） | `internal/marketdata/sector_data_provider.go`、`internal/apigateway/adapter_sector_data.go`、`channel_contract.go`、`internal/industry/sector_data_bridge.go`；測試 `TestResolveSectorDataDirMatchesShippedFile`、`TestSectorDataProvider_State*`、`TestSectorDataChannelAdapter_HealthCheck` |
@@ -50,6 +50,8 @@
 | 新 E1-E3 | 對外硬寫「已生效」：`period_weight_applied: true`（MCP narrative）、`appliedCount++` 不看 `SetParameter` 錯誤、`"calibrated": true` 無條件 | 對外宣稱生效 | **修正**：E1 改 `false` + 誠實 note；E2 先寫入後記錄（全失敗 verdict=`failed`）；E3 改由 `industry.CalibrationApplied()` 推導 | `cmd/atlas-mcp/server/tools_narrative.go`、`internal/config/calibrator.go`、`internal/monitoring/api/industry/handlers.go`；測試 `TestCalibrationApplied_DerivedFromEvidence`。**Batch A 再收斂**：E3 的推導本身被修正（重建權重 ≠ 改變權重：無層被 nudge ⇒ 原值回傳），E1/E2/E3 三處各補契約測試（mutation 自證），見 §Batch A 收尾 |
 
 ### Batch 2 剩餘（原清單；Batch 3 已逐項複核並就地標註，**Batch 4 §Batch 4 再複核剩餘項**；見 spec §4/§5/§10）
+
+> ⚠️ **已 superseded（2026-09-27 Batch B）**：以下是**該批次當下**的相對清單，與後續批次處置已多次矛盾（本清單列 I18／I27／I28「仍未處理」，但 Batch 4 已處理；N-U2／N-U5／N-U6 亦已處理）。**現行狀態一律以 §Batch B 收斂為準。**
 
 - **I4/I12/I13** → **Batch 3 已處理**：I12/I13 接線（共享 dashboard 驅動器與 tracker）；I4 prior 接線、cycle 明示未啟用。
 - **I17/I23** → **Batch 3 已處理**：health 明示未知＋消費端 clamp；narrative HitRate 全面加 `hit_rate_source` 來源標記。
@@ -100,10 +102,12 @@
 | 全市場 quote 抓取 N+1（fubon-proxy 逐檔 + Hybrid→FinMind 逐檔 fallback） | 一檔不完整 quote 可造成 ~1,599 次 FinMind 請求（≈11% 日配額） | **已緩解**（chunked fetch，fallback 成本限單一 chunk）；provider 內部逐檔行為未改（marketdata lane；spec §9.2/§9.6） |
 | `domain.Quote.Volume` 一欄兩種單位（TWSE=股、Fugle/Fubon=張，差 1000×） | 以「張」計的報價把 NT$10M 量價門檻實質變成 NT$10bn ⇒ 中型股以下靜默全滅（`quotes_status` 仍 ok）；live 管線更讓 `shouldReducePosition` 等絕對門檻全滅 | **已由 #1987 根治**：provider 邊界統一為股（fugle/fubon/fugle-ws ×`domain.SharesPerLot`），消費端換算表 `quoteVolumeLotSources`／`quoteVolumeInShares`／`lots_converted` 全數刪除；邊界由 `provider_volume_contract_test.go` 逐 provider 釘住 |
 | mock provider 被標成可信 | `selectProvider` 無 key 時回 `MockProvider`（假 quote 完整） | 中 | **已接線**：`IsMock()` → `quotes_status=mock`／`ranked_trustworthy=false` |
-| `ParameterSnapshot.NarrativeHitRates` 無來源標記 | theme hit rates 來自 config 常數集 | 中 | **未處理**（登記於此） |
+| `ParameterSnapshot.NarrativeHitRates` 無來源標記 | theme hit rates 來自 config 常數集 | 中 | **已處理（Batch B）**：新增機讀欄位 `narrative_hit_rates_source`（帶上 `NarrativeConviction.ThemeHitRates.Source`，未宣告時為 `shared.NarrativeHitRatesSourceUnspecified`），並把 config 文案由「Historical hit rates」改為與事實一致的「hand-authored PRIORS … NOT measured rates」。**注意兩個同名型別**：只改 `internal/domain/shared.ParameterSnapshot`（`internal/config.ParameterSnapshot` 是實驗快照儲存，未動）。證據：`TestBuildParameterSnapshot_NarrativeHitRatesCarrySource`（三段斷言＋mutation 自證）、`internal/orchestrator/system.go`、`internal/domain/shared/shared.go`、`internal/config/defaults_narrative.go`、`configs/parameters.json`、`configs/parameters/narrative_conviction.json`；`go generate ./...` 後生成物**無 diff**（gentags 以 config 版同名型別為準） |
 | `internal/config/configs/parameters.json` 影子副本 | 與 `configs/parameters.json` 不同、無 Go caller，還會誤導 `findRepoRoot` 探測 | 低-中 | **已處理（移除，Batch A / PR #2077）**：先完成引用盤查才刪 —— `scripts/ tests/ .github/ Dockerfile docker-compose*.yml` **0 處**、跨 worktree **0 處**、生產機 `kmacmini:~/workspace/atlas` **亦只有註解與 docs** ⇒ 無部署腳本／程式引用 ⇒ 刪除；`parameters_smoke_test.go` 改以 `moduleRoot()`（go.mod）定位並印出實際判讀檔（300823B / v1.2 / 2026-06-26 → 321638B / v1.3 / 2026-07-06），另加 `TestNoShadowParametersCopy` 防再犯守衛 |
 
 ### Batch 3 仍未處理（誠實清單）
+
+> ⚠️ **已 superseded（2026-09-27 Batch B）**：以下是**該批次當下**的相對清單（其中 I24／I30／I32／I31 CI 半邊、`ParameterSnapshot.NarrativeHitRates` 已被後續批次處置）。**現行狀態一律以 §Batch B 收斂為準。**
 
 - **I31 CI 半邊**：需 `.github/workflows/` 一行（加上 freshness 政策裁決：production 主機執行，或 CI 只驗結構）。
 - **I24 / I32 / I30**：ledger 口徑與 workflow 寫入票，Batch 4 仍未動（I30 屬 honesty-batch lane、I32 需 ledger schema 變更；見 §Batch 4）。
@@ -141,6 +145,8 @@
 
 ### Batch 4 仍 inert（誠實清單）
 
+> ⚠️ **已 superseded（2026-09-27 Batch B）**：以下是**該批次當下**的相對清單（其中 `ParameterSnapshot.NarrativeHitRates` 已由 Batch B 處理、`I23` 前端文案與 `domain.Quote.Volume` 已在 #1991／#1987 處置）。**現行狀態一律以 §Batch B 收斂為準。**
+
 - **I7**：死碼仍在 `internal/marketdata/symbol_industry_mapper.go`（lane 邊界，另票）。
 - **I19 殘留**：production 無 driver 注入點（`LLMSectorAgentDriverWired=false`）＋`llmSectorAgentsPlugin` 仍 pass-through（N-P1）⇒ LLM sector agent 仍未真正接線（旗標預設 false）。
 - **I29 殘留**：`cmd/atlas/main.go` 的 `universe_coverage_check` 仍永不觸發（分母/分子不同源、`snapshotSymbols==0` 被守衛排除）。
@@ -150,7 +156,7 @@
 - **I21**：**待觀察**——生產者半邊已由 #1949 修，消費端 source/window 固定（`stockpicker-foreign-3d-net-buy`／`120d`）；本批無生產存取，未驗證 `stock_win_rate` 與 `data/state/stock_flows/` 是否已生成。
 - **I27 殘留**：symbol→sector 的值仍是 segment ID（非 canonical L1），未命中仍回 `"other"`。
 - **N-A1 殘留**：`snapshot.projection`（需 projector 回傳 clamped 統計）、`legacy.read`、`fallback.count`、`rollback.drill` 四個 emitter 仍無誠實呼叫點（baseline 已寫明理由）。
-- **其他 Batch 2 中／低項**：`ParameterSnapshot.NarrativeHitRates` 無來源標記、超界 `adjustment_factor` 污染源、config validator 允許負值、`domain.Quote.Volume` 單位未在 provider 邊界統一、`I23` 前端文案（前端 lane）、`I16(a)` volatile 門檻需產品定案、`N-P1`／`N-P2`／`N-U6` 之外的 ledger／前端項。
+- **其他 Batch 2 中／低項**：超界 `adjustment_factor` 污染源、config validator 允許負值、`I16(a)` volatile 門檻需產品定案。**後續批次已處置**：`ParameterSnapshot.NarrativeHitRates` 無來源標記（Batch B）、`domain.Quote.Volume` 單位（#1987）、`I23` 前端文案（#1991）、`N-U6`（Batch 4 已接線）；`N-P1`／`N-P2` 仍待處理。現行完整清單一律以 §Batch B 收斂為準。
 
 ## Batch A 收尾（#1944，2026-09-27，PR [#2077](https://github.com/kaecer68/atlas-go/pull/2077)）
 
@@ -162,5 +168,89 @@
 | E1／E2／E3 三處修正無測試釘住（移除修正不會有測試變紅） | **補契約測試**（皆附 mutation 自證：拿掉修正 ⇒ 測試紅） | `TestHandleNarrativeGetEvents_PeriodWeightNotApplied`（E1）、`TestCalibratorVerdict_Table`（E2）、`TestDefaultCardConfig_ConsumesConfigFile`（N-C1 的 config 疊加） |
 | `internal/config/configs/parameters.json` 影子副本 | **移除**（先完成引用盤查才刪） | 盤查：`scripts/ tests/ .github/ Dockerfile docker-compose*.yml` **0 處**、跨 worktree **0 處**、生產機 `kmacmini:~/workspace/atlas` **亦只有註解與 docs**（逐字證據見上方 §Batch 4 表格該列）；smoke test 改 `moduleRoot()` 定位 + 印出實際判讀檔；新增 `TestNoShadowParametersCopy` 防再犯守衛 |
 | `internal/config/calibrator.go` 的 `failedCount > 0` 分支 | **實測否證：目前不可達**（誠實邊界，登記備查；未經最小實驗不得當成事實） | 迴圈只碰得到 `GetParameter` 可解析的名字 = `parameterTable` 條目或已存在的 map sub-key，兩者 `SetParameter` 都成功 ⇒ 窮舉 shipped config 可解析的 **285 個名字（242 個 `parameterTable` 條目 + 43 個 map sub-key）：285 寫入成功 / 0 被拒**；不可解析者更早中止（`calibrate: optimize: unknown parameter: <name>`）。故此語意改以純函式 `calibratorVerdict`（行為等價的重構）釘住，並由 **可執行守門測試** `TestCalibratorFailPath_UnreachableAssumptionStillHolds` 每次重跑該假設（違反 ⇒ 紅燈，且在訊息中要求補 end-to-end 覆蓋＋更新本敘述） |
+
+---
+
+## Batch B 收斂（#1944，2026-09-27，PR [#2098](https://github.com/kaecer68/atlas-go/pull/2098)）
+
+> 基準：`origin/main@5094abc8`；分支 `fix/20260927-inert-batchB-and-registry`。範圍：盤查複核後的**一項明確錯誤（型別層）＋ 一項敘述錯誤（I22）＋ 登記表收斂**。
+> **不含 I7／I29 的修法**：I7（`internal/marketdata/**` 死碼）與另一 lane 的區重疊；I29（`cmd/atlas` 覆蓋率告警的**分母口徑**）屬會影響告警的改動，刻意排在 2026-09-29 06:00Z 決定性驗收之後。**但 I29 的敘述已於本 PR 定案（2026-09-27 實測）**：Batch 4 的「分母 27／分子 1,599 ⇒ 5922%、`< 90` 恆不成立」**正確**；#2096 檔頭與 doc 的「99.9% 覆蓋」是**測試 fixture 的 `TotalSymbols=1600`**（非生產讀數），已由本 PR 更正 5 處敘述（只改敘述、不動邏輯）。見下方 bounded 清單。
+> 不碰凍結區行為（母體／量能／FinMind／`taiwanholidays`）、不編輯 `remediation-manifest.md`／`FOLLOWUPS.md`、不動主 clone HEAD、不改審計快照 `docs/specs/industry-allocation-inert-audit-20260924.md`。
+
+### 本節是唯一權威狀態表
+
+下方 §Batch 2 剩餘／§Batch 3 仍未處理／§Batch 4 仍 inert 三份子清單是各批次的**相對**視圖，已多次互相矛盾（同一個 ID 在較早清單標「未處理」、在較晚表格標「已處理」）。本節把兩者合成單一狀態：**已處理（附可執行證據）** 與 **仍待處理（bounded 清單）**。
+
+#### 已處理（掃描全表後確認）
+
+| ID | 處置 | 可執行證據 |
+|---|---|---|
+| I8 | 產業配置閉環：`applied` 改由消費證據驅動（無 `ConsumptionReceipt` ⇒ `false` ＋ `fallback_reason`） | PR [#1950](https://github.com/kaecer68/atlas-go/pull/1950)（Batch 1）；`internal/sectorallocation/closure_store*.go` |
+| I34 | `internal/sim` 的 `rotationFunc` **移除**（輪動只留推薦層單一實作） | PR [#1950](https://github.com/kaecer68/atlas-go/pull/1950)；`internal/sim/engine.go`、`internal/sim/testdata/sim_api.golden.json` |
+| I35 | L1–L5 心法層 **明示未啟用**（`TechniquesLayerActive=false` ＋ `pass_through=true`） | PR [#1950](https://github.com/kaecer68/atlas-go/pull/1950)；`strategy_techniques_plugin_test.go` |
+| I20 | 合成報酬改為 regime 條件化 placeholder（`syntheticPlaceholderReturn`） | PR [#1950](https://github.com/kaecer68/atlas-go/pull/1950)；`synthetic_placeholder_return_test.go` |
+| I1 | `CycleCalibration` 接線；**Batch A** 起無層被 nudge ⇒ 原值回傳（不再有 4e-5 殘差） | PR [#1950](https://github.com/kaecer68/atlas-go/pull/1950)／[#2077](https://github.com/kaecer68/atlas-go/pull/2077)；`TestCalibrationApplied_NoNudgedLayerIsNotCalibration` |
+| I22（capex／config／window 三半邊） | `getSiliconParams()` 讀 config；capex 走 `CapexGrowth` 或營收 YoY 等比例推估 ⇒ 衰退 ≥10% 跨門檻；`HistoryWindowSize<=0` 不修剪 | PR [#1964](https://github.com/kaecer68/atlas-go/pull/1964)；`TestGetSiliconParams_ConsumesConfigFile`、`TestExtractSiliconIndicators_CapexReachesCutThreshold`、`TestExtractSiliconIndicators_PrefersSectorDataCapex`、`TestPhaseHistoryWindowZeroDoesNotWipe` |
+| I3 | `industry.cycle_calibration` merge 補預設 ＋ `WindowSize<=0` 語意修正 | PR [#1964](https://github.com/kaecer68/atlas-go/pull/1964)；`TestMergeIndustryDefaults*`、`cycle_calibration_test.go` |
+| I2 | `cycle_calibrate` 不再丟棄計算（回報實際生效 config ＋ `applied=false`／`diagnostic_only_no_writeback`） | PR [#1964](https://github.com/kaecer68/atlas-go/pull/1964)；`cmd/atlas/calibration_tasks.go` |
+| I14 | sector_data 路徑單一權威（`ResolveSectorDataDir`）＋ provider 載入狀態對外 | PR [#1964](https://github.com/kaecer68/atlas-go/pull/1964)；`TestResolveSectorDataDirMatchesShippedFile`、`TestSectorDataProvider_State*` |
+| I10／I11／I33 | modulator **明示未啟用**（`ModulatorWiringActive=false` ＋ 理由） | PR [#1964](https://github.com/kaecer68/atlas-go/pull/1964)；`TestProductionRegistryLeavesConvictionModulatorsUnwired` |
+| I12／I13／N-C2 | 模擬路徑改吃 dashboard 真產業輸入；`SetCompositionRoot` 有生產呼叫者 | PR [#1979](https://github.com/kaecer68/atlas-go/pull/1979)；`TestSetCompositionRoot_SharesDashboardIndustryState` |
+| I25／N-U7 | 母體 quote provider 接線（chunked fetch）＋ 流動性 skip 不再靜默 | PR [#1979](https://github.com/kaecer68/atlas-go/pull/1979)；`TestRiskExclusionLiquidityEvidence`、`TestNewUniverseBuilderDepsWithQuotes_SharesProviderWithRiskFilter` |
+| N-U1／N-U3／N-U4 | CLI 修好、snapshot schema 統一、D6 watchlist 可達 | PR [#1979](https://github.com/kaecer68/atlas-go/pull/1979)；`TestBuildUniverseStatus_ReadsCanonicalSnapshot`、`TestSnapshotSchemaIsSingleAndCanonical`、`TestD6WatchlistChainReachable` |
+| I16 | volatile 樣本不再計 miss ＋ 對外 `hit_rate_scope` | PR [#1979](https://github.com/kaecer68/atlas-go/pull/1979)；`TestConditionEvaluator_VolatileNotCountedAsMiss`、`TestToSummary_VolatileFrameNotOverwrittenToZero` |
+| I17 | 消費端 clamp ＋ `unknown` 狀態；producer 半邊寫回校準觀測 | PR [#1979](https://github.com/kaecer68/atlas-go/pull/1979)（消費端）／[#1990](https://github.com/kaecer68/atlas-go/pull/1990)（producer）；`TestSummarizeCalibrationHealth_NoObservationsIsUnknownNotCritical`、`TestUpdateParametersFileAt_ClosesTheEvidenceLoop` |
+| I23／N-P4 | narrative hit rate 全面加 `hit_rate_source`；無模板主題明示 | PR [#1979](https://github.com/kaecer68/atlas-go/pull/1979)；`TestDefaultTemplatesCarryPriorHitRateSource`、`TestThemesWithoutTemplateMatchesKB`；**前端文案由 [#1991](https://github.com/kaecer68/atlas-go/pull/1991) 修正**（`shared_web/static/js/pages/narrative.js` 不再寫「歷史命中率」） |
+| I4 | strategic prior 接線（rebuild 重新套用）＋ cycle 半邊 measured-only 接線 | PR [#1979](https://github.com/kaecer68/atlas-go/pull/1979)／[#1990](https://github.com/kaecer68/atlas-go/pull/1990)；`TestSectorPredictionStatusWiresStrategicPrior`、`TestMeasuredCycleProvider_DropsSeedOnlyIndustries` |
+| I5／I6／I15／N-P3 | **明示未啟用／未落地／reserved**（皆附機讀旗標） | PR [#1979](https://github.com/kaecer68/atlas-go/pull/1979)；`TestProductionSectorPredictionStatusFlagOff`、`TestSectorPredictionsAreNeverPersisted`、`TestAgentPrimaryMetrics_HasNoNonTestReader`、`TestDriverAdapterReserved_HasNoNonTestCaller` |
+| I18／I28／N-U2 | 死碼／未用符號／未實作 help 宣告 **移除** | PR [#1990](https://github.com/kaecer68/atlas-go/pull/1990)（lane A `75942de7`）；`git grep -nw` 移除項 0 命中 |
+| I19（順序半邊） | LLM sector agent 註冊順序修正 ＋ `Supports` 護欄（旗標開但未接線時不靜默吃掉 desk） | PR [#1990](https://github.com/kaecer68/atlas-go/pull/1990)；`TestBuiltinAgentExecutors_LLMSectorAgentPrecedesDeterministic`、`TestResolveAgentExecutor_LLMAgentClaimsDeskOnlyWhenWired` |
+| I27（權威半邊） | symbol→sector 解析改單一決定性權威 | PR [#1990](https://github.com/kaecer68/atlas-go/pull/1990)（`ada5f29e`）；`TestBuildSymbolSectorIndex_DeterministicAcrossRuns`、`_MostSpecificSegmentWins` |
+| I24 | scorecard 過濾 `IsSynthetic` ＋ 對外揭露 `synthetic_share` | PR [#1991](https://github.com/kaecer68/atlas-go/pull/1991) |
+| I31 | 判定機讀化（13 code）＋ CI 半邊修好 ＋ production 新鮮度指標族與 3 條規則 | PR [#1979](https://github.com/kaecer68/atlas-go/pull/1979)（判定）／[#1991](https://github.com/kaecer68/atlas-go/pull/1991)（CI 半邊）／[#2016](https://github.com/kaecer68/atlas-go/pull/2016)（production 半邊）；`TestValidateCalibration_FindingsAreClassified` |
+| N-C1／N-C3 | 假風控明示未啟用；影子參數接線 1 ＋ 明示 2 | PR [#1979](https://github.com/kaecer68/atlas-go/pull/1979)／[#1990](https://github.com/kaecer68/atlas-go/pull/1990)；`TestShippedConfigMaxDailyWeightChangeIsDeclaredUnenforced`、`TestShadowParametersDeclarationMatchesConsumers` |
+| N-U5／N-U6 | stage3 中性哨兵修正（padding 不是證據）；命中率口徑揭露 | PR [#1990](https://github.com/kaecer68/atlas-go/pull/1990)；`TestStage3AlertEvaluator_ModelConfidenceDegraded_NoAlertOnPadding`、`TestComputeHistoricalHitRate_DisclosesNeutralBasis` |
+| N-A1（7/11） | SAC emitter 接線 snapshot 生命週期與 policy consumed/applied | PR [#1990](https://github.com/kaecer68/atlas-go/pull/1990)（`2bf9cfcb`）；`TestApplySectorRotation_EmitsSACLifecycleEvents`、`_AppliedEmitsPolicyApplied` |
+| N-A2／N-A3／N-A4 | macro_flow trace 順序修正；`applied_session_count` 只計已消費場次；closure store 路徑單一權威 | PR [#1990](https://github.com/kaecer68/atlas-go/pull/1990)；`TestExecuteWithContext_MacroFlowTraceIsRecordedAfterApplyControl`、`TestSACClosureStateManager_IsPromotable`、`TestClosureStorePathMatchesFileClosureStoreWriteTarget` |
+| E1／E2／E3 ＋ `CalibrationApplied()` 假宣稱 ＋ `internal/config/configs/parameters.json` 影子副本 | 見 §Batch A 收尾 | PR [#2077](https://github.com/kaecer68/atlas-go/pull/2077)／[#2082](https://github.com/kaecer68/atlas-go/pull/2082) |
+| `ParameterSnapshot.NarrativeHitRates` 無來源標記 | **Batch B**：新增機讀欄位 `narrative_hit_rates_source`（未宣告來源 ⇒ `unspecified`）＋ config 文案由「Historical」改為與事實一致 | 本 PR；`TestBuildParameterSnapshot_NarrativeHitRatesCarrySource`（三段斷言 ＋ mutation 自證）、`internal/domain/shared/shared.go`、`internal/orchestrator/system.go` |
+| I22 **敘述錯誤**（「TW semi index 無 producer」） | **Batch B**：更正為「writer 存在且已接線；不可達真因是值／門檻語意錯配」，並把 `PhaseOverheat` 不可達登記為具名缺口 | 本 PR；`TestSiliconIndicatorProvenance`（`SiliconTWIndexWriterWired=true`／`SiliconTWIndexIsMADeviation=false` ＋ 可達性斷言 ＋ 三式 mutation） |
+
+#### 仍待處理（bounded 清單）
+
+分類用語：`可修`／`需設計決定`／`需生產資料`／`需跨 lane`。
+
+| ID | 現況證據 | 分類 | 建議批次 |
+|---|---|---|---|
+| **I7** | `internal/marketdata/symbol_industry_mapper.go` 的 `NewSymbolIndustryMapper`／`BuildMapping` 零非測試呼叫者（生產走 `monitoring.NewTreeBasedMapper`；`git grep` 只有定義、另無測試） | 需跨 lane（`internal/marketdata/**` 由 #1986 quote-reliability lane 持有） | **本 PR 明確不動**；由該 lane 移除 |
+| **I29**（`cmd/atlas` 半邊） | **真缺口＝分母口徑（已實測定案，Batch B）**：`cmd/atlas/main.go` 的 `universe_coverage_check` 以 `TotalClassifiedSymbols(tree)` 當分母＝分類樹 12 段中 11 段的**代表股 27 檔**，分子卻是 snapshot 的 `symbols_built=1,599`（2026-09-25 artifact，`docs/operations/universe-run-truth-model.md` §5）⇒ `coveragePct ≈ 5922%`，`< 90` 對任何「回報 pipeline 母體」的 artifact **不可滿足**（要成立需 `symbols_built < 24.3`）⇒ 舊檢查**從未**因覆蓋率觸發。#2096 修的是另一半（artifact 新鮮度 finding）；本 PR 只更正「99.9% 覆蓋」這個**不存在於該路徑的讀數**（它出自測試 fixture `TotalSymbols=1600`）並以 `TestUniverseCoverageCheck_DenominatorCannotFireWithPipelineUniverse` 把分母與此算式釘住（實測 `TotalClassifiedSymbols(DefaultClassification()) == 27`）。 | 可修（**修好後會新增一個可能觸發的告警**） | 2026-09-29 06:00Z 驗收後：改分母為「pipeline 預期覆蓋的母體」＋補「舊分母恆不成立」的負向證明 |
+| **I30** | `.github/workflows/nightly-refresh.yml` 的 backfill 寫入仍被丟棄（runner 內寫 `configs/parameters.json` 後丟棄） | 需跨 lane（`.github/**`） | honesty-batch lane |
+| **I32** | `ledger.EventFlowPredictionRecord`／`EventFlowPredictionStore` 仍無任何 `sector` 欄位或方法（反射測試釘住） | 需設計決定（ledger schema 變更） | 與 I6 落地同批 |
+| **I36** | 生產 `darwinian_weights.json` 21 agents 中 15 個 `total_signals=0`、權重凍在 0.3 下限 | 需生產資料 | 另票（上游 signal 供給盤查） |
+| **I21** | 消費端 `stockpicker_winrate_executor.go` 的 source／window 固定（`stockpicker-foreign-3d-net-buy`／`120d`）；本批無生產存取 | 需生產資料 | 生產跑一輪後複驗（查 `stock_win_rate` 列數 ＋ `data/state/stock_flows/`） |
+| **N-P1** | `llmSectorAgentsPlugin` 仍是 pass-through | 可修（與 I19 殘留同源） | 與 I19 同批 |
+| **N-P2** | `sector_predictions` 無前端 consumer（`valid_fields.json` 僅型別鏡射） | 可修／需產品決定 | 另票（先明示未使用） |
+| **I19 殘留** | production 無 LLM driver 注入點（`LLMSectorAgentDriverWired=false`）、旗標預設 false | 需設計決定 | 需產品裁決是否啟用 |
+| **N-A1 殘留（4 emitter）** | `snapshot.projection`／`legacy.read`／`fallback.count`／`rollback.drill` 仍無誠實呼叫點（baseline 已寫明理由） | 需設計決定 | 需先有誠實資料來源 |
+| **N-A5** | `SectorDriverDeltasSupplied=false`：六個 driver delta map 全空 ⇒ 投影恆等 strategic prior | 需設計決定（供給 delta 是行為變更） | 另票 |
+| **I22-overheat（Batch B 新登記）** | `PhaseOverheat` 在生產完全不可達（見下節） | 需設計決定 | 2026-09-29 06:00Z 驗收之後 |
+| **I27 殘留** | symbol→sector 的值仍是 segment ID（非 canonical L1），未命中仍回 `"other"` | 可修 | 另票 |
+| 超界 `adjustment_factor` 污染源 | 生產 4 個超界值（含負值），來源早於／繞過 `cmd/calibrate-seasonal --update` 守門 | 需生產資料 | 另票 |
+| config validator 允許負 `adjustment_factor` | `parameters_validate.go` 只檢查 `!= 0`（實證 2 個負值載入成功） | 需設計決定（現行修法會擋掉 production 啟動） | 與上一列同批 |
+| **I16 (a)** | volatile 門檻定義未凍結 ⇒ 無法真的量測 | 需產品定案 | 產品 |
+| I31 CI freshness 政策 | CI 檢出貨 checkout 的 `updated_at` 結構上不可能新鮮；#2016 已把 production 半邊接上監控 | 需設計決定 | 待裁定（CI 只驗結構 or 移到 production） |
+| I23 前端文案的其餘口徑 | `narrative.js` 標題已修（#1991）；其餘表格欄位若仍寫「歷史」屬前端 lane | 可修 | 前端 lane |
+
+#### 具名缺口：`PhaseOverheat` 在生產完全不可達（Batch B 發現，**僅登記、不修**）
+
+| 項目 | 內容 |
+|---|---|
+| 症狀 | 矽循環相位機制的 `ExpansionConfirmed → PhaseOverheat`（1→2）兩條 trigger 在生產都不可能成立，故 `PhaseOverheat` 整個相位不可達 ⇒ 「過熱相位偵測」實質失效（`GetPhaseName`／`IsFavorable`／卡片分數的 overheat 分支在生產永遠走不到）。 |
+| 真因（**非**「沒有 producer」） | ① 索引線：`SiliconIndicators.TaiwanSemiconductorIndexMA` 的值是 `MacroDataSnapshot.TaiwanSemiIndex.ChangePct/100`，而唯一 writer（`monitoring.applyTWSESectorIndex`，經 `twse_sector_index` channel ＋ 15 分鐘生產任務）寫入的是 `latest.ReturnPct`＝**當日報酬**；門檻 `IndexMAPercentThreshold`（shipped `0.20`，Go 註解「index exceeds MA by this」）卻被當成「高於 MA 的幅度」比較 ⇒ 需要 TAISEMI **單日 +20%**。② SOX 線：值為 SOX **單日**變動，門檻 `SOXExtremeThreshold=0.40` 需要單日 +40%。 |
+| 修法方向（**不是**改門檻） | 依 config rationale 與欄名，門檻語意是「相對 MA 的偏離」⇒ 應修**實作**：改為計算真正的 MA 偏離（或接 TWSE 半導體指數歷史序列自算 MA），使 `TaiwanSemiconductorIndexMA` 名副其實；SOX 線同理需接真正的 YoY 序列或改語意。**門檻值不動**——把 0.20 降到單日報酬可及之處，等於用單日資料冒充 MA 偏離（與 Batch 2 對 SOX 的判定一致）。 |
+| 風險 | 修好後 `PhaseOverheat` 會**開始可能觸發**（曝光調整 −0.90 等相位分數會實際生效），屬**行為變更** ⇒ 需獨立 PR ＋ 驗收窗，並排在 2026-09-29 06:00Z 決定性驗收之後。 |
+| 為何不與本 PR 同時修 | 本 PR 是敘述更正／登記；改實作＝改生產行為。 |
+| 證據 | `TestSiliconIndicatorProvenance`（`SiliconTWIndexWriterWired=true`、`SiliconTWIndexIsMADeviation=false`、可達性斷言）、`TestApplyTWSESectorIndex`（writer 存在）、`cmd/atlas/operations_tasks.go`（15 分鐘任務）、`configs/parameters.json` 的 `industry.silicon_cycle.rationale`。 |
+| 同句錯誤的另一處 | 審計快照 `docs/specs/industry-allocation-inert-audit-20260924.md:85` 仍寫「`TaiwanSemiconductorIndexMA` 無任何 producer」。該檔依慣例（Batch A 起）不在本 PR 的允許範圍內，**未動**；以本表更正敘述為準。 |
 
 ---

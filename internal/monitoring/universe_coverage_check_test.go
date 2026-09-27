@@ -4,16 +4,23 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/kaecer68/atlas-go/internal/industry"
 )
 
 // This file pins the judgement of the in-process universe coverage alert
 // (monitoring.AssessUniverseCoverage, wired in cmd/atlas/main.go).
 //
 // The defect it exists for (2026-09-27 audit, gap C): the task alerted only when
-// `symbols_built > 0 && coveragePct < 90`, so 99.9% coverage computed from a
-// 39.7h-old snapshot produced no alert at all. The coverage half was right; the
-// age half did not exist. A test for the fix therefore has to hold BOTH halves
-// down, plus the boundaries where the check must stay silent.
+// `symbols_built > 0 && coveragePct < 90`, so a 39.7h-old snapshot produced no
+// alert at all. The age half did not exist, and the coverage half could not
+// compensate: the task passes `symbols_built` (1,599) over
+// TotalClassifiedSymbols(tree) (27 representative stocks) ⇒ ≈5922%, so `< 90` is
+// unsatisfiable for any artifact reporting the pipeline's universe (issue #1944
+// item I29, which owns the denominator). The `TotalSymbols: 1600` used by the
+// fixtures below is a TEST INPUT — it is what makes a 99.9% reading, and it is
+// not the production denominator. A test for the age fix therefore has to hold
+// the age half down, plus the boundaries where the check must stay silent.
 //
 // Boundary rows are not filler. Each one is a world in which a plausible
 // "improvement" of the check produces a false page:
@@ -249,7 +256,7 @@ func TestPreviousUniverseRun_AcrossHolidayClosure(t *testing.T) {
 		SnapshotMTime: mtime, Now: now, LastExpectedRun: lastExpected,
 	})
 	if len(findings) != 0 {
-		t.Fatalf("findings = %v, want none (99.9%% coverage, correct for that closure)", findings)
+		t.Fatalf("findings = %v, want none (fixture coverage 1599/1600 is above the threshold, and a holiday closure must not be judged stale)", findings)
 	}
 
 	// One session later the same artifact IS stale: this is the transition the
@@ -276,5 +283,45 @@ func TestPreviousUniverseRun_IsTheMirrorOfNextUniverseRun(t *testing.T) {
 	}
 	if !prev.Before(next) {
 		t.Fatalf("prev=%s is not before next=%s", prev, next)
+	}
+}
+
+// TestUniverseCoverageCheck_DenominatorCannotFireWithPipelineUniverse pins the
+// arithmetic behind the corrected narration of gap C (2026-09-27; see
+// universe_coverage_check.go).
+//
+// The alert's coverage finding is `symbols_built > 0 && coveragePct < 90` over
+// TotalSymbols = TotalClassifiedSymbols(tree). The tree supplies REPRESENTATIVE
+// stocks, not the pipeline's universe, so with the production reading
+// (symbols_built = 1,599; docs/operations/universe-run-truth-model.md §5) the
+// percentage is ~5922% and the finding is unsatisfiable. This test exists so the
+// corrected comments cannot drift back into the "99.9% coverage was fine"
+// reading: if someone makes the denominator the pipeline's universe (issue #1944
+// item I29), the pinned numbers below flip red and the narration must be updated
+// in the same commit.
+func TestUniverseCoverageCheck_DenominatorCannotFireWithPipelineUniverse(t *testing.T) {
+	const wantRepresentativeStocks = 27
+	total := TotalClassifiedSymbols(AdaptClassificationTree(industry.DefaultClassification()))
+	if total != wantRepresentativeStocks {
+		t.Fatalf("TotalClassifiedSymbols(DefaultClassification()) = %d, want %d: the denominator is the classification tree's representative stocks; if this changed deliberately (issue #1944 item I29), update the doc block in universe_coverage_check.go, the comment in cmd/atlas/main.go and this test together", total, wantRepresentativeStocks)
+	}
+
+	const productionSymbolsBuilt = 1599 // 2026-09-25 artifact, truth-model §5
+	if productionSymbolsBuilt <= total {
+		t.Fatalf("premise: symbols_built (%d) must exceed the representative-stock denominator (%d) for the finding to be unsatisfiable", productionSymbolsBuilt, total)
+	}
+	findings := AssessUniverseCoverage(CoverageInput{
+		SnapshotSymbols: productionSymbolsBuilt,
+		TotalSymbols:    total,
+		// Ages deliberately omitted: the coverage finding must be absent on its
+		// own merits, not because the age check is silent.
+	})
+	if len(findings) != 0 {
+		t.Fatalf("findings = %v, want none: %d/%d is above the threshold, which is exactly why the production artifact could not alert on coverage", findings, productionSymbolsBuilt, total)
+	}
+	// The same reading with a representative-stock-sized numerator is 100%: no
+	// numerator the pipeline can carry makes `coveragePct < 90` true here.
+	if got := float64(productionSymbolsBuilt) / float64(total) * 100; got <= CoverageLowThreshold {
+		t.Fatalf("fixture arithmetic: %.1f%% is not above CoverageLowThreshold %.1f", got, CoverageLowThreshold)
 	}
 }

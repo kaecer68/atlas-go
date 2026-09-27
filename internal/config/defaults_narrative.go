@@ -1270,7 +1270,7 @@ func defaultNarrativeConvictionParameters() NarrativeConvictionParameters {
 				"geopolitical_risk_spike": 0.65,
 				"oil_price_shock":         0.58,
 			},
-			Rationale: "Historical hit rates for narrative themes; AI_capex_surge highest (0.81), oil_price_shock lowest (0.58) due to TW semiconductor hedging",
+			Rationale: "Hand-authored hit-rate PRIORS for narrative themes (SourceHeuristic), NOT measured rates: AI_capex_surge highest (0.81), oil_price_shock lowest (0.58) due to TW semiconductor hedging. No backtest or realized-rate evidence exists yet (issue #1944 Batch B)",
 			Source:    SourceHeuristic,
 			Todo:      "Calibrate: derive from 36-month narrative event backtest",
 		},
