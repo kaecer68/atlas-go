@@ -23,7 +23,7 @@
 # expectation 是**完整比對**(labels + annotations 逐字)。因此:
 #   ⚠️ 改規則檔的 expr/文案/labels 時,本檔必須在同一個 commit 同步(逐字)——
 #      本檔的 expectation 區塊是從規則檔產生的,落後就會紅在「文字差異」而不是語意差異。
-#   ⚠️ 每個 case 都對**全部 9 條**規則下斷言(不只是一條),所以「意外 firing」也會被抓到。
+#   ⚠️ 每個 case 都對**全部 10 條**規則下斷言(不只是一條),所以「意外 firing」也會被抓到。
 #
 # 時間基準:promtool 的測試時間從 **Unix epoch 開始**(`time()` 在 eval_time=5m 時等於 300),
 # 所以 last_run_finished_timestamp_seconds 的測試值是 0(= 測試時間軸的原點),它與 `time()`

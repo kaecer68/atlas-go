@@ -1,6 +1,6 @@
 # monitoring/rules/atlas_universe_scoring_alerts.yml
 #
-# 母體(universe)評分鏈的可觀測性:9 條規則,全部以「pipeline 的輸出」為主要訊號。
+# 母體(universe)評分鏈的可觀測性:10 條規則,全部以「pipeline 的輸出」為主要訊號。
 #
 # ── 這份檔案的歷史(改動前必讀)───────────────────────────────────────────────
 # 建立 2026-09-25(任務 M):「母體評分失效會響」這一維在生產是零偵測 —— 生產實例
@@ -39,11 +39,14 @@
 #   gathered > 0, filtered == 0                ⇒ 第 5 條 EmptyFiltered
 #   gathered > 0, filtered > 0, trustworthy=0  ⇒ 第 3 條 QuotesMissing
 #   ... trustworthy = 1, ranked == 0            ⇒ 第 1/2 條(同一個訊號,見該條說明)
-#   ... trustworthy = 1, ranked > 0             ⇒ 健康,不 firing
+#   ... trustworthy = 1, ranked > 0, persisted == 0 ⇒ 第 10 條 SnapshotNotPersisted(2026-09-27 新增)
+#   ... trustworthy = 1, ranked > 0, persisted == 1 ⇒ 健康,不 firing
 # 另有兩條與 verdict 平行的規則:
 #   記帳面沒動(輸出說有產出、counter 6 天沒增量)⇒ 第 9 條 CounterEmissionMissing
 #   預告的下一輪逾時(沒跑)                       ⇒ 第 8 條 RunOverdue
-# 存在性(系列/族被改名或移除)⇒ 第 4 條(記帳面 screened)、第 6 條(本檔其餘輸入族)。
+# 產物沒落地(跑了、有產出,但那張 artifact 沒更新)⇒ 第 10 條 SnapshotNotPersisted(2026-09-27 新增)——
+#   它是**唯一**由「產物本身」回答的規則:verdict 與心跳都在記憶體發佈,舊的 9 條沒有一條看得到這個形狀。
+# 存在性(系列/族被改名或移除)⇒ 第 4 條(記帳面 screened)、第 6 條(本檔其餘輸入族,含第 10 條的輸入)。
 #
 # ── 共同約束(改動前必讀)──────────────────────────────────────────────────────
 # (1) **不得用 counter 的絕對值當門檻**。這一族是累積 counter、沒有上界 ⇒ 任何「大於某個

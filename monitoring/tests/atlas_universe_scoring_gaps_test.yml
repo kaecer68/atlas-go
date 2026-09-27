@@ -6,6 +6,7 @@
 #   第 6 條 AtlasUniverseMetricsFamilyMissing
 #   第 8 條 AtlasUniverseRunOverdue            (2026-09-27 新增:排程心跳,取代視窗算術)
 #   第 9 條 AtlasUniverseCounterEmissionMissing(2026-09-27 新增:2026-09-25 的真實形狀)
+#   第 10 條 AtlasUniverseSnapshotNotPersisted (2026-09-27 新增:跑了、有產出,但產物沒落地)
 #
 # 為什麼前一個檔案不夠:第 1/2/3/5/7 條只看「最近一次完成的執行」的 verdict。那個 verdict
 # **不會自己過期**(週一的 weekly 會留到下一輪),所以三件事需要獨立的規則:
@@ -21,8 +22,8 @@
 #      · last_run_finished_timestamp_seconds 的測試值用 0(= 原點),讓 `time() - finished`
 #        等於 eval_time,才能精確測第 9 條的 6 天新鮮度閘門。
 #
-# expectation 是完整比對(labels + annotations 逐字);每個 case 對全部 9 條規則下斷言,
-# 因此「意外 firing」也會被抓到。改規則檔時本檔必須在同一個 commit 同步。
+# expectation 是完整比對(labels + annotations 逐字);每個 case 對全部 **10 條**規則下斷言,
+# 因此「意外 firing」也會被抓到。改規則檔時本檔必須在同一個 commit 同步(逐字)。
 
 rule_files:
   - ../rules/atlas_universe_scoring_alerts.yml
