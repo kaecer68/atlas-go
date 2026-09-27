@@ -299,21 +299,26 @@ func TestLoadSystemHealth(t *testing.T) {
 }
 
 // =============================================================================
-// degradedFrom — degraded 語意: 只收 warn/error/partial,
-// inactive(未啟用) 與 expected_delay(正常延遲) 不計入降級
+// degradedFrom — degraded 語意: warn/error/partial/degraded 計入,
+// inactive(未啟用) 與 expected_delay(正常延遲) 不計入降級。
+// E29-3 (2026-09-27): degraded 過去也被漏掉 ⇒ 一個「狀態本身就是 degraded」的
+// 通道不會出現在 degraded_channels（欄位名就是這個契約）。stale 仍刻意不計:
+// 那個判定講的是「最後一次抓取」，已由 staleness-overage 指標/告警承載。
 // =============================================================================
 
-func TestDegradedFrom_OnlyWarnErrorPartial(t *testing.T) {
+func TestDegradedFrom_CountsWarnErrorPartialAndDegraded(t *testing.T) {
 	channels := []DataChannelInfo{
 		{ChannelID: "ok_ch", Status: "ok"},
 		{ChannelID: "warn_ch", Status: "warn"},
 		{ChannelID: "error_ch", Status: "error"},
 		{ChannelID: "partial_ch", Status: "partial"},
+		{ChannelID: "degraded_ch", Status: "degraded"},
+		{ChannelID: "stale_ch", Status: "stale"}, // deliberate: overage path owns it
 		{ChannelID: "inactive_ch", Status: "inactive"},
 		{ChannelID: "delay_ch", Status: "expected_delay"},
 	}
 	got := degradedFrom(channels)
-	want := []string{"warn_ch", "error_ch", "partial_ch"}
+	want := []string{"warn_ch", "error_ch", "partial_ch", "degraded_ch"}
 	if len(got) != len(want) {
 		t.Fatalf("expected %d degraded channels %v, got %d: %v", len(want), want, len(got), got)
 	}

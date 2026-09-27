@@ -336,3 +336,29 @@ func TestExportChannelHealthMetrics_DerivedIndicatorChannelsSkipped(t *testing.T
 		t.Fatalf("us_yahoo staleness missing\n--- full body ---\n%s", body)
 	}
 }
+
+// TestHealthStatusValue pins the atlas_channel_health_status gauge vocabulary.
+//
+// E29-3 (2026-09-27): "degraded" used to fall through to 4 (other/unmapped) — a
+// defined non-ok verdict exported as "unmapped" — while "stale" already mapped to
+// warn. warn/stale/degraded stay below the page threshold on purpose: the alert
+// rules on this gauge match == 2 only, and a channel that is degraded past its
+// freshness window no longer stops here (DeriveChannelStatus escalates it to
+// error, i.e. 2).
+func TestHealthStatusValue(t *testing.T) {
+	cases := map[string]float64{
+		"ok":             0,
+		"warn":           1,
+		"stale":          1,
+		"degraded":       1,
+		"error":          2,
+		"inactive":       3,
+		"expected_delay": 4,
+		"":               4,
+	}
+	for status, want := range cases {
+		if got := healthStatusValue(status); got != want {
+			t.Errorf("healthStatusValue(%q) = %v, want %v", status, got, want)
+		}
+	}
+}

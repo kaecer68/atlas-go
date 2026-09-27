@@ -264,13 +264,22 @@ func (s *SystemService) LoadSystemHealth() (SystemHealthResponse, error) {
 }
 
 // degradedFrom returns the channel IDs that should be surfaced as degraded.
-// Only warn/error/partial count — inactive (未啟用: operator-disabled or missing
-// API key) and expected_delay (正常延遲) are intentional states, not degradation.
+// warn/error/partial/degraded count — inactive (未啟用: operator-disabled or
+// missing API key) and expected_delay (正常延遲) are intentional states, not
+// degradation.
+//
+// E29-3 (2026-09-27): "degraded" used to be dropped here too, so the one field
+// whose NAME is the degradation contract reported nothing for a channel the
+// status judgment itself calls degraded (empty/partial payload served while the
+// fetch succeeded) — the dashboard showed a degraded badge on the channel page
+// while degraded_channels stayed empty. "stale" still does not count: that
+// verdict is about the last FETCH and is already carried by the
+// staleness-overage metric/alert path (atlas_channel_staleness_overage_seconds).
 func degradedFrom(channels []DataChannelInfo) []string {
 	var d []string
 	for _, c := range channels {
 		switch c.Status {
-		case "warn", "error", "partial":
+		case "warn", "error", "partial", "degraded":
 			d = append(d, c.ChannelID)
 		}
 	}
