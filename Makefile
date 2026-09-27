@@ -996,6 +996,9 @@ ci-gate: embed-dirs
 	@bash scripts/ci/check_fullwidth_var_expansion.sh
 	@bash tests/scripts/test-fullwidth-var-expansion.sh
 	@echo "    ✅"
+	@echo "  → 母體執行真值盤查工具的契約測試（hermetic fixtures；判層 + mutation 自證；2026-09-27）"
+	@bash tests/scripts/test-verify-universe-run.sh
+	@echo "    ✅"
 	@echo "  → 合併結果/ diff 衛生閘門自我測試（hermetic git fixtures；#1993）"
 	@bash tests/scripts/test-revert-guard.sh
 	@echo "    ✅"

@@ -71,6 +71,22 @@ const (
 	// vocabulary is owned by the caller (internal/monitoring's RunOutcome*
 	// constants); this package treats it as an opaque string.
 	UniverseMetricLastRunOutcome = "atlas_universe_last_run_outcome"
+	// UniverseMetricLastRunSnapshotPersisted is 1 when the canonical snapshot
+	// artifact on disk was verified to belong to the last completed run of that
+	// stage, 0 when it was not (the write failed, or the file at the canonical
+	// path is older than the run).
+	//
+	// Why it exists (2026-09-27): the other verdict gauges describe what the run
+	// COMPUTED, in memory, and they are published from the same defer on every
+	// exit path — so a run whose output never reached disk still reports a
+	// healthy verdict, and the heartbeat is republished too. The alert rules
+	// that existed until then covered "did not run" (UniverseMetricNextRun),
+	// "ran but produced nothing" (ranked) and "output healthy but a counter
+	// never emitted" — none of them covered "ran, produced a healthy verdict,
+	// and the artifact the consumers read was not updated". This gauge closes
+	// that gap, and it is measured by reading the file back (see
+	// monitoring.BuildUniverse), never by trusting the write call's intent.
+	UniverseMetricLastRunSnapshotPersisted = "atlas_universe_last_run_snapshot_persisted"
 	// UniverseMetricNextRun is the instant (unix time) at which the scheduler is
 	// next expected to run the pipeline, computed from the Taiwan trading
 	// calendar. It is emitted at process start and after every run, so a missed
@@ -102,6 +118,13 @@ type UniverseRunVerdict struct {
 	QuotesReturned  int
 	// Trustworthy is true when Ranked reflects real quote input.
 	Trustworthy bool
+	// SnapshotPersisted is true when the canonical snapshot artifact on disk was
+	// verified (read back) to carry this run's output. It is false whenever the
+	// run never attempted a write (every early return) and whenever the write
+	// did not land, so it must only be read together with Trustworthy: a
+	// trustworthy verdict with SnapshotPersisted == 0 is the "the run produced a
+	// market verdict that never reached disk" defect.
+	SnapshotPersisted bool
 	// FinishedAt is when the run finished; zero means "now".
 	FinishedAt time.Time
 }
@@ -150,6 +173,7 @@ func (m *UniverseMetrics) ReportRun(v UniverseRunVerdict) {
 	m.reportGauge(UniverseMetricLastRunQuotesRequested, float64(v.QuotesRequested), stage)
 	m.reportGauge(UniverseMetricLastRunQuotesReturned, float64(v.QuotesReturned), stage)
 	m.reportGauge(UniverseMetricLastRunTrustworthy, boolGauge(v.Trustworthy), stage)
+	m.reportGauge(UniverseMetricLastRunSnapshotPersisted, boolGauge(v.SnapshotPersisted), stage)
 
 	if prev, ok := m.lastOutcome[v.Stage]; ok && prev != "" && prev != v.Outcome {
 		m.reportGauge(UniverseMetricLastRunOutcome, 0, map[string]string{
@@ -199,6 +223,11 @@ func (m *UniverseMetrics) warmUpRunVerdicts(now time.Time) {
 		m.reportGauge(UniverseMetricLastRunQuotesRequested, 0, labels)
 		m.reportGauge(UniverseMetricLastRunQuotesReturned, 0, labels)
 		m.reportGauge(UniverseMetricLastRunTrustworthy, 0, labels)
+		// 0 = "no run of this stage has verified its output on disk yet". It is
+		// the honest warm-up value: unlike the counter family, this gauge is a
+		// statement about an artifact, and at process start nothing has been
+		// written by this process.
+		m.reportGauge(UniverseMetricLastRunSnapshotPersisted, 0, labels)
 	}
 }
 

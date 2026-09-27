@@ -41,6 +41,7 @@
 |------|------|
 | [FOLLOWUPS.md](FOLLOWUPS.md) | 待辦 / 已知限制**登記表**（刻意延後且只建議未實作的項目；每個條目附可重現的來源） |
 | [universe-scoring-ranked-zero-20260925.md](universe-scoring-ranked-zero-20260925.md) | SmartUniverseBuilder `symbols_ranked=0` 根因調查報告（含 §6.2 未覆蓋缺口 / §8 防再犯檢查 / §9 已知限制） |
+| [universe-run-truth-model.md](universe-run-truth-model.md) | 母體執行的**真值模型與判層**（誰是主真值／每個訊號怎麼說謊／壞了怎麼定位到哪一層；對應工具 `scripts/ops/verify-universe-run.sh` 與第 10 條告警） |
 
 > **驗收判讀（2026-09-25 實證；已實際造成一次誤判，含 root 本人）**：部署／重啟後
 > atlas-go 的 `/metrics` 是 **in-memory**（`internal/bootstrap/bootstrapper.go` 的 `InitMetrics()`）
