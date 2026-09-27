@@ -542,6 +542,15 @@ jobs:
     - name: Verify Governance Gates
       run: bash ./scripts/openclaw/verify_governance_gates.sh
 
+    # Script contract tests for the governance/first-line scripts themselves.
+    # Both are hermetic (no GitHub access, no Go run, no repo writes): the
+    # branch-protection test stubs `gh` on PATH, the generate-drift test only
+    # reads workflow YAML. Keep them here, next to the gates they protect.
+    - name: Verify branch-protection and generate-drift script contracts
+      run: |
+        bash tests/scripts/test-branch-protection-known-checks.sh
+        bash tests/scripts/test-generate-drift-coverage.sh
+
   # Operations gate (migrated from ci.yml per 2026-07-03 pipeline audit Phase 2)
   operations:
     runs-on: ubuntu-latest
