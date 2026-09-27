@@ -181,12 +181,43 @@ type ConvictionBreakdown struct {
 	Steps []ConvictionStep `json:"steps"`
 }
 
+// NarrativeHitRatesSourceUnspecified labels a ParameterSnapshot whose narrative
+// hit rates were populated from a config block that declares no source at all.
+// Consumers must not read it as a measurement (issue #1944 Batch B).
+const NarrativeHitRatesSourceUnspecified = "unspecified"
+
+// ParameterSnapshot records the parameter values that a recommendation was
+// produced with.
+//
+// Name collision warning: internal/config declares a second, unrelated type with
+// the same name (the experiment/audit snapshot store —
+// ID/Timestamp/Reason/User/Params/Changes). That one is the type the generated
+// frontend contract exposes, because gentags merges the config package over the
+// domain package; changes to the fields below therefore do not move
+// field_types.ts (issue #1944 Batch B).
 type ParameterSnapshot struct {
-	FactorWeights       map[string]float64 `json:"factor_weights,omitempty"`
-	NarrativeHitRates   map[string]float64 `json:"narrative_hit_rates,omitempty"`
-	IndustryPhaseScores map[string]float64 `json:"industry_phase_scores,omitempty"`
-	ConfigVersion       string             `json:"config_version,omitempty"`
-	CapturedAt          time.Time          `json:"captured_at"`
+	FactorWeights     map[string]float64 `json:"factor_weights,omitempty"`
+	NarrativeHitRates map[string]float64 `json:"narrative_hit_rates,omitempty"`
+	// NarrativeHitRatesSource is the declared provenance of NarrativeHitRates,
+	// copied verbatim from
+	// ParametersConfig.NarrativeConviction.ThemeHitRates.Source and therefore
+	// expressed in the config parameter-source vocabulary
+	// ("heuristic"/"empirical"/"calibrated"/"experimental"/...).
+	//
+	// None of those values asserts that a rate was measured against the market:
+	// the shipped block is a hand-authored prior set (source=heuristic) whose
+	// calibration is still outstanding. No consumer may render these rates as
+	// historical, backtested or realized hit rates — the same contract the
+	// narrative module applies to its own hit rates via hit_rate_source
+	// (internal/narrative/hitrate_provenance.go). Issue #1944 Batch B.
+	//
+	// The field is empty only when NarrativeHitRates is empty. A populated map
+	// with no declared source carries NarrativeHitRatesSourceUnspecified rather
+	// than silence.
+	NarrativeHitRatesSource string             `json:"narrative_hit_rates_source,omitempty"`
+	IndustryPhaseScores     map[string]float64 `json:"industry_phase_scores,omitempty"`
+	ConfigVersion           string             `json:"config_version,omitempty"`
+	CapturedAt              time.Time          `json:"captured_at"`
 }
 
 type AgentLayer string

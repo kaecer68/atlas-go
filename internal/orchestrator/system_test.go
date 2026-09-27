@@ -1,9 +1,14 @@
 package orchestrator
 
 import (
+	"encoding/json"
+	"os"
+	"path/filepath"
 	"testing"
 
+	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/domain"
+	"github.com/kaecer68/atlas-go/internal/domain/shared"
 	"github.com/kaecer68/atlas-go/internal/narrative"
 	"github.com/kaecer68/atlas-go/internal/portfolio"
 )
@@ -164,5 +169,80 @@ func TestRunDailyStressTests_NoQuotes_NoReporterCall(t *testing.T) {
 	}
 	if calls != 0 {
 		t.Errorf("drawdownReporter call count = %d, want 0 when no quotes", calls)
+	}
+}
+
+// TestBuildParameterSnapshot_NarrativeHitRatesCarrySource pins the provenance
+// contract of ParameterSnapshot.NarrativeHitRates (issue #1944 Batch B): the map
+// must travel with its declared source, the source must follow the config rather
+// than a literal, and a populated map whose config declares no source must say
+// so instead of staying silent.
+func TestBuildParameterSnapshot_NarrativeHitRatesCarrySource(t *testing.T) {
+	// Both the shipped config block and the Go defaults declare heuristic, i.e.
+	// a hand-authored prior set rather than a measurement.
+	snap := buildParameterSnapshot()
+	if snap == nil {
+		t.Fatal("expected non-nil ParameterSnapshot")
+	}
+	if len(snap.NarrativeHitRates) == 0 {
+		t.Fatal("expected NarrativeHitRates to be non-empty")
+	}
+	if want := string(config.SourceHeuristic); snap.NarrativeHitRatesSource != want {
+		t.Errorf("declared NarrativeHitRatesSource = %q, want %q", snap.NarrativeHitRatesSource, want)
+	}
+
+	// withDeclaredSource points the config singleton at a full default config
+	// whose theme-hit-rate block declares the given source. The fixture is built
+	// from DefaultParametersConfig() instead of a hand-written minimal document
+	// because the loader validates every skill_to_theme target key: a minimal
+	// document is rejected and the singleton falls back to the defaults, which
+	// would make the assertions below pass for the wrong reason.
+	withDeclaredSource := func(t *testing.T, source config.ParameterSource) {
+		t.Helper()
+		cfg := config.DefaultParametersConfig()
+		cfg.NarrativeConviction.ThemeHitRates.Source = source
+		data, err := json.Marshal(cfg)
+		if err != nil {
+			t.Fatalf("marshal temp parameters: %v", err)
+		}
+		prev := config.GetParametersConfigPath()
+		path := filepath.Join(t.TempDir(), "parameters.json")
+		if err := os.WriteFile(path, data, 0o600); err != nil {
+			t.Fatalf("write temp parameters: %v", err)
+		}
+		config.ResetParametersConfig()
+		config.SetParametersConfigPath(path)
+		t.Cleanup(func() {
+			config.ResetParametersConfig()
+			config.SetParametersConfigPath(prev)
+		})
+		if got := config.GetParametersConfig().NarrativeConviction.ThemeHitRates.Source; got != source {
+			t.Fatalf("test premise: fixture did not load, Source = %q, want %q", got, source)
+		}
+	}
+
+	// Mutation proof 1: the label follows the config, so a different declared
+	// source must reach the snapshot unchanged.
+	withDeclaredSource(t, config.SourceEmpirical)
+	snap = buildParameterSnapshot()
+	if snap == nil {
+		t.Fatal("expected non-nil ParameterSnapshot")
+	}
+	if snap.NarrativeHitRatesSource != string(config.SourceEmpirical) {
+		t.Errorf("NarrativeHitRatesSource = %q, want %q", snap.NarrativeHitRatesSource, config.SourceEmpirical)
+	}
+
+	// Mutation proof 2: an undeclared source must be labelled, never omitted,
+	// while the map is populated.
+	withDeclaredSource(t, "")
+	snap = buildParameterSnapshot()
+	if snap == nil {
+		t.Fatal("expected non-nil ParameterSnapshot")
+	}
+	if len(snap.NarrativeHitRates) == 0 {
+		t.Fatal("expected NarrativeHitRates to be non-empty")
+	}
+	if got := snap.NarrativeHitRatesSource; got != shared.NarrativeHitRatesSourceUnspecified {
+		t.Errorf("NarrativeHitRatesSource = %q, want %q for an undeclared source", got, shared.NarrativeHitRatesSourceUnspecified)
 	}
 }

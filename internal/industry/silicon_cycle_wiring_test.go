@@ -135,24 +135,63 @@ func TestExtractSiliconIndicators_PrefersSectorDataCapex(t *testing.T) {
 	}
 }
 
-// TestSiliconIndicatorProvenance pins the two indicator inputs that have no
-// production producer at the period their names declare, so the state machine
-// cannot be read as "no signal" (issue #1944 Batch 2, Q6 I22).
+// TestSiliconIndicatorProvenance pins what the two mis-declared silicon inputs
+// actually are, so a steady phase is never misread as "no signal" (issue #1944
+// Batch 2, Q6 I22; corrected by Batch B, 2026-09-27).
+//
+// Batch 2 asserted SiliconTWIndexProducerAvailable == false, i.e. "no production
+// provider writes MacroDataSnapshot.TaiwanSemiIndex". That was false: the
+// twse_sector_index channel writes it from a real TWSE provider and runs on a
+// 15-minute production task. The 1→2 trigger is still unreachable, for a
+// different reason — the written value is a single-day return while the
+// threshold means "this far above the moving average" — which is what this test
+// now pins, including the executable consequence.
 func TestSiliconIndicatorProvenance(t *testing.T) {
-	if SiliconTWIndexProducerAvailable {
-		t.Error("SiliconTWIndexProducerAvailable flipped to true: update the doc block and the audit spec")
+	if !SiliconTWIndexWriterWired {
+		t.Error("SiliconTWIndexWriterWired flipped to false: the twse_sector_index channel writes MacroDataSnapshot.TaiwanSemiIndex (gateway_adapter.applyTWSESectorIndex) — update the doc block and this test if that channel is really gone")
+	}
+	if SiliconTWIndexIsMADeviation {
+		t.Error("SiliconTWIndexIsMADeviation flipped to true: the channel stores latest.ReturnPct (a single-day return), so the field is not a deviation above its moving average — update the doc block, ExtractSiliconIndicators and this test")
 	}
 	if SiliconSOXIndicatorIsYoY {
 		t.Error("SiliconSOXIndicatorIsYoY flipped to true: update the doc block and the audit spec")
 	}
-	// TaiwanSemiconductorIndexMA is a passthrough of a field no provider
-	// populates, so it stays 0 even for an extreme input: the 1→2 overheat
-	// branch that reads it is unreachable today.
+
+	// TaiwanSemiconductorIndexMA is a 1:1 passthrough of ChangePct, whose only
+	// producer stores the index's daily return — not the "deviation above MA"
+	// that the field name and IndexMAPercentThreshold assume.
 	ind := ExtractSiliconIndicators(marketdata.MacroDataSnapshot{
 		TaiwanSemiIndex: marketdata.MacroDataPoint{ChangePct: 99.0},
 	})
 	if ind.TaiwanSemiconductorIndexMA != 0.99 {
 		t.Fatalf("TaiwanSemiconductorIndexMA = %v, want a 1:1 passthrough of ChangePct", ind.TaiwanSemiconductorIndexMA)
+	}
+
+	// Executable consequence: both 1→2 triggers compare a single-day change
+	// against a "deviation above MA" threshold, so PhaseOverheat cannot be
+	// entered from production data even though the writer is wired.
+	p := defaultSiliconCycleParams()
+	const dailyIndexMove, dailySOXMove = 0.09, 0.35
+	if p.IndexMAPercentThreshold <= dailyIndexMove || p.SOXExtremeThreshold <= dailySOXMove {
+		t.Fatalf("premise: thresholds = %v/%v, want both above the single-day moves used here (%v/%v)",
+			p.IndexMAPercentThreshold, p.SOXExtremeThreshold, dailyIndexMove, dailySOXMove)
+	}
+
+	e := NewSiliconCycleTracker()
+	now := time.Now()
+	if got := e.DetectPhase(now, SiliconIndicators{
+		TSMCMonthlyRevenueYoY: 0.25, GlobalSemiconductorBillingsYoY: 0.30, DRAMSpotPriceTrend: 0.05,
+	}); got != PhaseExpansionConfirmed {
+		t.Fatalf("premise: phase = %s, want %s after a recovery snapshot", got, PhaseExpansionConfirmed)
+	}
+	if got := e.DetectPhase(now.Add(time.Hour), SiliconIndicators{
+		TSMCMonthlyRevenueYoY:          0.25,
+		GlobalSemiconductorBillingsYoY: 0.30,
+		DRAMSpotPriceTrend:             0.05,
+		TaiwanSemiconductorIndexMA:     dailyIndexMove,
+		PhiladelphiaSOXIndexYoY:        dailySOXMove,
+	}); got != PhaseExpansionConfirmed {
+		t.Fatalf("phase = %s, want %s while both 1→2 triggers stay below their thresholds", got, PhaseExpansionConfirmed)
 	}
 }
 
