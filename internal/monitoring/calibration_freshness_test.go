@@ -458,6 +458,14 @@ func TestCalibrationFreshnessContractMatchesCLIAndRunbook(t *testing.T) {
 		"atlas_calibration_last_calibrated_timestamp_seconds",
 		"atlas_calibration_freshness_checked_timestamp_seconds",
 		"atlas-validate --path=configs/parameters.json --max-age=48h",
+		// #2007：兩個 artifact 的標籤值與 drift 族都必須在落地文件上（文件漂回
+		// 「只觀測 SSOT」的舊說法即紅燈）。
+		CalibrationArtifactParameters,
+		CalibrationArtifactParametersOverlay,
+		MetricCalibrationDriftRunOK,
+		MetricCalibrationDriftKeys,
+		MetricCalibrationDriftOutOfWindowKeys,
+		MetricCalibrationDriftDroppedKeys,
 	} {
 		if !strings.Contains(text, want) {
 			t.Errorf("runbook 缺少 %q（文件漂回舊說法或漏寫指標名即紅燈）", want)
@@ -490,12 +498,24 @@ func TestCalibrationFreshnessRulesReferenceEmittedMetrics(t *testing.T) {
 	}
 	exprs := strings.Join(exprLines, "\n")
 
+	// 這個 map 是「本套件真的會輸出的 atlas_calibration_* 指標名」。
+	// drift 那一族在 calibration_effective.go（#2007 子項 ②），同一個 package ⇒ 同一個承諾。
 	emitted := map[string]bool{
 		MetricCalibrationFreshnessOK:               true,
 		MetricCalibrationFreshnessRunOK:            true,
 		MetricCalibrationFreshnessAgeSeconds:       true,
 		MetricCalibrationLastCalibratedTimestamp:   true,
 		MetricCalibrationFreshnessCheckedTimestamp: true,
+		MetricCalibrationDriftRunOK:                true,
+		MetricCalibrationDriftKeys:                 true,
+		MetricCalibrationDriftOutOfWindowKeys:      true,
+		MetricCalibrationDriftDroppedKeys:          true,
+	}
+	// 規則檔的 triage 指令刻意用「共同前綴」grep 看整族（例如 `grep atlas_calibration_drift_`;
+	// 值班要的是全貌,不是逐個指標）。被允許的前綴必須在這裡**明示**——沒有列出的字串一律
+	// 紅燈（把一個指標名打錯一個字母仍然是「規則會永遠沉默」的經典缺陷）。
+	grepPrefixes := map[string]bool{
+		strings.TrimSuffix(MetricCalibrationDriftKeys, "keys"): true,
 	}
 	refs := regexp.MustCompile(`atlas_calibration_[a-z_]+`).FindAllString(exprs, -1)
 	if len(refs) == 0 {
@@ -504,7 +524,7 @@ func TestCalibrationFreshnessRulesReferenceEmittedMetrics(t *testing.T) {
 	seen := map[string]bool{}
 	for _, r := range refs {
 		seen[r] = true
-		if !emitted[r] {
+		if !emitted[r] && !grepPrefixes[r] {
 			t.Errorf("規則檔引用了本檔沒有輸出的指標 %q（規則會永遠沉默）", r)
 		}
 	}
@@ -516,8 +536,13 @@ func TestCalibrationFreshnessRulesReferenceEmittedMetrics(t *testing.T) {
 	t.Logf("規則檔（去掉 YAML 註解後，含 expr 與 triage 文案）引用的指標: %v", got)
 }
 
-// 規則檔必須真的有牙齒（不是只有指標名對得上）：至少一條規則的 expr 引用
-// fail-closed 訊號（run_ok），且至少一條以 absent() 覆蓋「檢查沒在跑」。
+// 規則檔必須真的有牙齒（不是只有指標名對得上）：
+//  1. 至少一條規則的 expr 引用 fail-closed 訊號（run_ok）；
+//  2. 至少一條以 absent() 覆蓋「檢查沒在跑」；
+//  3. drift 的告警必須以 `drift_run_ok == 1` 為閘門（否則比較沒做完時，凍結的舊值
+//     會持續 paging，而那個狀態另有第 2 條負責）；
+//  4. **不得**再出現以 image 內基準為判定標的的 expr——那正是 #2007 修掉的永久誤報
+//     （基準 `artifact="parameters"` 在生產一定會超過 48h）。
 func TestCalibrationFreshnessRulesCoverFailClosedAndAbsence(t *testing.T) {
 	data, err := os.ReadFile(filepath.Join("..", "..", "monitoring", "rules", "calibration_freshness_alerts.yml"))
 	if err != nil {
@@ -531,15 +556,33 @@ func TestCalibrationFreshnessRulesCoverFailClosedAndAbsence(t *testing.T) {
 		keep = append(keep, line)
 	}
 	text := strings.Join(keep, "\n")
+	overlay := `{artifact="` + CalibrationArtifactParametersOverlay + `"}`
 	for _, want := range []struct {
 		what   string
 		needle string
 	}{
-		{"fail-closed（無法評估 ⇒ 明確告警）", MetricCalibrationFreshnessRunOK + `{artifact="parameters"} == 0`},
+		{"fail-closed（無法評估 ⇒ 明確告警，標的是權威產物）", MetricCalibrationFreshnessRunOK + overlay + " == 0"},
 		{"缺席（檢查沒在跑 ⇒ 明確告警）", "absent(" + MetricCalibrationFreshnessCheckedTimestamp + ")"},
+		{"drift 告警的閘門（比較沒做完時不得沿用凍結值）", MetricCalibrationDriftRunOK + overlay + " == 1"},
 	} {
 		if !strings.Contains(text, want.needle) {
 			t.Errorf("%s：規則檔缺少 %q", want.what, want.needle)
 		}
+	}
+
+	// 反面斷言：判定用的 expr 不得再指向 image 內基準（#2007 的永久誤報形狀）。
+	// 基準的序列仍然存在（可見、可查），但沒有規則可以拿它做判定。
+	for _, forbidden := range []string{
+		MetricCalibrationFreshnessOK + `{artifact="parameters"}`,
+		MetricCalibrationFreshnessRunOK + `{artifact="parameters"}`,
+	} {
+		if strings.Contains(text, forbidden) {
+			t.Errorf("規則檔不得再以 image 內基準為判定標的（%q）——它在生產會永久 firing；"+
+				"權威產物是 %s", forbidden, CalibrationArtifactParametersOverlay)
+		}
+	}
+	if !strings.Contains(text, MetricCalibrationDriftOutOfWindowKeys) ||
+		!strings.Contains(text, MetricCalibrationDriftDroppedKeys) {
+		t.Error("規則檔必須引用 drift 的兩個異常計數（out_of_window / dropped）")
 	}
 }

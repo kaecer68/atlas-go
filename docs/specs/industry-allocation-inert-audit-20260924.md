@@ -796,3 +796,45 @@ atlas_calibration_freshness_age_seconds{artifact="parameters"} 3900.000000
 - **「校準任務有沒有在跑」沒有心跳指標**：校準寫入是**有變更才寫**（`internal/risk/self_calibrate.go`），所以產物年齡只是活動的**上界** ⇒ `CalibrationArtifactStale` 對「已收斂、連續 verdict=stable」的系統可能誤報。要接到 18 個校準任務才能給出直接訊號（FU-20260926-10）。
 - **結構性 finding 仍未進生產監控**：`L1/L2_NO_REPRESENTATIVES` 之類由 CI 的 policy 負責；生產端的結構漂移目前沒有自動訊號。
 - **`atlas-validate` 沒有隨 image 出貨**（§12.2 實查）：本 PR 讓「生產端沒有觀測」變成「有觀測」，但沒有處理「政策命令在生產不可直接執行」這件事；若業主希望 operator 能在主機上手動覆核，需另票（把 CLI 加進 image 或提供 wrapper）。
+
+### 12.8 後續更新（2026-09-27，issue #2007）：改標的 ＋ drift 偵測；並複驗推翻 §12.6 第 2 點
+
+**這一節取代 §12.3–§12.6 中「標的＝SSOT」與「SSOT 年齡仍是有意義的訊號」的敘述**
+（本節以前的內容是那一批 PR 的**當時**紀錄，保留原樣以便回溯）。
+
+**(1) 為什麼要改標的（生產實證）**：§12.6 第 2 點說「SSOT 仍會被其他校準器刷新 ⇒
+SSOT 超過 48h 仍是有意義的訊號」。2026-09-27 的生產實測**不成立**：
+
+```
+atlas_calibration_freshness_ok{artifact="parameters"}            0
+atlas_calibration_freshness_run_ok{artifact="parameters"}        1
+atlas_calibration_freshness_age_seconds{artifact="parameters"}   7206752   ≈ 83.4 天
+```
+
+83.4 天＝image 內 `configs/parameters.json` 的 `updated_at`（2026-07-06，建置日），
+而容器已跑 ~33h、overlay 是當天 11:27 寫的（32,113 bytes）。**判定的關鍵**：
+`ParametersConfig.SaveWithRollback`（`internal/config/parameters.go`）每一次寫入都執行
+`p.UpdatedAt = time.Now()` ⇒「`updated_at` 停在建置日」等價於「這個檔在容器內沒被寫過」。
+所以 `CalibrationArtifactStale`（當時的 `artifact="parameters"`）是**永久誤報**。
+
+**(2) 修法（皆已落地）**：
+- 新增 artifact 標籤值 `parameters_overlay`（權威的 effective 產物），第 1、2 條規則改讀它；
+  `artifact="parameters"` 序列**語意不變**、繼續輸出，但不再有任何規則讀它（§12.4 的告警表
+  已由 runbook §3 取代）。
+- 新增 drift 族（`atlas_calibration_drift_run_ok` / `_keys` / `_out_of_window_keys` /
+  `_dropped_keys{reason}`）與一條規則 `CalibrationEffectiveDriftUnexplained`：
+  把「runtime 生效值偏離受版控基準」變成可查詢的事實（#2007 的主題），
+  但**只**對「無法解釋」的偏離告警（比值超出單步窗、或有套不上的 entry），
+  因為 runtime 校準是業主定案的 **intended** 行為（`drift_keys > 0` 是正常狀態）。
+- 實作重用 `config.InspectCalibratedOverlayLayer`（runtime 載入的同一套判定，但**唯讀**：
+  監控任務不得寫檔，否則會與校準寫入者的 merge 競爭）。
+- 落地文件：`docs/operations/calibration-freshness-runbook.md`（§1.2 改標的的理由、
+  §2 兩個 artifact 的判定差異、§3.4 新告警的 triage、§4 驗收與真實資料 probe）。
+- promtool 案例 11 → **16**（新增 L/M/N/O/P，含「20 筆 drift 但全可解釋 ⇒ 不許 firing」
+  這條**政策**的可執行版本）。
+
+**(3) 生產實測的 drift 讀數（唯讀，不寫生產）**：出貨基準 ＋ 生產 overlay（6 筆，全部來自
+`calibrate_seasonal`）⇒ `drift_run_ok=1`、`drift_keys=6`（全部是
+`industry.seasonal_patterns.*` 的點分路徑 entry）、`out_of_window=0`、`not_applicable=0`、
+`ssot_moved=0` ⇒ 新告警在真實資料上**不誤報**，而改標的後 `CalibrationArtifactStale`
+由「永久 firing」變成 **inactive**（overlay 新鮮）。

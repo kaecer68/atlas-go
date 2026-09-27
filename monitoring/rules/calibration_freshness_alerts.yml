@@ -1,5 +1,7 @@
 # monitoring/rules/calibration_freshness_alerts.yml
 # 建立:2026-09-26（issue #1944 / I31 的 **production 半邊**;PR #1991 的「未完成項 1」）。
+# 改版:2026-09-27（issue #2007 的兩個 bounded 子項:① 新鮮度檢查改標的 ② image-vs-effective
+#      drift 偵測）。改版的**契約對應**見下面「本次改版:誰讀哪一條序列」。
 #
 # 為什麼存在
 # ----------
@@ -12,63 +14,119 @@
 # 是 CI 現場 build 的（`.github/workflows/nightly-refresh.yml` 的
 # `go build -o atlas-validate ./cmd/calibration-validate`），
 # 本 repo 的 Dockerfile 並沒有把它放進 image（實查指令見 runbook §1）。
-# ⇒ 在這次接線之前，「`configs/parameters.json` 已不新鮮」在生產上是**零觀測**：
-# 不是「值班忘了跑」，而是沒有東西會跑。
-# 本檔就是那個觀測面的判讀層（指標由 Go 側匯出，見下一段）。
+# ⇒ 在這次接線之前，「校準產物已不新鮮」在生產上是**零觀測**：不是「值班忘了跑」，
+# 而是沒有東西會跑。本檔就是那個觀測面的判讀層（指標由 Go 側匯出）。
 #
-# 這三條規則看的是 Go 側匯出的 gauge 族（`internal/monitoring/calibration_freshness.go`，
-# 由背景任務 `calibration_freshness_metrics_export` 每 5 分鐘輸出，
-# `cmd/atlas/calibration_freshness_metrics_task.go`）：
+# ══ 本次改版（#2007）：為什麼要改標的 ══
+# --------------------------------------
+# 原本四條規則都只看 `configs/parameters.json`（image 內、受版控、經人工審查的
+# **基準**，artifact=`parameters`）。那在 #2013 之前是對的：校準迴圈會改寫它。
+# #2013（FU-20260926-07）之後，容器內校準的寫入改到 bind mount 上的 overlay
+# （`data/state/parameters.calibrated.json`），基準在生產上**不會被寫**
+# （`SaveWithRollback` 每次都更新 `updated_at` ⇒ `updated_at` 停在 image 建置日
+# 等價於「這個檔自 image 之後沒被寫過」）。生產實測（2026-09-27）：
 #
-#   atlas_calibration_freshness_ok{artifact="parameters"}
-#       1 = 新鮮（沒有任何 freshness finding）;0 = 超過契約 / 從未記錄校準時間 /
-#       **檢查本身無法評估**（fail-closed）
-#   atlas_calibration_freshness_run_ok{artifact="parameters"}
-#       1 = 檢查可以評估產物;0 = 不行（stat/讀取/JSON 解析失敗）
-#   atlas_calibration_freshness_age_seconds{artifact="parameters"}
-#       產物自述的最後校準時間（updated_at）距今幾秒（只有可評估時才輸出）
-#   atlas_calibration_last_calibrated_timestamp_seconds{artifact="parameters"}
-#       Unix 秒;**0 = 從未記錄校準時間**（明確哨兵值,不是 1970 年）
+#   atlas_calibration_freshness_ok{artifact="parameters"}      0
+#   atlas_calibration_freshness_run_ok{artifact="parameters"}  1
+#   atlas_calibration_freshness_age_seconds{artifact="parameters"}  7206752   ≈ 83.4 天
+#
+# 而 overlay 是**當天** 11:27 寫的 ⇒ `CalibrationArtifactStale` 對 `artifact="parameters"`
+# 是**永久誤報**：它監控的不是權威產物。修法是**新增標籤值**而不是改既有序列的語意：
+#
+#   artifact="parameters"          image 內基準。**語意不變**（「基準多久沒被換過」），
+#                                  仍由 Go 側每 5 分鐘輸出，但**不再有任何規則讀它**——
+#                                  它在生產的「不新鮮」是預期狀態（基準只在重新部署時變），
+#                                  拿它開告警就是永久誤報。它的資訊價值改由 drift 承擔
+#                                  （見 `atlas_calibration_drift_*`）。
+#   artifact="parameters_overlay"  **權威的 effective 產物**（校準 overlay）。
+#                                  第 1、2 條規則改讀這個標籤值。
+#
+# ══ 本次改版：誰讀哪一條序列（消費者的契約對應）══
+# ------------------------------------------------
+#   · `CalibrationArtifactStale`        → 改讀 `artifact="parameters_overlay"`（語意不變:
+#     「權威產物不新鮮」；只是產物換成 overlay）。**改版前後 alertname/labels 完全相同**，
+#     差別只在被監控的序列與 annotation 文案（值班看到的是 overlay 的路徑與 triage）。
+#   · `CalibrationFreshnessUnverifiable`→ 同上，改讀 `artifact="parameters_overlay"`。
+#     （基準讀不到＝製程讀不到自己的參數檔，服務本身會壞在其他告警上，且它的
+#       `run_ok{artifact="parameters"}` 仍以序列呈現、可查。）
+#   · `CalibrationFreshnessExporterDown`→ **不動**。它讀的是探針心跳
+#     （`atlas_calibration_freshness_checked_timestamp_seconds`），那是**任務級**事實
+#     （三個觀察由同一個任務、同一個時戳寫入），刻意**不**帶 artifact 標籤：
+#     若給每個 artifact 各一份心跳，這一條會對同一個根因發兩次通知。
+#   · `CalibrationEffectiveDriftUnexplained`（新）→ 讀 drift 族的兩個**異常**計數。
+#
+# ══ 指標族（權威定義：internal/monitoring/calibration_freshness.go 與 calibration_effective.go）══
+#   atlas_calibration_freshness_ok{artifact}
+#       1 = 新鮮;0 = 其他一切情況（超過契約 / 從未記錄校準時間 / **檢查無法評估**，
+#       fail-closed）。兩個 artifact 的「新鮮」定義:**基準**＝`updated_at` 與檔案 mtime
+#       都還在 48h 內（CLI `config.ValidateCalibration` 同判）;**overlay**＝overlay
+#       自己的 `updated_at`（`SaveCalibrationOverlay` 每次寫入都蓋章）還在 48h 內。
+#   atlas_calibration_freshness_run_ok{artifact}
+#       1 = 可以評估;0 = 不行（stat/讀取/解析失敗）。
+#   atlas_calibration_freshness_age_seconds{artifact}
+#       落後多少秒（只有可評估時才輸出）。
+#   atlas_calibration_last_calibrated_timestamp_seconds{artifact}
+#       Unix 秒;**0 = 從未記錄校準時間**（明確哨兵值,不是 1970 年）。
 #   atlas_calibration_freshness_checked_timestamp_seconds{artifact="parameters"}
-#       檢查最後一次執行的 Unix 秒（探針心跳）
+#       任務心跳（**任務級**,不帶 artifact 的其他值）。
+#   atlas_calibration_drift_run_ok{artifact="parameters_overlay"}
+#       1 = 基準 vs 生效值的比較做完了;0 = 沒做完（基準讀不到/解析失敗、overlay 解不開）。
+#       fail-closed:0 時下面的數值序列是**凍結值**,不代表現在的偏離量。
+#   atlas_calibration_drift_keys{artifact="parameters_overlay"}
+#       **現在**有幾個 key 的生效值與 image 內基準不同（drift 的**可見性**;> 0 是
+#       intended 的正常狀態,見下）。
+#   atlas_calibration_drift_out_of_window_keys{artifact="parameters_overlay"}
+#       其中比值落在校準迴圈單步窗 `[1/3, 3]`（`config.CalibrationOverlaySingleStepWindow*`）
+#       之外的數量。**不是** drift 的存在與否,而是「這個生效值不是單一輪被接受的校準
+#       能解釋的」——與 `logOverlayApplication` 的既有 WARN 同一個判定。
+#   atlas_calibration_drift_dropped_keys{artifact="parameters_overlay",reason}
+#       overlay 宣告了但**沒生效**的 entry 數量:
+#         reason="ssot_moved"    基準已移動 ⇒ loader 讓它失效（**設計行為**:受審查的
+#                                憲章編輯優先）。只呈現,**不告警**。
+#         reason="not_applicable" 參數/路徑不存在或值型別不可套用 ⇒ 永遠不會生效
+#                                （**缺陷**,第 4 條的條件之一）。
 #
-# 「是否新鮮」的門檻**不在本檔**：它由 `monitoring.CalibrationFreshnessContract`
-# 決定,而那**就是** `config.DefaultCalibrationMaxAge`（= CLI `--max-age` 的預設值
-# = production 命令的 `--max-age=48h`）⇒ 全 repo 只有一個數字,CLI 與監控不可能漂移
-# （Go 測試 `TestCalibrationFreshnessContractMatchesCLIAndRunbook` 會讀 CLI 原始碼與
-# runbook 把這件事釘住）。
+# ══ 為什麼「drift 存在」本身**不**告警（政策,不是疏漏）══
+# ------------------------------------------------------
+# 業主已定案:runtime 校準是 **intended**（採「持久化 overlay ＋ 漂移偵測」）。
+# 因此 `atlas_calibration_drift_keys > 0` 是**健康系統的正常狀態**,對它開告警等於
+# 複製我們剛剛修掉的永久誤報。分工是:
+#   · **可見性(不 page)**:`drift_keys` 回答「這台機器偏離憲章多少」;值班/儀表板/runbook
+#     用它,而不是被它叫醒。
+#   · **告警(會 page)**:只有**無法解釋**的偏離才 page——比值超出單步窗,或
+#     overlay 宣告了套不上的 entry。
+# promtool 測試把這條政策寫成**可執行規格**:案例 N（照今日生產 overlay 的形狀:
+# drift_keys=6 但 out_of_window/not_applicable 皆 0）必須**全部沉默**;若有人把第 4 條
+# 改成 `drift_keys > 0`,案例 N 會紅。
 #
-# ⚠️ 判讀三條的共同前提（**先看這個再看任何數字**）
-# -------------------------------------------------
-#   1. `atlas_calibration_freshness_run_ok` = 0 ⇒ **age 與 last_calibrated 是凍結樣本**,
-#      不代表現況（gauge 是 last-write-wins、collector 不移除序列,所以無法評估之後
-#      `/metrics` 上仍留著最後一次可評估時的值）。此時只有第 2 條的 triage 有意義。
-#   2. 沒有任何一條規則拿 age / last_calibrated 做**判定**（本檔的 expr 只看
-#      `_ok` / `_run_ok`）⇒ 凍結值不會製造誤報;它只是會被值班的人讀到。
-#   3. `_ok` 與 age 量的不是同一件事:`_ok` 是 CLI 的 freshness 判定（updated_at
-#      **與檔案 mtime** 都看）,age 只看 updated_at。以 `cp -p` 還原舊檔時
-#      mtime 舊（`_ok`=0）而 updated_at 新（age 小）——**以 `_ok` 為準**。
+# ⚠️ 判讀前提（**先看 run_ok 再看任何數字**）
+# -----------------------------------------
+#   1. `atlas_calibration_freshness_run_ok{artifact="parameters_overlay"}` = 0 ⇒
+#      overlay 的 age / last_calibrated 是**凍結樣本**,不代表現況。
+#   2. `atlas_calibration_drift_run_ok` = 0 ⇒ `drift_*` 的數值是**凍結樣本**。
+#   3. 沒有任何一條規則拿 age / last_calibrated / drift_keys 做**判定** ⇒ 凍結值不會
+#      製造誤報;它們只是會被值班的人讀到,所以在此寫明。
 #
 # ⚠️ 另一條判讀前提：假陽性形狀（2026-09-26 實證;不是 bug,不要回報成 bug）
 # ----------------------------------------------------------------------
 # 校準寫入是**有變更才寫**（`internal/risk/self_calibrate.go`:只有
 # `len(report.Changes) > 0` 才呼叫 `LockedSaveWithRollback`),因此一個**已收斂**
 # 的系統可能連續多輪 `verdict=stable` 而合法地超過 48h 不改寫檔案。
-# ⇒ 看到 `CalibrationArtifactStale` firing 時,**第一件事不是查資料源,是查校準任務的
-#    verdict**。真正的「校準任務有沒有在跑」心跳指標目前**不存在**,屬另一張票
-#    （`docs/operations/FOLLOWUPS.md` FU-20260926-10）;本檔先給可量測的部分。
+# ⇒ 看到 `CalibrationArtifactStale{artifact="parameters_overlay"}` firing 時,
+#   **第一件事不是查資料源,是查校準任務的 verdict**。真正的「校準任務有沒有在跑」
+#   心跳指標目前**不存在**,屬另一張票（`docs/operations/FOLLOWUPS.md` FU-20260926-10）。
 
 groups:
   - name: calibration_freshness
     rules:
-      # ══ 1. 產物不新鮮（warning,不是 error）══════════════════════════════════
+      # ══ 1. 有效產物（overlay）不新鮮（warning,不是 error）════════════════════
       # 為什麼是 warning:產物年齡是「校準活動」的**上界**而不是直接量測（見上面的
       # 假陽性段）,單獨一個 stale 不足以證明 pipeline 壞掉 ⇒ 要被人看見,但不該
       # 用 error 的語氣叫人半夜起床。真正無法判定時由第 2 條以 error 負責。
       #
       # 為什麼要 `and run_ok == 1`:沒有這一半,「檢查讀不到檔案」會被讀成
       # 「產物很舊」—— 兩者需要完全相反的行動（前者查檔案/權限/路徑,後者查校準任務）。
-      # 標籤比對用預設（兩側都是 artifact="parameters"）,不需要 on()。
+      # 標籤比對用預設（兩側都是 artifact="parameters_overlay"）,不需要 on()。
       #
       # for: 1h（12 個匯出週期）:這個量一天最多變一次,1 小時的持續時間濾掉
       # 「單一輪的讀取抖動」而幾乎不延遲真正的發現。
@@ -79,9 +137,9 @@ groups:
       # 的案例 K 寫成可執行的規格,並記在 runbook §5「已知限制」。
       - alert: CalibrationArtifactStale
         expr: |
-          atlas_calibration_freshness_ok{artifact="parameters"} == 0
+          atlas_calibration_freshness_ok{artifact="parameters_overlay"} == 0
           and
-          atlas_calibration_freshness_run_ok{artifact="parameters"} == 1
+          atlas_calibration_freshness_run_ok{artifact="parameters_overlay"} == 1
         for: 1h
         labels:
           severity: warning
@@ -89,27 +147,31 @@ groups:
           component: calibration-freshness
           incident_ref: "issue-1944-i31"
         annotations:
-          summary: "校準產物 parameters.json 已不新鮮（超過 48h 契約 或 從未記錄校準時間；值仍可評估）"
+          summary: "有效校準產物 parameters.calibrated.json（overlay）已不新鮮（超過 48h 契約 或 從未記錄校準時間；值仍可評估）"
           description: |
-            `configs/parameters.json` 出現了 freshness finding（`atlas_calibration_freshness_ok` = 0）,
-            兩種子狀態:**超過契約**（`updated_at` 或檔案 mtime 比 48h 舊）
-            或**從未記錄校準時間**（`updated_at` 為零）。
+            `data/state/parameters.calibrated.json`（校準 overlay,artifact=`parameters_overlay`）
+            出現了 freshness finding（`atlas_calibration_freshness_ok{artifact="parameters_overlay"}` = 0）,
+            三種子狀態:**超過契約**（`updated_at` 比 48h 舊）、**從未記錄校準時間**
+            （`updated_at` 為零，沒有值可供判定）、或**檔案不存在**
+            （`OVERLAY_ABSENT`：沒有任何 runtime 校準被持久化）。
             契約 = `monitoring.CalibrationFreshnessContract` = `config.DefaultCalibrationMaxAge`
             = production 命令的 `--max-age=48h`。檢查本身可以評估
-            （`atlas_calibration_freshness_run_ok{artifact="parameters"}` = 1）
+            （`atlas_calibration_freshness_run_ok{artifact="parameters_overlay"}` = 1）
             ⇒ 這**不是**讀取/解析失敗;是哪一種子狀態看下面的第 1 步。
+
+            ⚠️ 這一條**不再**監控 `configs/parameters.json`（image 內基準）:那個檔在
+            #2013 之後只有重新部署才會變,它的「超過 48h」是預期狀態（永久誤報）。
 
             先查什麼（依序,不要跳到資料源）:
             0. 確認不是「無法評估」:run_ok 必須是 1。若它是 0,age 是凍結樣本,
                請走 CalibrationFreshnessUnverifiable 的 triage。
-            1. 看是「舊」還是「從未記錄」:
-               docker exec atlas-go grep -o '"updated_at": *"[^"]*"' /app/configs/parameters.json | head -1
-               值為 null/空 ⇒ 是「從未記錄校準時間」（此時 age 序列**不會**有值,
-               別去 grep 它）;有值 ⇒ 是「舊」。
-            2. 它是不是「本來就不該被刷新」:#2013 之後 `risk_gate_calibrate` 的寫入改到
-               `data/state/parameters.calibrated.json`（overlay）,SSOT 保持 pristine ⇒
-               本條量的是「其他校準器還有沒有在刷 SSOT」。要看 risk 校準,改看 overlay 的
-               calibrated_at（jq/結構化 log `overlay_entry_applied`）。
+            1. 三種子狀態怎麼分（生產 image 沒有 python/jq,用 grep/stat）:
+               docker exec atlas-go grep -o '"updated_at": *"[^"]*"' /app/data/state/parameters.calibrated.json | head -1
+               有值 ⇒ 是「舊」;值為 null/空 ⇒ 是「從未記錄」;檔案不存在 ⇒ 是「沒有 overlay」。
+            2. 「沒有 overlay」先確認寫入路由有沒有被註冊（#2013 的 writeback=overlay）:
+               docker logs atlas-go --since 24h 2>&1 | grep -E "calibration_writeback|overlay_written"
+               完全沒有這類日誌 ⇒ 校準沒有把結果持久化到 overlay（此時 risk gate 等
+               自適應值不會跨重建存活）。
             3. ⚠️ 假陽性第一順位:校準是「有變更才寫」⇒ 已收斂的系統會合法地不寫檔。
                docker logs atlas-go --since 72h 2>&1 | grep -E "self_calibrate|verdict"
                連續多輪 verdict=stable / "no adjustments needed" ⇒ 產物沒有變舊的理由,
@@ -117,9 +179,9 @@ groups:
             4. 檢查任務本身是否照常執行（心跳,與產物無關）:
                docker exec atlas-go curl -s localhost:18080/metrics | grep atlas_calibration_freshness_checked_timestamp_seconds
                落後遠大於 300s ⇒ 先看 CalibrationFreshnessExporterDown 的 triage。
-            5. 檔案的實際時間戳:
-               docker exec atlas-go stat -Lc '%y %n' /app/configs/parameters.json
-               （mtime 是 `_ok` 判定的一部分;`cp -p` 之類的還原會讓它變舊）
+            5. 真的偏離了多少（overlay 有幾筆、離憲章多遠）:
+               docker exec atlas-go curl -s localhost:18080/metrics | grep atlas_calibration_drift_
+               仍可評估時 drift 那一族是可信的;`drift_run_ok` = 0 時它是凍結值。
           runbook_url: "https://github.com/kaecer68/atlas-go/blob/main/docs/operations/calibration-freshness-runbook.md"
 
       # ══ 2. 檢查本身無法評估（error;fail-closed）══════════════════════════════
@@ -127,11 +189,11 @@ groups:
       # 這一條與第 1 條**互斥**:第 1 條要求 run_ok==1,本條要求 run_ok==0
       # ⇒ 同一個根因不會有兩條規則各自 paging。
       #
-      # for: 15m（3 個匯出週期）:檔案寫入是 tmp+rename 的原子替換,正常的讀取不會
-      # 失敗（沒有 torn read）⇒ 15m 足以濾掉單一輪的環境抖動,同時把「第 1 條 resolve →
-      # 本條 firing」的交接窗壓到 ≤15 分鐘（見第 1 條的註解）。
+      # for: 15m（3 個匯出週期）:overlay 的寫入是 tmp+rename 的原子替換,正常的讀取
+      # 不會失敗（沒有 torn read）⇒ 15m 足以濾掉單一輪的環境抖動,同時把
+      # 「第 1 條 resolve → 本條 firing」的交接窗壓到 ≤15 分鐘（見第 1 條的註解）。
       - alert: CalibrationFreshnessUnverifiable
-        expr: atlas_calibration_freshness_run_ok{artifact="parameters"} == 0
+        expr: atlas_calibration_freshness_run_ok{artifact="parameters_overlay"} == 0
         for: 15m
         labels:
           severity: error
@@ -139,27 +201,30 @@ groups:
           component: calibration-freshness
           incident_ref: "issue-1944-i31"
         annotations:
-          summary: "校準產物的新鮮度無法判定（檢查讀不到/解不開 parameters.json）"
+          summary: "有效校準產物（overlay）的新鮮度無法判定（檢查讀不到/解不開 parameters.calibrated.json）"
           description: |
             背景任務 `calibration_freshness_metrics_export` 連續 15 分鐘無法評估
-            `configs/parameters.json`（stat 失敗 / 讀取失敗 / JSON 不合法）。
+            `data/state/parameters.calibrated.json`（overlay；stat 失敗 / 讀取失敗 /
+            JSON 不合法）。
             此時 freshness 是**未知**,不是「新鮮」也不是「不新鮮」——
-            `atlas_calibration_freshness_ok{artifact="parameters"}` 是 0（fail-closed）,
+            `atlas_calibration_freshness_ok{artifact="parameters_overlay"}` 是 0（fail-closed）,
             且 `atlas_calibration_freshness_age_seconds` /
             `atlas_calibration_last_calibrated_timestamp_seconds` 是**凍結的舊值**。
 
             先查什麼（依序）:
             1. 檔案在不在、權限對不對:
-               docker exec atlas-go ls -l /app/configs/parameters.json
-            2. 日誌上有一則結構化 WARN 直接說明原因（code=PARAMS_STAT_FAILED /
-               PARAMS_READ_FAILED / PARAMS_INVALID_JSON）與 finding 數:
-               docker logs atlas-go --since 2h 2>&1 | grep artifact_unverifiable
-            3. JSON 是否不合法（通常是半寫入或人為編輯;生產 image 沒有 python/jq,
-               用 grep 看開頭結尾與 updated_at 欄位）:
-               docker exec atlas-go head -c 200 /app/configs/parameters.json
-               docker exec atlas-go tail -c 80 /app/configs/parameters.json
-            4. 若檔案其實正常:檢查路徑是否指向別的地方（權威來源是應用自己的
-               `config.GetParametersConfigPath()`,不是硬編的 /app/configs）。
+               docker exec atlas-go ls -l /app/data/state/parameters.calibrated.json
+            2. 日誌上有一則結構化 WARN 直接說明原因（code=OVERLAY_STAT_FAILED /
+               OVERLAY_READ_FAILED / OVERLAY_INVALID_DOCUMENT）:
+               docker logs atlas-go --since 2h 2>&1 | grep overlay_unverifiable
+            3. JSON 是否不合法（通常是半寫入;寫入是 tmp→rename,所以更可能是人為編輯。
+               生產 image 沒有 python/jq,用 grep 看開頭結尾與 updated_at 欄位）:
+               docker exec atlas-go head -c 200 /app/data/state/parameters.calibrated.json
+               docker exec atlas-go tail -c 80 /app/data/state/parameters.calibrated.json
+            4. 若檔案其實正常:檢查路徑是否指向別的地方（權威來源是製程註冊的
+               `config.GetCalibratedOverlayPath()`——`cmd/atlas/main.go` 啟動時註冊
+               `<workDir>/data/state/parameters.calibrated.json`）。
+            5. `drift_run_ok` 此時必然也是 0（同一個根因）:不要把它當成「沒有偏離」。
           runbook_url: "https://github.com/kaecer68/atlas-go/blob/main/docs/operations/calibration-freshness-runbook.md"
 
       # ══ 3. 匯出任務沒在跑 / 指標族消失（warning）══════════════════════════════
@@ -169,6 +234,11 @@ groups:
       # 為什麼用 `up{job="atlas-go"} == 1` 當閘門:服務沒在跑時
       # atlas_container_liveness_alerts.yml 的 AtlasGoTargetDown 已在 2 分鐘內 paging,
       # 這裡再叫一次只是重複（本 repo 對同一個根因重複 paging 有明確紀律）。
+      #
+      # ⚠️ 心跳是**任務級**的:它回答「這個匯出任務有沒有在跑」,而三個觀察（基準、
+      # overlay、drift）由同一次呼叫、同一個時戳寫入 ⇒ 心跳刻意**不帶** artifact 標籤。
+      # 若給每個 artifact 各一份心跳,下面第二個 arm 會同時匹配多條序列、對同一個
+      # 根因發多次通知。因此本條**沒有**因為 #2007 改版而變動（promtool 案例 E/F/G/H 不變）。
       #
       # 兩個 arm:
       #   · absent(...)        —— 序列完全消失（指標改名/移除、任務從未執行）
@@ -196,9 +266,9 @@ groups:
             1800 秒（= 6 個 5 分鐘匯出週期）,而同一個 job 的 `up{job="atlas-go"}` 仍為 1
             ⇒ atlas-go 活著、`/metrics` 還回得出東西,但這個檢查不再更新。
 
-            這代表什麼:`CalibrationArtifactStale` / `CalibrationFreshnessUnverifiable`
-            此刻的輸出**不可信**（所有序列都凍結在最後一次執行時的狀態,包含 age 與
-            last_calibrated）,先修本條再讀那兩條。
+            這代表什麼:`CalibrationArtifactStale` / `CalibrationFreshnessUnverifiable` /
+            `CalibrationEffectiveDriftUnexplained` 此刻的輸出**不可信**（所有序列都凍結在
+            最後一次執行時的狀態,包含 age / last_calibrated / drift 各量）,先修本條再讀那三條。
 
             先查什麼（依序）:
             1. 指標是不是換了名字或整族不見了:
@@ -209,7 +279,75 @@ groups:
                （`scripts/ci/check_critical_tasks.sh` 也把這個 task 名列為關鍵任務:
                它被 compiler DCE/遮蔽移除時,CI 會紅在 strings 檢查。）
             3. 任務有沒有執行過、有沒有錯誤:
-               docker logs atlas-go --since 6h 2>&1 | grep -E "calibration_freshness|task_failed"
+               docker logs atlas-go --since 6h 2>&1 | grep -E "calibration_freshness|calibration_drift|task_failed"
             4. 服務其實沒在跑（閘門的邊界）:本條 firing 時 `up{job="atlas-go"}` 必須是 1;
                若同時是 0,先看 AtlasGoTargetDown,不要查這裡。
+          runbook_url: "https://github.com/kaecer68/atlas-go/blob/main/docs/operations/calibration-freshness-runbook.md"
+
+      # ══ 4. 生效值與 image 內基準的偏離**無法由校準迴圈解釋**（warning）════════
+      # 這一條是 #2007 子項 ② 的告警面:把「runtime 已經偏離憲章,而且偏離的樣子說不通」
+      # 變成可 page 的事實。**不是**「有 drift 就 page」——那會是永久誤報
+      # （業主定案:runtime 校準是 intended;今日生產實測 drift_keys=6,見案例 N）。
+      #
+      # 兩個 arm（各自對應一種「宣告與事實不符」）:
+      #   · out_of_window_keys > 0    生效值與基準的比值落在單步窗 [1/3, 3] 之外
+      #                               ⇒ 與 `logOverlayApplication` 的既有 WARN 同判定。
+      #   · dropped_keys{not_applicable} > 0
+      #                               overlay 宣告了套不上的 entry（參數/路徑不存在、
+      #                               或值型別不可套用）⇒ **那些校準結果根本沒生效**,而且
+      #                              只有日誌會說（loader 在下次載入時把 entry 丟掉）。
+      #
+      # 為什麼要 `and on() drift_run_ok == 1`:比較沒做完時數值是凍結的,
+      # 不該用舊的異常值持續 paging;那個狀態由第 2 條（error）負責,同一個根因不重複。
+      #
+      # for: 1h（12 個匯出週期）:這是**狀態**不是事件。單步窗外的值要等下一次校準輪
+      # （主要 cadence 24h）才可能被改寫;1 小時足以濾掉單輪抖動而不延遲真正的處置。
+      - alert: CalibrationEffectiveDriftUnexplained
+        expr: |
+          (
+            atlas_calibration_drift_out_of_window_keys{artifact="parameters_overlay"} > 0
+            or
+            atlas_calibration_drift_dropped_keys{artifact="parameters_overlay",reason="not_applicable"} > 0
+          )
+          and on()
+          (atlas_calibration_drift_run_ok{artifact="parameters_overlay"} == 1)
+        for: 1h
+        labels:
+          severity: warning
+          service: atlas
+          component: calibration-drift
+          incident_ref: "issue-2007"
+        annotations:
+          summary: "生效參數與 image 內基準的偏離無法由校準迴圈解釋（比值超出單步窗 或 overlay 有套不上的 entry）"
+          description: |
+            atlas-go 執行的參數不是 `configs/parameters.json`（image 內、受版控、經人工審查
+            的**基準**），而是該基準疊上校準 overlay
+            （`data/state/parameters.calibrated.json`）的**生效值**。這個偏離本身是
+            **intended**（業主定案:runtime 校準採「持久化 overlay ＋ 漂移偵測」）,
+            所以這一條**不是**「有偏離就告警」——它只在偏離的樣子**說不通**時 firing:
+
+            1. `atlas_calibration_drift_out_of_window_keys{artifact="parameters_overlay"} > 0`
+               ⇒ 有 key 的 `生效值 / 基準值` 比值落在單步窗 [1/3, 3] 之外。這是
+               `logOverlayApplication` 既有的 WARN 條件（`internal/config/calibration_overlay.go`
+               的 `RatioOutsideSingleStepWindow`）:這個值不是單一輪被接受的校準能解釋的。
+            2. `atlas_calibration_drift_dropped_keys{artifact="parameters_overlay",reason="not_applicable"} > 0`
+               ⇒ overlay 裡有不存在的參數名/路徑,或值型別不可套用 ⇒ 那些「已校準」的值
+               **永遠不會生效**。loader 會在下次載入時把它們從 overlay 移除（日誌 WARN
+               `overlay_entry_unknown_parameter` / `_unknown_path` / `_non_numeric_parameter`）,
+               在那之前本條持續 firing。
+
+            先查什麼（依序）:
+            1. 目前偏離的全貌（多少 key、哪些、比值多少）:
+               docker exec atlas-go curl -s localhost:18080/metrics | grep -E "atlas_calibration_drift_(keys|out_of_window|dropped|run_ok)"
+            2. 逐筆看 overlay 的宣告與基準（生產 image 沒有 jq,用 grep）:
+               docker exec atlas-go grep -o '"path": *"[^"]*"' /app/data/state/parameters.calibrated.json | sort
+               docker exec atlas-go grep -o '"method": *"[^"]*"' /app/data/state/parameters.calibrated.json | sort | uniq -c
+            3. 誰寫的（方法名 + 時間）與「這是不是一次野蠻的單步」:
+               docker logs atlas-go --since 72h 2>&1 | grep -E "overlay_entry_applied|overlay_entry_outside_single_step_window"
+               同一個 key 的 ratio 若長期停在窗外,通常是**多輪累積**而不是單步暴走
+               （窗是**相對於憲章**的累積比值）⇒ 下一步是判斷目的是否正當,而不是先回滾。
+            4. 若是「套不上」那一類:**修正 overlay 的 key 名 / 值型別**,或修正產生它的校準器;
+               重啟/reload 會讓 loader 丟掉該 entry（屆時本條 resolve,`ssot_moved` 那一格會記一筆）。
+            5. 反向確認不是「量錯」:`atlas_calibration_drift_run_ok` 必須是 1
+               （0 ⇒ 數值是凍結的,先走 CalibrationFreshnessUnverifiable）。
           runbook_url: "https://github.com/kaecer68/atlas-go/blob/main/docs/operations/calibration-freshness-runbook.md"
