@@ -70,6 +70,12 @@ trap 'rm -rf "${WORK}"' EXIT
 mkdir -p "${WORK}/rules" "${WORK}/tests"
 cp monitoring/rules/*.yml "${WORK}/rules/"
 cp monitoring/tests/*.yml "${WORK}/tests/"
+# ⚠️ 容器以 image 內建的 nobody 執行（官方 Dockerfile:USER nobody）。`mktemp -d` 的 700
+# 在 Linux runner 上會讓 nobody **連 traverse 都不行** ⇒ promtool 讀不到檔案、以非 0 結束，
+# 於是「未突變必須為綠」這一步就紅（本腳本 2026-09-27 在 CI 上實際踩到）。
+# macOS 的 Docker Desktop 會把 uid 對映掉，所以本機不會重現 —— 這裡必須自己把權限打開。
+chmod 755 "${WORK}"
+chmod -R a+rX "${WORK}/rules" "${WORK}/tests"
 
 LOG="${WORK}/promtool.log"
 MUT_LOG="${WORK}/mut.log"
