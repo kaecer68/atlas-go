@@ -3,7 +3,7 @@
 | 項目 | 內容 |
 |---|---|
 | 文件角色 | 「producer 有、consumer 無」「狀態宣稱生效但實際 inert」「死碼」的**單一登記處**，避免同一類缺陷（靜默失效）反覆被發現又重新遺忘 |
-| 狀態 | v4（2026-09-25，issue [#1944](https://github.com/kaecer68/atlas-go/issues/1944) Batch 1 + Batch 2 + Batch 3 + **Batch 4**）＋ **Batch A 收尾**（2026-09-27，PR [#2077](https://github.com/kaecer68/atlas-go/pull/2077)）＋ **Batch B 收斂**（2026-09-27，PR {{PR_B}}） |
+| 狀態 | v4（2026-09-25，issue [#1944](https://github.com/kaecer68/atlas-go/issues/1944) Batch 1 + Batch 2 + Batch 3 + **Batch 4**）＋ **Batch A 收尾**（2026-09-27，PR [#2077](https://github.com/kaecer68/atlas-go/pull/2077)）＋ **Batch B 收斂**（2026-09-27，PR [#2098](https://github.com/kaecer68/atlas-go/pull/2098)） |
 | Batch 2／3／4 權威盤點 | [`../specs/industry-allocation-inert-audit-20260924.md`](../specs/industry-allocation-inert-audit-20260924.md)（Batch 2 §4/§5；Batch 3 §9；**Batch 4 §10**：長尾逐項處置、I29 殘留診斷、ledger/nightly 誠實聲明、可重跑證據） |
 | 靜態閘門一致性 | `scripts/ci/inert-baseline.json` = **179** 筆（Batch 4 前 187）。Batch 4 移除：`config-inert industry.event_sentiment_cap`（已接線）＋7 個 `writer-no-consumer` SAC emitter（`EmitSnapshotStart/Target/Current/Fallback/End`、`EmitPolicyConsumed/Applied`）。**Batch B 複跑**（`bash scripts/ci/check_inert_closure.sh`）：179 筆、new **0**、stale **0**、exit 0（Batch B 未新增也未清除任何 baseline 項） |
 | 判定法 | 對每個欄位／參數／旗標問三題：**有 producer 嗎？有 consumer 讀嗎？有測試嗎？** 三者缺一即列入 |
@@ -171,7 +171,7 @@
 
 ---
 
-## Batch B 收斂（#1944，2026-09-27，PR {{PR_B}}）
+## Batch B 收斂（#1944，2026-09-27，PR [#2098](https://github.com/kaecer68/atlas-go/pull/2098)）
 
 > 基準：`origin/main@5094abc8`；分支 `fix/20260927-inert-batchB-and-registry`。範圍：盤查複核後的**一項明確錯誤（型別層）＋ 一項敘述錯誤（I22）＋ 登記表收斂**。
 > **不含 I7／I29**：I7（`internal/marketdata/**` 死碼）與另一 lane 的區重疊；I29 的 `cmd/atlas` 半邊修好後會新增一個**可能觸發**的告警，刻意排在 2026-09-29 06:00Z 決定性驗收之後。
