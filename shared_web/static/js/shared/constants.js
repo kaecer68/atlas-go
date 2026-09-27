@@ -8,7 +8,9 @@ export function regimeLabel(regime) {
 }
 
 // Narrative event theme labels (frontend canonical source of truth).
-// Keep in sync with the 26 theme codes in `internal/narrative/lifecycle.go`.
+// Keep in sync with the theme codes in `internal/narrative/lifecycle.go`
+// (a superset of the narrative templates; asserted by
+// internal/narrative/frontend_theme_label_sync_test.go, so no count here to drift).
 // NOTE: A separate Go-side map in `internal/eventbus/eventbus.go` enriches SSE
 // events with longer impact-analysis descriptions — intentionally separate.
 // Unknown codes fall through to the raw snake_case value (null → "-").

@@ -12,7 +12,7 @@ import (
 
 // mockDetector is a test-only Detector that records calls and returns
 // configurable results/errors so we can exercise Registry.RunAll semantics
-// without depending on any of the 24 real detectors (which arrive in PR#2).
+// without depending on any of the real detectors (which arrive in PR#2).
 type mockDetector struct {
 	theme   string
 	enabled bool

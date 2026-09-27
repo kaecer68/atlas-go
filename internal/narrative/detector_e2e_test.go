@@ -1,7 +1,7 @@
 // Package narrative — Stage 5 PR#5 end-to-end chain verification.
 //
 // Verifies PR#1+PR#2 deliverables: Detector interface + DetectorRegistry
-// + 24 Detector impls produce correct DetectionResult for synthetic input.
+// + 29 Detector impls produce correct DetectionResult for synthetic input.
 //
 // Round-trip persistence (RunAll → AppendScan → LoadRecentScans) is covered
 // by template_detector_scan_test.go (mock store) and detector_scan_store_test.go
@@ -114,12 +114,14 @@ func TestE2E_KBPipeline_AcuteMacroScenario(t *testing.T) {
 	}
 }
 
-// TestE2E_All24ThemesRegistered is a regression guard: NewDefaultDetectorRegistry
-// must register all 24 templates defined in templates.go.
-func TestE2E_All24ThemesRegistered(t *testing.T) {
+// TestE2E_AllThemesRegistered is a regression guard: NewDefaultDetectorRegistry
+// must register every template defined in templates.go. expectedCount is the
+// count the docs state (documentedDetectorCount); detector_count_gate_test.go
+// owns that constant and fails when the registry and the docs disagree.
+func TestE2E_AllThemesRegistered(t *testing.T) {
 	reg := NewDefaultDetectorRegistry()
 
-	const expectedCount = 29
+	const expectedCount = documentedDetectorCount
 	if got := reg.Len(); got != expectedCount {
 		t.Errorf("NewDefaultDetectorRegistry().Len() = %d, want %d", got, expectedCount)
 	}

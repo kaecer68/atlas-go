@@ -9,7 +9,8 @@ import (
 )
 
 // ============================================================================
-// Stage 5 PR#2 — 24 Detector implementations
+// Stage 5 PR#2 — Detector implementations. How many exist is decided by
+// NewDefaultDetectorRegistry(); never hardcode the count in a comment.
 // ----------------------------------------------------------------------------
 // Each Detector below is a thin wrapper over one (or, for seasonal themes,
 // one filtered) legacy detect function in narrative_detectors.go / ingestor.go.
@@ -305,7 +306,7 @@ func (d *taiwanExportBoomDetector) Detect(_ context.Context, in DetectorInput) (
 // ----------------------------------------------------------------------------
 // Seasonal detectors (6) — all wrap detectSeasonalEvent() which returns at
 // most one event per call. Each detector filters by its own theme string
-// so the 24-detector scan can independently report which seasonal window
+// so the registry-wide scan can independently report which seasonal window
 // is active today.
 // ----------------------------------------------------------------------------
 
@@ -450,17 +451,21 @@ func (d *conflictDeescalationDetector) Detect(_ context.Context, in DetectorInpu
 }
 
 // ----------------------------------------------------------------------------
-// Public constructor — registers all 24 detectors, default-enabled.
+// Public constructor — registers all 29 detectors, default-enabled.
+// 29 is derived from DefaultTemplates() at registration time, not written down
+// here as an authority: see detector_count_gate_test.go before changing it.
 // ----------------------------------------------------------------------------
 
-// NewDefaultDetectorRegistry returns a registry populated with the 24
-// trigger-theme detectors from templates.go. Detectors start enabled; callers
+// NewDefaultDetectorRegistry returns a registry populated with the 29
+// trigger-theme detectors from templates.go (the count is registry-driven —
+// never hardcode it; detector_count_gate_test.go guards this claim).
+// Detectors start enabled; callers
 // can Disable() individual themes via Registry.Enable/Disable without
 // affecting the others.
 //
 // Order of registration is not semantically meaningful (Registry is map-
-// keyed), but we group: KB-pipeline detectors, then seasonal, then the one
-// snapshot-pipeline detector, so a debugger walking the list reads top-to-
+// keyed), but we group: KB-pipeline detectors, then seasonal, then the
+// snapshot-pipeline detectors, so a debugger walking the list reads top-to-
 // bottom in pipeline order.
 func NewDefaultDetectorRegistry() *DetectorRegistry {
 	r := NewDetectorRegistry()

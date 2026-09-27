@@ -37,8 +37,8 @@
 ```
 數據層   apigateway 10 個宏觀通道（DXY/US10Y/VIX/USD-TWD/油/金/日圓/GPR/三大法人）
    ↓
-事件層   narrative：24 個 Detector（KB pipeline=權威、snapshot pipeline=降級代理）
-         → KnowledgeBase 24 條 CausalTemplate（Steps×Impact + HistoricalHitRate）
+事件層   narrative：29 個 Detector（KB pipeline=權威、snapshot pipeline=降級代理）
+         → KnowledgeBase 29 條 CausalTemplate（Steps×Impact + HistoricalHitRate）
    ↓
 推論層   ① regime 四層傳導鏈（layer_0 宏觀 → layer_4 台股量能 → layer_7 敘事 → layer_root LLM）
          ② TaiwanStressIndex 八維加權
@@ -305,7 +305,7 @@ VIX 證據（現行保留，為主訊號）之外，疊加兩個帶符號子證�
 12. ParametersConfig — `Realtime.RateMoveThresholdPct` / `DXYMoveThresholdPct` 新鍵：`defaults_narrative.go` defaults + validate + **`internal/config/testdata/default_parameters_config.golden.json` 重新生成**
 
 **明確不做的決定（k3 建議明寫）**
-13. 不為 5 個新主題新增 `NarrativeConviction.ThemeHitRates` config 鍵（現狀僅 5/24 主題有鍵、19 個既有主題本就無鍵；事件命中率走 `hitRateForTheme` 自動查表 `ingestor.go:360-373`，與此 config 無關）
+13. 不為 5 個新主題新增 `NarrativeConviction.ThemeHitRates` config 鍵（2026-09-16 當時現狀：僅 5/24 主題有鍵、19 個既有主題本就無鍵；事件命中率走 `hitRateForTheme` 自動查表 `ingestor.go:360-373`，與此 config 無關）
 14. 不新增 InvestmentModel（`knowledge_base.go:358` ActiveThemes 模式）與 eventdriven `type_theme_mapping.go` 映射——新主題先以模板/偵測器/主題分數層級運作，演化模型列 backlog
 15. `internal/narrative/AGENTS.md` — 模組快照 24 → 29；記錄 duration 雙地圖既有技術債（US_rates_up：14d vs 7d，本次不合併，僅補 case）
 
