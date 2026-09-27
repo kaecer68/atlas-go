@@ -1002,6 +1002,10 @@ ci-gate: embed-dirs
 	@echo "  → 合併結果/ diff 衛生閘門自我測試（hermetic git fixtures；#1993）"
 	@bash tests/scripts/test-revert-guard.sh
 	@echo "    ✅"
+	@echo "  → branch-protection 腳本契約測試（hermetic：gh 以 stub 隔離、不連 GitHub；E39）"
+	@bash tests/scripts/test-branch-protection-known-checks.sh
+	@bash tests/scripts/test-generate-drift-coverage.sh
+	@echo "    ✅"
 	@echo "  → 落後分支 diff 衛生 + evil-merge 檢查（#1993；allowlist 見 scripts/ci/revert-guard-allowlist.json）"
 	@bash scripts/ci/check_revert_guard.sh
 	@echo "    ✅"
