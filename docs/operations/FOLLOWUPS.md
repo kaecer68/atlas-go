@@ -1974,6 +1974,26 @@
 - **本 session 我自己的兩次錯誤（已如實記錄）**：① `.omo/manifests` 最新日期以 **1 層 glob** 誤判（7 週 vs 實際 4 週）② **counter 推理陷阱**：把 legacy 錯標籤系列 `{daily="failed"}` 的 4906 當成真增量（正確形狀 `{stage=…}` 全為 0）。⇒ 紀律：**看到 counter 非零 increase 必須先驗 series 標籤形狀**。
 - **決定性驗收（2026-09-29 06:00Z）**：以 `universe_snapshot.json` **輸出**為真值 ＋ `last_run_*` ＋ counters 增量 ＋ 三條舊告警維持沉默；若 `CounterEmissionMissing` 反而 fire ⇒ **發射面又壞**（非評分問題）。腳本：`session-artifacts/…/verify_0929.sh`。
 
+---
+
+### FU-20260926-34 — 第五批同步：**D2 量測結案、E37/E39 殘項已併、新增 E40–E43**（本 session 觀測性/真相類修復的收斂）
+
+- **狀態**：`open`（E40/E41/E42 的**部署後驗收**、E43 的**跨 repo 修正**、以及各列殘項待處理）
+- **記錄日期**：2026-09-27
+- **對應**：`docs/operations/remediation-manifest.md` §3（D2/E37/E39 更新 ＋ E40–E43 新增）、§6
+- **本批納入的 PR（皆已併）**：**#2063/#2065**（宇宙告警改讀輸出）、**#2072**（N-U4 明示化）、**#2074**（負向證明規則層斷言）、**#2075**（E22）、**#2076**（校準改標的＋drift）、**#2077**（Batch A）、**#2078**（E12）、**#2079/#2081**（B）、**#2082–#2084**（registry／spec／manifest）、**#2085/#2086**（traps 內嵌陷阱＋generate-drift 缺口）、**#2087**（真值模型＋判層工具＋規則 #10）、**#2090**（awk＋generate 覆蓋）、**#2091**（promtool 預算）、**#2092**（9→10 敘述）、**#2096**（可觀測性誠實化批次＋規則 #11）、**#2097/#2099**（Fubon/TWSE 量能語意契約 spec）、**#2098**（Batch B＋99.9% 更正）、**#2100/#2101**（detector 真相 24→29＋閘門）
+- **本 session 我（root）自己的更正紀錄（8 次，皆為同一病：用代理指標取代權威來源）**：
+  1. `.omo/manifests` 最新日期（1 層 glob ⇒ 誤判休眠 7 週，實為 4 週）
+  2. counter 的 `increase` 讀數（把 **legacy 錯標籤系列 `{daily="failed"}`** 當真增量；正確形狀 `{stage=…}` 全為 0）⇒ 紀律：**看到 counter 非零 increase 必先驗標籤形狀**
+  3. N-U4 產品意圖（用 flag help ＋ compose 取代 **`product-positioning.md`** ⇒ 判錯方向，業主更正）
+  4. 「不要手動 update-branch」（**被自己的 watcher 污染**的觀察）⇒ 受控觀測反證：**本 repo 無 merge queue ⇒ BEHIND 必須手動對齊**（今晚 4 次實證）
+  5. `merge-tree` 的 `changed in both` 被誤讀成「衝突」（實為「兩邊都改過」；`mergeable=MERGEABLE`、conflict 標記 0）
+  6. 檢查方法用未解析成功的 ref（`origin/$HB`）⇒ 得 239 行假差；改用權威 `gh pr diff` ⇒ 0 非註解變更
+  7. 任務書裡的因果主張未量測就寫（「(C) 的新告警會對過期 artifact 亮紅」⇒ child 實測推翻：**交易日曆**判定 ⇒ 連假不誤報）
+  8. 轉述他人結論當事實（多次）⇒ **紀律：轉述一律區分「實測事實」與「推論／未驗證假設」，並要求對方複驗**（含任務書本身）
+- **本 session 由 child 更正我的次數**：≥8（上列 3、5、6、7、8 皆屬此類）⇒ 我已把「**派遣前先驗當前狀態**」收緊為固定紀律
+- **待辦**：E40/E41/E42 的部署後驗收（規則＋binary 一起、09-29 06:00Z 之後）；E43 由 wiki 維護線修；`snapshot_persisted_total` 語意、I29 分母半邊、`VolumeScope` 契約欄位、`PhaseOverheat` 語意錯配等皆已立列
+
 ## 相關文件
 
 - [universe-scoring-ranked-zero-20260925.md](universe-scoring-ranked-zero-20260925.md)
