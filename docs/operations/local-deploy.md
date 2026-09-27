@@ -28,8 +28,8 @@ MacBook (kaecer) = 唯一開發機           Mac Mini (kaecer@kmacmini) = 唯一
 | 變數 | 用途 | 備註 |
 |------|------|------|
 | `LLM_DEEPSEEK_API_KEY` | DeepSeek（canonical 模型 `deepseek-flash` = V4.1-Flash；可用 `LLM_DEEPSEEK_MODEL` 覆寫） | 從 https://platform.deepseek.com 取得 |
-| `LLM_MINIMAX_API_KEY` | MiniMax M3（coding plan） | `sk-cp-` 前綴的 minimax-cn-coding-plan key；為敘事/解釋群組的 primary（DataClass 自 ADR-012 起不再擋 provider） |
-| `LLM_ANNOTATOR_API_KEY` | **向後相容** — 早期 `KimiClient` 讀此變數 | 實際值等同 `LLM_MINIMAX_API_KEY`（Kimi K2.7 因 coding plan key 限制已移除） |
+| `LLM_MINIMAX_API_KEY` | MiniMax M3（coding plan） | `sk-cp-` 前綴的 minimax-cn-coding-plan key；為敘事/解釋群組的 primary（DataClass 自 ADR-012 起不再擋 provider），也是 `POST /api/strategies/{id}/annotate` 的啟用依據（Issue #1897：該端點走 Router，需要鏈上 provider 已註冊） |
+| `LLM_ANNOTATOR_API_KEY` | **向後相容** — 早期 `KimiClient` 讀此變數 | 實際值等同 `LLM_MINIMAX_API_KEY`（Kimi K2.7 因 coding plan key 限制已移除）。⚠️ 自 Issue #1897 起，**只設這個別名不會啟用 `/annotate`**：legacy client 不再是該端點的後端，只是 `/api/llm_annotator/cost` 的使用量來源；`/annotate` 需要鏈上 provider（`LLM_MINIMAX_API_KEY` 或 `LLM_DEEPSEEK_API_KEY`）已註冊 |
 | `LLM_RATIONALE_TRANSLATION_ENABLED` | 啟用 `CapabilityRationaleGeneration` hook | default `false` |
 | `LLM_PRISM_SCENARIO_ENABLED` | 啟用 `CapabilityScenarioSimulation` hook | default `false` |
 | `LLM_NARRATIVE_EXPLAIN_ENABLED` | 啟用 `CapabilityRegimeExplanation` + `CapabilitySentimentExplanation` | default `false` |

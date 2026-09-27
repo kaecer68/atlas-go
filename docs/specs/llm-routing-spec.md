@@ -56,7 +56,7 @@
 
 | Capability | 舊值 | 新值 | 理由（一行） |
 |------------|------|------|--------------|
-| `failure_attribution` | （無設定，走 provider 預設） | 2048 | Router 路徑的 reasoning 最低預算；rule-based fallback 仍為權威。⚠️ production `/annotate` 目前不走 Router（走 `llm_annotator.KimiClient`，tokens 由其 `Config.MaxTokens` 決定），故此值僅在 Router 路徑生效 |
+| `failure_attribution` | （無設定，走 provider 預設） | 2048 | Router 路徑的 reasoning 最低預算；rule-based fallback 仍為權威。**2026-09-27（Issue #1897）：production `POST /api/strategies/{id}/annotate` 已收斂到 Router**（經 `llmAdapters.RouterAnnotator` → `FailureAttributionHandler`），因此本值同時是該端點的生效值；先前「`/annotate` 走 `llm_annotator.KimiClient`」的註記已失效 |
 | `rationale_generation` | 500 | 2048 | 翻譯輸出含 JSON 外殼；M3 / `deepseek-flash` reasoning 需要預算 |
 | `regime_explanation` | 300 | 2048 | 原值對 reasoning 模型過小，會回空內容；headline 短但 thinking 需預算 |
 | `sentiment_explanation` | 500 | 2048 | 同上 |
