@@ -8,7 +8,7 @@ package main
 //
 // Tasks (10 total):
 //   1. system_health_monitor    — healthMonitor.RunDaily (24h)
-//   2. auto_backfill            — daily-replay-sync binary (24h)
+//   2. auto_backfill            — gap backfill (daily-replay-sync) + CSV→JSONL conversion gate (24h)
 //   3. fundamentals_staleness_check — monitor.Alert on >90d (24h)
 //   4. storage_cleanup          — LifecycleManager.Run (24h)
 //   5. auto_calendar_refresh    — TWSE calendar provider (24h)
@@ -24,16 +24,13 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"os/exec"
 	"path/filepath"
-	"strings"
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/apigateway"
 	"github.com/kaecer68/atlas-go/internal/capitalflow"
 	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/domain"
-	"github.com/kaecer68/atlas-go/internal/importer"
 	"github.com/kaecer68/atlas-go/internal/industry"
 	"github.com/kaecer68/atlas-go/internal/janus"
 	"github.com/kaecer68/atlas-go/internal/logging"
@@ -100,76 +97,16 @@ func registerOperationsTasks(d operationsDeps) {
 	log.Printf("[Gateway] registered system_health_monitor background task (24h interval)")
 
 	// Register auto_backfill via Gateway.
+	//
+	// task body 已抽到 autobackfill_task.go（runAutoBackfill），原因與修法見該檔頭：
+	// 舊碼把 CSV→JSONL 轉檔寫在「有缺口」分支內，導致常態（無缺口）永遠不轉檔。
 	_ = d.taskMgr.Register(&apigateway.ScheduledTask{
 		Name:      "auto_backfill",
 		ChannelID: "twse_replay",
 		Interval:  24 * time.Hour,
 		Enabled:   true,
 		Task: func(ctx context.Context) error {
-			absWorkDir, err := filepath.Abs(d.cfg.WorkDir)
-			if err != nil {
-				absWorkDir = d.cfg.WorkDir
-			}
-			latestDate, err := getLatestReplayDate(d.cfg.ReplayDataPath)
-			if err != nil {
-				return fmt.Errorf("backfill replay read: %w", err)
-			}
-			now := time.Now()
-			if tz, err := time.LoadLocation("Asia/Taipei"); err == nil {
-				now = now.In(tz)
-			}
-			end := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
-			if now.Hour() < 15 || (now.Hour() == 15 && now.Minute() < 30) {
-				end = end.AddDate(0, 0, -1)
-			}
-			start := latestDate.AddDate(0, 0, 1)
-			for start.Weekday() == time.Saturday || start.Weekday() == time.Sunday {
-				start = start.AddDate(0, 0, 1)
-			}
-			for end.Weekday() == time.Saturday || end.Weekday() == time.Sunday {
-				end = end.AddDate(0, 0, -1)
-			}
-			if start.After(end) {
-				return nil
-			}
-			startStr := start.Format("2006-01-02")
-			endStr := end.Format("2006-01-02")
-			log.Printf("[Gateway] backfill gap detected: %s to %s", startStr, endStr)
-			bgCtx, cancel := context.WithTimeout(ctx, 5*time.Minute)
-			defer cancel()
-			var cmd *exec.Cmd
-			binaryPath := filepath.Join(absWorkDir, "daily-replay-sync")
-			if _, err := os.Stat(binaryPath); err == nil {
-				cmd = exec.CommandContext(bgCtx, binaryPath, "-csv", d.cfg.ReplayDataPath, "-backfill-start", startStr, "-backfill-end", endStr)
-				cmd.Dir = absWorkDir
-			} else if _, err := exec.LookPath("go"); err == nil {
-				cmd = exec.CommandContext(bgCtx, "go", "run", "./cmd/daily-replay-sync", "-csv", d.cfg.ReplayDataPath, "-backfill-start", startStr, "-backfill-end", endStr)
-				cmd.Dir = absWorkDir
-			} else {
-				return fmt.Errorf("backfill binary not found")
-			}
-			out, err := cmd.CombinedOutput()
-			if err != nil {
-				return fmt.Errorf("backfill failed: %w, output: %s", err, string(out))
-			}
-			log.Printf("[Gateway] backfill success: %s", string(out))
-
-			// Auto-convert CSV to JSONL so the system's replay pipeline
-			// (tw_extended_90days.jsonl) stays in sync with the CSV that
-			// daily-replay-sync appends to. JSONL is the canonical format
-			// consumed by FactorEngine (composition.go:67).
-			absCSV := d.cfg.ReplayDataPath
-			absJSONL := strings.TrimSuffix(d.cfg.ReplayDataPath, ".csv") + ".jsonl"
-			if !filepath.IsAbs(absCSV) {
-				absCSV = filepath.Join(absWorkDir, absCSV)
-				absJSONL = filepath.Join(absWorkDir, absJSONL)
-			}
-			if convErr := importer.ImportTWOpenDataCSVToJSONL(absCSV, absJSONL); convErr != nil {
-				log.Printf("[Gateway] backfill CSV→JSONL conversion warning (non-fatal): %v", convErr)
-			} else {
-				log.Printf("[Gateway] backfill CSV→JSONL conversion: %s", absJSONL)
-			}
-			return nil
+			return runAutoBackfill(ctx, d.cfg)
 		},
 	})
 	log.Printf("[Gateway] registered auto_backfill background task (24h interval)")
