@@ -166,14 +166,15 @@ AGENTS.md 只要求 agent 自己跑 `./agent-guard --check`。現在它的 PreTo
 
 | 情境 | 模式 | 行為 |
 |------|------|------|
-| 本機 dev worktree(預設) | `warn` | 注入明確警告給模型與使用者,**不擋** |
-| `export ATLAS_HOOK_MODE=enforce` | `enforce` | 擋下(hook exit 2) |
-| `ATLAS_ENV=production` 且未設 `ATLAS_HOOK_MODE` | `enforce` | 同上 |
+| **預設**(任何 worktree,含本機 dev) | `enforce` | 擋下(hook exit 2;2026-09-27 E23 起) |
+| `export ATLAS_HOOK_MODE=warn` | `warn` | 注入明確警告給模型與使用者,**不擋**(逃生口) |
+| `ATLAS_ENV=production` 且未設 `ATLAS_HOOK_MODE` | `enforce` | 同上(自 E23 起為冗餘;空字串仍視為未設) |
 | guard 執行失敗 / payload 壞掉 | 任意 | **fail-open**(放行)+ stderr 告警 |
 
 ```bash
-# 切成 enforce(單一 session,不必改檔)
-export ATLAS_HOOK_MODE=enforce
+# 逃生口:放寬回 warn(必須在「啟動 agent 的那個 shell」export;
+# hook 繼承的是 agent 的環境,在指令裡 export 無法解除擋下)
+export ATLAS_HOOK_MODE=warn
 ```
 
 完整說明、rollback(從 `.claude/settings.json` 移除 `PreToolUse` 段)與 bash 3.2 依賴注意事項:

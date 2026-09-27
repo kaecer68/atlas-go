@@ -7,7 +7,7 @@
 
 | 工具 | 角色 | 觸發時機 | 設計 |
 |------|------|---------|------|
-| [`deny-dangerous.sh`](deny-dangerous.sh) | **Hard block** for destructive / secrets / production 操作 | ① 自動:Claude Code `PreToolUse`(matcher `Bash`,經下方 adapter;註冊於 tracked 的 `.claude/settings.json`)② 手動:`./agent-guard --check '<cmd>'` | exit 0 = allow,exit 1 = block;`ATLAS_HOOK_MODE=warn\|enforce` 切換 |
+| [`deny-dangerous.sh`](deny-dangerous.sh) | **Hard block** for destructive / secrets / production 操作 | ① 自動:Claude Code `PreToolUse`(matcher `Bash`,經下方 adapter;註冊於 tracked 的 `.claude/settings.json`)② 手動:`./agent-guard --check '<cmd>'` | exit 0 = allow,exit 1 = block;**預設即 `enforce`**(2026-09-27,E23);`ATLAS_HOOK_MODE=warn` 為文件化逃生口 |
 | [`pretooluse-deny-dangerous.sh`](pretooluse-deny-dangerous.sh) | **Adapter** — 把 Claude Code hook payload(stdin JSON)的 Bash 指令交給 `deny-dangerous.sh`,再把判定翻成 hook 協定 | 自動:本 repo 每次 Bash tool call | 純 glue(不重複 pattern 邏輯);warn ⇒ exit 0 + 注入訊息,enforce ⇒ exit 2 擋下,守門壞掉 ⇒ fail-open + 告警 |
 | [`aci-read-prompt.sh`](aci-read-prompt.sh) | **Soft reminder** 推 agent 走 ACI routing 流程 | 自動由 Claude Code `PreToolUse` hook 觸發,當 Read/Edit/Write/Grep/Bash 接觸 `internal/` 或 `cmd/` 下的 Go 檔 | 注入 `additionalContext`(~150 token),不 block,每檔每 session 去重一次 |
 | [`install.sh`](install.sh) | 安裝入口 — 設 executable + 建 `./agent-guard` symlink + 印使用說明 | 一次性,每 worktree 跑一次 | — |
@@ -40,17 +40,21 @@ bash .agent-hooks/install.sh
 
 | 情境 | 判定模式 | 行為 |
 |------|---------|------|
-| 本機 dev worktree(預設) | `warn` | 注入明確警告給模型與使用者,**不擋** |
-| `export ATLAS_HOOK_MODE=enforce` | `enforce` | 擋下(Claude Code hook exit 2) |
-| `ATLAS_ENV=production` 且未設 `ATLAS_HOOK_MODE` | `enforce` | 同上 |
+| **預設**(任何 worktree,含 dev) | `enforce` | 擋下(Claude Code hook exit 2) |
+| `export ATLAS_HOOK_MODE=warn` | `warn` | 注入明確警告給模型與使用者,**不擋**(文件化逃生口) |
+| `ATLAS_ENV=production` 且未設 `ATLAS_HOOK_MODE` | `enforce` | 同上(自 E23 起為冗餘;保留的原因:`ATLAS_HOOK_MODE=""` 這種空字串仍視為未設) |
 | guard 執行失敗(例如直譯器缺失) | 任意 | **fail-open**:放行 + stderr 明確告警 |
 
-```bash
-# 切成 enforce(單一 session,不必改檔)
-export ATLAS_HOOK_MODE=enforce
+> 2026-09-27(E23)前預設是 `warn`。翻成 `enforce` **之前**先移除了三個已實測的誤擋面
+> (pattern 4 只因指令含 `secret` 一字就判讀機密檔、pattern 8 擋掉部署路徑與 `go test`/`make test`)。
+> 每一面都有「修前擋、修後通過」的迴歸斷言在 `tests/scripts/test-agent-hook-wiring.sh`(§E23),再引入就會紅燈。
 
-# 放寬回 warn(即使在 production 機上)
+```bash
+# 逃生口:整個 agent session 放寬回 warn(必須在「啟動 agent 的那個 shell」export)
 export ATLAS_HOOK_MODE=warn
+
+# 只放行 production 的裸 docker compose(部署用;見下方「production 部署」)
+export ATLAS_ALLOW_PROD_COMPOSE=true
 
 # 一鍵還原接線:移除 tracked settings.json 內的 PreToolUse 段
 python3 - <<'PY'
@@ -63,7 +67,23 @@ PY
 ```
 
 > 影響面:一旦接線,**此 repo 內所有 Claude Code Bash 呼叫**都會先經過 `deny-dangerous.sh`。
-> 因此判定必須保守:warn 為預設,且守門故障時 fail-open(不可把整個 session 鎖死)。
+> 自 E23 起預設 `enforce` ⇒ 被誤判就是真的擋下(不是提示)。因此:
+> ① 每個 block 都必須附「合法路徑」提示(`block()` 的第二個參數);
+> ② 守門故障時仍 fail-open(不可把整個 session 鎖死);
+> ③ 判定必須是「**目標/結構**」而非「指令列出現某個詞」(pattern 1/2/4/5/6/8 皆如此)。
+
+## production 部署與 guard 的關係(E23)
+
+`ATLAS_ENV=production` 下,pattern 8 **不再**擋掉部署本身:
+
+| 指令 | production worktree | 理由 |
+|------|--------------------|------|
+| `make rebuild-all` | ✅ 通過 | Mac Mini 現行部署入口(`docs/operations/local-deploy.md`) |
+| `bash scripts/deploy-staging.sh` | ✅ 通過 | 文件化部署腳本(內部才跑 `docker compose build && up -d`) |
+| `ATLAS_GIT_COMMIT=$(git rev-parse HEAD) docker compose up -d` | ✅ 通過 | 文件化的裸 compose 契約(必須帶 commit pin) |
+| `docker compose build` / `up -d`(無 pin) | ❌ 擋下 | 需明確意圖:加 `ATLAS_GIT_COMMIT=` pin,或 export `ATLAS_ALLOW_PROD_COMPOSE=true` |
+| `go test ./...` / `make test` / `make ci-gate` / `make ci-full` | ✅ 通過 | 測試是唯讀;修復迴圈就在這個 worktree |
+| `make dev` / `make clean` / `go run` / 實驗 CLI | ❌ 擋下 | 真正的 dev-only 動作 |
 
 ## 依賴
 
