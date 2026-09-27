@@ -16,11 +16,25 @@ import (
 //	symbols_built > 0 && coveragePct < 90
 //
 // where the numerator came from the snapshot artifact on disk and the
-// denominator from the classification tree. Nothing in that condition mentions
-// WHEN the artifact was written, so the production shape of 2026-09-27 —
-// 99.9% coverage computed from a 39.7h-old snapshot — produced no alert at all.
-// The reading was arithmetically correct and the file was stale; only the second
-// half was the defect, and the check was blind to it.
+// denominator from the classification tree. Two independent reasons made that
+// condition silent on the production shape of 2026-09-27 (an artifact with
+// symbols_built=1599 and an mtime 39.7h old — see
+// docs/operations/universe-run-truth-model.md §5). Only the second one is the
+// gap this file closes:
+//
+//  1. The percentage was not a coverage ratio, so the coverage half could not
+//     fire either. The numerator is the snapshot's `symbols_built` — 1,599, the
+//     pipeline's universe — while TotalSymbols is TotalClassifiedSymbols(tree):
+//     the classification tree's REPRESENTATIVE stocks, 27 against the shipped
+//     tree (measured 2026-09-27: 11 of the 12 L1 segments carry representatives,
+//     Σ len(seg.RepresentativeStocks) = 27). 1599/27 ≈ 5922%, and `coveragePct < 90`
+//     would need `symbols_built < 24.3` — a state in which the number means
+//     nothing. The "99.9% coverage" this change used to be described with is a
+//     FIXTURE reading (the test below supplies TotalSymbols=1600); the task never
+//     supplies that denominator. The denominator itself is issue #1944 item I29
+//     and is deliberately NOT changed here.
+//  2. Nothing in the condition mentioned WHEN the artifact was written, so even a
+//     correct percentage could not have flagged the stale file.
 //
 // Two consequences shaped this design:
 //

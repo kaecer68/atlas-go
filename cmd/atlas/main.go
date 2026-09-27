@@ -2227,8 +2227,13 @@ func run(args []string, deps appDeps) error {
 					// The artifact's mtime is a second, independent reading. The
 					// coverage percentage above describes whatever the file
 					// contains, so it cannot see a stale file: before 2026-09-27
-					// a 39.7h-old snapshot with 99.9% coverage produced no alert
-					// at all. The age judgement compares the artifact against the
+					// a 39.7h-old snapshot produced no alert at all. The coverage
+					// comparison could not compensate either — totalSymbols is
+					// the classification tree's REPRESENTATIVE stocks (27), not
+					// the pipeline's universe (symbols_built=1,599), so the ratio
+					// is ≈5922% and `< 90` is unsatisfiable (issue #1944 item
+					// I29 owns that denominator; it is deliberately unchanged
+					// here). The age judgement compares the artifact against the
 					// last run the Taiwan trading calendar says should have
 					// written it (monitoring.PreviousUniverseRun), never against
 					// a fixed window — a fixed window fires on every holiday
