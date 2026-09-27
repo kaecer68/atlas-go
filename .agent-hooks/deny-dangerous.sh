@@ -35,7 +35,10 @@
 # Known approximations (deliberate — the command is read as TEXT, not executed):
 #   * a dangerous string inside quotes is not evaluated as if it ran;
 #   * a secret file reached through a variable (`cat $SECRET_FILE`) is not seen;
-#   * `rm -rf /*` is not covered by pattern 3 (only the bare root/home targets are).
+#   * pattern 3 matches a root/home target as a WHOLE argument (`rm -rf /`,
+#     `rm -rf ~/`, `rm -rf $HOME/`, `rm -rf /Users/`, `rm -rf /home/`). `rm -rf ~`
+#     (no slash), `rm -rf /*` and `rm -rf /Users/x` are NOT covered — unchanged
+#     from before E23, recorded here so the gap is not mistaken for coverage.
 
 set -euo pipefail
 
@@ -154,14 +157,25 @@ split_segment() { # $1 = one shell segment
 # Index of the command word inside SEG_TOKENS: skips leading `VAR=value`
 # assignments and the usual wrappers. Prints nothing if the segment has none.
 segment_cmd_index() {
-  local idx=0 word
+  local idx=0 word expect_value=0
   while [ "$idx" -lt "$SEG_N" ]; do
     word="${SEG_TOKENS[$idx]}"
+    idx=$((idx + 1))
+    if [ "$expect_value" -eq 1 ]; then
+      # Value of a wrapper flag: `sudo -u root cat .env` must still see `cat` as
+      # the command word (only the unambiguous wrapper flags are listed; `-p`,
+      # `-S` and friends stay plain flags because `time -p cat .env` /
+      # `sudo -S cat .env` are real forms too).
+      expect_value=0
+      continue
+    fi
     case "$word" in
-      *=*) idx=$((idx + 1)); continue ;;
-      sudo|command|env|nohup|time|xargs) idx=$((idx + 1)); continue ;;
+      -u|--user|-g|--group|-C|--chdir|--prompt|--unset) expect_value=1; continue ;;
+      -*) continue ;;
+      *=*) continue ;;
+      sudo|command|env|nohup|time|xargs) continue ;;
     esac
-    printf '%s' "$idx"
+    printf '%s' "$((idx - 1))"
     return 0
   done
   return 1

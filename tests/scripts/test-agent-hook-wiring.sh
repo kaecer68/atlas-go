@@ -437,6 +437,7 @@ curl-pipe-grep%curl -s localhost:18080/api/version | grep sha
 curl-pipe-shasum%curl -s https://example.invalid/x | shasum -a 256
 curl-local%curl -sf localhost:18080/health
 ssh-ls%ssh kmacmini 'ls ~/bin'
+sudo-ls%sudo ls /var/lib/atlas
 git-fetch-merge%git fetch origin main && git merge --ff-only origin/main
 E23-wordmatch-devcli%grep -rn backtest-window docs/
 E23-wordmatch-sql%grep -rn 'drop table' internal/db/
@@ -461,6 +462,9 @@ secret-ssh%cat ~/.ssh/id_rsa
 secret-second-arg%head -20 config.json credentials.json
 secret-grep-file%grep -n x .env
 secret-cp-out%cp .env /tmp/leak
+secret-sudo-wrapped%sudo -u root cat .env
+secret-env-wrapped%env cat .env
+secret-time-wrapped%time -p cat .env
 push-main%git push origin main
 force-push-main%git push --force origin main
 push-head-main%git push origin HEAD:main
