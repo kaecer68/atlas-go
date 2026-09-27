@@ -1457,7 +1457,7 @@
   - `AtlasReplaySessionDateInvalid`（同檔 `:93-104`）只有兩個 arm：`day_of_week(...) == 0|6`（`:100`／`:102`）與「資料日晚於 `time()`」（`:95`）。
   - 檔頭記載：2026-08-29~09-25 生產 replay CSV 有 **396 列**幻影，其中 **weekend=352／holiday=44**（同檔 `:21-22`、`:75-76`）。
     ⇒ 其中 **44 列（約 11%）是週間休市**，現行規則**抓不到**。
-  - **為什麼不在規則端補**（不是懶，是結構限制）：PromQL 拿不到台灣交易日曆；同一份規則檔已因同一個限制把「CSV 落後」的門檻由 3d／72h 放寬到 14d（同檔 `:47-52`）。
+  - **為什麼不在規則端補**（不是懶，是結構限制）：PromQL 拿不到台灣交易日曆；同一份規則檔已因同一個限制把「CSV 落後」的門檻由 3d／72h 放寬到 14d（同檔 `:55-58`）。
 - **最小修法建議（只建議，未實作）**：
   1. 在寫入端（`cmd/daily-replay-sync`）新增 counter `atlas_replay_nontrading_rows_total`，
      僅在「**實際寫入**的列,其資料日經 `marketdata.IsTaiwanTradingDay`（`internal/marketdata/calendar.go:49`）判為非交易日」時 `Inc()`。
