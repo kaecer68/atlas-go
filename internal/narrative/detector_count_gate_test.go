@@ -43,6 +43,9 @@
 //   - spelled-out numbers ("twenty-four detectors") are invisible;
 //   - numbers separated from the keyword by other words ("24 of the templates")
 //     are invisible;
+//   - a number glued to a token (a letter, dot or slash before it) is not read as
+//     a claim, so the fraction, decimal and path forms (N/N detectors, N.0
+//     detectors, path/to/N detectors) are invisible;
 //   - files outside countClaimCarriers and outside ownerPackageRoots are not
 //     scanned. When you add a file that states the count, add it to
 //     countClaimCarriers.
@@ -187,8 +190,8 @@ var reverseClaimPatterns = []*regexp.Regexp{
 	regexp.MustCompile(`(?i)number\s+of\s+detectors?\b[^0-9\n]{0,16}\d+`),
 	regexp.MustCompile(`(?i)(?:detector|template|theme)s?\s*\bcount\b[^0-9\n]{0,16}\d+`),
 	regexp.MustCompile(`(?:detector|template|theme|偵測器|模板|主題)s?\s*(?:總數|數量)[^0-9\n]{0,16}\d+`),
-	regexp.MustCompile(`(?i)(?:detectors?|templates?|themes?)\b\s*(?:(?:count|total)\b|(?:數|數量|總數))?\s*[:=]\s*\d+`),
-	regexp.MustCompile(`(?:偵測器|模板|主題)\s*(?:(?:count|total)\b|(?:數|數量|總數))?\s*[:：]\s*\d+`),
+	regexp.MustCompile(`(?i)(?:detectors?|templates?|themes?)\b\s*(?:(?:count|total)\b|(?:數|數量|總數))?\s*[:=：]\s*\d+`),
+	regexp.MustCompile(`(?:偵測器|模板|主題)\s*(?:(?:count|total)\b|(?:數|數量|總數))?\s*[:=：]\s*\d+`),
 }
 
 // countClaim is one count statement the pattern layer found, with the span it
@@ -419,6 +422,10 @@ func TestDetectorCount_ClaimClassifier_Contract(t *testing.T) {
 		{"colon form short", staleDetectorLine("// detectors = %d"), []int{24}},
 		{"colon form chinese", staleDetectorLine("// 偵測器：%d"), []int{24}},
 		{"colon form chinese keyword", staleDetectorLine("// detector 數: %d"), []int{24}},
+		{"colon fullwidth with english noun", staleDetectorLine("// detector：%d"), []int{24}},
+		{"colon equals with chinese noun", staleDetectorLine("// 偵測器 = %d"), []int{24}},
+		{"colon fullwidth with chinese noun", staleDetectorLine("// 主題：%d"), []int{24}},
+		{"two numbers, second one stale (dedup must not swallow the newer one)", staleDetectorLine("// 29 detectors total: %d are registered"), []int{29, 24}},
 		{"chinese total form", staleDetectorLine("// 偵測器總數 %d"), []int{24}},
 		{"chinese total form 2", staleDetectorLine("// 模板總數：%d"), []int{24}},
 		{"chinese quantity form", staleDetectorLine("// 主題數量 %d"), []int{24}},
@@ -426,8 +433,8 @@ func TestDetectorCount_ClaimClassifier_Contract(t *testing.T) {
 		{"correct number is also a claim", "// registers all 29 detectors, default-enabled.", []int{29}},
 
 		// Deliberately not claims (no allowance needed).
-		{"identifier named themeCount", "if themeCount[theme] != 1 {", nil},
-		{"identifier named detectorCount", "detectorCount = %d", nil},
+		{"identifier named themeCount", "themeCount = 1", nil},
+		{"identifier named detectorCount", staleDetectorLine("detectorCount = %d"), nil},
 		{"identifier named templateCount", "templateCount = 14", nil},
 		{"filename with glued digits", "// see docs/2026-07-14-atlas-stage5-detector-plan.md", nil},
 		{"legacy theme subset", "// the legacy 5-theme subset that", nil},
@@ -436,10 +443,18 @@ func TestDetectorCount_ClaimClassifier_Contract(t *testing.T) {
 
 		// Documented blind spots — if you make one of these work, move the row up.
 		{"blind spot: spelled-out number", "// twenty-four detectors ship by default", nil},
-		{"blind spot: number split from keyword", "// %d of the templates are KB-backed", nil},
-		{"blind spot: fraction form", "// 5/%d detectors are snapshot-backed", nil},
-		{"blind spot: decimal form", "// %d.0 detectors expected", nil},
+		{"blind spot: number split from keyword", staleDetectorLine("// %d of the templates are KB-backed"), nil},
+		{"blind spot: fraction form", staleDetectorLine("// 5/%d detectors are snapshot-backed"), nil},
+		{"blind spot: decimal form", staleDetectorLine("// %d.0 detectors expected"), nil},
+		{"blind spot: identifier prefix", staleDetectorLine("// x%d detectors are cached"), nil},
+		{"blind spot: path prefix", staleDetectorLine("// path/to/%d detectors are cached"), nil},
 		{"subset phrasing is judged too", "// 21 個 detector themes today", []int{21}},
+	}
+
+	for _, tc := range cases {
+		if strings.Contains(tc.line, "%d") {
+			t.Fatalf("case %q still contains an unsubstituted %%d — the trap number was never rendered, so the row tests nothing", tc.name)
+		}
 	}
 
 	for _, tc := range cases {
@@ -492,8 +507,14 @@ func rawCountClaims(line string) []countClaim {
 	}
 
 	// Several patterns can describe the same statement ("detector count: 24" is
-	// both a count-phrase and a colon form). Keep the widest span per position so
-	// one statement is reported once.
+	// both a count-phrase and a colon form). Drop a span only when it is fully
+	// contained in an already kept span AND states the same number — those are the
+	// same statement.
+	//
+	// A plain "drop anything that starts inside the previous span" rule is NOT
+	// safe: an adversarial review showed it swallowing the stale number in
+	// "29 detectors total: 24", because the trailing colon form starts inside the
+	// leading "29 detectors" span. A newer, different number must always be judged.
 	sort.Slice(spans, func(i, j int) bool {
 		if spans[i].start != spans[j].start {
 			return spans[i].start < spans[j].start
@@ -502,13 +523,18 @@ func rawCountClaims(line string) []countClaim {
 	})
 
 	var out []countClaim
-	lastEnd := -1
 	for _, s := range spans {
-		if s.start < lastEnd {
+		duplicate := false
+		for _, kept := range out {
+			if s.number == kept.number && s.start >= kept.start && s.end <= kept.end {
+				duplicate = true
+				break
+			}
+		}
+		if duplicate {
 			continue
 		}
 		out = append(out, countClaim{number: s.number, text: line[s.start:s.end], start: s.start, end: s.end})
-		lastEnd = s.end
 	}
 	return out
 }
