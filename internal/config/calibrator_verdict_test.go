@@ -16,8 +16,10 @@ import (
 // not assumed.
 //   - Every name the loop accepts is writable: GetParameter resolves either a
 //     parameterTable entry or a map sub-key that already exists, and both are
-//     settable. Enumerating all 245 names the shipped config resolves gave
-//     245 writes accepted and 0 refused (probe, 2026-09-27).
+//     settable. Enumerating all 285 names the shipped config resolves gave
+//     285 writes accepted and 0 refused — re-derived on every run by
+//     TestCalibratorFailPath_UnreachableAssumptionStillHolds, which fails loudly
+//     (with what to do about it) if that stops being true.
 //   - A name that is not resolvable never reaches the loop: the optimizer aborts
 //     first with "calibrate: optimize: unknown parameter: <name>".
 //

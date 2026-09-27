@@ -217,8 +217,12 @@ func CalibrateParameters(ctx context.Context, calibrator ParameterCalibrator, ev
 // a map sub-key that already exists, and both are settable — so SetParameter
 // never fails there, while an unresolvable name aborts earlier inside the
 // optimizer ("calibrate: optimize: unknown parameter: X") before any report is
-// built (issue #1944 Batch A2, measured 2026-09-27: 245/245 resolvable names
-// were written successfully, 0 refused).
+// built (issue #1944 Batch A2). Batch A turned that measurement into an
+// executable guard — TestCalibratorFailPath_UnreachableAssumptionStillHolds
+// enumerates every name parameterTable and the map-prefix handlers resolve (285
+// at 2026-09-27) and requires SetParameter to accept each one, because the
+// moment one is refused this arm becomes reachable and needs end-to-end
+// coverage.
 //
 // The arm still has to be right, and it is the one that matters: reporting the
 // benign "stable"/"unchanged" verdict after failed writes was the defect fixed
