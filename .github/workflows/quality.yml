@@ -1151,7 +1151,12 @@ jobs:
   # §CI 監控設定 gate）。
   monitoring-config:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    # 5 → 8 分鐘（2026-09-27）：本 job 2026-09-27 起多了一個 promtool 突變負向證明 step，
+    # 它自己就要 3 次 promtool 呼叫（基準 + 兩輪突變；CI 上每次約 45 秒，實測 3m00s/4 次）。
+    # 原本的 5 分鐘被吃光 ⇒ job **timeout 而 cancelled**（不是判定失敗，是跑不完）。
+    # 「超時的閘門」等於不可靠的閘門，比慢一點更糟。同時那個腳本已從 4 次呼叫降到 3 次
+    # （見 scripts/ci/promtool-mutation-negative-proof.sh 的分組說明）。
+    timeout-minutes: 8
     steps:
     - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 

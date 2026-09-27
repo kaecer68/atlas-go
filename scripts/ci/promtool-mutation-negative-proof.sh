@@ -125,35 +125,90 @@ M3_NEW=''
 
 PROOF_FAILED=0
 
-prove_mutation() {
-  local label="$1" old="$2" new="$3" want_alert="$4" want_case="$5"
+# ── 為什麼是「兩次突變執行」而不是「三個突變各一次」────────────────────────────────
+#
+# 事實（2026-09-27 實測）：CI 上這個 job 的 `timeout-minutes: 5` 會被「基準 + 3 個突變」的
+# 4 次 promtool 呼叫吃光 —— monitoring-config **timeout 而 cancelled**（前一次 4 次呼叫的成功
+# 記錄是 4m07s，加上 runner 差異就超時）。超時的閘門等於不可靠的閘門，比慢一點更糟。
+#
+# 但**不是**所有突變都能合併：M1（把 persisted 的 `== 0` 改成 `== 2`）會讓第 10 條變成
+# 恆不成立，於是 M2（把 ranked 的 `> 0` 放寬成 `>= 0`）在 case U 上的「不該 firing 卻 firing」
+# 就被 M1 遮蔽掉了 —— 合併後 M2 咬不住（本腳本 2026-09-27 實測：失敗 case 只剩 2 個）。
+# ⇒ 依**互相獨立**分組：
+#   第一輪：M1（第 10 條恆不成立）＋ M3（第 6 條不再守新系列）—— 兩者作用在不同規則/不同 case
+#   第二輪：M2（互斥性被拿掉）單獨一輪
+# 每一輪都斷言：(a) rc 恰為 1、(b) 失敗輸出的 case 名/happening alert 名逐項命中、
+# (c) **失敗的 case 數恰好等於預期**（證明沒有別的 case 被連帶改變、也沒有漏咬）。
+# 這比「每個突變各跑一次」只少了「同一輪內互不干擾」這個維度，而那個維度由分組本身保證。
+
+# run_mutated <label> <old> <new> [<label> <old> <new> …]
+#   刻意用「三個參數一組」而不是任何分隔符：突變目標本身含 `|`（PromQL 的
+#   `stage=~"daily|weekly"`）⇒ 用分隔符串接會在 `|` 上被切斷（本腳本 2026-09-27 實際踩到，
+#   症狀是「突變目標命中 0 次」但後續步驟照跑）。參數分組沒有這個問題。
+run_mutated() {
   cp monitoring/rules/atlas_universe_scoring_alerts.yml "${WORK}/rules/atlas_universe_scoring_alerts.yml"
-  if ! mutate "${WORK}/rules/atlas_universe_scoring_alerts.yml" "${old}" "${new}" > "${MUT_LOG}" 2>&1; then
-    negproof_err "[${label}] 突變目標沒有恰好命中一次：$(cat "${MUT_LOG}") ⇒ 這份證明已與規則檔脫節（fail-closed）"
-    PROOF_FAILED=1
-    return
-  fi
-  if ! negproof_expect 1 "[${label}] 改壞判定式之後 promtool 必須失敗" "${LOG}" \
-        -- run_promtool test rules "${TESTS_REL}"; then
-    negproof_show_log "${LOG}"
-    PROOF_FAILED=1
-    return
-  fi
-  negproof_expect_output "${want_alert}" "${LOG}" \
-    "[${label}] 擋下的必須是 ${want_alert}" || PROOF_FAILED=1
-  negproof_expect_output "${want_case}" "${LOG}" \
-    "[${label}] 擋下的必須是那個 case（${want_case}）" || PROOF_FAILED=1
+  local target="${WORK}/rules/atlas_universe_scoring_alerts.yml"
+  while [ "$#" -gt 0 ]; do
+    local label="$1" old="$2" new="$3"
+    shift 3
+    if ! mutate "${target}" "${old}" "${new}" > "${MUT_LOG}" 2>&1; then
+      negproof_err "[${label}] 突變目標沒有恰好命中一次：$(cat "${MUT_LOG}") ⇒ 這份證明已與規則檔脫節（fail-closed）"
+      return 1
+    fi
+  done
+  return 0
 }
 
-prove_mutation "M1 persisted==0 被改成 ==2" "${M1_OLD}" "${M1_NEW}" \
-  "AtlasUniverseSnapshotNotPersisted" "T 產物沒落地"
-prove_mutation "M2 ranked>0 被放寬成 >=0" "${M2_OLD}" "${M2_NEW}" \
-  "AtlasUniverseSnapshotNotPersisted" "U 沒有產出"
-prove_mutation "M3 第 6 條不再守 last_run_snapshot_persisted" "${M3_OLD}" "${M3_NEW}" \
-  "AtlasUniverseMetricsFamilyMissing" "V 產物訊號整族缺席"
+expect_fail_case_count() {
+  # $1 = 期望的失敗 case 數（$2 = 說明）
+  local want="$1" desc="$2" got
+  got="$(grep -c '^    name: ' "${LOG}" || true)"
+  if [ "${got}" = "${want}" ]; then
+    echo "  ✅ [${desc}] 失敗的 case 數恰為 ${want}（沒有別的 case 被連帶改變）"
+    return 0
+  fi
+  negproof_err "[${desc}] 失敗的 case 數為 ${got}，期望 ${want} ⇒ 突變的影響面與預期不符"
+  return 1
+}
+
+# ── 第一輪：M1 + M3（互不干擾）───────────────────────────────────────────────
+if ! run_mutated \
+    "M1 persisted==0 被改成 ==2" "${M1_OLD}" "${M1_NEW}" \
+    "M3 第 6 條不再守 last_run_snapshot_persisted" "${M3_OLD}" "${M3_NEW}"; then
+  PROOF_FAILED=1
+elif ! negproof_expect 1 "[M1+M3] 改壞判定式之後 promtool 必須失敗" "${LOG}" \
+      -- run_promtool test rules "${TESTS_REL}"; then
+  negproof_show_log "${LOG}"
+  PROOF_FAILED=1
+else
+  negproof_expect_output "    name: T 產物沒落地" "${LOG}" \
+    "[M1] persisted == 0 被改成 == 2 ⇒ case T 必須紅" || PROOF_FAILED=1
+  negproof_expect_output "    alertname: AtlasUniverseSnapshotNotPersisted" "${LOG}" \
+    "[M1] 而且紅的必須是第 10 條" || PROOF_FAILED=1
+  negproof_expect_output "    name: V 產物訊號整族缺席" "${LOG}" \
+    "[M3] 第 6 條不再守 last_run_snapshot_persisted ⇒ case V 必須紅" || PROOF_FAILED=1
+  negproof_expect_output "    alertname: AtlasUniverseMetricsFamilyMissing" "${LOG}" \
+    "[M3] 而且紅的必須是第 6 條" || PROOF_FAILED=1
+  expect_fail_case_count 2 "M1+M3" || PROOF_FAILED=1
+fi
+
+# ── 第二輪：M2（必須單獨一輪，見上面的遮蔽說明）────────────────────────────────
+if ! run_mutated "M2 ranked>0 被放寬成 >=0" "${M2_OLD}" "${M2_NEW}"; then
+  PROOF_FAILED=1
+elif ! negproof_expect 1 "[M2] 改壞判定式之後 promtool 必須失敗" "${LOG}" \
+      -- run_promtool test rules "${TESTS_REL}"; then
+  negproof_show_log "${LOG}"
+  PROOF_FAILED=1
+else
+  negproof_expect_output "    name: U 沒有產出" "${LOG}" \
+    "[M2] ranked > 0 被放寬成 >= 0 ⇒ case U 必須紅（互斥性被拿掉）" || PROOF_FAILED=1
+  negproof_expect_output "    alertname: AtlasUniverseSnapshotNotPersisted" "${LOG}" \
+    "[M2] 而且紅的必須是第 10 條" || PROOF_FAILED=1
+  expect_fail_case_count 1 "M2" || PROOF_FAILED=1
+fi
 
 if [ "${PROOF_FAILED}" -ne 0 ]; then
   echo "❌ promtool mutation negative proof 失敗（見上方 ::error::）" >&2
   exit 1
 fi
-echo "✅ promtool mutation negative proof：3 個突變全部被咬住，且未突變為綠"
+echo "✅ promtool mutation negative proof：3 個突變全部被咬住，且未突變為綠（3 次 promtool 呼叫）"
