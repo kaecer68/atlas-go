@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 
 	"golang.org/x/time/rate"
@@ -121,14 +122,43 @@ func (p *MarketVolumeProvider) fetchDate(ctx context.Context, dateStr string) (*
 		return nil, fmt.Errorf("unmarshal response: %w", err)
 	}
 
-	if apiResp.Stat != "OK" || len(apiResp.Tables) < 7 {
+	// A closed market (weekend, holiday) answers with prose in `stat`, not with
+	// an HTTP error — measured 2026-09-27: date=20260925 (中秋節) →
+	// {"stat":"很抱歉，沒有符合條件的資料!","date":"20260925"} with 10 empty tables,
+	// so neither the stat nor the table count may be read as "OK, one day".
+	if !strings.EqualFold(apiResp.Stat, "OK") {
 		return nil, fmt.Errorf("TWSE MI_INDEX returned no data: stat=%s tables=%d", apiResp.Stat, len(apiResp.Tables))
 	}
 
-	// Table index 6 = 大盤統計資訊
-	marketTable := apiResp.Tables[6]
+	// 大盤統計資訊, selected by field names so the title read below provably
+	// belongs to the market-stats section (E29-2).
+	marketTable, ok := apiResp.MarketStatsTable()
+	if !ok {
+		return nil, fmt.Errorf("TWSE MI_INDEX: 大盤統計資訊 table not found (schema change?): tables=%d", len(apiResp.Tables))
+	}
 	if len(marketTable.Data) == 0 {
 		return nil, fmt.Errorf("TWSE MI_INDEX returned empty market stats")
+	}
+
+	// E29-2 (2026-09-27): the day these numbers describe comes from the PAYLOAD,
+	// never from the request. The 大盤統計資訊 title states it ("115年09月24日
+	// 大盤統計資訊") while the envelope's `date` is not evidence at all — TWSE
+	// echoes the requested date there even when it cannot answer the request
+	// (same measurement as above). Stamping `dateStr` onto the result, which is
+	// what this provider used to do, is how a mis-dated payload (a cached or
+	// "latest-only" upstream answer) entered the snapshot labelled as the
+	// requested trading day. A payload for another day is refused, so the caller
+	// can walk back to a day the exchange actually published.
+	dataDate, ok := marketTable.TitleDate()
+	if !ok {
+		return nil, fmt.Errorf("TWSE MI_INDEX market stats: title carries no data date (schema change?): title=%q", marketTable.Title)
+	}
+	wantDate, err := time.Parse("20060102", dateStr)
+	if err != nil {
+		return nil, fmt.Errorf("TWSE MI_INDEX market stats: invalid requested date %q: %w", dateStr, err)
+	}
+	if want := wantDate.Format("2006-01-02"); dataDate != want {
+		return nil, fmt.Errorf("TWSE MI_INDEX market stats: payload describes %s, refusing to label it %s (mis-dated payload)", dataDate, want)
 	}
 
 	// Row 0 = "1.一般股票", column 1 = 成交金額(元)
@@ -147,6 +177,9 @@ func (p *MarketVolumeProvider) fetchDate(ctx context.Context, dateStr string) (*
 
 	return &MarketVolumeResult{
 		MarketVolume: amountYi,
-		Date:         dateStr,
+		// YYYYMMDD of the payload's OWN date (== the requested date, verified
+		// above). numeric value is untouched by E29-2: only the provenance of
+		// the date changed, verified bit-for-bit for 20260924.
+		Date: strings.ReplaceAll(dataDate, "-", ""),
 	}, nil
 }
