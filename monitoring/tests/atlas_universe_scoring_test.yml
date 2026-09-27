@@ -47,6 +47,8 @@ tests:
     input_series:
       - series: 'atlas_universe_last_run_valid{stage="daily"}'
         values: '1x121'
+      - series: 'atlas_universe_last_run_snapshot_persisted{stage="daily"}'
+        values: '1x121'
       - series: 'atlas_universe_last_run_finished_timestamp_seconds{stage="daily"}'
         values: '0x121'
       - series: 'atlas_universe_last_run_symbols_gathered{stage="daily"}'
@@ -80,6 +82,8 @@ tests:
       - series: 'atlas_universe_quotes_fetched_total{stage="daily"}'
         values: '0x1 1581x120'
       - series: 'atlas_universe_last_run_valid{stage="weekly"}'
+        values: '1x121'
+      - series: 'atlas_universe_last_run_snapshot_persisted{stage="weekly"}'
         values: '1x121'
       - series: 'atlas_universe_last_run_finished_timestamp_seconds{stage="weekly"}'
         values: '0x121'
@@ -144,6 +148,9 @@ tests:
         exp_alerts: []
       - eval_time: 60m
         alertname: AtlasUniverseCounterEmissionMissing
+        exp_alerts: []
+      - eval_time: 60m
+        alertname: AtlasUniverseSnapshotNotPersisted
         exp_alerts: []
   - name: "B 評分空轉(daily ranked=0,weekly 健康):第 1/2 條只對 daily firing;25m 仍在 pending"
     # daily 的 verdict 可信但 ranked=0(市場判定),weekly 正常;
@@ -154,6 +161,8 @@ tests:
     input_series:
       - series: 'atlas_universe_last_run_valid{stage="daily"}'
         values: '1x121'
+      - series: 'atlas_universe_last_run_snapshot_persisted{stage="daily"}'
+        values: '1x121'
       - series: 'atlas_universe_last_run_finished_timestamp_seconds{stage="daily"}'
         values: '0x121'
       - series: 'atlas_universe_last_run_symbols_gathered{stage="daily"}'
@@ -187,6 +196,8 @@ tests:
       - series: 'atlas_universe_quotes_fetched_total{stage="daily"}'
         values: '0x1 1581x120'
       - series: 'atlas_universe_last_run_valid{stage="weekly"}'
+        values: '1x121'
+      - series: 'atlas_universe_last_run_snapshot_persisted{stage="weekly"}'
         values: '1x121'
       - series: 'atlas_universe_last_run_finished_timestamp_seconds{stage="weekly"}'
         values: '0x121'
@@ -350,6 +361,12 @@ tests:
         exp_alerts: []
       - eval_time: 60m
         alertname: AtlasUniverseCounterEmissionMissing
+        exp_alerts: []
+      - eval_time: 25m
+        alertname: AtlasUniverseSnapshotNotPersisted
+        exp_alerts: []
+      - eval_time: 60m
+        alertname: AtlasUniverseSnapshotNotPersisted
         exp_alerts: []
   - name: "C 評分空轉(weekly ranked=0,daily 健康):第 1/2 條只對 weekly firing"
     # 週一 full rebuild 產出 0、週二~週五的 daily 正常 ⇒ 舊版(單一 series + 聚合)會被 daily 遮蔽;
@@ -358,6 +375,8 @@ tests:
     input_series:
       - series: 'atlas_universe_last_run_valid{stage="daily"}'
         values: '1x121'
+      - series: 'atlas_universe_last_run_snapshot_persisted{stage="daily"}'
+        values: '1x121'
       - series: 'atlas_universe_last_run_finished_timestamp_seconds{stage="daily"}'
         values: '0x121'
       - series: 'atlas_universe_last_run_symbols_gathered{stage="daily"}'
@@ -391,6 +410,8 @@ tests:
       - series: 'atlas_universe_quotes_fetched_total{stage="daily"}'
         values: '0x1 1581x120'
       - series: 'atlas_universe_last_run_valid{stage="weekly"}'
+        values: '1x121'
+      - series: 'atlas_universe_last_run_snapshot_persisted{stage="weekly"}'
         values: '1x121'
       - series: 'atlas_universe_last_run_finished_timestamp_seconds{stage="weekly"}'
         values: '0x121'
@@ -528,6 +549,9 @@ tests:
       - eval_time: 60m
         alertname: AtlasUniverseCounterEmissionMissing
         exp_alerts: []
+      - eval_time: 60m
+        alertname: AtlasUniverseSnapshotNotPersisted
+        exp_alerts: []
   - name: "D 報價不可用(provider 沒接 / 不可用):只有第 3 條 firing"
     # gathered>0、filtered>0,但 ranked_trustworthy=0(outcome=quotes_unavailable),ranked=0。
     # 歷史形狀:2026-06-22~09-25 的 wiring `Quotes: nil`(counter 面:quotes_fetched 不增、screened{failed} 全量)。
@@ -535,6 +559,8 @@ tests:
     interval: 1m
     input_series:
       - series: 'atlas_universe_last_run_valid{stage="daily"}'
+        values: '1x121'
+      - series: 'atlas_universe_last_run_snapshot_persisted{stage="daily"}'
         values: '1x121'
       - series: 'atlas_universe_last_run_finished_timestamp_seconds{stage="daily"}'
         values: '0x121'
@@ -570,6 +596,8 @@ tests:
         values: '0x121'
       - series: 'atlas_universe_last_run_valid{stage="weekly"}'
         values: '0x121'
+      - series: 'atlas_universe_last_run_snapshot_persisted{stage="weekly"}'
+        values: '0x121'
       - series: 'atlas_universe_last_run_finished_timestamp_seconds{stage="weekly"}'
         values: '0x121'
       - series: 'atlas_universe_last_run_symbols_gathered{stage="weekly"}'
@@ -673,12 +701,17 @@ tests:
       - eval_time: 60m
         alertname: AtlasUniverseCounterEmissionMissing
         exp_alerts: []
+      - eval_time: 60m
+        alertname: AtlasUniverseSnapshotNotPersisted
+        exp_alerts: []
   - name: "E 報價部分失敗(partial):與 D 同一個 bucket,仍然只有第 3 條 firing"
     # outcome=quotes_partial、quotes_returned=800(部分 chunk 失敗):ranked 不完整 ⇒ 不可信。
     # 釘住「判定用布林而非 outcome 字串」:任何 quote_* 的 reason 都落在同一條規則。
     interval: 1m
     input_series:
       - series: 'atlas_universe_last_run_valid{stage="daily"}'
+        values: '1x121'
+      - series: 'atlas_universe_last_run_snapshot_persisted{stage="daily"}'
         values: '1x121'
       - series: 'atlas_universe_last_run_finished_timestamp_seconds{stage="daily"}'
         values: '0x121'
@@ -714,6 +747,8 @@ tests:
         values: '0x121'
       - series: 'atlas_universe_last_run_valid{stage="weekly"}'
         values: '0x121'
+      - series: 'atlas_universe_last_run_snapshot_persisted{stage="weekly"}'
+        values: '0x121'
       - series: 'atlas_universe_last_run_finished_timestamp_seconds{stage="weekly"}'
         values: '0x121'
       - series: 'atlas_universe_last_run_symbols_gathered{stage="weekly"}'
@@ -817,6 +852,9 @@ tests:
       - eval_time: 60m
         alertname: AtlasUniverseCounterEmissionMissing
         exp_alerts: []
+      - eval_time: 60m
+        alertname: AtlasUniverseSnapshotNotPersisted
+        exp_alerts: []
   - name: "F 母體為空(gathered=0):只有第 7 條 firing"
     # gathered=0(filtered=0、ranked=0、outcome=universe_empty);counter 面完全不動。
     # 這是舊設計結構上偵測不到的形狀(gatheredCounter.Add 在 early-return 之後)⇒ 2026-09-27 由 defer 發佈的 verdict 覆蓋。
@@ -824,6 +862,8 @@ tests:
     interval: 1m
     input_series:
       - series: 'atlas_universe_last_run_valid{stage="daily"}'
+        values: '1x121'
+      - series: 'atlas_universe_last_run_snapshot_persisted{stage="daily"}'
         values: '1x121'
       - series: 'atlas_universe_last_run_finished_timestamp_seconds{stage="daily"}'
         values: '0x121'
@@ -858,6 +898,8 @@ tests:
       - series: 'atlas_universe_quotes_fetched_total{stage="daily"}'
         values: '0x121'
       - series: 'atlas_universe_last_run_valid{stage="weekly"}'
+        values: '0x121'
+      - series: 'atlas_universe_last_run_snapshot_persisted{stage="weekly"}'
         values: '0x121'
       - series: 'atlas_universe_last_run_finished_timestamp_seconds{stage="weekly"}'
         values: '0x121'
@@ -956,6 +998,9 @@ tests:
       - eval_time: 60m
         alertname: AtlasUniverseCounterEmissionMissing
         exp_alerts: []
+      - eval_time: 60m
+        alertname: AtlasUniverseSnapshotNotPersisted
+        exp_alerts: []
   - name: "G industry filter 全滅(gathered>0,filtered=0):只有第 5 條 firing"
     # gathered=1599、filtered=0、outcome=filtered_empty ⇒ Step 3/4/5 都不執行、ranked=0 但不可信。
     # counter 面:只有 gathered 與 filtered{dropped} 有增量(舊版第 5 條正是靠那個桶成立的)。
@@ -963,6 +1008,8 @@ tests:
     interval: 1m
     input_series:
       - series: 'atlas_universe_last_run_valid{stage="daily"}'
+        values: '1x121'
+      - series: 'atlas_universe_last_run_snapshot_persisted{stage="daily"}'
         values: '1x121'
       - series: 'atlas_universe_last_run_finished_timestamp_seconds{stage="daily"}'
         values: '0x121'
@@ -999,6 +1046,8 @@ tests:
       - series: 'atlas_universe_quotes_fetched_total{stage="daily"}'
         values: '0x121'
       - series: 'atlas_universe_last_run_valid{stage="weekly"}'
+        values: '0x121'
+      - series: 'atlas_universe_last_run_snapshot_persisted{stage="weekly"}'
         values: '0x121'
       - series: 'atlas_universe_last_run_finished_timestamp_seconds{stage="weekly"}'
         values: '0x121'
@@ -1099,12 +1148,17 @@ tests:
       - eval_time: 60m
         alertname: AtlasUniverseCounterEmissionMissing
         exp_alerts: []
+      - eval_time: 60m
+        alertname: AtlasUniverseSnapshotNotPersisted
+        exp_alerts: []
   - name: "H 剛重啟、這個 process 還沒跑過(valid=0、整族 0):九條都不得 firing(負向對照 2)"
     # WarmUp 之後、第一輪之前:valid=0(兩個 stage 都是)⇒ 所有 verdict 條件的第一個閘門不成立。
     # 這正是 2026-09-25 舊規則在**每一次部署/重啟後**誤報的形狀(false fire 的前身)。
     interval: 1m
     input_series:
       - series: 'atlas_universe_last_run_valid{stage="daily"}'
+        values: '0x121'
+      - series: 'atlas_universe_last_run_snapshot_persisted{stage="daily"}'
         values: '0x121'
       - series: 'atlas_universe_last_run_finished_timestamp_seconds{stage="daily"}'
         values: '0x121'
@@ -1137,6 +1191,8 @@ tests:
       - series: 'atlas_universe_quotes_fetched_total{stage="daily"}'
         values: '0x121'
       - series: 'atlas_universe_last_run_valid{stage="weekly"}'
+        values: '0x121'
+      - series: 'atlas_universe_last_run_snapshot_persisted{stage="weekly"}'
         values: '0x121'
       - series: 'atlas_universe_last_run_finished_timestamp_seconds{stage="weekly"}'
         values: '0x121'
@@ -1200,12 +1256,17 @@ tests:
       - eval_time: 60m
         alertname: AtlasUniverseCounterEmissionMissing
         exp_alerts: []
+      - eval_time: 60m
+        alertname: AtlasUniverseSnapshotNotPersisted
+        exp_alerts: []
   - name: "I 只有 weekly 跑過、daily 還沒跑(valid: weekly=1, daily=0):九條都不得 firing"
     # 週一 weekly 跑完、週二 daily 尚未執行之前的狀態(daily 的 verdict 仍是 WarmUp 的 0)。
     # 釘住 per-stage 的 valid 閘門:不能因為 daily 的 0 就 firing(那是「還沒跑」,不是「空轉」)。
     interval: 1m
     input_series:
       - series: 'atlas_universe_last_run_valid{stage="daily"}'
+        values: '0x121'
+      - series: 'atlas_universe_last_run_snapshot_persisted{stage="daily"}'
         values: '0x121'
       - series: 'atlas_universe_last_run_finished_timestamp_seconds{stage="daily"}'
         values: '0x121'
@@ -1238,6 +1299,8 @@ tests:
       - series: 'atlas_universe_quotes_fetched_total{stage="daily"}'
         values: '0x121'
       - series: 'atlas_universe_last_run_valid{stage="weekly"}'
+        values: '1x121'
+      - series: 'atlas_universe_last_run_snapshot_persisted{stage="weekly"}'
         values: '1x121'
       - series: 'atlas_universe_last_run_finished_timestamp_seconds{stage="weekly"}'
         values: '0x121'
@@ -1302,4 +1365,8 @@ tests:
         exp_alerts: []
       - eval_time: 60m
         alertname: AtlasUniverseCounterEmissionMissing
+        exp_alerts: []
+
+      - eval_time: 60m
+        alertname: AtlasUniverseSnapshotNotPersisted
         exp_alerts: []

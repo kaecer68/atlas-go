@@ -1187,6 +1187,14 @@ jobs:
         docker run --rm -v "$PWD:/work" -w /work --entrypoint /bin/promtool \
           prom/prometheus:v3.14.0 test rules monitoring/tests/*.yml
 
+    # 為什麼還要這一步（2026-09-27）:上一步綠燈只證明「規則與 fixture 一致」,**不證明
+    # fixture 有鑑別力**。把一條規則的判定式改壞而沒有 case 改變結論時,整組測試照樣全綠
+    # ——對第 10 條（舊 9 條完全沒有偵測器的「產物沒落地」形狀）來說,那等於回到零偵測。
+    # 本步在副本上做三個外科式突變,斷言 promtool 以**恰為 1** 的 rc 失敗且指名那條規則/那個 case。
+    - name: promtool mutation negative proof (改壞判定式 ⇒ 對應 case 必須紅)
+      run: |
+        bash scripts/ci/promtool-mutation-negative-proof.sh
+
     - name: amtool check-config (Alertmanager route/receiver/inhibit)
       run: |
         docker run --rm -v "$PWD:/work" -w /work --entrypoint /bin/amtool \
