@@ -80,11 +80,33 @@ const (
 // DailyQuotesTable returns the 每日收盤行情 section: the only one holding
 // per-symbol OHLCV. Selection is by FIELD NAMES, not by the localised title or
 // a positional index, so a title rewording or a new section upstream cannot
-// silently hand back indices instead of stocks (contrast
-// MarketVolumeProvider, which still indexes Tables[6] positionally).
+// silently hand back indices instead of stocks.
 func (r twseMIIndexResponse) DailyQuotesTable() (twseMITable, bool) {
 	for _, t := range r.Tables {
 		if t.hasFields(miIndexFieldCode, miIndexFieldClose) {
+			return t, true
+		}
+	}
+	return twseMITable{}, false
+}
+
+// Column names of the 大盤統計資訊 section (measured 2026-09-27: tables[6] of a
+// type=MS answer is the only section carrying these).
+const (
+	miIndexFieldMarketStats     = "成交統計"
+	miIndexFieldTradeAmountYuan = "成交金額(元)"
+)
+
+// MarketStatsTable returns the 大盤統計資訊 section (集中市場成交金額).
+//
+// E29-2 (2026-09-27): selected by FIELD NAMES like DailyQuotesTable — a
+// positional Tables[6] is not a contract — because the TABLE'S OWN TITLE
+// ("115年09月24日 大盤統計資訊") is the only provenance a type=MS payload has:
+// its envelope `date` merely echoes the requested date
+// (internal/marketdata/market_volume_provider.go, fetchDate).
+func (r twseMIIndexResponse) MarketStatsTable() (twseMITable, bool) {
+	for _, t := range r.Tables {
+		if t.hasFields(miIndexFieldMarketStats, miIndexFieldTradeAmountYuan) {
 			return t, true
 		}
 	}
