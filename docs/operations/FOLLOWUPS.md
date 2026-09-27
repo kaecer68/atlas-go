@@ -1448,6 +1448,116 @@
 - **不可動**：`.githooks/pre-push`（`FU-20260926-15`）、`Makefile` ci 段（`FU-20260926-12`／E3）、`quality.yml`、
   `docs/reference/traps.md`、`docs/operations/remediation-manifest.md`（另一 lane 的 SSOT）。
 
+### FU-20260927-01 — replay 幻影列只剩「週末」可判：**週間休市（假日）的幻影列在 Prometheus 端結構上無法判別**（需交易日曆）
+
+- **狀態**：`open`
+- **記錄日期**：2026-09-27
+- **來源**：`monitoring/rules/atlas_replay_alerts.yml` 的 5 條新規則（PR #2063／`b1a1ee7d`）交付時**已知的界線**；規則檔自己已在 annotation 內註明（同檔 `:125-126`）。
+- **事實**（規則檔與程式碼位置＝我實查;**生產數字為前一 lane 實測後寫入檔頭,我未複驗產線資料**）：
+  - `AtlasReplaySessionDateInvalid`（同檔 `:93-104`）只有兩個 arm：`day_of_week(...) == 0|6`（`:100`／`:102`）與「資料日晚於 `time()`」（`:95`）。
+  - 檔頭記載：2026-08-29~09-25 生產 replay CSV 有 **396 列**幻影，其中 **weekend=352／holiday=44**（同檔 `:21-22`、`:75-76`）。
+    ⇒ 其中 **44 列（約 11%）是週間休市**，現行規則**抓不到**。
+  - **為什麼不在規則端補**（不是懶，是結構限制）：PromQL 拿不到台灣交易日曆；同一份規則檔已因同一個限制把「CSV 落後」的門檻由 3d／72h 放寬到 14d（同檔 `:47-52`）。
+- **最小修法建議（只建議，未實作）**：
+  1. 在寫入端（`cmd/daily-replay-sync`）新增 counter `atlas_replay_nontrading_rows_total`，
+     僅在「**實際寫入**的列,其資料日經 `marketdata.IsTaiwanTradingDay`（`internal/marketdata/calendar.go:49`）判為非交易日」時 `Inc()`。
+  2. 規則加一條 `> 0`（severity 依 #2063 的既有分級）。
+  - 用 **counter（已發生的事件）**而不是 gauge（狀態）：`#2057` 之後正常路徑**永遠 0**，任何非 0 都是缺陷；
+    缺席的處理沿用第 4 條（`AtlasReplayFreshnessExporterDown`，同檔 `:218`）的 `absent()` arm 設計，不另立第二套心跳。
+  - **不要**改第 1 條的 `day_of_week` arm：週末與週間假日是**互斥的兩個判據**，合併會讓 annotation 說不清是哪一種。
+- **驗收條件**：注入一列週間假日資料 ⇒ 新規則 firing、第 1 條維持沉默；正常路徑連續 0；`promtool test rules` 有對應正向案例與負向對照。
+
+---
+
+### FU-20260927-02 — `atlas_channel_health_status` 的**值域對照表**仍散落,且 #2068 只修了一半（測試檔內部自相矛盾）
+
+- **狀態**：`open`
+- **記錄日期**：2026-09-27
+- **來源**：#2064（`b6fe7d8a`）把 `degraded` 的 gauge 映射由 **4 改成 1**；#2068（`b5108fbb`）修了規則檔文案。
+- **已定案的值域（我實查程式碼,不是抄註解）**：
+  - 映射：`cmd/atlas/channel_health_metrics_task.go:156-168` `healthStatusValue` ⇒ `ok=0`、`warn|stale|degraded=1`、`error=2`、`inactive=3`、其他 `=4`。
+  - 語意：`internal/apigateway/channel_status.go:22`（`StatusDegraded = "degraded"`）＋ `:84-92`（Rule 2b：degraded 的**資料**年齡超過 `EffectiveFreshnessWindow()` 時**自升級為 `error`**）。
+- **仍不一致（我實測,可重現 —— 這是本票的直接證據）**：
+  1. `monitoring/rules/atlas_replay_alerts.yml:280-281` 的 annotation 已寫對（`gauge 值 {{ $value }}`;`1=warn/stale/**degraded**`…`4=其他`）✓ — 這半邊 #2068 修好了。
+  2. 但 `monitoring/tests/atlas_replay_alerts_test.yml` 的 **J 案例仍停在舊映射,且同一段內三處互相矛盾**：
+     - `:27` 註解已寫「gauge 1 = degraded,#2064 前的映射是 4」；
+     - `:28`（**隔一行**）仍寫「`4=degraded`」；
+     - `:370` 案例名寫「gauge 1 = degraded」,但 `:380` 的 `input_series` 實際餵 **`4x700`**,`:396` 的 `exp_annotations.description` 也仍寫「gauge 值 4」。
+  3. **為什麼會「看起來綠」**：第 5 條的 expr 是 `atlas_channel_health_status{channel="twse_replay_sync"} > 0`（同檔 `:269`）——**1 與 4 都會成立** ⇒ 餵哪個值都 PASS。
+     實測（2026-09-27,本機;與 CI 同版 pinned 映像）：
+     `docker run --rm -v "$PWD":/work -w /work --entrypoint /bin/promtool prom/prometheus:v3.14.0 test rules monitoring/tests/atlas_replay_alerts_test.yml` ⇒ `SUCCESS`、`RC=0`。
+     ⇒ 該案例**已不再驗證 #2064 之後的映射**,但沒有任何機制會說出來（「宣告與事實不符」正是本 repo 反覆在獵的缺陷類別）。
+- **最小修法建議（只建議,未實作）**：
+  1. 值域對照表**只留一份**：寫進規則檔頭（或 `docs/operations/` 的 runbook）,測試檔與 annotation 都引用同一份;
+  2. 讓 J 案例的**名稱／輸入／期望三者對齊**（`input_series` 至少反映現行映射）,並補一個「degraded 資料超窗 ⇒ 升級 `error` ⇒ 命中既有 `ChannelHealthStatusError`」的案例（目前那條升級路徑在規則層沒有任何 fixture）。
+- **驗收條件**：`grep -rn '4=degraded' monitoring/ docs/` ⇒ 僅出現在**明確標為「#2064 前」的歷史註記**內（現況 1 命中且未標記）;`promtool test rules monitoring/tests/*.yml` RC=0。
+
+---
+
+### FU-20260927-03 — replay 異常**沒有專屬 runbook**：5 條新規則的 `runbook_url` 全指向通用部署文件
+
+- **狀態**：`open`
+- **記錄日期**：2026-09-27
+- **來源**：PR #2063（`b1a1ee7d`）交付 5 條 replay 規則後刻意留下的界線（前一 lane 明確記載）。
+- **事實（我實查）**：
+  - `monitoring/rules/atlas_replay_alerts.yml` 的 5 條規則（`:93`／`:141`／`:185`／`:218`／`:268`）的 `runbook_url` **全部**指
+    `https://github.com/kaecer68/atlas-go/blob/main/docs/operations/local-deploy.md`（`:127`／`:174`／`:207`／`:247`／`:294`）。
+  - 該檔是**部署與 `.env` 分工**文件,**不含**這 5 條告警各自的處置步驟;`docs/operations/` 內**沒有** replay 專屬 runbook
+    （`ls docs/operations/ | grep -i replay` ⇒ 空）。
+- **代價**：值班點連結後拿不到判讀步驟。相對於「無連結」這是改善（#2066 已把死鏈修成可達）,但與 #2066 自己立的判準
+  （**不要指向目錄／要指向真的處理那份告警的文件**）仍有落差。
+- **建議（只建議,未實作）**：新增 `docs/operations/` 下的 replay 專屬 runbook（檔名建議 `replay-runbook.md`）,
+  把 #2063 PR body 的 triage 步驟（**5 條規則逐條**的立即檢查／判讀前提／補救）整段搬過去,再把 5 處 `runbook_url` 改指它。
+  - 與 `FU-20260927-04` 的關係：那張是「指到**不存在**的東西」,這張是「指到存在但**不對**的東西」——兩者都要收斂,但驗收方式不同。
+- **驗收條件**：`docs/operations/` 內存在 replay runbook,且 5 條規則的 `runbook_url` 指向它;`promtool check rules` 與 `scripts/ci/check_markdown_links.sh` RC=0。
+
+---
+
+### FU-20260927-04 — **12 處** `runbook_url` 指向 `wiki.internal`（DNS **NXDOMAIN**）：其中 **5 處**在 repo 內沒有對應 runbook
+
+- **狀態**：`open`
+- **記錄日期**：2026-09-27
+- **事實（我實查,全部可重現）**：
+  - `grep -rn 'wiki.internal' monitoring/` ⇒ **12 處**。
+  - `host wiki.internal` ⇒ `Host wiki.internal not found: 3(NXDOMAIN)`（2026-09-27;MacBook,解析器 192.168.0.1）⇒ 這 12 個連結**對值班是死的**。
+- **分類（依「哪一份 runbook 才指得對」計;我實測的計數與前一 lane 的判斷一致＝7／5）**：
+  - **(a) channel-health 7 處 —— 可修**：
+    - `monitoring/rules/channel_health_latent_staleness.yml` **6 處**（`ChannelDataStale`:`22`／`ChannelFetchLatencyHigh`:`40`／`ChannelHealthStatusError`×4:`60`／`:76`／`:92`／`:108`）。
+    - `monitoring/rules/wave9_channel_individual_health.yml` **1 處**（`ChannelHighErrorRatePerChannel`:`17`）。
+    - 可指向的**現行**文件：`docs/operations/wave9-runbook.md`（存在;§3.3 處理 `atlas_channel_health_errors_total`,§7／§8 有 Wave 9 自身監控與緊急處置）。
+      ⚠️ **我的判斷（需 owner 覆核,不要直接照抄）**：該檔**部分**涵蓋「通道錯誤率」,但**不涵蓋**「資料陳舊／抓取延遲」的處置
+      ⇒ 直接把 7 處都改指它,會重演「看起來修好」的形狀。建議**同一張票內**先補 `wave9-runbook.md` 的一節（或另立 channel-health runbook）再改指。
+  - **(b) llm-annotator 5 處 —— 需先寫 runbook（依賴 `FU-20260927-03` 的同型格式）**：
+    - `monitoring/rules/llm_annotator_alerts.yml` 共 9 條告警,其中 **5 條**帶死鏈（fast／medium／slow burn、circuit-breaker、no-traffic）。
+    - repo 內**沒有** llm-annotator 的 on-call runbook（`ls docs/operations/ | grep -i 'llm\|annotator'` ⇒ 空;
+      `docs/` 內的 llm 文件是 spec／策略框架,不是處置步驟）⇒ 硬指現有文件＝把死鏈換成另一種謊。
+- **為什麼前一 lane 刻意不動**：同上 —— 避免製造假的閉環。本票把界線寫清楚,讓後手不會誤以為「12 處都只是換連結」。
+- **最小修法建議**：拆兩步 —— ① 先寫 llm-annotator runbook;② 12 處**一次**改指正確目標（含 channel-health 那 7 處所需的補節）。
+  驗收不是「grep 歸零」而是「每個新目標真的含該告警的處置步驟」。
+- **驗收條件**：`grep -rn 'wiki.internal' monitoring/` ⇒ 0 命中;且 12 個新目標逐條**人工複核**含對應處置（不接受只換 URL）。
+
+---
+
+### FU-20260927-05 — `scripts/ci/check_monitoring_single_source.py` 可再加 **R4：`runbook_url` 必須指到存在且對應的文件**（只建議,未實作）
+
+- **狀態**：`open`
+- **記錄日期**：2026-09-27
+- **來源**：本日的 replay 告警工作（#2063／#2066／`FU-20260927-03`／`FU-20260927-04`）暴露的同一道縫：
+  `runbook_url` 是**唯一沒有人守的欄位**（#2066 是一次人工修;12 處死鏈仍在）。
+- **為什麼落在這支檢查而不是新開一支**：`check_monitoring_single_source.py` 已經是「監控設定只有一棵權威樹」的 PR 階段斷言
+  （R1 唯一設定樹／R2 掛載源落點／R3 舊樹路徑）,而 runbook 目標正是同一棵樹上的**引用完整性**;加一條 R4 比再養一支腳本便宜。
+- **建議的 R4 形狀（門檻需 owner 定案）**：
+  - **可離線判定的部分（建議必做,fail）**：`runbook_url` 若指向本 repo
+    （`https://github.com/kaecer68/atlas-go/blob/main/<path>`）,則 `<path>` 必須是 repo 內**存在的檔案**,且**不得是目錄**
+    —— #2066 修的就是「指向目錄」那一種。
+  - **不可離線判定的部分（建議只 warn,不 fail）**：外部 URL（含 `wiki.internal`）**不做 DNS／HTTP 檢查**。
+    理由：CI 依賴外部網路會製造新的 flake,而本 repo 當日已有「`check_jev_contract.sh` 連外服務一 flake 就擋合法 push」的實證（`FU-20260926-21`）。
+    ⇒ 外部 URL 只檢查「是否在具名 allowlist 內」或「是否帶具名的『尚未存在』標記」。
+  - ⚠️ **界線**：本票**不動** `check_monitoring_single_source.py`、`Makefile`、`.github/workflows/quality.yml`
+    （實作需 owner 確認佔用;且在 `FU-20260927-04` 收斂前就把外部 URL 設成 fail,會讓 gate 立刻紅）。
+- **驗收條件**：故意把一條 `runbook_url` 改成 `.../blob/main/docs/operations/`（目錄）⇒ 檢查 **exit 1**;
+  12 處 `wiki.internal` 的既定狀態下 ⇒ **只 warn、不 FAIL**（且有自我測試,不可退化成永遠 PASS）。
+
 ## 判讀註記（讀告警與做驗收前必讀）
 
 以下三則不是待辦，而是**判讀規則**：已實際造成過一次誤判（含 root 本人），所以寫進登記表。
