@@ -19,6 +19,11 @@
 #   3.  Zero file diff vs origin/main      → PR will be closed as redundant
 #       (this is the exact failure mode that produced PR #799)
 #
+#   A DELETE-ONLY push (every refspec git hands us on stdin is a deletion) exits
+#   early, naming the gates it skipped and why — see "Push classification" below.
+#   Nothing here judges a deletion's content, and post-merge branch cleanup is
+#   exactly the case that used to force `--no-verify` (E30, 2026-09-27).
+#
 # Install: bash scripts/install-hooks.sh
 # Skip with: git push --no-verify (use only if you know what you're doing)
 
@@ -37,6 +42,67 @@ fi
 # script's own directory.
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_ROOT"
+
+# ── Push classification: read this push's refspecs from STDIN ─────
+# 2026-09-27 (E30): the refs being pushed are NOT in argv — git writes them to
+# the hook's stdin, one per line:
+#     <local ref> <local sha> <remote ref> <remote sha>
+# A deletion is announced as `(delete) 0000…0 <remote ref> <old sha>`. Measured
+# directly (git 2.52.0, this host, 2026-09-27), this one shape covers
+# `git push --delete origin X`, `git push origin :X` and tag deletions.
+# NOT covered, and deliberately so: `git push --mirror` was measured (twice) as
+# NOT reporting its deletions on stdin — once handing the hook an empty list,
+# once a list holding only a create line — while still deleting a remote-only
+# branch. A mirror push is therefore classified as a content push and stays
+# subject to every gate (fail-closed; it never silently gets the delete-only
+# pass).
+#
+# Why this matters: every gate below judges *content* (0b binary freshness, 1
+# ci-gate, 1b ci-full, 1c frontend dist, 2 HEAD==origin/main, 3 zero-diff). A
+# delete carries no content, and in the routine post-merge cleanup case the
+# branch is already merged, so `git diff origin/main...HEAD` is empty and Gate 3
+# fired: the delete was refused and the only way through was
+# `git push --no-verify` — i.e. routine cleanup forced the operator to switch the
+# whole gate set off. Now delete-only pushes skip explicitly and loudly.
+#
+# Read stdin exactly once (git writes it once, then closes the pipe) and classify:
+#   delete_only=1  ⇔  at least one refspec line AND every line is a deletion.
+# Fail-closed on the unknown: no refspec information (empty stdin, or a TTY when
+# the hook is run by hand) ⇒ delete_only=0, i.e. treat it as a content push and
+# keep every gate. A mixed push (one deletion + one content line) ⇒
+# delete_only=0, so a deletion can never whitewash the content pushed beside it.
+# The read is bounded (-t 1) so a caller that hands us an open-but-silent pipe
+# cannot hang the push; a timeout can only lose lines, which fails closed.
+delete_only=0
+refspec_total=0
+refspec_deletes=0
+if [ ! -t 0 ]; then
+  while IFS= read -r -t 1 refspec_line || [ -n "$refspec_line" ]; do
+    refspec_total=$((refspec_total + 1))
+    case "$refspec_line" in
+      '(delete) '*) refspec_deletes=$((refspec_deletes + 1)) ;;
+    esac
+  done
+fi
+if [ "$refspec_total" -gt 0 ] && [ "$refspec_deletes" -eq "$refspec_total" ]; then
+  delete_only=1
+fi
+
+if [ "$delete_only" -eq 1 ]; then
+  echo ""
+  echo "✅ pre-push: delete-only push（$refspec_deletes 個 ref 全是刪除，沒有內容）— 放行。"
+  echo "   理由：delete-only push：沒有內容可守。以下是本次明示跳過的閘門："
+  echo "     Gate 0b  host binary freshness（bin/atlas* 落後原始碼）"
+  echo "     Gate 1   make ci-gate"
+  echo "     Gate 1b  make ci-full"
+  echo "     Gate 1c  frontend dist freshness"
+  echo "     Gate 2   HEAD == origin/main（空內容推送才有意義）"
+  echo "     Gate 3   zero file diff vs origin/main（同上）"
+  echo "   這些閘門全都在判斷『內容』；刪除遠端分支/標籤不帶任何內容。"
+  echo "   若這其實是內容 push，git 會在 stdin 給出非 delete 的 refspec 行。"
+  echo ""
+  exit 0
+fi
 
 # ── Gate 0: refresh origin/main (fail-closed) ─────────────────────
 # 2026-09-26 (E4): this used to `exit 0` when the fetch failed, i.e. it silently

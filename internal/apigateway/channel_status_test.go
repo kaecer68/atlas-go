@@ -28,7 +28,47 @@ func TestDeriveChannelStatus(t *testing.T) {
 		{"expired ok is stale", &ChannelHealthRecord{Status: StatusOK, LastFetchAt: mustRFC(now.Add(-17 * 24 * time.Hour))}, oddlot, StatusStale},
 		{"warn passthrough", &ChannelHealthRecord{Status: StatusWarn, LastFetchAt: mustRFC(now.Add(-17 * 24 * time.Hour))}, oddlot, StatusWarn},
 		{"error passthrough", &ChannelHealthRecord{Status: StatusError, LastFetchAt: mustRFC(now.Add(-17 * 24 * time.Hour))}, oddlot, StatusError},
-		{"degraded passthrough", &ChannelHealthRecord{Status: StatusDegraded, LastFetchAt: mustRFC(now.Add(-17 * 24 * time.Hour))}, oddlot, StatusDegraded},
+		{
+			// E29-3: a degraded record with no data stamp cannot be judged, so
+			// it stays degraded (never escalate on a fact that does not exist).
+			"degraded without a data stamp stays degraded",
+			&ChannelHealthRecord{Status: StatusDegraded, LastFetchAt: mustRFC(now.Add(-17 * 24 * time.Hour))},
+			oddlot, StatusDegraded,
+		},
+		{
+			"degraded with fresh data stays degraded (cache still valid)",
+			&ChannelHealthRecord{Status: StatusDegraded, LastFetchAt: mustRFC(now.Add(-5 * time.Minute)), LastSuccessAt: mustRFC(now.Add(-2 * time.Hour))},
+			oddlot, StatusDegraded,
+		},
+		{
+			// The state that had no way out before E29-3: the fetch keeps
+			// succeeding (LastFetchAt fresh) while no real data lands.
+			"degraded whose data outlived the window escalates",
+			&ChannelHealthRecord{Status: StatusDegraded, LastFetchAt: mustRFC(now.Add(-5 * time.Minute)), LastSuccessAt: mustRFC(now.Add(-17 * 24 * time.Hour))},
+			oddlot, StatusError,
+		},
+		{
+			"degraded anchors on the upstream data stamp",
+			&ChannelHealthRecord{Status: StatusDegraded, LastFetchAt: mustRFC(now.Add(-5 * time.Minute)), LastDataAt: mustRFC(now.Add(-30 * time.Minute)), LastSuccessAt: mustRFC(now.Add(-30 * 24 * time.Hour))},
+			oddlot, StatusDegraded,
+		},
+		{
+			// The NEWEST data stamp wins, so a stale leftover LastDataAt
+			// cannot escalate a channel whose data actually landed minutes ago.
+			"degraded uses the freshest data stamp, not the first one",
+			&ChannelHealthRecord{Status: StatusDegraded, LastFetchAt: mustRFC(now.Add(-5 * time.Minute)), LastDataAt: mustRFC(now.Add(-4 * 30 * 24 * time.Hour)), LastSuccessAt: mustRFC(now.Add(-5 * time.Minute))},
+			oddlot, StatusDegraded,
+		},
+		{
+			"long window keeps a recent degraded snapshot degraded",
+			&ChannelHealthRecord{Status: StatusDegraded, LastFetchAt: mustRFC(now.Add(-5 * time.Minute)), LastSuccessAt: mustRFC(now.Add(-3 * 24 * time.Hour))},
+			tdcc, StatusDegraded,
+		},
+		{
+			"long window still escalates when the data is over it",
+			&ChannelHealthRecord{Status: StatusDegraded, LastFetchAt: mustRFC(now.Add(-5 * time.Minute)), LastSuccessAt: mustRFC(now.Add(-9 * 24 * time.Hour))},
+			tdcc, StatusError,
+		},
 		{"inactive passthrough", &ChannelHealthRecord{Status: StatusInactive, LastFetchAt: mustRFC(now.Add(-17 * 24 * time.Hour))}, oddlot, StatusInactive},
 		{"missing timestamp cannot be judged", &ChannelHealthRecord{Status: StatusOK}, oddlot, StatusOK},
 		{"unparseable timestamp cannot be judged", &ChannelHealthRecord{Status: StatusOK, LastFetchAt: "2026-09-07"}, oddlot, StatusOK},
@@ -116,5 +156,45 @@ func TestChannelHealthSyncValuesFor(t *testing.T) {
 	broken := ChannelHealthSyncValuesFor("twse_capital_flow", &ChannelHealthRecord{Status: StatusOK}, now)
 	if !broken.LastFetchAt.Equal(now) || broken.LastSuccessAt != nil {
 		t.Errorf("record without timestamps = %+v, want now + nil last_success (NOT NULL column)", broken)
+	}
+}
+
+// TestDegradedSelfEscalatesWhenTheDataIsGone is the E29-3 contract: "degraded"
+// is a verdict about the DATA, so it must expire like one, and the escalated
+// verdict must be the one the alert path acts on (the gauge maps error → 2,
+// which is what ChannelHealthStatusError matches). Before this, a degraded
+// record could never escalate: it keeps LastFetchAt moving, so no freshness
+// gate saw it and permanent schema drift was visible only in a process exit
+// code.
+func TestDegradedSelfEscalatesWhenTheDataIsGone(t *testing.T) {
+	now := time.Date(2026, 9, 27, 6, 0, 0, 0, time.UTC)
+	oddlot := ChannelContracts().Contract("twse_oddlot") // window = 48h
+	rec := &ChannelHealthRecord{
+		Status:        StatusDegraded,
+		LastFetchAt:   mustRFC(now.Add(-5 * time.Minute)), // the fetch still works
+		LastSuccessAt: mustRFC(now.Add(-17 * 24 * time.Hour)),
+	}
+
+	if got := DeriveChannelStatus(rec, oddlot, now); got != StatusError {
+		t.Fatalf("degraded with 17-day-old data = %q, want error (an alarmable verdict)", got)
+	}
+	reason := DeriveChannelStatusReason(rec, oddlot, now)
+	if !strings.Contains(reason, "17 天") || !strings.Contains(reason, "升級為 error") {
+		t.Errorf("escalation reason = %q, want the data age and the escalation", reason)
+	}
+	// One judgment, every consumer: the DB mirror carries the same verdict.
+	if v := ChannelHealthSyncValuesFor("twse_oddlot", rec, now); v.Status != StatusError {
+		t.Errorf("mirrored status = %q, want error", v.Status)
+	}
+
+	// Negative control: the same record with data inside the window is NOT
+	// escalated, so the rule is about the data and not about "degraded exists".
+	fresh := *rec
+	fresh.LastSuccessAt = mustRFC(now.Add(-2 * time.Hour))
+	if got := DeriveChannelStatus(&fresh, oddlot, now); got != StatusDegraded {
+		t.Errorf("degraded with 2-hour-old data = %q, want degraded (cache still within contract)", got)
+	}
+	if r := DeriveChannelStatusReason(&fresh, oddlot, now); r != "" {
+		t.Errorf("a degraded record inside its window must carry no error reason, got %q", r)
 	}
 }
