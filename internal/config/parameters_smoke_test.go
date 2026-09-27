@@ -3,6 +3,7 @@ package config
 import (
 	"encoding/json"
 	"os"
+	"path/filepath"
 	"testing"
 )
 
@@ -12,23 +13,34 @@ import (
 //
 // If this test fails in CI, it means someone ran ParametersConfig.Save() without
 // re-running the calibrator, or the calibrator didn't write both timestamp formats.
+//
+// The document is located through moduleRoot() (go.mod), NOT by probing for
+// "configs/parameters.json" (issue #1944 Batch A4). A probe walks up from this
+// package's directory, so it used to return the stale duplicate at
+// internal/config/configs/parameters.json — version 1.2, updated_at 2026-06-26 —
+// while the SSOT is configs/parameters.json, version 1.3, updated_at 2026-07-06.
+// The gate therefore asserted against a 300 KB file that nothing reads.
 func TestCalibrationEvidence_Smoke(t *testing.T) {
-	// Test runs from internal/config/ — navigate to repo root.
-	path, err := findRepoRoot("configs/parameters.json")
+	root, err := moduleRoot()
 	if err != nil {
-		t.Skipf("configs/parameters.json not found: %v", err)
+		t.Skipf("module root (go.mod) not found: %v", err)
 	}
+	path := filepath.Join(root, "configs", "parameters.json")
 	data, err := os.ReadFile(path)
 	if err != nil {
-		t.Skipf("configs/parameters.json not readable: %v", err)
+		t.Skipf("%s not readable: %v", path, err)
 	}
 
-	var config map[string]any
-	if err := json.Unmarshal(data, &config); err != nil {
+	var doc map[string]any
+	if err := json.Unmarshal(data, &doc); err != nil {
 		t.Fatalf("invalid JSON: %v", err)
 	}
+	// Print what was actually judged: the resolved path and the document version
+	// are the two things that made this gate read the wrong file for months.
+	t.Logf("calibration evidence source: %s (%d bytes, version=%v, updated_at=%v)",
+		path, len(data), doc["version"], doc["updated_at"])
 
-	industryCfg, ok := config["industry"].(map[string]any)
+	industryCfg, ok := doc["industry"].(map[string]any)
 	if !ok {
 		t.Fatal("industry section missing")
 	}
@@ -82,16 +94,20 @@ after calibration.`, eq, calMethod)
 	}
 }
 
-// findRepoRoot walks up from the current directory until it finds
-// the given relative path, or returns an error after 10 levels.
-func findRepoRoot(rel string) (string, error) {
-	dir := "."
-	for range 10 {
-		abs := dir + "/" + rel
-		if _, err := os.Stat(abs); err == nil {
-			return abs, nil
-		}
-		dir = dir + "/.."
+// TestNoShadowParametersCopy keeps the duplicate document from coming back
+// (issue #1944 Batch A4). A second copy of parameters.json inside
+// internal/config/ is worse than dead weight: it makes every
+// "walk up until configs/parameters.json exists" probe — findRepoRoot and
+// friends — resolve to internal/config instead of the repository root, so tests
+// and tools silently judge a stale document while the SSOT moves on.
+func TestNoShadowParametersCopy(t *testing.T) {
+	root, err := moduleRoot()
+	if err != nil {
+		t.Skipf("module root (go.mod) not found: %v", err)
 	}
-	return "", os.ErrNotExist
+	shadow := filepath.Join(root, "internal", "config", "configs", "parameters.json")
+	if _, statErr := os.Stat(shadow); statErr == nil {
+		t.Fatalf("shadow copy exists again: %s\n\nRemove it. It shadows the SSOT (%s) for every walk-up probe (issue #1944 Batch A4).",
+			shadow, filepath.Join(root, "configs", "parameters.json"))
+	}
 }

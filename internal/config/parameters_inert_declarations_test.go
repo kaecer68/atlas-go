@@ -29,10 +29,12 @@ const (
 )
 
 // moduleRoot walks up from the test working directory until it finds go.mod.
-// It deliberately does NOT reuse findRepoRoot (which probes for
-// "<dir>/configs/parameters.json"): a stale duplicate copy lives at
-// internal/config/configs/parameters.json, so that probe returns
-// internal/config instead of the repository root.
+//
+// Prefer it over probing for a data file: a probe answers "where is a file that
+// looks like X", and the removed duplicate internal/config/configs/parameters.json
+// was exactly such a decoy — it made every walk-up probe stop at internal/config
+// instead of the repository root (issue #1944 Batch A4; see also
+// parameters_smoke_test.go).
 func moduleRoot() (string, error) {
 	dir, err := filepath.Abs(".")
 	if err != nil {
