@@ -767,9 +767,18 @@ func BuildUniverse(ctx context.Context, deps UniverseBuilderDeps, fullRebuild bo
 	// The verdict also refreshes the schedule heartbeat (see
 	// universe_run_verdict.go), so a missed trigger is visible without any
 	// holiday-blind window arithmetic in the alert rules.
+	// snapshotPersisted records whether THIS run's output was verified on disk
+	// (Step 7 reads the file back). It is deliberately a local of the run, not a
+	// field of UniverseBuildResult: the result is what gets WRITTEN to the
+	// snapshot, so it cannot contain a statement about the write that produces it.
+	// The defer below is the only reader, so no exit path can publish the verdict
+	// of a different run.
+	var snapshotPersisted bool
 	if um != nil {
 		defer func() {
-			um.ReportRun(UniverseRunVerdictFor(result, stage, time.Now()))
+			verdict := UniverseRunVerdictFor(result, stage, time.Now())
+			verdict.SnapshotPersisted = snapshotPersisted
+			um.ReportRun(verdict)
 			ReportUniverseHeartbeat(um, time.Now())
 		}()
 	}
@@ -1030,6 +1039,24 @@ func BuildUniverse(ctx context.Context, deps UniverseBuilderDeps, fullRebuild bo
 		logging.Warn("universe_scheduler", "snapshot_save_error",
 			logging.Err(snapshotErr))
 	}
+	// The verdict published by the defer reports whether the artifact is really
+	// there, read back from the filesystem — never whether the write call
+	// returned nil. Reasons to measure instead of trust:
+	//   - a silently misconfigured WorkDir writes the snapshot somewhere nobody
+	//     reads, and the write itself succeeds;
+	//   - MkdirAll/Rename failures are only logged (the run must still publish
+	//     its verdict), so the error is not a reliable signal downstream;
+	//   - atlas_universe_snapshot_persisted_total increments even on failure
+	//     (Step 7 below), so the counter cannot answer this question either.
+	// See SnapshotPersistedOnDisk and AtlasUniverseSnapshotNotPersisted
+	// (monitoring/rules/atlas_universe_scoring_alerts.yml).
+	snapshotPersisted = SnapshotPersistedOnDisk(deps.WorkDir, result.Timestamp)
+	if !snapshotPersisted {
+		logging.Warn("universe_scheduler", "snapshot_not_persisted",
+			"path", UniverseSnapshotPath(deps.WorkDir),
+			"run_started", result.Timestamp.UTC().Format(time.RFC3339),
+			"save_error", snapshotErr != nil)
+	}
 
 	// Also persist as agents.json-compatible universe registry.
 	registryPath := filepath.Join(deps.WorkDir, "data", "state", "universe.json")
@@ -1169,6 +1196,39 @@ func LoadUniverseSnapshot(workDir string) (*UniverseSnapshot, error) {
 		return nil, fmt.Errorf("unmarshal universe snapshot %q: %w", path, err)
 	}
 	return &snap, nil
+}
+
+// snapshotMtimeTolerance absorbs filesystem timestamp granularity when a run's
+// artifact is compared against the instant the run started. It is small on
+// purpose: a false "1" (reporting an artifact that is not this run's as if it
+// were) is the failure mode that would silence the alert this check feeds.
+const snapshotMtimeTolerance = 2 * time.Second
+
+// SnapshotPersistedOnDisk reports whether the canonical snapshot artifact at
+// UniverseSnapshotPath(workDir) carries a write that is at least as recent as
+// the run that started at runStart.
+//
+// It is the measurement behind atlas_universe_last_run_snapshot_persisted. The
+// question it answers is "did this run's output reach the file the consumers
+// read?", which is NOT the same as "did the write call return nil":
+//
+//   - a wrong WorkDir makes the write succeed at a path nobody reads;
+//   - a stale file left by a previous (or out-of-band CLI) run makes the write
+//     call irrelevant to whether the artifact describes the market now;
+//   - the failure is only warned about (see BuildUniverse Step 7), so a caller
+//     that reads the error would still have to decide what "the artifact" means.
+//
+// Reading the file back makes the answer auditable from outside the process:
+// `stat data/state/universe_snapshot.json` must agree with the gauge.
+//
+// A missing file is false, never an error: "there is no artifact" is exactly
+// the state the alert must see.
+func SnapshotPersistedOnDisk(workDir string, runStart time.Time) bool {
+	info, err := os.Stat(UniverseSnapshotPath(workDir))
+	if err != nil {
+		return false
+	}
+	return !info.ModTime().Before(runStart.Add(-snapshotMtimeTolerance))
 }
 
 // saveUniverseSnapshot is the scheduler-internal alias kept for readability of

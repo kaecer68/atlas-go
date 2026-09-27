@@ -39,6 +39,8 @@ tests:
     input_series:
       - series: 'atlas_universe_last_run_valid{stage="daily"}'
         values: '0x2900'
+      - series: 'atlas_universe_last_run_snapshot_persisted{stage="daily"}'
+        values: '0x2900'
       - series: 'atlas_universe_last_run_finished_timestamp_seconds{stage="daily"}'
         values: '0x2900'
       - series: 'atlas_universe_last_run_symbols_gathered{stage="daily"}'
@@ -58,6 +60,8 @@ tests:
       - series: 'atlas_universe_last_run_ranked_trustworthy{stage="daily"}'
         values: '0x2900'
       - series: 'atlas_universe_last_run_valid{stage="weekly"}'
+        values: '0x2900'
+      - series: 'atlas_universe_last_run_snapshot_persisted{stage="weekly"}'
         values: '0x2900'
       - series: 'atlas_universe_last_run_finished_timestamp_seconds{stage="weekly"}'
         values: '0x2900'
@@ -179,12 +183,20 @@ tests:
       - eval_time: 48h
         alertname: AtlasUniverseCounterEmissionMissing
         exp_alerts: []
+      - eval_time: 24h
+        alertname: AtlasUniverseSnapshotNotPersisted
+        exp_alerts: []
+      - eval_time: 48h
+        alertname: AtlasUniverseSnapshotNotPersisted
+        exp_alerts: []
   - name: "K heartbeat 仍在未來:第 8 條不得 firing"
     # next_run=1000000000(遠在未來)⇒ 服務久未執行時也不會 firing;
     # 「有沒有在跑」由 Go 端更新的 heartbeat 表達(ReportUniverseHeartbeat)。
     interval: 1m
     input_series:
       - series: 'atlas_universe_last_run_valid{stage="daily"}'
+        values: '0x2900'
+      - series: 'atlas_universe_last_run_snapshot_persisted{stage="daily"}'
         values: '0x2900'
       - series: 'atlas_universe_last_run_finished_timestamp_seconds{stage="daily"}'
         values: '0x2900'
@@ -205,6 +217,8 @@ tests:
       - series: 'atlas_universe_last_run_ranked_trustworthy{stage="daily"}'
         values: '0x2900'
       - series: 'atlas_universe_last_run_valid{stage="weekly"}'
+        values: '0x2900'
+      - series: 'atlas_universe_last_run_snapshot_persisted{stage="weekly"}'
         values: '0x2900'
       - series: 'atlas_universe_last_run_finished_timestamp_seconds{stage="weekly"}'
         values: '0x2900'
@@ -264,6 +278,9 @@ tests:
       - eval_time: 48h
         alertname: AtlasUniverseCounterEmissionMissing
         exp_alerts: []
+      - eval_time: 48h
+        alertname: AtlasUniverseSnapshotNotPersisted
+        exp_alerts: []
   - name: "L heartbeat 缺席(發佈程式碼被刪/新 binary 尚未部署):第 6 條 firing、第 8 條沉默"
     # next_run 完全不存在、服務活著(up=1)⇒ 第 6 條以「輸入族缺失」的文案報告;
     # 第 8 條的輸入不存在 ⇒ 沉默(不是宣稱「現在沒逾時」)。
@@ -271,6 +288,8 @@ tests:
     interval: 1m
     input_series:
       - series: 'atlas_universe_last_run_valid{stage="daily"}'
+        values: '0x2900'
+      - series: 'atlas_universe_last_run_snapshot_persisted{stage="daily"}'
         values: '0x2900'
       - series: 'atlas_universe_last_run_finished_timestamp_seconds{stage="daily"}'
         values: '0x2900'
@@ -291,6 +310,8 @@ tests:
       - series: 'atlas_universe_last_run_ranked_trustworthy{stage="daily"}'
         values: '0x2900'
       - series: 'atlas_universe_last_run_valid{stage="weekly"}'
+        values: '0x2900'
+      - series: 'atlas_universe_last_run_snapshot_persisted{stage="weekly"}'
         values: '0x2900'
       - series: 'atlas_universe_last_run_finished_timestamp_seconds{stage="weekly"}'
         values: '0x2900'
@@ -351,11 +372,12 @@ tests:
             description: |
               本檔讀取的 metric family 至少有一個在過去 30 分鐘完全不存在(不是值為 0),
               而 `up{job=atlas-go}` 仍為 1 ⇒ atlas-go 還活著、/metrics 還回得出東西,
-              但規則的輸入不見了。四個輸入是:
+              但規則的輸入不見了。五個輸入是:
                 atlas_universe_symbols_ranked_total            (記帳面:第 9 條)
                 atlas_universe_quotes_fetched_total            (記帳面)
                 atlas_universe_last_run_valid                  (輸出面:第 1/2/3/5/7 條)
                 atlas_universe_next_run_timestamp_seconds      (心跳:第 8 條)
+                atlas_universe_last_run_snapshot_persisted     (產物面:第 10 條)
 
               這代表什麼:
               - 這是「零偵測」的一種形狀:規則不會 firing,但**不是因為系統健康**,而是因為
@@ -385,6 +407,9 @@ tests:
       - eval_time: 48h
         alertname: AtlasUniverseCounterEmissionMissing
         exp_alerts: []
+      - eval_time: 48h
+        alertname: AtlasUniverseSnapshotNotPersisted
+        exp_alerts: []
   - name: "M 記帳面斷線(= 2026-09-25 生產實況):只有第 9 條 firing(輸出健康、counter 全 0)"
     # daily 的 verdict 健康(valid=1、ranked=150、trustworthy=1、finished 在原點),
     # 但 symbols_ranked_total / quotes_fetched_total 恆為 0(wiring 把單標籤 series 丟掉的形狀)。
@@ -393,6 +418,8 @@ tests:
     interval: 1m
     input_series:
       - series: 'atlas_universe_last_run_valid{stage="daily"}'
+        values: '1x4400'
+      - series: 'atlas_universe_last_run_snapshot_persisted{stage="daily"}'
         values: '1x4400'
       - series: 'atlas_universe_last_run_finished_timestamp_seconds{stage="daily"}'
         values: '0x4400'
@@ -415,6 +442,8 @@ tests:
       - series: 'atlas_universe_last_run_outcome{outcome="ok",stage="daily"}'
         values: '1x4400'
       - series: 'atlas_universe_last_run_valid{stage="weekly"}'
+        values: '0x4400'
+      - series: 'atlas_universe_last_run_snapshot_persisted{stage="weekly"}'
         values: '0x4400'
       - series: 'atlas_universe_last_run_finished_timestamp_seconds{stage="weekly"}'
         values: '0x4400'
@@ -522,6 +551,9 @@ tests:
               TestBuildUniverse_EmitsEveryCounterTheAlertsRead 守著(pipeline → bridge → /metrics
               的文字斷言),而「整個 name 消失」由第 6 條負責。
             runbook_url: "https://github.com/kaecer68/atlas-go/blob/main/docs/operations/universe-scoring-ranked-zero-20260925.md"
+      - eval_time: 72h
+        alertname: AtlasUniverseSnapshotNotPersisted
+        exp_alerts: []
   - name: "M2 生產 09-25~09-27 的實況:legacy 標籤 series 提供假活動,verdict 健康 ⇒ 只有第 9 條 firing"
     # 這是 2026-09-27 在生產 Prometheus 實查到的形狀(不是假設):
     #   · 新形狀的 {stage=...} counters 全為 0(WarmUp 建立後從未增量):ranked_total / quotes_fetched / screened;
@@ -533,6 +565,8 @@ tests:
     interval: 1m
     input_series:
       - series: 'atlas_universe_last_run_valid{stage="daily"}'
+        values: '1x4400'
+      - series: 'atlas_universe_last_run_snapshot_persisted{stage="daily"}'
         values: '1x4400'
       - series: 'atlas_universe_last_run_finished_timestamp_seconds{stage="daily"}'
         values: '0x4400'
@@ -555,6 +589,8 @@ tests:
       - series: 'atlas_universe_last_run_outcome{outcome="ok",stage="daily"}'
         values: '1x4400'
       - series: 'atlas_universe_last_run_valid{stage="weekly"}'
+        values: '0x4400'
+      - series: 'atlas_universe_last_run_snapshot_persisted{stage="weekly"}'
         values: '0x4400'
       - series: 'atlas_universe_last_run_finished_timestamp_seconds{stage="weekly"}'
         values: '0x4400'
@@ -670,11 +706,16 @@ tests:
               TestBuildUniverse_EmitsEveryCounterTheAlertsRead 守著(pipeline → bridge → /metrics
               的文字斷言),而「整個 name 消失」由第 6 條負責。
             runbook_url: "https://github.com/kaecer68/atlas-go/blob/main/docs/operations/universe-scoring-ranked-zero-20260925.md"
+      - eval_time: 72h
+        alertname: AtlasUniverseSnapshotNotPersisted
+        exp_alerts: []
   - name: "N 記帳面正常(同上但 counter 有增量):第 9 條不得 firing(負向對照 1)"
     # 唯一差異:symbols_ranked_total 有增量(0 → 150)⇒ 輸出與記帳一致 ⇒ 不 firing。
     interval: 1m
     input_series:
       - series: 'atlas_universe_last_run_valid{stage="daily"}'
+        values: '1x4400'
+      - series: 'atlas_universe_last_run_snapshot_persisted{stage="daily"}'
         values: '1x4400'
       - series: 'atlas_universe_last_run_finished_timestamp_seconds{stage="daily"}'
         values: '0x4400'
@@ -697,6 +738,8 @@ tests:
       - series: 'atlas_universe_last_run_outcome{outcome="ok",stage="daily"}'
         values: '1x4400'
       - series: 'atlas_universe_last_run_valid{stage="weekly"}'
+        values: '0x4400'
+      - series: 'atlas_universe_last_run_snapshot_persisted{stage="weekly"}'
         values: '0x4400'
       - series: 'atlas_universe_last_run_finished_timestamp_seconds{stage="weekly"}'
         values: '0x4400'
@@ -756,12 +799,17 @@ tests:
       - eval_time: 72h
         alertname: AtlasUniverseCounterEmissionMissing
         exp_alerts: []
+      - eval_time: 72h
+        alertname: AtlasUniverseSnapshotNotPersisted
+        exp_alerts: []
   - name: "O 最後一輪已離開 6 天視窗:第 9 條不得 firing(負向對照 2:新鮮度閘門)"
     # finished=0、eval=192h ⇒ time()-finished = 8 天 > 6 天 ⇒ 視窗內「沒有完成過一輪」,
     # 「輸出與記帳矛盾」的前提不成立(此時若排程真的停了,是第 8 條的職責)。
     interval: 1m
     input_series:
       - series: 'atlas_universe_last_run_valid{stage="daily"}'
+        values: '1x11550'
+      - series: 'atlas_universe_last_run_snapshot_persisted{stage="daily"}'
         values: '1x11550'
       - series: 'atlas_universe_last_run_finished_timestamp_seconds{stage="daily"}'
         values: '0x11550'
@@ -784,6 +832,8 @@ tests:
       - series: 'atlas_universe_last_run_outcome{outcome="ok",stage="daily"}'
         values: '1x11550'
       - series: 'atlas_universe_last_run_valid{stage="weekly"}'
+        values: '0x11550'
+      - series: 'atlas_universe_last_run_snapshot_persisted{stage="weekly"}'
         values: '0x11550'
       - series: 'atlas_universe_last_run_finished_timestamp_seconds{stage="weekly"}'
         values: '0x11550'
@@ -843,6 +893,9 @@ tests:
       - eval_time: 192h
         alertname: AtlasUniverseCounterEmissionMissing
         exp_alerts: []
+      - eval_time: 192h
+        alertname: AtlasUniverseSnapshotNotPersisted
+        exp_alerts: []
   - name: "P 輸出族整體缺席(服務仍在跑):第 6 條 firing"
     # last_run_* 完全不存在(改名或 WarmUp/defer 的發佈路徑被拆掉),但 counter 面還在、up=1。
     # 輸出族是多數規則的輸入 ⇒ 缺席必須有人報告。
@@ -891,11 +944,12 @@ tests:
             description: |
               本檔讀取的 metric family 至少有一個在過去 30 分鐘完全不存在(不是值為 0),
               而 `up{job=atlas-go}` 仍為 1 ⇒ atlas-go 還活著、/metrics 還回得出東西,
-              但規則的輸入不見了。四個輸入是:
+              但規則的輸入不見了。五個輸入是:
                 atlas_universe_symbols_ranked_total            (記帳面:第 9 條)
                 atlas_universe_quotes_fetched_total            (記帳面)
                 atlas_universe_last_run_valid                  (輸出面:第 1/2/3/5/7 條)
                 atlas_universe_next_run_timestamp_seconds      (心跳:第 8 條)
+                atlas_universe_last_run_snapshot_persisted     (產物面:第 10 條)
 
               這代表什麼:
               - 這是「零偵測」的一種形狀:規則不會 firing,但**不是因為系統健康**,而是因為
@@ -924,6 +978,9 @@ tests:
         exp_alerts: []
       - eval_time: 48h
         alertname: AtlasUniverseCounterEmissionMissing
+        exp_alerts: []
+      - eval_time: 48h
+        alertname: AtlasUniverseSnapshotNotPersisted
         exp_alerts: []
   - name: "Q 輸出族缺席且服務沒在跑(up=0):第 6 條必須沉默(up 閘門的牙齒)"
     # 閘門把「服務沒在跑」排除(那是 AtlasGoTargetDown 的轄區);把閘門拿掉這一格會紅燈。
@@ -969,6 +1026,9 @@ tests:
       - eval_time: 48h
         alertname: AtlasUniverseCounterEmissionMissing
         exp_alerts: []
+      - eval_time: 48h
+        alertname: AtlasUniverseSnapshotNotPersisted
+        exp_alerts: []
   - name: "R 記帳面 screened 單獨消失(filtered 還在):第 4 條 firing"
     # symbols_screened_total 被改名/移除,同族 filtered_total 仍有 series、up=1 ⇒ 第 4 條 firing。
     # 第 6 條不得 firing(它的四個輸入族都在)—— 兩條是互斥分工,不是重複告警。
@@ -981,6 +1041,8 @@ tests:
       - series: 'atlas_universe_symbols_filtered_total{reason="industry_filter",stage="daily"}'
         values: '0x2900'
       - series: 'atlas_universe_last_run_valid{stage="daily"}'
+        values: '0x2900'
+      - series: 'atlas_universe_last_run_snapshot_persisted{stage="daily"}'
         values: '0x2900'
       - series: 'atlas_universe_last_run_finished_timestamp_seconds{stage="daily"}'
         values: '0x2900'
@@ -1001,6 +1063,8 @@ tests:
       - series: 'atlas_universe_last_run_ranked_trustworthy{stage="daily"}'
         values: '0x2900'
       - series: 'atlas_universe_last_run_valid{stage="weekly"}'
+        values: '0x2900'
+      - series: 'atlas_universe_last_run_snapshot_persisted{stage="weekly"}'
         values: '0x2900'
       - series: 'atlas_universe_last_run_finished_timestamp_seconds{stage="weekly"}'
         values: '0x2900'
@@ -1090,6 +1154,9 @@ tests:
       - eval_time: 48h
         alertname: AtlasUniverseCounterEmissionMissing
         exp_alerts: []
+      - eval_time: 48h
+        alertname: AtlasUniverseSnapshotNotPersisted
+        exp_alerts: []
   - name: "S screened 與 filtered 一起消失:第 4 條必須沉默(peer gate 的牙齒)"
     # 兩者一起不見 ⇒ 無法區分「改名」與「服務/遙測中斷」⇒ 第 4 條 peer gate 不成立、沉默。
     # ⚠️ 這是**刻意保留的殘餘缺口**(舊檔的缺口 (g)):第 6 條只守著 ranked / quotes_fetched /
@@ -1105,6 +1172,8 @@ tests:
       - series: 'atlas_universe_quotes_fetched_total{stage="daily"}'
         values: '0x2900'
       - series: 'atlas_universe_last_run_valid{stage="daily"}'
+        values: '0x2900'
+      - series: 'atlas_universe_last_run_snapshot_persisted{stage="daily"}'
         values: '0x2900'
       - series: 'atlas_universe_last_run_finished_timestamp_seconds{stage="daily"}'
         values: '0x2900'
@@ -1125,6 +1194,8 @@ tests:
       - series: 'atlas_universe_last_run_ranked_trustworthy{stage="daily"}'
         values: '0x2900'
       - series: 'atlas_universe_last_run_valid{stage="weekly"}'
+        values: '0x2900'
+      - series: 'atlas_universe_last_run_snapshot_persisted{stage="weekly"}'
         values: '0x2900'
       - series: 'atlas_universe_last_run_finished_timestamp_seconds{stage="weekly"}'
         values: '0x2900'
@@ -1176,3 +1247,433 @@ tests:
       - eval_time: 48h
         alertname: AtlasUniverseCounterEmissionMissing
         exp_alerts: []
+
+      - eval_time: 48h
+        alertname: AtlasUniverseSnapshotNotPersisted
+        exp_alerts: []
+
+  - name: "T 產物沒落地(ranked>0 但 snapshot 沒落地):第 10 條只對 daily firing,其餘 9 條沉默"
+    # 這一輪 daily 算出了可信的 150 檔(valid=1/trustworthy=1/ranked>0),而 daily 的產物訊號
+    # 說它沒有寫進 snapshot(persisted=0);weekly 的 1 不得替 daily 的 0 背書。
+    # counter 面刻意有增量 ⇒ 第 9 條(記帳面斷線)沉默,證明這是**不同的**層。
+    # 25m 時本條仍在 pending(for: 30m)⇒ 不得 firing。
+    interval: 1m
+    input_series:
+      - series: 'atlas_universe_last_run_valid{stage="daily"}'
+        values: '1x121'
+      - series: 'atlas_universe_last_run_finished_timestamp_seconds{stage="daily"}'
+        values: '0x121'
+      - series: 'atlas_universe_last_run_valid{stage="weekly"}'
+        values: '1x121'
+      - series: 'atlas_universe_last_run_finished_timestamp_seconds{stage="weekly"}'
+        values: '0x121'
+      - series: 'atlas_universe_last_run_symbols_gathered{stage="daily"}'
+        values: '1599x121'
+      - series: 'atlas_universe_last_run_symbols_filtered{stage="daily"}'
+        values: '1599x121'
+      - series: 'atlas_universe_last_run_screened_passed{stage="daily"}'
+        values: '150x121'
+      - series: 'atlas_universe_last_run_screened_failed{stage="daily"}'
+        values: '1449x121'
+      - series: 'atlas_universe_last_run_symbols_ranked{stage="daily"}'
+        values: '150x121'
+      - series: 'atlas_universe_last_run_ranked_trustworthy{stage="daily"}'
+        values: '1x121'
+      - series: 'atlas_universe_last_run_outcome{outcome="ok",stage="daily"}'
+        values: '1x121'
+      - series: 'atlas_universe_last_run_snapshot_persisted{stage="daily"}'
+        values: '0x121'
+      - series: 'atlas_universe_last_run_symbols_gathered{stage="weekly"}'
+        values: '1599x121'
+      - series: 'atlas_universe_last_run_symbols_filtered{stage="weekly"}'
+        values: '1599x121'
+      - series: 'atlas_universe_last_run_screened_passed{stage="weekly"}'
+        values: '150x121'
+      - series: 'atlas_universe_last_run_screened_failed{stage="weekly"}'
+        values: '1449x121'
+      - series: 'atlas_universe_last_run_symbols_ranked{stage="weekly"}'
+        values: '150x121'
+      - series: 'atlas_universe_last_run_ranked_trustworthy{stage="weekly"}'
+        values: '1x121'
+      - series: 'atlas_universe_last_run_outcome{outcome="ok",stage="weekly"}'
+        values: '1x121'
+      - series: 'atlas_universe_last_run_snapshot_persisted{stage="weekly"}'
+        values: '1x121'
+      - series: 'atlas_universe_symbols_gathered_total{stage="daily"}'
+        values: '0x1 1599x120'
+      - series: 'atlas_universe_symbols_filtered_total{reason="industry_filter",stage="daily"}'
+        values: '0x1 1599x120'
+      - series: 'atlas_universe_symbols_screened_total{result="passed",stage="daily"}'
+        values: '0x1 150x120'
+      - series: 'atlas_universe_symbols_screened_total{result="failed",stage="daily"}'
+        values: '0x1 1449x120'
+      - series: 'atlas_universe_symbols_ranked_total{stage="daily"}'
+        values: '0x1 150x120'
+      - series: 'atlas_universe_quotes_fetched_total{stage="daily"}'
+        values: '0x1 1581x120'
+      - series: 'atlas_universe_symbols_ranked_total{stage="weekly"}'
+        values: '0x1 150x120'
+      - series: 'atlas_universe_quotes_fetched_total{stage="weekly"}'
+        values: '0x1 1581x120'
+      - series: 'atlas_universe_next_run_timestamp_seconds'
+        values: '1000000000x121'
+      - series: 'up{job="atlas-go"}'
+        values: '1x121'
+    alert_rule_test:
+      - eval_time: 25m
+        alertname: AtlasUniverseRankedZero
+        exp_alerts: []
+      - eval_time: 25m
+        alertname: AtlasUniverseScreeningAllRejected
+        exp_alerts: []
+      - eval_time: 25m
+        alertname: AtlasUniverseQuotesMissing
+        exp_alerts: []
+      - eval_time: 25m
+        alertname: AtlasUniverseScreenedFamilyMissing
+        exp_alerts: []
+      - eval_time: 25m
+        alertname: AtlasUniverseEmptyFiltered
+        exp_alerts: []
+      - eval_time: 25m
+        alertname: AtlasUniverseMetricsFamilyMissing
+        exp_alerts: []
+      - eval_time: 25m
+        alertname: AtlasUniverseEmptyUniverse
+        exp_alerts: []
+      - eval_time: 25m
+        alertname: AtlasUniverseRunOverdue
+        exp_alerts: []
+      - eval_time: 25m
+        alertname: AtlasUniverseCounterEmissionMissing
+        exp_alerts: []
+      - eval_time: 60m
+        alertname: AtlasUniverseRankedZero
+        exp_alerts: []
+      - eval_time: 60m
+        alertname: AtlasUniverseScreeningAllRejected
+        exp_alerts: []
+      - eval_time: 60m
+        alertname: AtlasUniverseQuotesMissing
+        exp_alerts: []
+      - eval_time: 60m
+        alertname: AtlasUniverseScreenedFamilyMissing
+        exp_alerts: []
+      - eval_time: 60m
+        alertname: AtlasUniverseEmptyFiltered
+        exp_alerts: []
+      - eval_time: 60m
+        alertname: AtlasUniverseMetricsFamilyMissing
+        exp_alerts: []
+      - eval_time: 60m
+        alertname: AtlasUniverseEmptyUniverse
+        exp_alerts: []
+      - eval_time: 60m
+        alertname: AtlasUniverseRunOverdue
+        exp_alerts: []
+      - eval_time: 60m
+        alertname: AtlasUniverseCounterEmissionMissing
+        exp_alerts: []
+      - eval_time: 25m
+        alertname: AtlasUniverseSnapshotNotPersisted
+        exp_alerts: []
+      - eval_time: 60m
+        alertname: AtlasUniverseSnapshotNotPersisted
+        exp_alerts:
+        - exp_labels:
+            alertname: "AtlasUniverseSnapshotNotPersisted"
+            severity: "warning"
+            stage: "daily"
+            service: "atlas"
+            component: "universe-persistence"
+            wave: "9.2"
+            incident_ref: "universe-snapshot-persistence-20260927"
+          exp_annotations:
+            summary: "universe 產物沒落地:這一輪算出市場判定,但 snapshot 沒有更新"
+            description: |
+              <stage> 這一輪完成了(valid == 1),它自己的 verdict 說可信且有產出
+              (ranked_trustworthy == 1、ranked > 0),但同一次執行留下的產物訊號
+              `atlas_universe_last_run_snapshot_persisted{stage}` == 0 ⇒ **這一輪的輸出沒有寫進
+              data/state/universe_snapshot.json**。
+
+              證據(全部來自輸出;「輸出健康」與「產物落地」是兩件事,矛盾才有意義):
+                atlas_universe_last_run_valid{stage}                      == 1
+                atlas_universe_last_run_ranked_trustworthy{stage}          == 1
+                atlas_universe_last_run_symbols_ranked{stage}              > 0
+                atlas_universe_last_run_snapshot_persisted{stage}          == 0   ← 本條的判定
+              ⚠️ 不要把它當成「評分空轉」查(那是第 1/2 條):本條 firing 時 pipeline 算得出來,
+              壞的是「把結果寫到磁碟」那一段。也**不要**用
+              atlas_universe_snapshot_persisted_total 判斷:那個 counter 在寫入失敗時仍然 +1。
+
+              這代表什麼:
+              - 讀 snapshot 的消費者(D6 watchlist 的 loadPreviousRankedSymbols、universe_coverage_check、
+                人工驗收)看到的是一份**無聲過期**的母體:它不會壞、也不會報錯,只會繼續用上一次的
+                排名字單。
+              - 這是 2026-09-27 之前**完全沒有偵測器**的形狀:verdict 與心跳都由同一個 defer 在記憶體裡
+                發佈,所以「跑了」與「產物落地」在舊訊號裡無法區分。
+
+              先查什麼(依序):
+              1. 產物本身(與本條的判定同源,一次指令):
+                 ls -l <repo>/data/state/universe_snapshot.json && date -u
+                 · mtime 比這一輪的開始時刻舊 ⇒ 確認產物沒落地;
+                 · 也可以直接跑 scripts/ops/verify-universe-run.sh,它的 L5(產物面)讀同一個事實。
+              2. 為什麼寫不進去:docker logs atlas-go --since 48h 2>&1 | grep -E
+                 'snapshot_save_error|snapshot_not_persisted|universe_registry_write_error'
+                 · WorkDir 指到沒有人讀的路徑、目錄權限、磁碟滿、或 data 掛載掉了。
+              3. 掛載與路徑:docker inspect atlas-go 的 Mounts 欄位
+                 · 期望 <repo>/data ↔ /app/data;WorkDir 必須是容器內的 /app。
+              4. ⚠️ 不要用 counter 絕對值判斷(累積 counter 沒有上界)。
+            runbook_url: "https://github.com/kaecer68/atlas-go/blob/main/docs/operations/universe-run-truth-model.md"
+
+  - name: "U 沒有產出(ranked=0)且產物訊號也是 0:第 10 條不得 firing(那是第 1/2 條的職責)"
+    # 互斥性證明:早退/空轉路徑(ranked == 0)必然 trustworthy == 0 或 ranked == 0,
+    # 而第 10 條要求 trustworthy == 1 且 ranked > 0 ⇒ 同一個根因不會有兩條規則 firing。
+    interval: 1m
+    input_series:
+      - series: 'atlas_universe_last_run_valid{stage="daily"}'
+        values: '1x121'
+      - series: 'atlas_universe_last_run_finished_timestamp_seconds{stage="daily"}'
+        values: '0x121'
+      - series: 'atlas_universe_last_run_valid{stage="weekly"}'
+        values: '1x121'
+      - series: 'atlas_universe_last_run_finished_timestamp_seconds{stage="weekly"}'
+        values: '0x121'
+      - series: 'atlas_universe_last_run_symbols_gathered{stage="daily"}'
+        values: '1599x121'
+      - series: 'atlas_universe_last_run_symbols_filtered{stage="daily"}'
+        values: '1599x121'
+      - series: 'atlas_universe_last_run_screened_passed{stage="daily"}'
+        values: '0x121'
+      - series: 'atlas_universe_last_run_screened_failed{stage="daily"}'
+        values: '1449x121'
+      - series: 'atlas_universe_last_run_symbols_ranked{stage="daily"}'
+        values: '0x121'
+      - series: 'atlas_universe_last_run_ranked_trustworthy{stage="daily"}'
+        values: '1x121'
+      - series: 'atlas_universe_last_run_outcome{outcome="ok",stage="daily"}'
+        values: '1x121'
+      - series: 'atlas_universe_last_run_snapshot_persisted{stage="daily"}'
+        values: '0x121'
+      - series: 'atlas_universe_last_run_symbols_gathered{stage="weekly"}'
+        values: '1599x121'
+      - series: 'atlas_universe_last_run_symbols_filtered{stage="weekly"}'
+        values: '1599x121'
+      - series: 'atlas_universe_last_run_screened_passed{stage="weekly"}'
+        values: '150x121'
+      - series: 'atlas_universe_last_run_screened_failed{stage="weekly"}'
+        values: '1449x121'
+      - series: 'atlas_universe_last_run_symbols_ranked{stage="weekly"}'
+        values: '150x121'
+      - series: 'atlas_universe_last_run_ranked_trustworthy{stage="weekly"}'
+        values: '1x121'
+      - series: 'atlas_universe_last_run_outcome{outcome="ok",stage="weekly"}'
+        values: '1x121'
+      - series: 'atlas_universe_last_run_snapshot_persisted{stage="weekly"}'
+        values: '1x121'
+      - series: 'atlas_universe_symbols_gathered_total{stage="daily"}'
+        values: '0x1 1599x120'
+      - series: 'atlas_universe_symbols_filtered_total{reason="industry_filter",stage="daily"}'
+        values: '0x1 1599x120'
+      - series: 'atlas_universe_symbols_screened_total{result="passed",stage="daily"}'
+        values: '0x1 150x120'
+      - series: 'atlas_universe_symbols_screened_total{result="failed",stage="daily"}'
+        values: '0x1 1449x120'
+      - series: 'atlas_universe_symbols_ranked_total{stage="daily"}'
+        values: '0x1 150x120'
+      - series: 'atlas_universe_quotes_fetched_total{stage="daily"}'
+        values: '0x1 1581x120'
+      - series: 'atlas_universe_symbols_ranked_total{stage="weekly"}'
+        values: '0x1 150x120'
+      - series: 'atlas_universe_quotes_fetched_total{stage="weekly"}'
+        values: '0x1 1581x120'
+      - series: 'atlas_universe_next_run_timestamp_seconds'
+        values: '1000000000x121'
+      - series: 'up{job="atlas-go"}'
+        values: '1x121'
+    alert_rule_test:
+      - eval_time: 60m
+        alertname: AtlasUniverseQuotesMissing
+        exp_alerts: []
+      - eval_time: 60m
+        alertname: AtlasUniverseScreenedFamilyMissing
+        exp_alerts: []
+      - eval_time: 60m
+        alertname: AtlasUniverseEmptyFiltered
+        exp_alerts: []
+      - eval_time: 60m
+        alertname: AtlasUniverseMetricsFamilyMissing
+        exp_alerts: []
+      - eval_time: 60m
+        alertname: AtlasUniverseEmptyUniverse
+        exp_alerts: []
+      - eval_time: 60m
+        alertname: AtlasUniverseRunOverdue
+        exp_alerts: []
+      - eval_time: 60m
+        alertname: AtlasUniverseCounterEmissionMissing
+        exp_alerts: []
+      - eval_time: 60m
+        alertname: AtlasUniverseSnapshotNotPersisted
+        exp_alerts: []
+
+  - name: "V 產物訊號整族缺席(服務仍在跑):第 6 條 firing（第 10 條的輸入被刪掉時不得沉默）"
+    # 2026-09-27 新增第 10 條之後，它的輸入系列也必須被第 6 條守著：
+    # 否則「把產物訊號的發佈路徑刪掉」會讓第 10 條變成**零偵測**（規則還在、永遠不響）。
+    # 這裡刻意只讓 last_run_snapshot_persisted 缺席（其他四個輸入都在、up=1）⇒ 第 6 條 firing、第 10 條沉默。
+    interval: 1m
+    input_series:
+      - series: 'atlas_universe_last_run_valid{stage="daily"}'
+        values: '1x121'
+      - series: 'atlas_universe_last_run_finished_timestamp_seconds{stage="daily"}'
+        values: '0x121'
+      - series: 'atlas_universe_last_run_valid{stage="weekly"}'
+        values: '1x121'
+      - series: 'atlas_universe_last_run_finished_timestamp_seconds{stage="weekly"}'
+        values: '0x121'
+      - series: 'atlas_universe_last_run_symbols_gathered{stage="daily"}'
+        values: '1599x121'
+      - series: 'atlas_universe_last_run_symbols_filtered{stage="daily"}'
+        values: '1599x121'
+      - series: 'atlas_universe_last_run_screened_passed{stage="daily"}'
+        values: '150x121'
+      - series: 'atlas_universe_last_run_screened_failed{stage="daily"}'
+        values: '1449x121'
+      - series: 'atlas_universe_last_run_symbols_ranked{stage="daily"}'
+        values: '150x121'
+      - series: 'atlas_universe_last_run_ranked_trustworthy{stage="daily"}'
+        values: '1x121'
+      - series: 'atlas_universe_last_run_outcome{outcome="ok",stage="daily"}'
+        values: '1x121'
+      - series: 'atlas_universe_last_run_symbols_gathered{stage="weekly"}'
+        values: '1599x121'
+      - series: 'atlas_universe_last_run_symbols_filtered{stage="weekly"}'
+        values: '1599x121'
+      - series: 'atlas_universe_last_run_screened_passed{stage="weekly"}'
+        values: '150x121'
+      - series: 'atlas_universe_last_run_screened_failed{stage="weekly"}'
+        values: '1449x121'
+      - series: 'atlas_universe_last_run_symbols_ranked{stage="weekly"}'
+        values: '150x121'
+      - series: 'atlas_universe_last_run_ranked_trustworthy{stage="weekly"}'
+        values: '1x121'
+      - series: 'atlas_universe_last_run_outcome{outcome="ok",stage="weekly"}'
+        values: '1x121'
+      - series: 'atlas_universe_symbols_gathered_total{stage="daily"}'
+        values: '0x1 1599x120'
+      - series: 'atlas_universe_symbols_filtered_total{reason="industry_filter",stage="daily"}'
+        values: '0x1 1599x120'
+      - series: 'atlas_universe_symbols_screened_total{result="passed",stage="daily"}'
+        values: '0x1 150x120'
+      - series: 'atlas_universe_symbols_screened_total{result="failed",stage="daily"}'
+        values: '0x1 1449x120'
+      - series: 'atlas_universe_symbols_ranked_total{stage="daily"}'
+        values: '0x1 150x120'
+      - series: 'atlas_universe_quotes_fetched_total{stage="daily"}'
+        values: '0x1 1581x120'
+      - series: 'atlas_universe_symbols_ranked_total{stage="weekly"}'
+        values: '0x1 150x120'
+      - series: 'atlas_universe_quotes_fetched_total{stage="weekly"}'
+        values: '0x1 1581x120'
+      - series: 'atlas_universe_next_run_timestamp_seconds'
+        values: '1000000000x121'
+      - series: 'up{job="atlas-go"}'
+        values: '1x121'
+    alert_rule_test:
+      - eval_time: 25m
+        alertname: AtlasUniverseRankedZero
+        exp_alerts: []
+      - eval_time: 25m
+        alertname: AtlasUniverseScreeningAllRejected
+        exp_alerts: []
+      - eval_time: 25m
+        alertname: AtlasUniverseQuotesMissing
+        exp_alerts: []
+      - eval_time: 25m
+        alertname: AtlasUniverseScreenedFamilyMissing
+        exp_alerts: []
+      - eval_time: 25m
+        alertname: AtlasUniverseEmptyFiltered
+        exp_alerts: []
+      - eval_time: 25m
+        alertname: AtlasUniverseEmptyUniverse
+        exp_alerts: []
+      - eval_time: 25m
+        alertname: AtlasUniverseRunOverdue
+        exp_alerts: []
+      - eval_time: 25m
+        alertname: AtlasUniverseCounterEmissionMissing
+        exp_alerts: []
+      - eval_time: 25m
+        alertname: AtlasUniverseSnapshotNotPersisted
+        exp_alerts: []
+      - eval_time: 25m
+        alertname: AtlasUniverseMetricsFamilyMissing
+        exp_alerts: []
+      - eval_time: 60m
+        alertname: AtlasUniverseRankedZero
+        exp_alerts: []
+      - eval_time: 60m
+        alertname: AtlasUniverseScreeningAllRejected
+        exp_alerts: []
+      - eval_time: 60m
+        alertname: AtlasUniverseQuotesMissing
+        exp_alerts: []
+      - eval_time: 60m
+        alertname: AtlasUniverseScreenedFamilyMissing
+        exp_alerts: []
+      - eval_time: 60m
+        alertname: AtlasUniverseEmptyFiltered
+        exp_alerts: []
+      - eval_time: 60m
+        alertname: AtlasUniverseEmptyUniverse
+        exp_alerts: []
+      - eval_time: 60m
+        alertname: AtlasUniverseRunOverdue
+        exp_alerts: []
+      - eval_time: 60m
+        alertname: AtlasUniverseCounterEmissionMissing
+        exp_alerts: []
+      - eval_time: 60m
+        alertname: AtlasUniverseSnapshotNotPersisted
+        exp_alerts: []
+      - eval_time: 60m
+        alertname: AtlasUniverseMetricsFamilyMissing
+        exp_alerts:
+        - exp_labels:
+            alertname: "AtlasUniverseMetricsFamilyMissing"
+            severity: "warning"
+            service: "atlas"
+            component: "universe-monitoring"
+            wave: "9.2"
+            incident_ref: "universe-scoring-gap-20260925"
+          exp_annotations:
+            summary: "universe 告警的輸入族缺失:ranked/quotes counter 或 last_run verdict 不存在(服務仍在跑)"
+            description: |
+              本檔讀取的 metric family 至少有一個在過去 30 分鐘完全不存在(不是值為 0),
+              而 `up{job=atlas-go}` 仍為 1 ⇒ atlas-go 還活著、/metrics 還回得出東西,
+              但規則的輸入不見了。五個輸入是:
+                atlas_universe_symbols_ranked_total            (記帳面:第 9 條)
+                atlas_universe_quotes_fetched_total            (記帳面)
+                atlas_universe_last_run_valid                  (輸出面:第 1/2/3/5/7 條)
+                atlas_universe_next_run_timestamp_seconds      (心跳:第 8 條)
+                atlas_universe_last_run_snapshot_persisted     (產物面:第 10 條)
+
+              這代表什麼:
+              - 這是「零偵測」的一種形狀:規則不會 firing,但**不是因為系統健康**,而是因為
+                它看不到東西。缺席必須被明確報出來,不能沉默。
+              - 缺席只剩三個原因:(a) 指標被改名/移除;(b) 發佈它的程式碼路徑被刪掉
+                (WarmUp / ReportUniverseHeartbeat / BuildUniverse 的 defer);
+                (c) 服務其實沒在跑(此時閘門不成立,本條沉默,看 AtlasGoTargetDown)。
+              - ⚠️ 若剛合併 monitoring 規則、新 binary 還沒部署,本條會 firing:
+                `next_run_timestamp_seconds` 還不存在。部署完成後自動 resolve。
+
+              先查什麼(依序):
+              1. 指標是不是換了名字:
+                 curl -s localhost:18080/metrics | grep -E '^atlas_universe_' | sort
+              2. 發佈路徑是否還在接線上(回歸檢查):
+                 grep -rn WarmUp()\|SetRunVerdictSink\|ReportUniverseHeartbeat cmd/atlas/main.go
+                 正確位置:SetOnInc → SetRunVerdictSink → WarmUp → ReportUniverseHeartbeat,
+                 且 BuildUniverse 內有一個 defer 呼叫 ReportRun。
+              3. 服務是不是其實沒在跑(閘門邊界):up{job=atlas-go} 必須是 1。
+              4. ⚠️ 不要用 counter 絕對值判斷(累積 counter 沒有上界)。本條只看 series 在不在。
+            runbook_url: "https://github.com/kaecer68/atlas-go/blob/main/docs/operations/universe-scoring-ranked-zero-20260925.md"

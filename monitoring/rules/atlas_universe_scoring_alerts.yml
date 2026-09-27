@@ -411,8 +411,9 @@ groups:
       #
       # 2026-09-27 擴大:第 1/2/3/5/7/8 條改讀 last_run_* 輸出族後,那個族也必須被守著
       # (否則整個輸出面的偵測會靜默失效)。因此本條現在同時涵蓋:
-      #   symbols_ranked_total / quotes_fetched_total(記帳面)與
-      #   last_run_valid / next_run_timestamp_seconds(輸出面與心跳)。
+      #   symbols_ranked_total / quotes_fetched_total(記帳面)、
+      #   last_run_valid / next_run_timestamp_seconds(輸出面與心跳)與
+      #   last_run_snapshot_persisted(第 10 條的產物面)。
       #
       # why up 閘門:缺席有兩個來源 ——(i) 指標被改名/移除;(ii) 服務沒在跑(scrape 拿不到)。
       # 閘門把 (ii) 排除(那由 AtlasGoTargetDown 負責),本條只報「服務活著但訊號不見了」。
@@ -427,6 +428,7 @@ groups:
             or absent(atlas_universe_quotes_fetched_total)
             or absent(atlas_universe_last_run_valid)
             or absent(atlas_universe_next_run_timestamp_seconds)
+            or absent(atlas_universe_last_run_snapshot_persisted)
           )
           and on()
           (up{job="atlas-go"} == 1)
@@ -442,11 +444,12 @@ groups:
           description: |
             本檔讀取的 metric family 至少有一個在過去 30 分鐘完全不存在(不是值為 0),
             而 `up{job=atlas-go}` 仍為 1 ⇒ atlas-go 還活著、/metrics 還回得出東西,
-            但規則的輸入不見了。四個輸入是:
+            但規則的輸入不見了。五個輸入是:
               atlas_universe_symbols_ranked_total            (記帳面:第 9 條)
               atlas_universe_quotes_fetched_total            (記帳面)
               atlas_universe_last_run_valid                  (輸出面:第 1/2/3/5/7 條)
               atlas_universe_next_run_timestamp_seconds      (心跳:第 8 條)
+              atlas_universe_last_run_snapshot_persisted     (產物面:第 10 條)
 
             這代表什麼:
             - 這是「零偵測」的一種形狀:規則不會 firing,但**不是因為系統健康**,而是因為
@@ -674,3 +677,99 @@ groups:
             TestBuildUniverse_EmitsEveryCounterTheAlertsRead 守著(pipeline → bridge → /metrics
             的文字斷言),而「整個 name 消失」由第 6 條負責。
           runbook_url: "https://github.com/kaecer68/atlas-go/blob/main/docs/operations/universe-scoring-ranked-zero-20260925.md"
+
+      # ══ 10.（2026-09-27 新增）產物沒落地:這一輪算出市場判定,但那張 artifact 沒有更新 ═════
+      # 語意:最近一次完成的執行(valid == 1)這一側說它「可信且有產出」(trustworthy == 1、
+      # ranked > 0),但同一次執行留下的**產物訊號**(last_run_snapshot_persisted == 0)說
+      # 「我這一輪的輸出沒有寫進 data/state/universe_snapshot.json」。
+      #
+      # 為什麼需要這條(2026-09-27 的缺口盤查;完整真值階層見
+      # docs/operations/universe-run-truth-model.md):
+      #   第 1/2 條覆蓋「跑了但 ranked == 0」、第 5/7 條覆蓋「母體/篩選空」、第 8 條覆蓋
+      #   「沒跑」、第 9 條覆蓋「counter 沒發射」。**沒有任何一條覆蓋「跑了、有產出、
+      #   但產物沒有落地」**:
+      #     · verdict 由 BuildUniverse 的單一 defer 在**記憶體**裡發佈,與寫檔無關;
+      #     · 心跳(next_run)也由同一個 defer 重新發佈 ⇒ 第 8 條不會 firing;
+      #     · atlas_universe_snapshot_persisted_total 在**寫入失敗時仍然 +1**
+      #       (universe_scheduler.go Step 7 的 Inc() 不在 err == nil 分支內)⇒ 連記帳面都會說謊。
+      #   ⇒ 下游(D6 watchlist 的 loadPreviousRankedSymbols、universe_coverage_check、人工驗收)
+      #   讀到的是一份**無聲過期**的母體,而所有訊號都說健康。這是最危險的形狀。
+      #
+      # Go 端的證據(internal/monitoring/universe_scheduler.go Step 7 的 SnapshotPersistedOnDisk):
+      #   寫入嘗試**之後讀回檔案**(os.Stat 比對 mtime 與本輪開始時刻),所以這個 gauge 問的是
+      #   「產物在不在、是不是這一輪的」,不是「write 有沒有回 nil」:
+      #     · WorkDir 設錯 ⇒ 寫入成功但寫到沒有人讀的路徑 ⇒ 0;
+      #     · 前一次(或 CLI / 人工)留下的舊檔 ⇒ mtime 比本輪舊 ⇒ 0;
+      #     · 寫入失敗(權限/磁碟/目錄)⇒ 0。
+      #   外部可稽核:同一個問題用一次 stat 就能複核(見 triage 第 1 步)。
+      #
+      # 為什麼早期退出不會誤報:早退路徑(母體空 / 篩選全滅 / 報價不可用)必然
+      # ranked_trustworthy == 0,而本條要求 trustworthy == 1 且 ranked > 0 ⇒ 它們各自由
+      # 第 7 / 5 / 3 條負責,同一個根因不會有兩條規則 firing。
+      # 與第 9 條的關係:第 9 條問「記帳面有沒有斷線」,本條問「產物有沒有落地」——不同層的
+      # 失敗,確實可能同時發生(那是兩個根因)。
+      #
+      # ⚠️ 部署時序:本條的輸入系列 atlas_universe_last_run_snapshot_persisted 由**同一個 PR**
+      #    的 Go 端發佈,而該 PR 的部署**排在 2026-09-29 06:00Z 母體驗收之後**(不在驗收前
+      #    改變告警行為)。若規則先上、binary 後上,序列不存在 ⇒ 本條沉默(sum by(stage) 取不到
+      #    東西 ⇒ 空向量),而那個缺席由第 6 條負責回報。
+      - alert: AtlasUniverseSnapshotNotPersisted
+        expr: |
+          (
+            sum by (stage) (atlas_universe_last_run_valid{stage=~"daily|weekly"}) == 1
+          )
+          and on (stage)
+          (
+            sum by (stage) (atlas_universe_last_run_ranked_trustworthy{stage=~"daily|weekly"}) == 1
+          )
+          and on (stage)
+          (
+            sum by (stage) (atlas_universe_last_run_symbols_ranked{stage=~"daily|weekly"}) > 0
+          )
+          and on (stage)
+          (
+            sum by (stage) (atlas_universe_last_run_snapshot_persisted{stage=~"daily|weekly"}) == 0
+          )
+        for: 30m
+        labels:
+          severity: "warning"
+          service: "atlas"
+          component: "universe-persistence"
+          wave: "9.2"
+          incident_ref: "universe-snapshot-persistence-20260927"
+        annotations:
+          summary: "universe 產物沒落地:這一輪算出市場判定,但 snapshot 沒有更新"
+          description: |
+            <stage> 這一輪完成了(valid == 1),它自己的 verdict 說可信且有產出
+            (ranked_trustworthy == 1、ranked > 0),但同一次執行留下的產物訊號
+            `atlas_universe_last_run_snapshot_persisted{stage}` == 0 ⇒ **這一輪的輸出沒有寫進
+            data/state/universe_snapshot.json**。
+
+            證據(全部來自輸出;「輸出健康」與「產物落地」是兩件事,矛盾才有意義):
+              atlas_universe_last_run_valid{stage}                      == 1
+              atlas_universe_last_run_ranked_trustworthy{stage}          == 1
+              atlas_universe_last_run_symbols_ranked{stage}              > 0
+              atlas_universe_last_run_snapshot_persisted{stage}          == 0   ← 本條的判定
+            ⚠️ 不要把它當成「評分空轉」查(那是第 1/2 條):本條 firing 時 pipeline 算得出來,
+            壞的是「把結果寫到磁碟」那一段。也**不要**用
+            atlas_universe_snapshot_persisted_total 判斷:那個 counter 在寫入失敗時仍然 +1。
+
+            這代表什麼:
+            - 讀 snapshot 的消費者(D6 watchlist 的 loadPreviousRankedSymbols、universe_coverage_check、
+              人工驗收)看到的是一份**無聲過期**的母體:它不會壞、也不會報錯,只會繼續用上一次的
+              排名字單。
+            - 這是 2026-09-27 之前**完全沒有偵測器**的形狀:verdict 與心跳都由同一個 defer 在記憶體裡
+              發佈,所以「跑了」與「產物落地」在舊訊號裡無法區分。
+
+            先查什麼(依序):
+            1. 產物本身(與本條的判定同源,一次指令):
+               ls -l <repo>/data/state/universe_snapshot.json && date -u
+               · mtime 比這一輪的開始時刻舊 ⇒ 確認產物沒落地;
+               · 也可以直接跑 scripts/ops/verify-universe-run.sh,它的 L5(產物面)讀同一個事實。
+            2. 為什麼寫不進去:docker logs atlas-go --since 48h 2>&1 | grep -E
+               'snapshot_save_error|snapshot_not_persisted|universe_registry_write_error'
+               · WorkDir 指到沒有人讀的路徑、目錄權限、磁碟滿、或 data 掛載掉了。
+            3. 掛載與路徑:docker inspect atlas-go 的 Mounts 欄位
+               · 期望 <repo>/data ↔ /app/data;WorkDir 必須是容器內的 /app。
+            4. ⚠️ 不要用 counter 絕對值判斷(累積 counter 沒有上界)。
+          runbook_url: "https://github.com/kaecer68/atlas-go/blob/main/docs/operations/universe-run-truth-model.md"
