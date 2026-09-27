@@ -168,6 +168,22 @@ type CostReport struct {
 	GeneratedAt     time.Time              `json:"generated_at"`
 }
 
+// UsageReporter is the narrow read-only usage surface required by the
+// /api/llm_annotator/cost endpoint.
+//
+// It exists so the HTTP layer can expose cost/usage without holding a concrete
+// *KimiClient (issue #1897 removed the last such dependency from the
+// dashboard). KimiClient is the only implementation today.
+//
+// Implementations MUST be safe for concurrent use: the endpoint runs on the
+// shared HTTP server goroutines.
+type UsageReporter interface {
+	// CostReport returns a point-in-time usage/cost snapshot.
+	// costPer1kTokens is the USD price per 1,000 tokens; pass 0 to compute
+	// token counts without a USD total.
+	CostReport(costPer1kTokens float64) CostReport
+}
+
 // CostReport returns a CostReport computed from the current state of the
 // client. Safe to call from any goroutine. The costPer1kTokens parameter
 // is the USD price per 1,000 tokens; pass 0 to compute token counts only

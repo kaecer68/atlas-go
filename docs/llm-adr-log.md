@@ -215,7 +215,7 @@
 - **#1887 `failure_attribution` Router 路徑契約（已修）**：根因是雙軌抽象下的 payload 契約不合——handler 送 `FailureContext` struct，而 MiniMax/DeepSeek adapter 只吃 `[]byte`（messages JSON），唯一能吃 struct 的 `AnnotatorAdapter` 又只用 `ProviderKimi` 註冊且不在該鏈上。
   修法（不新增任何 prompt 語意）：把 legacy 的 prompt 文字抽成單一來源（`llm_annotator.FailureAttributionSystemPrompt` / `FailureContextPrompt` /
   `FailureAttributionTemperature`），讓 capability handler 用它組出 messages payload；`RouterAnnotator` 也改走同一個 handler。新增 handler→adapter→httptest 的端到端測試。
-  仍未做（另案）：把 production `/annotate` 由 legacy `KimiClient` 遷移到 Router（`dashboard.SetStrategiesAnnotator` 目前對 `*llm_annotator.KimiClient` 有具體型別斷言）。
+  **已完成（2026-09-27，Issue #1897）**：production `/annotate` 由 legacy `KimiClient` 遷移到 Router。`DashboardAPI.SetStrategiesAnnotator` 對 `*llm_annotator.KimiClient` 的具體型別斷言已移除，cost 端點改依賴窄介面 `llm_annotator.UsageReporter`（`SetAnnotatorUsageSource`）；`cmd/atlas` 改以 `setupStrategiesAnnotator` 注入 `llmAdapters.RouterAnnotator`，並以「failure_attribution 鏈上是否有已註冊 provider」決定是否要接線（沒有時維持 503 契約而非 502）。legacy client 僅保留為 `/api/llm_annotator/cost` 的唯讀使用量來源。
 - **#1888 risk forensics hook 觸發不到（已修，方案 A）**：`returnHistory` / `portfolioHistory` 是 per-process 累積，而 `simulation_state.json` 的
   `EquityCurve` / `DailyReturns` 就是同一組序列（同引擎、同定義）→ 載入持久化狀態時補齊，gate 才可能成立。新增 `RiskForensicsMinSamples = 30` 常數與
   端到端測試（補齊 35 筆 → 單次 `RunDailySimulation` → hook 被呼叫）。
