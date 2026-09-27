@@ -126,9 +126,14 @@ const (
 	MetricCalibrationFreshnessCheckedTimestamp = "atlas_calibration_freshness_checked_timestamp_seconds"
 )
 
-// CalibrationArtifactParameters 是唯一目前受監控的校準產物
-// （`configs/parameters.json`）。保留 label 是因為同族的檢查未來可能要涵蓋
-// 其他產物（例如 `configs/sector_symbols.json`），屆時不必改指標名。
+// CalibrationArtifactParameters 是**image 內基準**（`configs/parameters.json`）的
+// artifact 標籤值。
+//
+// ⚠️ #2007（2026-09-27）之後它**不再是告警標的**：容器內校準改寫 overlay
+// （`CalibrationArtifactParametersOverlay`，見 calibration_effective.go），基準在生產
+// 只有重新部署才會變，所以它的「不新鮮」是預期狀態 ⇒ 它仍然被輸出（可見、可查、
+// 可畫圖），但沒有規則讀它。當時新增一個標籤值而不是把這個值改指向 overlay，
+// 正是為了「不改變既有序列的語意」。
 const CalibrationArtifactParameters = "parameters"
 
 // CalibrationFreshnessContract 是「校準產物多久算不新鮮」的權威門檻。
