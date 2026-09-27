@@ -1830,7 +1830,8 @@
 - **方法論註記（本次三次「派遣前重新定性」的成果）**：E5（死守門 ≠ 預設 warn）、E13（歸因錯：修者是 #2041 非 #2031）、E19（孤兒 ≠ 死碼：3 支有操作性引用）⇒ 已固化為「先重新定性再派遣」紀律。
 ### FU-20260926-28 — `make ci-full` 的 coverage profile 走**共用** `/tmp` 路徑：其他 lane 的 `rm -f` 讓本 lane 假紅（「coverprofile 缺失或為空」）
 
-- **狀態**：`open`
+- **狀態**：`done`
+- 已由 **#2075**（`963be848`）修好 —— coverage profile/log 改 per-run `mktemp -d` ＋ `trap … EXIT` 私有狀態 ✓
 - **記錄日期**：2026-09-26
 - **來源（多 lane 同日並行實測）**：本機 `make ci-full`（由 `.githooks/pre-push` gate 1b 觸發）在**最後一步**紅：
   `❌ 取不到覆蓋率：coverprofile 缺失或為空（/tmp/atlas-ci-full-coverage.out）`，
