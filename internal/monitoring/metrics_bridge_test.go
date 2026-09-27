@@ -211,3 +211,43 @@ func TestCollectorOnInc_NilCollector(t *testing.T) {
 		t.Fatal("CollectorOnInc(nil) must return a nil callback so SetOnInc records nothing")
 	}
 }
+
+// TestGaugeSink_WritesGaugesIntoMetricsText covers the sink the run verdict uses.
+// Two properties matter and neither is shared with the counter path:
+//
+//	(1) the series must appear on /metrics as gauges, so Prometheus scrapes a
+//	    value and not a cumulative total;
+//	(2) writing twice must OVERWRITE (that is what makes
+//	    atlas_universe_last_run_* describe the LAST run) instead of accumulating.
+func TestGaugeSink_WritesGaugesIntoMetricsText(t *testing.T) {
+	collector := NewMetricsCollector()
+	sink := GaugeSink(collector)
+	if sink == nil {
+		t.Fatal("GaugeSink(collector) returned nil for a non-nil collector")
+	}
+
+	sink(metrics.UniverseMetricLastRunValid, 1, map[string]string{"stage": "daily"})
+	sink(metrics.UniverseMetricLastRunValid, 0, map[string]string{"stage": "daily"})
+
+	rec := httptest.NewRecorder()
+	PrometheusHandler(collector).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/metrics", nil))
+	body := rec.Body.String()
+
+	if !strings.Contains(body, "# TYPE atlas_universe_last_run_valid gauge") {
+		t.Error("atlas_universe_last_run_valid is not exposed as a gauge")
+	}
+	if !strings.Contains(body, `atlas_universe_last_run_valid{stage="daily"} 0.000000`) {
+		t.Errorf("/metrics does not show the overwritten gauge value; body:\n%s", body)
+	}
+	if strings.Contains(body, `atlas_universe_last_run_valid{stage="daily"} 1.000000`) {
+		t.Error("the gauge accumulated instead of being overwritten")
+	}
+}
+
+// TestGaugeSink_NilCollector pins the nil contract: an unwired collector yields
+// a nil sink, which ReportRun treats as "not wired".
+func TestGaugeSink_NilCollector(t *testing.T) {
+	if sink := GaugeSink(nil); sink != nil {
+		t.Fatal("GaugeSink(nil) must return a nil sink")
+	}
+}

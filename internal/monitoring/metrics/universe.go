@@ -23,6 +23,14 @@ type UniverseMetrics struct {
 	CoverageMapped          *CounterVec
 	CoverageTotal           *CounterVec
 	onInc                   OnInc
+	// runVerdictSink publishes the per-run verdict gauges (see universe_run.go).
+	// It is a separate sink on purpose: the verdict must reach /metrics even when
+	// the CounterVec/OnInc path is broken, which is the 2026-09-25 defect shape.
+	runVerdictSink UniverseRunVerdictSink
+	// lastOutcome remembers the outcome label value published per stage so
+	// ReportRun can zero it before publishing the new one (the sink is an
+	// append-only map, so a one-hot metric must be explicitly un-set).
+	lastOutcome map[string]string
 }
 
 // SetOnInc installs a callback that is invoked on every counter increment.
@@ -141,6 +149,10 @@ func (m *UniverseMetrics) WarmUp() {
 	for _, s := range m.warmUpSeries() {
 		s.counter.WithLabelValues(s.values...).Add(0)
 	}
+	// Same reasoning for the run-verdict family (universe_run.go): a consumer
+	// must be able to tell "no run yet since this process started" (valid == 0)
+	// from "series missing".
+	m.warmUpRunVerdicts(time.Now())
 }
 
 // UniverseSnapshot is a point-in-time view of all universe pipeline counters.

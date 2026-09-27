@@ -22,6 +22,48 @@
 
 ---
 
+## 0. 2026-09-27 更新：告警的證據模型已從「counter 增量」改為「pipeline 的輸出」
+
+> 本節是**唯一**與 2026-09-25 之後不一致的部分;§1 起是當時的調查記錄(事實不變)。
+> 如果你是因為 `AtlasUniverse*` 其中一條告警的 annotation 指到本檔而來的,**先讀本節**。
+
+**為什麼改**:舊版第 1/2/3/5 條全部靠 counter 增量推論
+(`sum(increase(atlas_universe_*_total[6d]))`),因此無法區分三個世界:
+
+| 世界 | 舊規則 | 新規則 |
+|---|---|---|
+| (i) 管線根本沒跑(長假、排程壞) | 靠 `[6d]` 餘裕硬撐,連假更長就假 recovery | **第 8 條**`AtlasUniverseRunOverdue`(以台灣交易日曆算出的下一次預期執行時刻 + 2h) |
+| (ii) 跑了但產出沒用(母體空/報價死/門檻全滅) | firing,但文案與 bucket 混在一起 | **第 1/2/3/5/7 條**,依 `last_run_outcome` 分桶,互斥 |
+| (iii) 跑了、產出**健康**,但 counter 沒發射 | **照樣 firing**,把值班的人送去查健康的 pipeline | **第 9 條**`AtlasUniverseCounterEmissionMissing`(記帳面斷線;pipeline 是健康的) |
+
+**新的判讀起點(一個指令)**:
+
+```bash
+curl -s localhost:18080/metrics | grep -E '^atlas_universe_(last_run_|next_run_)'
+```
+
+| 指標 | 意思 |
+|---|---|
+| `atlas_universe_last_run_valid{stage}` | 這個 container 生命期內該 stage 是否**完成過**一輪(0 = 還沒跑過,不是「空轉」) |
+| `atlas_universe_last_run_symbols_{gathered,filtered,ranked}` | 最後一輪各階段的**產出數量** |
+| `atlas_universe_last_run_screened_{passed,failed}` | 最後一輪篩選的兩個桶 |
+| `atlas_universe_last_run_quotes_{requested,returned}` | 最後一輪的報價輸入 |
+| `atlas_universe_last_run_ranked_trustworthy` | 最後一輪的 ranked **是不是市場判定**(1/0) |
+| `atlas_universe_last_run_outcome{outcome=...}` | 最後一輪的判定桶:`ok` / `universe_empty` / `filtered_empty` / `quotes_unavailable` / `quotes_fetch_error` / `quotes_empty` / `quotes_partial` / `quotes_mock` / `other` |
+| `atlas_universe_next_run_timestamp_seconds` | 下一次**預期**執行時刻(交易日曆;假日會往後跳) |
+
+- 這些 gauge 由 `internal/monitoring/metrics/universe_run.go` 定義,`BuildUniverse` 的**單一 defer**
+  發佈(每一條退出路徑都經過),走獨立的 `GaugeSink`(**不共用** counter 的 wiring)—— 世界 (iii) 的
+  專屬偵測器就是靠這件事成立。
+- 規則本體與逐條 triage:`monitoring/rules/atlas_universe_scoring_alerts.yml`;
+  「什麼世界該 firing / 不該 firing」的合成案例:`monitoring/tests/atlas_universe_scoring{,_gaps}_test.yml`。
+- §6.2 的規則草案(以 counter 為輸入)已被 2026-09-27 版**取代**;那份草案裡「需要新指標」的兩項
+  (排程心跳、empty_universe)在 2026-09-27 已落地(第 8、7 條)。
+- 舊版留下、仍未關閉的缺口只有一項:第 4 條的 peer gate 在 `screened` 與 `filtered` **同時**被
+  改名/移除時不成立(見規則檔「已知限制 (g)」;因為 counter 面已不是偵測主幹,影響有限)。
+
+---
+
 ## 1. 事實鏈（生產實證，唯讀）
 
 ### 1.1 容器日誌（`docker logs -t atlas-go`）
