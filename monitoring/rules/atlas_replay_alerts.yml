@@ -5,14 +5,19 @@
 # ------------------------------
 # 1. 2026-09-27 之前 `monitoring/rules/` 的 8 個檔**完全沒有** replay 相關規則
 #    （`grep -rl replay monitoring/rules/` 為空）⇒ replay 資料異常零告警。
-# 2. 2026-08-24 ~ 2026-09-24 CSV→JSONL 轉檔停擺一個月,期間生產 Prometheus 上
-#    與 replay 有關的序列**全部維持正常值**（2026-09-27 唯讀實查）:
-#      atlas_channel_health_status{channel="twse_replay"}        0
-#      atlas_channel_health_status{channel="twse_replay_sync"}   0
-#      atlas_channel_data_staleness_seconds{channel="twse_replay"}  1585
-#      atlas_channel_staleness_overage_seconds{channel="twse_replay"} 0
-#    因為前兩條是「抓取層」狀態、後兩條取自 channel_health.json 的 last_fetch_at
-#    （最後一次**嘗試抓取**距今,不是資料本身的日期）⇒ 結構上看不到資料內容落後。
+# 2. 2026-08-24 ~ 2026-09-24 CSV→JSONL 轉檔停擺一個月:JSONL（FactorEngine 的正式
+#    輸入）停在 08-24,而**停擺當時**生產 Prometheus 上與 replay 有關的序列全部是
+#    正常值 —— 直接查歷史樣本（生產保留窗 8d8h,唯讀,實查指令與結果）:
+#      curl -s 'localhost:9090/api/v1/query?query=atlas_channel_health_status%7Bchannel%3D%22twse_replay_sync%22%7D&time=<停擺期間 ts>'
+#      2026-09-22T00:00Z（停擺中,JSONL 已落後約 29 天）:
+#        atlas_channel_health_status{channel="twse_replay_sync"}        0     (ok)
+#        atlas_channel_health_status{channel="twse_replay"}             0     (ok)
+#        atlas_channel_data_staleness_seconds{channel="twse_replay"}    385.6 (= now - last_fetch_at)
+#        atlas_channel_staleness_overage_seconds{channel="twse_replay"} 0
+#    ⇒ 前兩條是「抓取層」狀態、後兩條取自 channel_health.json 的 last_fetch_at
+#    （最後一次**嘗試抓取**距今,不是資料本身的日期）⇒ 抓取層訊號**結構上**看不到
+#    資料內容落後。這不是推論,是停擺期間的實際樣本（同型的現況值見
+#    「2026-09-27 01:5xZ:twse_replay staleness=1585s、overage=0、兩條 status=0」）。
 # 3. 2026-08-29 ~ 2026-09-25 生產 replay CSV 被寫入 396 列幻影（非交易日以
 #    time.Now() 蓋章;weekend=352 / holiday=44,每交易日 44 檔）。寫入端已由 #2057
 #    根治（帶日期的 MI_INDEX + 回應日期守門 + 休市日 guard），但**沒有任何規則**
@@ -23,11 +28,14 @@
 # A. `atlas_channel_health_status{channel="twse_replay_sync"}` —— **既有**
 #    （`channel_health_metrics_export` 任務,5m）。值域由
 #    `cmd/atlas/channel_health_metrics_task.go:healthStatusValue` 決定:
-#      0=ok 1=warn/stale 2=error 3=inactive **4=degraded/其他未映射**
+#      0=ok 1=warn/stale/**degraded** 2=error 3=inactive 4=其他
+#    ⚠️ #2064（E29-1/2/3）把 degraded 的映射由 4 改成 1,並讓它「資料超過契約窗口
+#    就自升級為 error」。本檔第 5 條的 expr 只看 `> 0`,兩種映射都成立。
 #    ⚠️ 關鍵事實:「degraded」（= 跑了但資料沒落地,見
 #    `cmd/daily-replay-sync/main.go` 的 zero-match 分支與 data-date guard 分支）
-#    經 `DeriveChannelStatus` 原樣透傳後在 gauge 上是 **4**,不是 1 —— 而既有規則
-#    只比對 `==2`,所以「今天的 replay 資料沒落地」在今天**不會觸發任何規則**。
+#    在 gauge 上是 **1（warn）**,而既有規則**只**比對 `==2`（error）⇒ 單一交易日的
+#    「資料沒落地」要等升級成 error 才會響,而 `twse_replay_sync` 未登記契約
+#    ⇒ `EffectiveFreshnessWindow()` 取預設 48h ⇒ **最多安靜 48 小時**。
 # B. `atlas_replay_{csv,jsonl}_latest_date_timestamp_seconds` +
 #    `atlas_replay_freshness_checked_timestamp_seconds` —— 本 PR 新增的接線
 #    （`cmd/atlas/replay_freshness_metrics_task.go`;值來自**既有** helper
@@ -243,9 +251,12 @@ groups:
       #   規則只比對 ==2（error）。而「跑了、但資料沒落地」在寫入端記的是
       #   **degraded**（cmd/daily-replay-sync/main.go:回應日期守門拒絕寫入、
       #   MI_INDEX 回的檔都對不上 target symbol 集合,兩種都記 degraded 並且**不推進
-      #   LastSuccessAt**）,經 DeriveChannelStatus 透傳後在 gauge 上是 **4**
-      #   （healthStatusValue 的 default 分支）⇒ 今天完全沒有規則會響。
-      # 判準:gauge > 0（任何非 ok 的判定:1=warn/stale、2=error、3=inactive、4=degraded）。
+      #   LastSuccessAt**）。
+      # #2064（E29-1/2/3）之後:degraded 在 gauge 上是 **1（warn）**,且會在「資料年齡
+      #   超過契約窗口」時自升級為 error。但 `twse_replay_sync` 沒有登記契約
+      #   ⇒ 窗口取預設 48h ⇒ 既有規則要**最多 48 小時**才會以 error 響。
+      #   本條以 gauge > 0 在 1 小時內就把它變成可見的 warning（不影響之後的 error 升級）。
+      # 判準:gauge > 0（任何非 ok 的判定:1=warn/stale/degraded、2=error、3=inactive、4=其他）。
       # 門檻與 `for` 依據:
       #   · 這個通道的記錄**只在下一次每日 run（15:30 UTC）才會變**,所以任何非 ok 值
       #     都描述「一整個交易日的 replay 資料沒落地」,不是單次抖動。
@@ -267,7 +278,7 @@ groups:
           summary: "每日 replay sync 沒有把資料寫進 CSV（未落地/降級）"
           description: |
             `twse_replay_sync` 的通道狀態非 ok（gauge 值 {{ $value }}:
-            1=warn/stale、2=error、3=inactive、**4=degraded/未映射**）。
+            1=warn/stale/**degraded**、2=error、3=inactive、4=其他）。
             「degraded」在寫入端有明確語意:**跑了但沒有資料落地**
             （回應日期與請求日不符 ⇒ 拒絕寫入;或 MI_INDEX 回傳的檔都對不上 target 集合）,
             且刻意**不推進 LastSuccessAt**（避免「沒資料卻顯示成功」的謊言）。
