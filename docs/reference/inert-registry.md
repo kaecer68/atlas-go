@@ -174,7 +174,7 @@
 ## Batch B 收斂（#1944，2026-09-27，PR [#2098](https://github.com/kaecer68/atlas-go/pull/2098)）
 
 > 基準：`origin/main@5094abc8`；分支 `fix/20260927-inert-batchB-and-registry`。範圍：盤查複核後的**一項明確錯誤（型別層）＋ 一項敘述錯誤（I22）＋ 登記表收斂**。
-> **不含 I7／I29**：I7（`internal/marketdata/**` 死碼）與另一 lane 的區重疊；I29 的 `cmd/atlas` 半邊修好後會新增一個**可能觸發**的告警，刻意排在 2026-09-29 06:00Z 決定性驗收之後。
+> **不含 I7／I29 的修法**：I7（`internal/marketdata/**` 死碼）與另一 lane 的區重疊；I29 的 `cmd/atlas` 半邊屬會影響告警的改動，刻意排在 2026-09-29 06:00Z 決定性驗收之後。**但 I29 的現況敘述**在本 PR 依 2026-09-27 實測更新為「**敘述衝突，待複核**」：Batch 4 的「分母 27／分子 1,599 ⇒ 永不觸發」與同日進 main 的 **#2096** 記載的生產觀測「99.9% 覆蓋」互相矛盾（見下方 bounded 清單）。
 > 不碰凍結區行為（母體／量能／FinMind／`taiwanholidays`）、不編輯 `remediation-manifest.md`／`FOLLOWUPS.md`、不動主 clone HEAD、不改審計快照 `docs/specs/industry-allocation-inert-audit-20260924.md`。
 
 ### 本節是唯一權威狀態表
@@ -223,7 +223,7 @@
 | ID | 現況證據 | 分類 | 建議批次 |
 |---|---|---|---|
 | **I7** | `internal/marketdata/symbol_industry_mapper.go` 的 `NewSymbolIndustryMapper`／`BuildMapping` 零非測試呼叫者（生產走 `monitoring.NewTreeBasedMapper`；`git grep` 只有定義、另無測試） | 需跨 lane（`internal/marketdata/**` 由 #1986 quote-reliability lane 持有） | **本 PR 明確不動**；由該 lane 移除 |
-| **I29**（`cmd/atlas` 半邊） | 分母＝分類樹代表股（實數 27）／分子＝pipeline 母體（1,599）⇒ `coveragePct ≈ 5922%`、`< 90` 永不成立；且 `snapshotSymbols == 0`（最該響的「快照缺失」）被 `snapshotSymbols > 0` 守衛排除 | 可修（**修好後會新增一個可能觸發的告警**） | 2026-09-29 06:00Z 決定性驗收之後（改用 `monitoring.CheckUniverseCoverage` 當唯一判準） |
+| **I29**（`cmd/atlas` 半邊） | **敘述衝突，待複核（Batch B 實測發現）**：Batch 4 lane B 的讀碼結論是「分母＝分類樹代表股（實數 27）／分子＝pipeline 母體（1,599）⇒ `coveragePct ≈ 5922%`、`< 90` 永不成立」。但 **#2096**（2026-09-27，已進 main）把該判斷抽成純函式 `monitoring.AssessUniverseCoverage`（新檔 `internal/monitoring/universe_coverage_check.go`），並在檔頭記載生產觀測為「**99.9% 覆蓋、artifact 39.7h 舊仍零告警**」；`TotalClassifiedSymbols()`（＝Σ `len(seg.RepresentativeStocks)`，分類樹代表股）的分子／分母形狀**未改**。**兩者不可能同時成立**（27 檔分母無法產生 99.9%）。本 PR 無生產存取、**不裁決**，只把衝突明確標註。（#2096 另新增 artifact 新鮮度 finding，屬同一任務的另一缺口。） | 需複核（原分類 `可修` 修正為 `需複核`：先要確認分母實數與 `universe_snapshot.json` 的 `symbols_built`） | 2026-09-29 06:00Z 驗收後，與 #2096 的規則部署時序一起處理 |
 | **I30** | `.github/workflows/nightly-refresh.yml` 的 backfill 寫入仍被丟棄（runner 內寫 `configs/parameters.json` 後丟棄） | 需跨 lane（`.github/**`） | honesty-batch lane |
 | **I32** | `ledger.EventFlowPredictionRecord`／`EventFlowPredictionStore` 仍無任何 `sector` 欄位或方法（反射測試釘住） | 需設計決定（ledger schema 變更） | 與 I6 落地同批 |
 | **I36** | 生產 `darwinian_weights.json` 21 agents 中 15 個 `total_signals=0`、權重凍在 0.3 下限 | 需生產資料 | 另票（上游 signal 供給盤查） |
