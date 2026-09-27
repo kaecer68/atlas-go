@@ -30,7 +30,15 @@ groups:
             1. ~/.config/atlas-go/.env 的 DATABASE_URL 是否有效
             2. docker-compose.yml 的 ${DB_PASSWORD} 是否設置
             3. postgres container 是否 healthy（docker compose ps）
-          runbook_url: "https://github.com/kaecer68/atlas-go/blob/main/docs/operations/"
+          # runbook_url 原本只指到**目錄** `docs/operations/`（2026-07-03 f504a8db 起）:
+          # 那不是 runbook,點進去只是一個檔案清單,值班的人拿不到「怎麼修」。
+          # 改指本 repo 現行的部署/運維權威文件（與 atlas_container_liveness_alerts.yml
+          # 在 2026-09-26 E10 清理 iMac runbook 死鏈時選定的目標一致,全 repo 只有一本）:
+          # 上面 description 的三個檢查（DATABASE_URL / compose 的 DB_PASSWORD / postgres
+          # healthy）都屬於部署面,`docs/operations/local-deploy.md` 就是那份文件。
+          # ⚠️ 不指 `docs/operations/MACMINI-RECOVER.md`:該檔在 **a2a-dev** repo,
+          # 在 atlas-go 內不存在（跨 repo blob 連結會是新的死鏈）。
+          runbook_url: "https://github.com/kaecer68/atlas-go/blob/main/docs/operations/local-deploy.md"
 
       - alert: AtlasChannelUsYahooErrorSustained
         expr: rate(atlas_channel_health_errors_total{channel="us_yahoo"}[15m]) > 0.05
