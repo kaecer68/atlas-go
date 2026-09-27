@@ -27,14 +27,16 @@ workflows:
     description: |
       Live Trading 入口。啟動 broker-aware live trading orchestrator，
       支援 dry-run / paper / live 模式。
+      研究保留、非產品主線（`docs/reference/product-positioning.md` §3）：生產 compose 不傳 `-live`，
+      且 run() 的 `-api` 分支會先 return，同時給定 `-api -live` 時本入口不會執行（僅印明示 log）。
     triggers:
       - cli: "--live"
     depends_on: [WA-001]
     produces: "live trading session"
     criticality: P0
     test_coverage: unknown
-    last_verified: "2026-07-01"
-    verified_by: "agent-interface-audit"
+    last_verified: "2026-09-27"
+    verified_by: "live-flag-intent-clarity"
 
   - id: WA-003
     symbol: "cmd/atlas/main.go::runSimulation"
