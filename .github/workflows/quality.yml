@@ -23,6 +23,7 @@ jobs:
     outputs:
       code: ${{ steps.filter.outputs.code }}
       ci: ${{ steps.filter.outputs.ci }}
+      embedded_docs: ${{ steps.filter.outputs.embedded_docs }}
     steps:
     - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
     - uses: dorny/paths-filter@de90cc6fb38fc0963ad72b210f1f284cd68cea36 # v3
@@ -51,6 +52,27 @@ jobs:
             - 'scripts/**'
             - 'Makefile'
             - '.github/workflows/**'
+          # Docs that cmd/atlas-mcp/docsgen embeds into Go code
+          # (SSOT: the docFiles map in cmd/atlas-mcp/docsgen/main.go) — trigger
+          # ONLY the narrow generate-docs-embed job below. A docs-only PR never
+          # sets `code`, so the `generate` job skips it and drift in
+          # cmd/atlas-mcp/server/resources_docs.gen.go would land unnoticed.
+          # This list MUST stay identical to docsgen's docFiles map; the
+          # atlas-mcp-docs-consistency job enforces that
+          # (scripts/ci/check_docsgen_filter_sync.sh).
+          # internal/** is also in `code` (so `generate` already covers those two
+          # files); they are listed anyway so this filter alone is complete.
+          embedded_docs:
+            - 'docs/reference/tool-catalog.md'
+            - 'docs/reference/workflow-map.md'
+            - 'docs/architecture.md'
+            - 'docs/reference/constitution.md'
+            - 'docs/reference/traps.md'
+            - 'docs/reference/parameter-system.md'
+            - 'docs/reference/processes.yaml'
+            - 'docs/documentation-map.md'
+            - 'internal/AGENTS_INDEX.md'
+            - 'internal/MATURITY.md'
 
   # Frontend build (reusable) — builds admin_web + client_web once,
   # uploads dist artifacts. Downstream jobs download instead of rebuilding.
@@ -274,7 +296,10 @@ jobs:
     - name: Check frontend dynamic import consistency
       run: bash scripts/ci/check_frontend_imports.sh
 
-  # Go generate check — ensures generated files are up-to-date
+  # Go generate check — ensures generated files are up-to-date.
+  # Gated on `code`, so a docs-only PR skips it. The subset of docs that
+  # docsgen embeds into Go (the `embedded_docs` path filter) is covered even
+  # for docs-only PRs by the narrow `generate-docs-embed` job below.
   generate:
     needs: [changes]
     if: needs.changes.outputs.code == 'true'
@@ -298,6 +323,58 @@ jobs:
           git diff --stat
           exit 1
         fi
+
+  # Embedded-doc generate check — narrow, docs-only-PR gap closer (E39).
+  #
+  # Why it exists: the `generate` job above is gated on the `code` path filter,
+  # so a PR that only edits a doc embedded by cmd/atlas-mcp/docsgen (e.g.
+  # docs/reference/traps.md) and forgets to regenerate
+  # cmd/atlas-mcp/server/resources_docs.gen.go used to pass CI green — the only
+  # net was the local pre-push `make ci-gate` (machine-checked on a dev box,
+  # not by CI). Editing the 10-strong embed set is a docs change, so the fix
+  # must not depend on `code`.
+  #
+  # Scope: runs only when a changed path is in the `embedded_docs` path filter
+  # (SSOT = cmd/atlas-mcp/docsgen/main.go docFiles; kept in sync by
+  # scripts/ci/check_docsgen_filter_sync.sh in atlas-mcp-docs-consistency).
+  # Cost: ~1 minute, versus 20+ minutes for the full code pipeline.
+  # Deliberately short: no frontend build, no artifacts, no tests — the single
+  # question is "does the committed gen file match the embedded docs?".
+  generate-docs-embed:
+    needs: [changes]
+    if: needs.changes.outputs.embedded_docs == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+    - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+    - name: Set up Go
+      uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+      with:
+        go-version-file: go.mod
+
+    - name: Download dependencies
+      run: go mod download
+
+    # Same command as ci-cd.yml's `generate` job: it covers docsgen
+    # (resources_docs.gen.go) and descgen (auto-desc.gen.go / .json).
+    - name: Regenerate embedded MCP docs
+      run: go generate ./cmd/atlas-mcp/...
+
+    # Porcelain (not `git diff`): an untracked gen file must fail too. Mirrors
+    # the `generate` job's check so both gates agree on "drift".
+    - name: Fail on embedded-doc drift
+      run: |
+        if [ -n "$(git status --porcelain)" ]; then
+          echo "::error::Embedded MCP docs changed but cmd/atlas-mcp/server/resources_docs.gen.go was not regenerated."
+          echo "Run 'go generate ./cmd/atlas-mcp/...' and commit the result."
+          echo "Embedded set (SSOT: cmd/atlas-mcp/docsgen/main.go docFiles) and the"
+          echo "related traps: docs/reference/traps.md section 'Build Pipeline / 程式碼生成'."
+          git status --porcelain
+          git diff --stat
+          exit 1
+        fi
+        echo "OK: embedded docs and resources_docs.gen.go are in sync."
 
   # Frontend-backend field contract check — validates JS field accesses
   # against Go JSON tags generated by cmd/gentags.
@@ -659,8 +736,14 @@ jobs:
           echo "OK: doc (${DOC_MIN}–${DOC_MAX}) matches code ($CODE_COUNT registered tools via countedAddTool wrapper)."
 
   # atlas-mcp docs consistency — authoritative MCP docs must use correct
-  # env var names, keep AGENTS.md under the line cap, and propagate the
-  # current tool count across README / quickstart / server README.
+  # env var names, keep AGENTS.md under the line cap, propagate the current
+  # tool count across README / quickstart / server README, and keep the
+  # docsgen embed list equal to the `embedded_docs` path filter that arms
+  # generate-docs-embed.
+  #
+  # Unconditional on purpose (no path filter): the filter-drift check must run
+  # on the PRs that edit .github/workflows/** and cmd/atlas-mcp/docsgen/**, and
+  # neither of those necessarily sets the `code` or `embedded_docs` filter.
   atlas-mcp-docs-consistency:
     runs-on: ubuntu-latest
     steps:
@@ -668,6 +751,9 @@ jobs:
 
       - name: Check atlas-mcp docs consistency
         run: bash scripts/ci/check_atlas_mcp_docs_consistency.sh
+
+      - name: Check docsgen embed list matches the CI path filter
+        run: bash scripts/ci/check_docsgen_filter_sync.sh
 
   # AGENTS.md line count gate — prevents token bloat by enforcing
   # ≤ 180 lines of human-written content (before auto-injected blocks).

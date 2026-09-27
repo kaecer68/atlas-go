@@ -49,6 +49,7 @@
 - `auto-desc.gen.go` 頂端標示 `DO NOT EDIT`，由 `cmd/atlas-mcp/descgen` 根據 `tools_*.go` 產生。
 - `tools.go` 第一行 `//go:generate go run ../descgen -out ../auto-desc.gen.json -pkgdir .` 只產 JSON；`auto-desc.gen.go` 的 byte slice 由建置流程嵌入。
 - 要改 tool 描述請改各 `tools_*.go` 的 fallback 字串或 descgen 輸入，不要直接改 `auto-desc.gen.go`。
+- `resources_docs.gen.go` 同樣是 `DO NOT EDIT`：`cmd/atlas-mcp/docsgen` 把 **10 份**知識文件（清單 SSOT = 該檔 `docFiles`：`docs/reference/traps.md`、`tool-catalog.md`、`workflow-map.md`、`architecture.md`、`constitution.md`、`parameter-system.md`、`processes.yaml`、`docs/documentation-map.md`、`internal/AGENTS_INDEX.md`、`internal/MATURITY.md`）內嵌成 `embeddedDocs`（`resources.go` 的 static resources 用它；`tools_system.go` 的 `system_get_maturity` fallback 也讀同一份快照）。改任何一份就必須 `go generate ./cmd/atlas-mcp/...` 並一起 commit：`quality.yml` 的 `generate-docs-embed` job 與本機 `make ci-gate` 都會擋 drift。不要直接改 `.gen.go`。
 
 ## 稽核陷阱
 
