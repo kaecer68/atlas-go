@@ -140,3 +140,34 @@ func NextUniverseRun(now time.Time) time.Time {
 	}
 	return time.Time{}
 }
+
+// PreviousUniverseRun returns the last instant at or before now at which the
+// universe pipeline was scheduled to run, or the zero time when no trading day is
+// found within universeNextRunScanDays.
+//
+// It is the exact mirror of NextUniverseRun, and it exists because the freshness
+// of an artifact can only be judged against a calendar fact, never against a
+// fixed window: "the snapshot is older than the last session that should have
+// written it" is answerable across a holiday closure (2026-09-25 中秋 + 09-28
+// 教師節 leave a five-day gap in which no run is expected at all), while "the
+// snapshot is older than 24h" fires on every closure. The in-process coverage
+// check (see universe_coverage_check.go) is the caller.
+//
+// The zero return means "unknown": a calendar that cannot be read must not be
+// turned into an alert, the same rule ReportNextRun follows when it drops a zero
+// heartbeat instead of publishing 1970.
+func PreviousUniverseRun(now time.Time) time.Time {
+	loc := universeLocation()
+	local := now.In(loc)
+	target := time.Date(local.Year(), local.Month(), local.Day(), universeTriggerHourTW, 0, 0, 0, loc)
+	for day := 0; day <= universeNextRunScanDays; day++ {
+		candidate := target.AddDate(0, 0, -day)
+		if candidate.After(now) {
+			continue
+		}
+		if marketdata.IsTaiwanTradingDay(candidate) {
+			return candidate
+		}
+	}
+	return time.Time{}
+}

@@ -31,9 +31,20 @@ import (
 // the duration of the test and restores the previous logger afterwards.
 func captureLogs(t *testing.T) *bytes.Buffer {
 	t.Helper()
+	return captureLogsAt(t, slog.LevelDebug)
+}
+
+// captureLogsAt is captureLogs with an explicit level, so a test can capture the
+// way PRODUCTION sees the log stream (ATLAS_LOG_LEVEL=info) instead of the way a
+// developer debugging locally sees it. The distinction is the whole point of
+// TestDailySkip_InfoLevelAndDailyVolume: a message that is emitted at Debug is
+// absent from an Info-level capture, which is exactly what production showed
+// before 2026-09-27.
+func captureLogsAt(t *testing.T, level slog.Level) *bytes.Buffer {
+	t.Helper()
 	buf := &bytes.Buffer{}
 	prev := logging.Default()
-	logging.SetLogger(slog.New(slog.NewTextHandler(buf, &slog.HandlerOptions{Level: slog.LevelDebug})))
+	logging.SetLogger(slog.New(slog.NewTextHandler(buf, &slog.HandlerOptions{Level: level})))
 	t.Cleanup(func() { logging.SetLogger(prev) })
 	return buf
 }
@@ -274,5 +285,97 @@ func TestWeeklyRebuild_WeekdayOnlyPredicateWouldHaveRun(t *testing.T) {
 	}
 	if !strings.Contains(buf.String(), "weekly_skip_holiday") {
 		t.Errorf("expected weekly_skip_holiday, got: %s", buf.String())
+	}
+}
+
+// TestDailySkip_InfoLevelAndDailyVolume pins the two claims the "the market was
+// closed" evidence now rests on (2026-09-27 audit, gap F):
+//
+//  1. LEVEL: the skip is emitted at Info, i.e. it survives ATLAS_LOG_LEVEL=info.
+//     Before the fix both daily skips were Debug, so production had NO log
+//     evidence for "the pipeline did not run today because the market was
+//     closed" — the decisive fact was written to a stream nobody reads.
+//
+//  2. VOLUME: the whole point of "just raise the level" being safe. The task is
+//     registered with Interval: 1m, and both gates used to run BEFORE
+//     alignToTarget, so a holiday logged ~1440 lines/day and every Monday
+//     ~1440 lines for the weekday gate. The gates now run inside the ±1 minute
+//     alignment window (the order NewWeeklyUniverseRebuildTask documented), so a
+//     day costs the ticks in that window. This test drives all 1440 ticks of a
+//     calendar day and counts, so the claim is measured rather than asserted.
+//
+// A regression to Debug fails (1) — the Info-level capture is empty. A regression
+// in the gate order fails (2) — the count jumps to a full day of lines.
+func TestDailySkip_InfoLevelAndDailyVolume(t *testing.T) {
+	cases := []struct {
+		name        string
+		date        time.Time
+		wantMsg     string
+		wantTrading bool
+	}{
+		{
+			name:        "holiday_monday_teacher_day",
+			date:        time.Date(2026, 9, 28, 0, 0, 0, 0, universeLocation()),
+			wantMsg:     "daily_skip_non_trading",
+			wantTrading: false,
+		},
+		{
+			name:        "ordinary_monday",
+			date:        time.Date(2026, 10, 5, 0, 0, 0, 0, universeLocation()),
+			wantMsg:     "daily_skip_monday",
+			wantTrading: true,
+		},
+	}
+
+	// Upper bound on how many ticks can sit inside ±1 minute of the trigger. The
+	// scheduler ticks every minute, so a correct implementation emits at most
+	// three lines per calendar day (13:59, 14:00, 14:01 in Taipei terms); the
+	// bound is written as a small constant rather than "== 3" so a scheduler
+	// interval change does not turn this into a false failure, while a return to
+	// per-tick logging (hundreds) still fails loudly.
+	const maxSkipLinesPerDay = 3
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			requireCalendarPremise(t, tc.date, tc.wantTrading)
+
+			workDir := tempDir(t)
+			deps := buildDepsFixture(t, workDir)
+
+			// Capture at Info: this is the production level, so a Debug regression
+			// yields an empty buffer rather than passing on a technicality.
+			buf := captureLogsAt(t, slog.LevelInfo)
+
+			prev := clockFunc
+			t.Cleanup(func() { clockFunc = prev })
+			dayStart := time.Date(tc.date.Year(), tc.date.Month(), tc.date.Day(), 0, 0, 0, 0, universeLocation())
+			cur := dayStart
+			clockFunc = func() time.Time { return cur }
+
+			task := NewDailyUniverseRefreshTask(deps)
+			for minute := 0; minute < 24*60; minute++ {
+				cur = dayStart.Add(time.Duration(minute) * time.Minute)
+				if err := task(context.Background()); err != nil {
+					t.Fatalf("tick %d: %v", minute, err)
+				}
+			}
+
+			lines := strings.Count(buf.String(), tc.wantMsg)
+			if lines == 0 {
+				t.Fatalf("%s was not emitted at Info level over a full day: production would have no "+
+					"evidence that the pipeline was skipped (captured %q)", tc.wantMsg, buf.String())
+			}
+			if lines > maxSkipLinesPerDay {
+				t.Fatalf("%s was emitted %d times in one calendar day (limit %d): the gate must run "+
+					"inside the alignment window, not on every 1-minute tick", tc.wantMsg, lines, maxSkipLinesPerDay)
+			}
+			t.Logf("%s @ %s: %d line(s) at Info level over 1440 ticks",
+				tc.wantMsg, tc.date.Format("2006-01-02"), lines)
+
+			// The skip must be a skip: no artifact may be written on either day.
+			if _, err := os.Stat(universeSnapshotPath(workDir)); err == nil {
+				t.Errorf("a snapshot was written on %s: the gate must skip", tc.date.Format("2006-01-02"))
+			}
+		})
 	}
 }

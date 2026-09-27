@@ -68,20 +68,29 @@ func TestReportRun_PublishesVerdictWithoutCounterWiring(t *testing.T) {
 		QuotesRequested: 1599,
 		QuotesReturned:  1581,
 		Trustworthy:     true,
-		FinishedAt:      at,
+		// Both artifacts persisted. The two fields travel on the same verdict but
+		// reach /metrics through separate series, so each has to be asserted: a
+		// ReportRun that forgot one of them would leave that artifact's rule with
+		// no input at all (and, because both are published from this one call,
+		// nothing else in the suite would notice).
+		SnapshotPersisted: true,
+		RegistryPersisted: true,
+		FinishedAt:        at,
 	})
 
 	for name, want := range map[string]float64{
-		UniverseMetricLastRunValid:           1,
-		UniverseMetricLastRunFinished:        float64(at.Unix()),
-		UniverseMetricLastRunGathered:        1599,
-		UniverseMetricLastRunFiltered:        1599,
-		UniverseMetricLastRunScreenedPassed:  150,
-		UniverseMetricLastRunScreenedFailed:  1449,
-		UniverseMetricLastRunRanked:          150,
-		UniverseMetricLastRunQuotesRequested: 1599,
-		UniverseMetricLastRunQuotesReturned:  1581,
-		UniverseMetricLastRunTrustworthy:     1,
+		UniverseMetricLastRunValid:             1,
+		UniverseMetricLastRunFinished:          float64(at.Unix()),
+		UniverseMetricLastRunGathered:          1599,
+		UniverseMetricLastRunFiltered:          1599,
+		UniverseMetricLastRunScreenedPassed:    150,
+		UniverseMetricLastRunScreenedFailed:    1449,
+		UniverseMetricLastRunRanked:            150,
+		UniverseMetricLastRunQuotesRequested:   1599,
+		UniverseMetricLastRunQuotesReturned:    1581,
+		UniverseMetricLastRunTrustworthy:       1,
+		UniverseMetricLastRunSnapshotPersisted: 1,
+		UniverseMetricLastRunRegistryPersisted: 1,
 	} {
 		got, ok := sink.last(name, map[string]string{UniverseStageLabel: UniverseStageDaily})
 		if !ok {
@@ -149,6 +158,17 @@ func TestWarmUpRunVerdicts_ValidZeroAndTimestampAtStart(t *testing.T) {
 		}
 		if v, ok := sink.last(UniverseMetricLastRunRanked, labels); !ok || v != 0 {
 			t.Errorf("ranked{%s} = %v (present=%v), want 0", stage, v, ok)
+		}
+		// Both artifact gauges warm up to 0 for the same reason: at process start
+		// neither file has been written BY THIS PROCESS, so claiming 1 would be a
+		// claim about a file nobody checked. (The registry rule reads
+		// snapshot_persisted == 1 AND registry_persisted == 0, so a wrong warm-up
+		// value here would make it fire on every restart.)
+		if v, ok := sink.last(UniverseMetricLastRunSnapshotPersisted, labels); !ok || v != 0 {
+			t.Errorf("snapshot_persisted{%s} = %v (present=%v), want 0", stage, v, ok)
+		}
+		if v, ok := sink.last(UniverseMetricLastRunRegistryPersisted, labels); !ok || v != 0 {
+			t.Errorf("registry_persisted{%s} = %v (present=%v), want 0", stage, v, ok)
 		}
 	}
 }
