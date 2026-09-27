@@ -83,8 +83,13 @@ err := ie.SetParameter("garch_alpha", 0.15)
 // Get parameter
 value, ok := ie.GetParameter("garch_alpha")
 
-// List all parameters
-params := ie.ListParameters() // returns []string with 140+ names
+// List well-known parameter names.
+// NOTE: ListParameters() is a CURATED SUBSET (202 names as of 2026-09-27), NOT the
+// full writable set - do not treat it as the authority on what is settable. The
+// authority is parameterTable (internal/config/param_table.go, 242 scalar entries)
+// plus the map sub-keys the get/set handlers resolve: 285 resolvable names in total
+// (executable assertion: internal/config/calibrator_failpath_assumption_test.go).
+params := ie.ListParameters()
 
 // Calibrate GARCH
 err := ie.CalibrateGARCH(historicalReturns)
@@ -92,6 +97,10 @@ err := ie.CalibrateGARCH(historicalReturns)
 // Calibrate VaR
 err := ie.CalibrateVaR(historicalReturns)
 ```
+
+> **可執行真相**：`internal/config/calibrator_failpath_assumption_test.go` 每次重跑都重新列舉權威名字數，並印出
+> `assumption holds: 285/285 resolvable names writable (43 from map prefixes, 242 from parameterTable), 0 refused`
+> （`go test ./internal/config/ -run TestCalibratorFailPath_UnreachableAssumptionStillHolds -v`）。本節敘述與該斷言不同步時，以斷言為準。
 
 ### Supported Parameter Names
 
@@ -152,7 +161,11 @@ Run `go run ./cmd/parameter-health-check` to generate:
 ## Troubleshooting
 
 ### Parameter not found in InferenceEngine
-- Check exact name using `ie.ListParameters()`
+- To confirm a name is settable, use the **authority**: `parameterTable`
+  (`internal/config/param_table.go`) or the actual verdict of
+  `ie.SetParameter(name, v)` (non-nil error ⇒ rejected). `ie.ListParameters()` is only a
+  curated subset (202 names) for a quick lookup of common names — absence from it does
+  **not** mean a name is unsettable.
 - Map parameters use underscore notation: `factor_institutional_sentiment_weights_foreign`
 
 ### Calibration fails with insufficient data
