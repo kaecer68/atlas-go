@@ -422,6 +422,10 @@ func TestDetectorCount_ClaimClassifier_Contract(t *testing.T) {
 		{"colon form short", staleDetectorLine("// detectors = %d"), []int{24}},
 		{"colon form chinese", staleDetectorLine("// 偵測器：%d"), []int{24}},
 		{"colon form chinese keyword", staleDetectorLine("// detector 數: %d"), []int{24}},
+		{"colon fullwidth with english noun", staleDetectorLine("// detector：%d"), []int{24}},
+		{"colon equals with chinese noun", staleDetectorLine("// 偵測器 = %d"), []int{24}},
+		{"colon fullwidth with chinese noun", staleDetectorLine("// 主題：%d"), []int{24}},
+		{"two numbers, second one stale (dedup must not swallow the newer one)", staleDetectorLine("// 29 detectors total: %d are registered"), []int{29, 24}},
 		{"chinese total form", staleDetectorLine("// 偵測器總數 %d"), []int{24}},
 		{"chinese total form 2", staleDetectorLine("// 模板總數：%d"), []int{24}},
 		{"chinese quantity form", staleDetectorLine("// 主題數量 %d"), []int{24}},
@@ -429,7 +433,7 @@ func TestDetectorCount_ClaimClassifier_Contract(t *testing.T) {
 		{"correct number is also a claim", "// registers all 29 detectors, default-enabled.", []int{29}},
 
 		// Deliberately not claims (no allowance needed).
-		{"identifier named themeCount", "if themeCount[theme] != 1 {", nil},
+		{"identifier named themeCount", "themeCount = 1", nil},
 		{"identifier named detectorCount", staleDetectorLine("detectorCount = %d"), nil},
 		{"identifier named templateCount", "templateCount = 14", nil},
 		{"filename with glued digits", "// see docs/2026-07-14-atlas-stage5-detector-plan.md", nil},
