@@ -13,6 +13,11 @@
 #   **127**、參數寫錯回 **2** ⇒ 照樣印 ✅（假綠）。改用 negproof_expect 精確比對 rc==1，
 #   任何其他值都判為「測試本身失敗」。
 #
+# 【為什麼還要斷言「是哪一條規則擋下」】
+#   精確 rc 只證明「**有東西**擋下」。若 telegram 規則被停用／改壞，卻由另一條規則順手擋下同一個
+#   fixture，這支證明照樣綠燈。故再斷言「fixture 的那一行**同時**含該規則的 id `[telegram_bot_token]`」：
+#   證明的是「**正確的規則**擋下」（強度升級；原本「輸出含 fixture 檔名」的斷言保留，未放寬）。
+#
 # 【為什麼不用 #2003 的 plumbing（暫存 index + write-tree/commit-tree）】
 #   revert-guard 是「用 ref 指定 base/head」的檢查，所以能造合成 commit 而不動工作樹。
 #   本檢查要靠 `git ls-files` 看到 fixture，而受測的 `secret-scan.sh` **刻意過濾所有 GIT_\* 環境變數**
@@ -33,6 +38,10 @@ cd "${REPO_ROOT}" || { negproof_err "無法進入 ${REPO_ROOT}"; exit 1; }
 
 CHECK="scripts/secret-scan.sh"
 FIXTURE="scripts/__negtest_secret__.py"
+# 這個 fixture 是為了觸發掃描器的**哪一條**規則（規則 id 字面值，見 secret-scan.sh 的 pattern 清單）。
+# 負向證明不只要證明「有東西擋下」，還要證明「**這條規則**擋下」——否則 A 規則壞了、由 B 規則代擋，
+# 斷言照樣綠燈（假安心）。
+RULE_ID="telegram_bot_token"
 LOG="$(mktemp)"
 cleanup() {
   # 還原 index + 移除 fixture（任何結束路徑都跑；cleanup 失敗不影響判定結果，故吞掉錯誤）
@@ -67,5 +76,12 @@ if ! negproof_expect_output "$(basename "${FIXTURE}")" "${LOG}" "擋下的就是
   negproof_show_log "${LOG}"
   exit 1
 fi
+# 規則層斷言：擋下 fixture 的那一行必須**同時**出現該規則的 id（`[telegram_bot_token]`）。
+# 只證明「有東西擋下」不足：目標規則被停用/改壞、卻由別的規則代擋同一行時，仍會假綠。
+if ! negproof_expect_output_line "$(basename "${FIXTURE}")" "[${RULE_ID}]" "${LOG}" \
+     "擋下 fixture 的是 ${RULE_ID} 這條規則（不是別的規則代擋）"; then
+  negproof_show_log "${LOG}"
+  exit 1
+fi
 negproof_show_log "${LOG}"
-echo "✅ 負向證明通過：secret-scan 以 exit 1 擋下 ${FIXTURE}（精確 rc 斷言；127/2 不再算「擋下了」）"
+echo "✅ 負向證明通過：secret-scan 以 exit 1 擋下 ${FIXTURE}，且擋下它的是規則 [${RULE_ID}]（精確 rc ＋ 規則 id 斷言；127/2 不再算「擋下了」）"

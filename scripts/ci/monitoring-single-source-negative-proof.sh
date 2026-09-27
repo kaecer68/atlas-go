@@ -13,6 +13,11 @@
 #   改用 negproof_expect 精確比對 rc==1。註：本檢查的 `2` 是**用法錯誤**（`--root` 不存在），
 #   不是「有違規」，所以 2 絕不可算通過。
 #
+# 【為什麼還要斷言「是哪幾條規則擋下」】
+#   精確 rc 只證明「**有東西**擋下」。這個 fixture 的設計是同時踩到 R2（掛載源落點）與 R3（舊樹引用）；
+#   若其中一條被停用／改壞，仍可能由另一條擋下 ⇒ 只看 rc 會誤以為「兩條都還有效」。
+#   故逐條斷言「fixture 的那一行同時含規則 id `[R2]`／`[R3]`」：證明的是「**正確的規則**擋下」。
+#
 # 【為什麼不用 #2003 的 plumbing】見 secret-scan-negative-proof.sh 的同名段落：
 #   受測檢查同樣刻意過濾 `GIT_*`（fixture 必須進真 index 才看得到），故改用
 #   「暫時 `git add -f` + trap 無條件還原 + 跑前驗證 fixture 確實在 index 中」。
@@ -29,6 +34,10 @@ cd "${REPO_ROOT}" || { negproof_err "無法進入 ${REPO_ROOT}"; exit 1; }
 
 CHECK="scripts/ci/check_monitoring_single_source.sh"
 FIXTURE="scripts/docker-compose.__negtest__.yml"
+# 這個 fixture 是為了同時踩到**哪幾條**規則（規則 id 字面值，見 check_monitoring_single_source.py
+# 的 R2 / R3）。負向證明不只要證明「有東西擋下」，還要證明「**這幾條規則**擋下」——否則其中一條
+# 被停用／改壞、由另一條代擋時，只看 rc 會誤以為「兩條都還有效」。
+RULE_IDS="R2 R3"
 LOG="$(mktemp)"
 cleanup() {
   git -C "${REPO_ROOT}" rm --cached -q --ignore-unmatch -- "${FIXTURE}" >/dev/null 2>&1 || :
@@ -67,5 +76,14 @@ if ! negproof_expect_output "$(basename "${FIXTURE}")" "${LOG}" "擋下的就是
   negproof_show_log "${LOG}"
   exit 1
 fi
+# 規則層斷言：擋下 fixture 的那一行必須**同時**出現每一條預期規則的 id（`[R2]`、`[R3]`）。
+# 只證明「有東西擋下」不足：停用其中一條、由另一條代擋時，rc 仍是 1，只看 rc 會假安心。
+for rule in ${RULE_IDS}; do
+  if ! negproof_expect_output_line "$(basename "${FIXTURE}")" "[${rule}]" "${LOG}" \
+       "擋下 fixture 的是 ${rule} 這條規則（不是別的規則代擋）"; then
+    negproof_show_log "${LOG}"
+    exit 1
+  fi
+done
 negproof_show_log "${LOG}"
-echo "✅ 負向證明通過：檢查以 exit 1 擋下 ${FIXTURE}（精確 rc 斷言；127/2 不再算「擋下了」）"
+echo "✅ 負向證明通過：檢查以 exit 1 擋下 ${FIXTURE}，且擋下它的是規則 [$(echo "${RULE_IDS}" | tr ' ' '/')]（精確 rc ＋ 規則 id 斷言；127/2 不再算「擋下了」）"
