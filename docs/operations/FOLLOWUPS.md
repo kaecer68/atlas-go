@@ -1691,6 +1691,24 @@
 - **E22 擴充為兩種形態**：① coverage 硬編共用 `/tmp`（`Makefile:1042-1046`）② **golangci-lint 共用快取重播已刪除的兄弟 worktree**（`cannot read file`）⇒ 0 個 `.go` 變更的 PR 亦假紅（`#2052`/`#2053`/`#2060` 各中一次）。
 - **殘項**：**E29**（replay 三個同型靜默缺陷）在飛；**E26**（生產 `Calibration` 告警載入）由 a2a-dev 查；**09-29 06:00Z** 母體決定性驗收（root 執行）。
 
+---
+
+### FU-20260926-32 — 最終同步：**E26/E29 結案 ＋ 新增 E32/E33**；生產已部署 `b1a1ee7d`（規則 40 條）
+
+- **狀態**：`open`（E29 的 5 項殘項、E23 之後的 pattern 調校、E22 串行等待皆未派；其餘結案）
+- **記錄日期**：2026-09-27
+- **對應**：`docs/operations/remediation-manifest.md` §3（E26/E29 更新 ＋ 新增 E32/E33）、§6
+- **本次結案／新增（root 逐項複驗）**：
+  - **E29 → #2064**（`b6fe7d8a`）：replay 判讀三處失真（`checkReplayHealth` 取資料自身最新日／`MarketVolumeProvider` 讀表格自身標題的民國日期並拒收不符／`degraded` 取最新戳記並超窗升級 error）。**root 複核**：凍結區 0 檔、生產 45 通道 **degraded=0**、E29-2 testdata 與線上 payload **byte-identical** 且值 = 生產 `TSE_VOLUME(20260924)`（交易日值不變）。**5 項殘項**見 manifest。
+  - **E26 → 已恢復**：生產 Prometheus 由 29 條／`Calibration`=0 變成 **40 條／12 組**（`Universe` **9**、`Replay` **5**、`Calibration` **3**）⇒ **#2016 的校準監控已實際生效**。仍待 a2a-dev 回報「是什麼讓載入生效」與「`#53` 閘門判檔案存在或真的載入」（若只判存在＝假綠）。
+  - **E32（新）→ #2065**（`91cd0564`）：**宇宙三條警報的規則層根因** —— 舊表達式以 counter 增量為唯一判據，無法區分（i）沒跑（ii）跑了但產出沒用（iii）**跑了、產出健康但計數器沒發射（本日實況）**。修法＝9 條**輸出優先、bucket 互斥**規則（新增 `EmptyUniverse`／`RunOverdue`（假日感知）／**`CounterEmissionMissing`**）＋ Go 端 `last_run_*`（per stage，**單一 defer** 發佈、走**獨立 `GaugeSink`**）與 `next_run_timestamp_seconds`；**未動 pipeline 行為**。決定性驗證＝真 `BuildUniverse` → 真 `/metrics` 文字 ＋ mutation。
+  - **E33（新）→ #2063**（`b1a1ee7d`）：**replay 告警的結構性盲區** —— `monitoring/rules/` 先前**零 replay 規則**，而 JSONL 停擺一個月與 396 列幻影列**當時都零告警**；child 以生產保留窗內的**歷史樣本**證明抓取層訊號**結構上看不到內容落後**。修法＝5 條規則 ＋ 最新資料日接線。
+- **⚠️ 本 session 我兩次被 child 更正（誠實記錄）**：
+  1. `.omo/manifests` 最新日期我以 **1 層 glob** 誤判（說休眠 7 週，實為 4 週）。
+  2. **counter 推理陷阱**：我把 `increase(atlas_universe_symbols_screened_total[7d])` 的 **4906** 當成「管線跑了約 3 輪」的真增量，實際那是 **legacy 錯標籤系列 `{daily="failed"}` 的殘留**；正確形狀 `{stage="daily"|"weekly"}` 的系列**全為 0**。⇒ 紀律：**看到 counter 非零 increase 時，必須先驗該 series 的標籤形狀**，否則不得推論「跑過幾輪」。
+- **生產部署狀態（2026-09-27 03:24Z，a2a-dev 執行、root 複查）**：binary = **`b1a1ee7d`**（含 #2052–#2065）；規則載入 **40 條／12 組**；新指標族皆在（`atlas_universe_last_run_*` 20 條、`atlas_universe_next_run_*` 1 條、`atlas_replay_*` 3 條）；**三條舊 Universe 警報已不再 firing**（新規則在「尚未跑」時保持沉默 —— 正是設計意圖）。
+- **決定性驗收（2026-09-29 06:00Z，週二 daily；root 執行）**：以 **`universe_snapshot.json` 輸出為真值**（計數器會說謊），並核對 `last_run_valid{stage="daily"}=1`、`last_run_symbols_ranked{stage="daily"}=150`、`last_run_ranked_trustworthy=1`、counters 有增量、三條舊警報維持沉默；**若 `CounterEmissionMissing` 反而 firing ⇒ 是發射面又壞（非評分問題）**。`stage="weekly"` 仍會沉默（下次 10-05）。
+
 ## 相關文件
 
 - [universe-scoring-ranked-zero-20260925.md](universe-scoring-ranked-zero-20260925.md)
