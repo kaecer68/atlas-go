@@ -297,3 +297,7 @@ func (s *server) handleResourceEventsToday(ctx context.Context, _ *mcp.ReadResou
 	}
 	return resourceText("atlas://events/today", "application/json", mustJSON(out)), nil
 }
+
+// Negative-proof scratch change (temporary; this branch is never merged):
+// touches only a .go file, so the `code` path filter is true while
+// `embedded_docs` stays false — the generate-docs-embed job must be skipped.
