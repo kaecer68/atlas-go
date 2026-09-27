@@ -2136,12 +2136,24 @@ func run(args []string, deps appDeps) error {
 			// the vector's real label names (see monitoring.CollectorOnInc for the
 			// two defects this replaced).
 			um.SetOnInc(monitoring.CollectorOnInc(collector))
+			// The per-run verdict (atlas_universe_last_run_*) travels on its own
+			// sink, deliberately NOT through CounterVec/OnInc: it must survive a
+			// defect in the counter path. The 2026-09-25 production shape was a
+			// healthy pipeline whose symbols_ranked_total / quotes_fetched_total
+			// never incremented, and the alert rules now read this verdict instead
+			// of counter increments (see monitoring.GaugeSink).
+			um.SetRunVerdictSink(monitoring.GaugeSink(collector))
 			// Materialize the whole atlas_universe_* family now. Series are created
 			// by the first increment, and the pipeline runs at most once per trading
 			// day, so without this every restart leaves /metrics without the family
 			// until the next scheduled run (issue #1995: 71h blind window after the
-			// 2026-09-25T07:14Z restart). Must stay after SetOnInc — see WarmUp.
+			// 2026-09-25T07:14Z restart). Must stay after SetOnInc and
+			// SetRunVerdictSink — see WarmUp.
 			um.WarmUp()
+			// Publish the schedule heartbeat before the first run of this process:
+			// AtlasUniverseRunOverdue reads it, and a scheduler that never fires must
+			// be visible without waiting for a run that will never come.
+			monitoring.ReportUniverseHeartbeat(um, time.Now())
 			classTreeAdapter := monitoring.AdaptClassificationTree(industry.DefaultClassification())
 			{
 				suCfg := config.GetParametersConfig().SmartUniverse

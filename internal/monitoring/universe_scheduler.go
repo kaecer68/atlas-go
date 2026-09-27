@@ -759,6 +759,21 @@ func BuildUniverse(ctx context.Context, deps UniverseBuilderDeps, fullRebuild bo
 
 	um := deps.UniverseMetrics
 
+	// Publish the run verdict from ONE point: a defer, not one call per return.
+	// Every exit path (success, Step 1/2 early return, degraded quote fetch,
+	// error) then reports what it produced, and no future edit can leave a path
+	// that publishes nothing — the 2026-09-25 incident was exactly "the pipeline
+	// ran, the snapshot was healthy, and two signals never left it".
+	// The verdict also refreshes the schedule heartbeat (see
+	// universe_run_verdict.go), so a missed trigger is visible without any
+	// holiday-blind window arithmetic in the alert rules.
+	if um != nil {
+		defer func() {
+			um.ReportRun(UniverseRunVerdictFor(result, stage, time.Now()))
+			ReportUniverseHeartbeat(um, time.Now())
+		}()
+	}
+
 	// Cache single-label counters at task entry to avoid repeated
 	// WithLabelValues() resolution across pipeline stages.
 	var gatheredCounter, quotesFetchedCounter, rankedCounter, scrapedCounter, snapshotCounter, durationCounter *metrics.Counter
