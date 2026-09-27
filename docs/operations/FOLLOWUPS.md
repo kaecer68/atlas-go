@@ -1673,8 +1673,23 @@
   1. **部署要求**已交 a2a-dev：`main ≥ db7fdb44`（同時含 #2054 與 #2057）＋ `--remove-orphans`（E17）＋ 部署後 replay CSV 清理（預期 396 列）＋ JSONL 重建；**預期現象**：09-28 weekly 不重建（教師節休市，`weekly_skip_holiday` 為正確行為）、下一次 weekly ＝ **2026-10-05**。
   2. **決定性驗收 ＝ 2026-09-29（週二）06:00Z**（daily 增量；root 已行為驗證該日為交易日）。
   3. **E26**（生產 `Calibration` 告警未載入）仍交 a2a-dev 查載入面。
-  4. **待 owner**：E23（guard 是否收緊）、liveness `cron_darwinian` 殘留列（一次性 SQL）、E29/E30/E31 的處置、`cleanup-manifests.sh`。
+  4. **待 owner**：~~E23（guard 是否收緊）、E29/E30/E31 的處置、`cleanup-manifests.sh`~~ ⇒ **已於 2026-09-27 全部決定並落地**：E23 → **#2061**（`1601c65e`，預設 `enforce`）、E30 → **#2059**（`f0d658d9`）、E31＋`cleanup-manifests.sh` → **#2060**（`20c414ea`，兩支皆刪）；僅 **E29** 仍在飛（`fix-replay-silent-and-gate3`）。liveness `cron_darwinian` 殘留列 → **已交 a2a-dev**（一次性 SQL）。
 - **方法論註記**：本輪**三次**由 child 推翻我的指示（E21 的選路、E19 的 symlink vs wrapper、E25 的來源切換範圍），且我**兩次攔下自己的驗證方法錯誤**（落後工作樹／字串比對）⇒ 兩者都源於同一紀律：**先實測再定調，且不把未驗證的推論寫成事實**。
+
+---
+
+### FU-20260926-31 — 第二批同步：**E23/E30/E31 結案**（#2061／#2059／#2060）＋ E19/E22 更新
+
+- **狀態**：`open`（僅 E29 在飛；其餘結案）
+- **記錄日期**：2026-09-27
+- **對應**：`docs/operations/remediation-manifest.md` §3（E19/E22/E23/E30/E31 五列）＋ §6
+- **本次結案（root 逐項複驗）**：
+  - **E23 → #2061**（`1601c65e`）：guard 預設收緊為 **`enforce`**，但**先消除三面已實測誤擋**。**root 實跑複核**：`grep -rn secret internal/`／`go test ./...`／`ATLAS_GIT_COMMIT=$(…) docker compose up -d` 皆 **rc=0**；`cat .env`／`rm -rf /`／`git push --force origin main` 皆 **rc=2**；`ATLAS_HOOK_MODE=warn` 下 **rc=0**；契約測試（76 條矩陣）PASS。**child 對自己的改動做了對抗式複查，抓到自身引入的覆蓋退化**（`sudo -u root cat .env` 的 command word 被讀成 `root`）並修正 —— 這是本輪最值得複製的行為。
+  - **E30 → #2059**（`f0d658d9`）：pre-push **讀一次 stdin 分類 refspec**，delete-only push 明示跳過內容閘門；非 delete push 仍走完整 gate。
+  - **E31 → #2060**（`20c414ea`）：`scripts/hooks/pre-commit`（exit-0 stub）與 `scripts/cleanup-manifests.sh` 皆刪；5 處文件改為反映實況（含替代的 `find` 指令），未動 `docs/manifests/` 的位置治理 gate。
+- **root 的數字被更正（誠實記錄）**：我以 1 層 glob 誤判 `.omo/manifests` 最新為 2026-08-07（休眠 7 週），實際最新為 **2026-08-30**（休眠約 **4 週**）；`find -type f` = **78 檔**；`.gitignore` 為 **:66-67**。**結論（刪除）仍成立**（兩項停手條件皆未觸發），但這說明：**判斷的品質取決於數字的品質**。
+- **E22 擴充為兩種形態**：① coverage 硬編共用 `/tmp`（`Makefile:1042-1046`）② **golangci-lint 共用快取重播已刪除的兄弟 worktree**（`cannot read file`）⇒ 0 個 `.go` 變更的 PR 亦假紅（`#2052`/`#2053`/`#2060` 各中一次）。
+- **殘項**：**E29**（replay 三個同型靜默缺陷）在飛；**E26**（生產 `Calibration` 告警載入）由 a2a-dev 查；**09-29 06:00Z** 母體決定性驗收（root 執行）。
 
 ## 相關文件
 

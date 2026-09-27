@@ -40,7 +40,9 @@ echo "  ./agent-guard --check 'git push origin main'"
 echo "  ./agent-guard --mode=enforce --check 'rm -rf /'"
 echo "  ./agent-guard --dry-run"
 echo ""
-echo "To enforce in a production worktree, set ATLAS_ENV=production or ATLAS_HOOK_MODE=enforce."
+echo "Mode: enforce is the DEFAULT (2026-09-27, E23) - dangerous commands are"
+echo "      blocked (hook exit 2). Escape hatch: export ATLAS_HOOK_MODE=warn in the"
+echo "      shell that starts the agent; full rollback: .agent-hooks/README.md."
 
 # Check jq dependency for aci-read-prompt.sh.
 if ! command -v jq >/dev/null 2>&1; then
@@ -55,7 +57,7 @@ fi
 # is active in every session without any per-user step. Confirm it is still there.
 SETTINGS_SHARED="${REPO_ROOT}/.claude/settings.json"
 if grep -q "pretooluse-deny-dangerous.sh" "${SETTINGS_SHARED}" 2>/dev/null; then
-  echo "✓ .claude/settings.json registers the PreToolUse agent-guard hook (active for every session; default mode: warn)"
+  echo "✓ .claude/settings.json registers the PreToolUse agent-guard hook (active for every session; default mode: enforce)"
 else
   echo "⚠️  .claude/settings.json no longer registers .agent-hooks/pretooluse-deny-dangerous.sh"
   echo "   → the deny-dangerous guard is NOT on the effective path; re-add the PreToolUse entry."

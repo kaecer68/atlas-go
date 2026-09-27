@@ -94,7 +94,7 @@ docs/
 | **建立** | `.omo/manifests/YYYY-MM-DD-slug.md` | 從 `docs/manifests/TEMPLATE.md` 複製 |
 | **進行中** | `.omo/manifests/` | 正常編輯、commit、PR |
 | **完成** | 判斷後處理 | 見下方 promotion 路徑 |
-| **PR merge** | 手動 | 完成後決定歸檔或刪除（**無自動驗證器**：`scripts/verify-manifest.sh` 已於 2026-09-27 刪除，見下方說明） |
+| **PR merge** | 手動 | 完成後決定歸檔或刪除（**無自動驗證器、無清理腳本**：`scripts/verify-manifest.sh` 與 `scripts/cleanup-manifests.sh` 皆於 2026-09-27 刪除，見下方說明） |
 
 #### Manifest 完成後 Promotion 路徑
 
@@ -107,12 +107,18 @@ Manifest done →
 
 **為何沒有自動驗證器（2026-09-27）**：原本的外部驗證器 `scripts/verify-manifest.sh` 已刪除，理由是它的核心檢查**恆不觸發**——awk 的 `gsub(/^[ \t]+|[ \t]+$/, "")` 只給 2 個參數（改的是 `$0` 而非欄位），所以 `$7` 永遠帶著空白（`" done "`），`:39` 的 `!= "done"` 恆真，**每一列都被 `continue` 跳過**；實測「Status=done + Notes 空」仍回 `OK` 且 exit 0。它讀取的 manifest 又位於 gitignored `.omo/`（乾淨 clone 沒有對象可驗）。因此 manifest 完成狀態改由 owner 於 `docs/operations/remediation-manifest.md` 與 `docs/operations/FOLLOWUPS.md` 這兩個受版控的文件審閱。
 
+**為何也沒有清理腳本（2026-09-27）**：`scripts/cleanup-manifests.sh` 一併刪除。它唯一的產出就是「提示你去清 `.omo/manifests/`」，而該目錄位於 gitignored `.omo/`（乾淨 clone 內根本不存在 ⇒ 腳本直接 no-op），且該實務已休眠（最後一筆 manifest 為 2026-08-31，9 月 0 筆）。退役決策痕跡留在 git 歷史（`git log --oneline -- scripts/cleanup-manifests.sh`），不需要靠檔案本體保存。
+
+要檢視陳舊 manifest 直接手動查即可：
+
+```bash
+# 陳舊 manifest 檢視（取代已刪的 cleanup-manifests.sh；目錄不存在 ⇒ 無需清理）
+find .omo/manifests -name '*.md' -mtime +7
+```
+
 #### 自動化檢查
 
 ```bash
-# 檢查 .omo/manifests/ 內是否有 7 天以上未更新的 done manifest
-./scripts/cleanup-manifests.sh --stale-days 7
-
 # CI 強制（ci-quick 掛載）— 防止 agent 偷跑將 manifest 寫入 docs/
 bash scripts/ci/check_docs_governance.sh
 ```
@@ -128,7 +134,7 @@ bash scripts/ci/check_docs_governance.sh
 **禁止**：
 
 - ❌ 在 `docs/manifests/` 存放個別審計 manifest（應放 `.omo/manifests/`）
-- ❌ 已完成 manifest 無限期留在 `.omo/manifests/`（7 天後提示清理）
+- ❌ 已完成 manifest 無限期留在 `.omo/manifests/`（不再有清理腳本提醒；PR 收尾時自行判斷歸檔 / promote / 刪除）
 - ❌ 把 manifest 當 spec 用（應 extract invariant 到 `docs/specs/`）
 
 **archive 內禁止新增子目錄**（`archive/superpowers/`、`archive/plans/` 都已撤銷）。所有歸檔檔案直接放 `archive/YYYY-MM-DD-<slug>.md`。
