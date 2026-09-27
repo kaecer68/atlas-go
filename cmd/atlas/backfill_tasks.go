@@ -284,4 +284,5 @@ func registerBackfillTasks(d backfillDeps) {
 
 	registerChannelHealthMetricsTask(d)
 	registerCalibrationFreshnessMetricsTask(d)
+	registerReplayFreshnessMetricsTask(d)
 }

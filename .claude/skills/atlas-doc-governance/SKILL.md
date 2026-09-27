@@ -85,7 +85,8 @@ grep -A20 "完整子目錄白名單" docs/documentation-standard.md
 
 - 權威規範：`docs/documentation-standard.md`
 - 文件地圖：`docs/documentation-map.md`
-- 清理腳本：`scripts/cleanup-manifests.sh`
+- 陳舊 manifest 檢視（無腳本）：`find .omo/manifests -name '*.md' -mtime +7`
+  （原 `scripts/cleanup-manifests.sh` 已於 2026-09-27 刪除：它只服務 gitignored、已休眠的 `.omo/manifests/`）
 
 ## CI 強制防護（2026-08-07 起，不可繞過）
 

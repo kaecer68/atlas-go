@@ -21,23 +21,26 @@
 #   (d) translate the guard's verdict into the Claude Code hook protocol.
 # If you want to add/remove a dangerous pattern, edit `deny-dangerous.sh` only.
 #
-# ── Mode policy (conservative; the owner can tighten) ────────────────────────
+# ── Mode policy (2026-09-27, E23: ENFORCE is the default) ────────────────────
 # This adapter never picks a mode. `deny-dangerous.sh` does:
 #   ATLAS_HOOK_MODE set          -> that mode wins
-#   else ATLAS_ENV=production    -> enforce
-#   else                         -> warn
-# So the default in a dev worktree is `warn`: the model and the user get a clear
-# message, but the Bash call still runs (no surprise blocking of normal work).
+#   else                         -> enforce (default since E23)
+#   (ATLAS_ENV=production also pins enforce, which is now redundant but kept)
+# So every Bash call in this repo is BLOCKED at the tool layer when the guard
+# denies it. The guard was only tightened to enforce after the three measured
+# false blocks were removed (see deny-dangerous.sh's header and the E23 block in
+# tests/scripts/test-agent-hook-wiring.sh).
 #
-# To block locally (no file edit, per session / per shell):
-#   export ATLAS_HOOK_MODE=enforce
-# To make a whole host enforce (production boxes already do this via ATLAS_ENV):
-#   export ATLAS_HOOK_MODE=enforce     # in the shell that starts the agent
+# Escape hatch / rollback (documented in .agent-hooks/README.md):
+#   export ATLAS_HOOK_MODE=warn        # in the shell that STARTS the agent
+# The hook process inherits the agent's environment, so exporting the variable
+# inside a Bash tool call cannot lift a block — only the human (or a new session)
+# can. Full rollback = remove the PreToolUse entry from .claude/settings.json.
 #
 # ── Verdict mapping ──────────────────────────────────────────────────────────
 #  guard warns  (marker `WARNING (warn mode):`)  -> exit 0, guard text is injected
 #      into the model context (`additionalContext`) and shown to the user
-#      (`systemMessage`). Visibility only.
+#      (`systemMessage`). Visibility only (warn mode is opt-in now).
 #  guard denies (marker `DENIED (enforce mode):`) -> message on stderr, exit 2.
 #      Exit 2 is Claude Code's "block this tool call" code. Other non-zero codes
 #      would only be reported as a non-blocking hook error.
@@ -48,8 +51,11 @@
 # ── Contract (asserted by tests/scripts/test-agent-hook-wiring.sh) ───────────
 #   * `.claude/settings.json` registers this file under PreToolUse / matcher Bash
 #   * both verdict markers above still exist inside `deny-dangerous.sh`
-#   * `git status`, `ls`, `make ci-gate` pass; `rm -rf /` warns in warn mode and
-#     exits 2 in enforce mode; a non-Bash tool and a malformed payload pass
+#   * the default (no ATLAS_HOOK_MODE) is enforce: `rm -rf /` exits 2
+#   * normal development commands pass in EVERY mode/worktree — including the
+#     three E23 false-block families (secret-word searches, the documented deploy
+#     path, `go test`/`make test`/`make ci-*` in a production worktree)
+#   * a non-Bash tool and a malformed payload pass
 #
 # ── Environment overrides (tests / unusual hosts) ────────────────────────────
 #   ATLAS_HOOK_PYTHON   interpreter used to parse the payload (default: python3)
@@ -158,7 +164,7 @@ guard_rc=$?
 case "$GUARD_OUTPUT" in
   *"$DENY_MARKER"*)
     printf '%s\n' "$GUARD_OUTPUT" >&2
-    notice "blocked this Bash call (enforce mode, exit $BLOCK_EXIT). To allow it for now, set ATLAS_HOOK_MODE=warn in the environment that starts the agent."
+    notice "blocked this Bash call (enforce mode, exit $BLOCK_EXIT). Enforce is the default; the guard's message above already names the legitimate command where one exists. To allow this class of command, start the agent with ATLAS_HOOK_MODE=warn (an env var set inside the command cannot lift the block)."
     exit "$BLOCK_EXIT"
     ;;
   *"$WARN_MARKER"*)
@@ -170,7 +176,7 @@ case "$GUARD_OUTPUT" in
 
 $GUARD_TRIMMED
 
-To make this class of command actually block, set ATLAS_HOOK_MODE=enforce (or ATLAS_ENV=production) for the agent session."
+Warn mode is active because ATLAS_HOOK_MODE=warn is set for this session. Unset it (or start a new session without it) to get the default back: enforce."
 
     USER_ONE="[agent-guard] warn: flagged a possibly dangerous Bash command (NOT blocked): ${COMMAND:0:200}"
 

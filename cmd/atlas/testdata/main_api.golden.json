@@ -31,6 +31,18 @@
     {
       "name": "MetricChannelStalenessOverageSeconds",
       "value": "\"atlas_channel_staleness_overage_seconds\""
+    },
+    {
+      "name": "MetricReplayCSVLatestDate",
+      "value": "\"atlas_replay_csv_latest_date_timestamp_seconds\""
+    },
+    {
+      "name": "MetricReplayFreshnessChecked",
+      "value": "\"atlas_replay_freshness_checked_timestamp_seconds\""
+    },
+    {
+      "name": "MetricReplayJSONLLatestDate",
+      "value": "\"atlas_replay_jsonl_latest_date_timestamp_seconds\""
     }
   ],
   "funcs": [

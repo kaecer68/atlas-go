@@ -5,7 +5,12 @@ set -euo pipefail
 # remote, PATH-stubbed `make`, recording docker stub; no network, no docker
 # daemon, no writes to the caller's checkout).
 #
-# Pins down two defects fixed 2026-09-26 in ONE file:
+# Pins down three defects fixed 2026-09-26/27 in ONE file:
+#   E30 — a delete-only push (`git push --delete origin <branch>`, `git push
+#         origin :<branch>`) was judged by content gates and refused, so routine
+#         post-merge branch cleanup had to use `--no-verify`. Git passes the
+#         pushed refspecs on the hook's STDIN; a delete line reads
+#         `(delete) 0000…0 <remote ref> <old sha>`.
 #   E4  — a failed `git fetch origin/main` used to `exit 0` (look-green,
 #         checked-nothing: it skipped ci-full AND every diff-based gate).
 #   FU-20260926-15 — no host binary freshness gate at all: source had moved past
@@ -117,6 +122,42 @@ add_docs_commit() {
   DOCS_COMMIT=$(git -C "$FIX_REPO" rev-parse HEAD)
 }
 
+# add_empty_commit : make branch fix/lane ALREADY MERGED into origin/main, with
+# main then moving one EMPTY commit further, then come back to fix/lane.
+# Result: lane is an ancestor of origin/main, so
+#   * `rev-parse HEAD` != origin/main  → Gate 2 passes, and
+#   * `git diff --name-only origin/main...HEAD` is empty → Gate 3 fires.
+# That is the real post-merge shape: the branch is merged, and all that is left
+# is deleting the now-redundant remote branch. That is exactly the push E30 is
+# about. (Without the merge step the merge base would sit before the lane commit
+# and the diff would be non-empty, i.e. an ordinary content push.)
+add_empty_commit() {
+  fake_git "$FIX_REPO" push -q origin fix/lane:refs/heads/fix/lane
+  fake_git "$FIX_REPO" checkout -q main
+  fake_git "$FIX_REPO" merge -q --ff-only fix/lane
+  fake_git "$FIX_REPO" push -q origin main
+  fake_git "$FIX_REPO" commit -q --allow-empty -m "chore: empty"
+  fake_git "$FIX_REPO" push -q origin main
+  fake_git "$FIX_REPO" fetch -q origin main
+  fake_git "$FIX_REPO" checkout -q fix/lane
+}
+
+# build_merged_fixture <dir> : fixture in that merged, zero-diff state (FIX_REPO).
+build_merged_fixture() {
+  local dir=$1
+  build_fixture "$dir"
+  seed_main
+  add_go_commit
+  add_empty_commit
+  # Fixture self-check: without this shape the delete cases below would pass for
+  # the wrong reason (Gate 2 would fire first, or the branch would not be
+  # zero-diff and Gate 3 would have nothing to say).
+  test "$(git -C "$FIX_REPO" rev-parse HEAD)" != "$(git -C "$FIX_REPO" rev-parse origin/main)" || \
+    fail "fixture: HEAD == origin/main — Gate 2 would fire before Gate 3"
+  test -z "$(git -C "$FIX_REPO" diff --name-only origin/main...HEAD)" || \
+    fail "fixture: branch is not zero-diff vs origin/main"
+}
+
 # fake_host_binary <rel-path> <commit-ish> — the checker reads buildinfo out of
 # the file with `strings | grep Commit=`, so a text file is a valid stand-in.
 fake_host_binary() {
@@ -146,12 +187,17 @@ EOF
   cmp -s "$CHECK" "$repo/scripts/check-binary-freshness.sh" || fail "fixture checker copy drifted from $CHECK"
 }
 
-# run_hook <dir> <repo> → HOOK_RC / HOOK_OUT (combined stdout+stderr)
+# run_hook <dir> <repo> [refspecs] → HOOK_RC / HOOK_OUT (combined stdout+stderr)
+# The optional third argument is the refspec list git writes to the hook's STDIN,
+# one line per ref: `<local ref> <local sha> <remote ref> <remote sha>`. It always
+# feeds a PIPE (never the caller's terminal), so omitting it means "Git gave the
+# hook no refspec information" — the case the classification must fail closed on.
 run_hook() {
-  local dir=$1 repo=$2
+  local dir=$1 repo=$2 refspecs=${3-} stdin_text=""
   install_fixture_hook "$repo"
+  [ -z "$refspecs" ] || stdin_text=$(printf '%s\n' "$refspecs")
   HOOK_RC=0
-  HOOK_OUT=$(cd "$repo" && env \
+  HOOK_OUT=$(cd "$repo" && printf '%s' "$stdin_text" | env \
       PATH="$dir/stub:$PATH" \
       FAKE_MAKE_LOG="$dir/make.log" \
       FAKE_DOCKER_LOG="$dir/docker.log" \
@@ -339,7 +385,146 @@ run_override_test() {
   PRE_PUSH_FULL_OVERRIDE=auto
 }
 
+# ── E30 (a): delete-only push (the refspec git writes for `--delete`) ───────
+run_delete_only_refspec_test() {
+  local dir repo out
+  dir=$(mktemp -d)
+  trap 'rm -rf "$dir"' RETURN
+  build_merged_fixture "$dir"
+  repo=$FIX_REPO
+
+  run_hook "$dir" "$repo" "(delete) 0000000000000000000000000000000000000000 refs/heads/lane $(git -C "$repo" rev-parse HEAD)"
+  out=$HOOK_OUT
+  test "$HOOK_RC" -eq 0 || fail "(a) delete-only push was blocked (E30): $out"
+  # Not silent: the skip and its reason must both be on the record.
+  printf '%s\n' "$out" | grep -Fq -- "delete-only push" || fail "(a) delete-only push produced no delete-only explanation (silent skip): $out"
+  printf '%s\n' "$out" | grep -Fq -- "沒有內容可守" || fail "(a) delete-only skip does not state the reason (沒有內容可守): $out"
+  printf '%s\n' "$out" | grep -Fq -- "1 個 ref 全是刪除" || fail "(a) skipped refspec count not reported: $out"
+  # Every skipped gate must be named.
+  printf '%s\n' "$out" | grep -Fq -- "Gate 0b" || fail "(a) skip does not name Gate 0b (host binary freshness): $out"
+  printf '%s\n' "$out" | grep -Fq -- "make ci-gate" || fail "(a) skip does not name Gate 1 (ci-gate): $out"
+  printf '%s\n' "$out" | grep -Fq -- "make ci-full" || fail "(a) skip does not name Gate 1b (ci-full): $out"
+  printf '%s\n' "$out" | grep -Fq -- "Gate 1c  frontend dist freshness" || fail "(a) skip does not name Gate 1c (frontend dist): $out"
+  printf '%s\n' "$out" | grep -Fq -- "Gate 2" || fail "(a) skip does not name Gate 2 (HEAD == origin/main): $out"
+  printf '%s\n' "$out" | grep -Fq -- "Gate 3" || fail "(a) skip does not name Gate 3 (zero diff): $out"
+  # ...and the refusal it replaces must not appear.
+  printf '%s\n' "$out" | grep -Fq -- "❌ pre-push: branch has zero file diff" && fail "(a) Gate 3 still fired on a delete-only push: $out" || true
+  # Nothing was executed: no make (ci-gate/ci-full), no docker, no frontend check.
+  test ! -s "$dir/make.log" || fail "(a) delete-only push ran make: $(cat "$dir/make.log")"
+  test ! -s "$dir/docker.log" || fail "(a) delete-only push invoked docker: $(cat "$dir/docker.log")"
+  test ! -s "$dir/frontend.log" || fail "(a) delete-only push ran the frontend dist check"
+}
+
+# ── E30 (b): same outcome when REAL git supplies the refspec on stdin ───────
+# `git push --delete origin <b>` and `git push origin :<b>` both make git write
+# the stdin line itself, so this is the un-faked end of the path (local bare
+# remote only; the real origin is never touched).
+run_delete_only_real_git_test() {
+  local dir rc out
+  dir=$(mktemp -d)
+  trap 'rm -rf "$dir"' RETURN
+  build_merged_fixture "$dir"
+  install_fixture_hook "$FIX_REPO"
+  # A second, identical lane for the `:<branch>` spelling. Publish it BEFORE the
+  # hook is armed below — every push from here on really goes through it.
+  fake_git "$FIX_REPO" push -q origin fix/lane:refs/heads/fix/colon
+  git -C "$FIX_REPO" config core.hooksPath "$FIX_REPO/.githooks"
+
+  rc=0
+  out=$(cd "$FIX_REPO" && env PATH="$dir/stub:$PATH" \
+        FAKE_MAKE_LOG="$dir/make.log" FAKE_DOCKER_LOG="$dir/docker.log" \
+        FAKE_FRONTEND_LOG="$dir/frontend.log" DOCKER_BIN="$dir/stub/docker" \
+        git push --delete origin fix/lane 2>&1) || rc=$?
+  test "$rc" -eq 0 || fail "(b) git push --delete origin fix/lane was blocked (E30): $out"
+  printf '%s\n' "$out" | grep -Fq -- "delete-only push" || fail "(b) git push --delete skipped the gates silently: $out"
+  test ! -s "$dir/make.log" || fail "(b) git push --delete ran make: $(cat "$dir/make.log")"
+  test ! -s "$dir/docker.log" || fail "(b) git push --delete invoked docker: $(cat "$dir/docker.log")"
+  # The push really happened — the hook let it through, it did not fake it.
+  git -C "$dir/origin.git" rev-parse --verify -q refs/heads/fix/lane >/dev/null && \
+    fail "(b) remote branch fix/lane still exists after the delete push" || true
+
+  rc=0
+  out=$(cd "$FIX_REPO" && env PATH="$dir/stub:$PATH" \
+        FAKE_MAKE_LOG="$dir/make.log" FAKE_DOCKER_LOG="$dir/docker.log" \
+        FAKE_FRONTEND_LOG="$dir/frontend.log" DOCKER_BIN="$dir/stub/docker" \
+        git push origin :fix/colon 2>&1) || rc=$?
+  test "$rc" -eq 0 || fail "(b) git push origin :fix/colon was blocked (E30): $out"
+  printf '%s\n' "$out" | grep -Fq -- "delete-only push" || fail "(b) git push origin :branch skipped the gates silently: $out"
+  test ! -s "$dir/make.log" || fail "(b) git push origin :branch ran make: $(cat "$dir/make.log")"
+  git -C "$dir/origin.git" rev-parse --verify -q refs/heads/fix/colon >/dev/null && \
+    fail "(b) remote branch fix/colon still exists after the delete push" || true
+}
+
+# ── E30 (c): a content push is still judged (and still blocked) ────────────
+run_content_push_still_gated_test() {
+  local dir repo sha out
+  dir=$(mktemp -d)
+  trap 'rm -rf "$dir"' RETURN
+  build_merged_fixture "$dir"
+  repo=$FIX_REPO
+  sha=$(git -C "$repo" rev-parse HEAD)
+
+  run_hook "$dir" "$repo" "$sha $sha refs/heads/lane $sha"
+  out=$HOOK_OUT
+  test "$HOOK_RC" -ne 0 || fail "(c) content push on a zero-diff branch was allowed: $out"
+  printf '%s\n' "$out" | grep -Fq -- "zero file diff vs origin/main" || fail "(c) Gate 3 did not fire for a content push: $out"
+  printf '%s\n' "$out" | grep -Fq -- "delete-only push" && fail "(c) content push took the delete-only skip path: $out" || true
+  grep -Fq -- "ci-gate" "$dir/make.log" || fail "(c) content push did not run ci-gate: $(cat "$dir/make.log")"
+}
+
+# ── E30 (c2): a CREATE line carries an all-zero REMOTE sha, not a delete ────
+run_create_refspec_is_not_delete_test() {
+  local dir repo sha out
+  dir=$(mktemp -d)
+  trap 'rm -rf "$dir"' RETURN
+  build_merged_fixture "$dir"
+  repo=$FIX_REPO
+  sha=$(git -C "$repo" rev-parse HEAD)
+
+  run_hook "$dir" "$repo" "$sha $sha refs/heads/lane 0000000000000000000000000000000000000000"
+  out=$HOOK_OUT
+  test "$HOOK_RC" -ne 0 || fail "(c2) create-shaped refspec (all-zero remote sha) was treated as a delete: $out"
+  printf '%s\n' "$out" | grep -Fq -- "zero file diff vs origin/main" || fail "(c2) Gate 3 did not fire for a create-shaped refspec: $out"
+  printf '%s\n' "$out" | grep -Fq -- "delete-only push" && fail "(c2) create-shaped refspec took the delete-only skip path: $out" || true
+}
+
+# ── E30 (d): a mixed push must not let the delete whitewash the content ────
+run_mixed_delete_and_content_test() {
+  local dir repo sha out
+  dir=$(mktemp -d)
+  trap 'rm -rf "$dir"' RETURN
+  build_merged_fixture "$dir"
+  repo=$FIX_REPO
+  sha=$(git -C "$repo" rev-parse HEAD)
+
+  run_hook "$dir" "$repo" "(delete) 0000000000000000000000000000000000000000 refs/heads/other $sha
+$sha $sha refs/heads/lane $sha"
+  out=$HOOK_OUT
+  test "$HOOK_RC" -ne 0 || fail "(d) mixed delete+content push was allowed (a delete whitewashed content): $out"
+  printf '%s\n' "$out" | grep -Fq -- "zero file diff vs origin/main" || fail "(d) Gate 3 did not fire on the content half of a mixed push: $out"
+  printf '%s\n' "$out" | grep -Fq -- "delete-only push" && fail "(d) mixed push took the delete-only skip path: $out" || true
+  grep -Fq -- "ci-gate" "$dir/make.log" || fail "(d) mixed push did not run ci-gate: $(cat "$dir/make.log")"
+}
+
+# ── E30 (e): no refspec information at all must fail CLOSED ────────────────
+run_empty_stdin_is_content_push_test() {
+  local dir repo out
+  dir=$(mktemp -d)
+  trap 'rm -rf "$dir"' RETURN
+  build_merged_fixture "$dir"
+  repo=$FIX_REPO
+
+  run_hook "$dir" "$repo"          # no refspecs: git gave us nothing to read
+  out=$HOOK_OUT
+  test "$HOOK_RC" -ne 0 || fail "(e) empty stdin was treated as a delete-only push (fail-open): $out"
+  printf '%s\n' "$out" | grep -Fq -- "zero file diff vs origin/main" || fail "(e) Gate 3 did not fire when stdin was empty: $out"
+  printf '%s\n' "$out" | grep -Fq -- "delete-only push" && fail "(e) empty stdin took the delete-only skip path: $out" || true
+  grep -Fq -- "ci-gate" "$dir/make.log" || fail "(e) empty-stdin push did not run ci-gate: $(cat "$dir/make.log")"
+}
+
 # ── static contract: the wiring itself ─────────────────────────────────────
+line_of() { grep -Fn -- "$2" "$1" | head -n 1 | cut -d: -f1; }
+
 run_static_contract_tests() {
   assert_contains "$HOOK" '--host-only --diff-base origin/main'
   assert_contains "$HOOK" 'PRE_PUSH_FULL=never — ci-full 明示跳過'
@@ -352,6 +537,24 @@ run_static_contract_tests() {
   assert_contains "$HOOK" 'if [ "$remote" != "origin" ]; then'
   # The checker must not reach for docker in host-only mode.
   assert_contains "$CHECK" 'if [ "$HOST_ONLY" -eq 0 ]; then'
+
+  # E30: delete-only classification must exist, be keyed on git's `(delete)`
+  # marker, name its reason, and sit BEFORE the content gates it bypasses.
+  # Reverting any of this must turn this test red.
+  assert_contains "$HOOK" 'delete_only=1'
+  assert_contains "$HOOK" "'(delete) '*"
+  assert_contains "$HOOK" 'refspec_deletes'
+  assert_contains "$HOOK" 'delete-only push：沒有內容可守'
+  assert_contains "$HOOK" 'delete-only push（'
+  local del_line gate_line
+  del_line=$(line_of "$HOOK" 'if [ "$refspec_total" -gt 0 ]')
+  gate_line=$(line_of "$HOOK" 'host_out=$(bash scripts/check-binary-freshness.sh')
+  test -n "$del_line" && test -n "$gate_line" || \
+    fail "static: E30 classification / first content gate marker missing from $HOOK"
+  test "$del_line" -lt "$gate_line" || \
+    fail "static: delete-only classification (line $del_line) must precede the content gates (line $gate_line)"
+  # ...and this test file must actually be able to feed stdin (its whole point).
+  assert_contains "$0" 'refspecs=${3-}'
 }
 
 run_fetch_failure_test
@@ -360,6 +563,12 @@ run_fresh_host_binary_test
 run_docs_only_test
 run_no_host_binaries_test
 run_override_test
+run_delete_only_refspec_test
+run_delete_only_real_git_test
+run_content_push_still_gated_test
+run_create_refspec_is_not_delete_test
+run_mixed_delete_and_content_test
+run_empty_stdin_is_content_push_test
 run_static_contract_tests
 
 echo "PASS: pre-push gate contract tests"
