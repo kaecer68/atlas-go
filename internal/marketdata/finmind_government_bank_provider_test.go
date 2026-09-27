@@ -236,3 +236,16 @@ func TestFinMindGovernmentBankProvider_BackfillDay_NoDataWritesNothing(t *testin
 		t.Errorf("expected no reading file for no-data day, stat err = %v", err)
 	}
 }
+
+// TestNewFinMindGovernmentBankProvider_SetsBaseURL pins the constructor's base
+// URL. This provider builds its FinMindClient by hand instead of via
+// NewFinMindClient, so nothing else sets baseURL: without this line the client
+// formats every request as fmt.Sprintf("%s/data", "") == "/data" and all
+// fetches fail. Found 2026-09-27 while backfilling 八大行庫 in the paid FinMind
+// window (cmd/backfill-govflow-finmind is the only caller of this ctor).
+func TestNewFinMindGovernmentBankProvider_SetsBaseURL(t *testing.T) {
+	p := NewFinMindGovernmentBankProvider("dummy-token", t.TempDir())
+	if got := p.Client().baseURL; got != finmindBaseURL {
+		t.Fatalf("baseURL = %q, want %q (requests would go to the relative path \"/data\")", got, finmindBaseURL)
+	}
+}
