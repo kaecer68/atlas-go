@@ -272,7 +272,8 @@ apply_profile_defaults() {
 }
 
 # Default required checks come from the live protection on the targeted branch.
-# No live checks and no --checks => refuse (exit 5) instead of inventing a list.
+# No live checks and no --checks => refuse (exit ${EXIT_NO_LIVE_CHECKS} = 22)
+# instead of inventing a list.
 resolve_required_checks() {
   if [[ -n "${RESTORE_FROM}" ]]; then
     return 0
@@ -309,6 +310,15 @@ read_current_protection() {
 
 # Job ids and job-level "name:" values from the workflows in this checkout.
 # The context a GitHub Actions check reports is the job id, or the job "name:".
+#
+# Rule order is load-bearing (E39, 2026-09-27): `jobs:` itself starts with an
+# ASCII letter, so a generic "any column-0 key ends the jobs block" rule placed
+# BEFORE the `jobs:` rule swallows the very line that opens the block and the
+# state never turns on. That was the shipped behaviour: this function returned
+# ZERO names for every workflow, so the --checks probe only knew live contexts
+# plus already-reported check runs, and a job name that exists in the workflows
+# but has not reported yet (a job added in the same PR) was refused with exit 21.
+# A column-0 comment must not end the block either, hence the /^#/ rule.
 workflow_job_names() {
   local dir="${PROJECT_ROOT}/.github/workflows"
   [[ -d "${dir}" ]] || return 0
@@ -322,9 +332,10 @@ workflow_job_names() {
   (( ${#files[@]} > 0 )) || return 0
 
   awk '
-    /^[A-Za-z]/ { in_jobs = 0; next }
-    /^jobs:[[:space:]]*$/ { in_jobs = 1; next }
-    in_jobs && /^  [A-Za-z0-9_.-]+:[[:space:]]*$/ {
+    /^#/ { next }
+    /^jobs:[[:space:]]*(#.*)?$/ { in_jobs = 1; next }
+    /^[^[:space:]]/ { in_jobs = 0; next }
+    in_jobs && /^  [A-Za-z0-9_.-]+:[[:space:]]*(#.*)?$/ {
       job = $1
       sub(/:$/, "", job)
       print job
@@ -334,6 +345,7 @@ workflow_job_names() {
       label = $0
       sub(/^    name:[[:space:]]*/, "", label)
       gsub(/"/, "", label)
+      gsub(/^'\''|'\''$/, "", label)
       print label
       next
     }
@@ -495,7 +507,12 @@ validate_inputs() {
 
   local lines
   lines="$(parse_checks_csv "${CHECKS}")"
-  CHECKS="$(echo "${lines}" | paste -sd ',' -)"
+  # Dedupe, order-preserving. `--checks` is documented as a set of contexts, but
+  # the natural invocation "--checks <the live list>,<a new job name>" repeats a
+  # name whenever the new job is already required (that is exactly how E39 was
+  # validated: generate-docs-embed was already live, so the plan carried it
+  # twice and a PUT would have sent a duplicated context).
+  CHECKS="$(echo "${lines}" | awk '!seen[$0]++' | paste -sd ',' -)"
 }
 
 build_proposed_payload() {

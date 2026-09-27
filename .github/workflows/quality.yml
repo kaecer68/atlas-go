@@ -300,6 +300,16 @@ jobs:
   # Gated on `code`, so a docs-only PR skips it. The subset of docs that
   # docsgen embeds into Go (the `embedded_docs` path filter) is covered even
   # for docs-only PRs by the narrow `generate-docs-embed` job below.
+  #
+  # Step scope (E39, 2026-09-27): `go generate .` only reaches the root package
+  # (generate.go -> cmd/gentags). The other directives live in
+  # cmd/atlas-mcp/server (resources.go -> docsgen, tools.go -> descgen) and in
+  # internal/domain/types.go (gentags again), so this job alone was green on a
+  # code PR whose resources_docs.gen.go / auto-desc.gen.* were stale; only
+  # ci-cd.yml's wider `generate` job caught that. The explicit
+  # `go generate ./cmd/atlas-mcp/...` step below closes the gap here too, and it
+  # is porcelain-checked, so an untracked gen file also fails (ci-cd's
+  # `git diff --exit-code` cannot see untracked files).
   generate:
     needs: [changes]
     if: needs.changes.outputs.code == 'true'
@@ -315,11 +325,18 @@ jobs:
     - name: Run go generate
       run: go generate .
 
+    # Same command as ci-cd.yml's `generate` job and as the narrow
+    # `generate-docs-embed` job below: covers docsgen (resources_docs.gen.go)
+    # and descgen (auto-desc.gen.go / auto-desc.gen.json).
+    - name: Regenerate MCP embedded docs and tool auto-desc
+      run: go generate ./cmd/atlas-mcp/...
+
     - name: Check for uncommitted generated changes
       run: |
         if [ -n "$(git status --porcelain)" ]; then
           echo "ERROR: go generate produced uncommitted changes."
-          echo "Run 'go generate .' locally and commit the results."
+          echo "Run 'go generate . && go generate ./cmd/atlas-mcp/...' locally and commit the results."
+          git status --porcelain
           git diff --stat
           exit 1
         fi
