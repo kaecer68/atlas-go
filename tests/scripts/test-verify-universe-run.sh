@@ -12,9 +12,26 @@
 #
 # 結構：
 #   ① 每個 case = 一個 fixture 目錄（metrics.txt / rules.json / universe_snapshot.json /
-#      logs.txt / increase_ranked.json / snapshot_mtime.txt …）＋ 期望的判層向量與 exit code
+#      logs.txt / increase_ranked.json / snapshot_mtime.txt / registry_mtime.txt …）
+#      ＋ 期望的判層向量與 exit code
 #   ② 每一層的判定式各有一個 mutation：把該判定式改成恆假 ⇒ 對應 case 的判層必須改變
+#      （本輪新增的「L0 逐條比對 NEW_RULES 的載入集合」有**兩個方向**的 mutation：
+#        已載入卻被當成沒部署 ⇒ WARN；沒載入卻被當成已部署 ⇒ 假綠）
 #   ③ 唯讀斷言：跑完之後 fixture 目錄的內容（含 mtime）必須一字不差
+#   ④ note / evidence 斷言：判層向量一樣但**字指錯條**也是一種騙人（例如「部分載入」時把
+#      兩條新規則都講成沒部署）⇒ 這種錯誤只有比對 note 才看得見（check_field）
+#
+# 現有清單（22 個 fixture case）：
+#   green / transport-family-missing / transport-rules-not-loaded / transport-new-rule-present /
+#   transport-new-rule-partial / schedule-heartbeat-overdue / schedule-last-run-missed /
+#   schedule-pending / holiday-closure / scoring-ranked-zero / scoring-universe-empty /
+#   input-partial / emission-label-shape / emission-counter-silent / emission-legit-labels /
+#   artifact-stale / artifact-missing / artifact-signal-zero / artifact-registry-signal /
+#   legacy-schema / no-metrics / evidence-destroyed
+# 現有清單（10 個 mutation）：
+#   heartbeat-overdue / last-run-missing / output-family-missing / scoring-broken /
+#   input-unusable / label-shape-bad / emission-missing / artifact-stale /
+#   new-rule-deployed / new-rule-missing
 #
 # hermetic：不連網、不呼叫 docker、不碰 production、不改 repo（offline 模式 + mktemp 目錄）。
 #
@@ -88,6 +105,12 @@ write_metrics() {
       if [ -n "${W_PERSISTED:-}" ]; then
         printf 'atlas_universe_last_run_snapshot_persisted{stage="weekly"} %s\n' "$W_PERSISTED"
       fi
+      if [ -n "${D_REG_PERSISTED:-}" ]; then
+        printf 'atlas_universe_last_run_registry_persisted{stage="daily"} %s\n' "$D_REG_PERSISTED"
+      fi
+      if [ -n "${W_REG_PERSISTED:-}" ]; then
+        printf 'atlas_universe_last_run_registry_persisted{stage="weekly"} %s\n' "$W_REG_PERSISTED"
+      fi
     fi
     printf 'atlas_universe_next_run_timestamp_seconds %s\n' "${NEXT_RUN:-$E_SEP30_0600}"
     printf 'atlas_universe_symbols_gathered_total{stage="daily"} %s\n' "${D_GATHERED:-1599}"
@@ -116,7 +139,14 @@ AtlasUniverseEmptyUniverse AtlasUniverseRunOverdue AtlasUniverseCounterEmissionM
     printf '{"status":"success","data":{"groups":[{"name":"atlas_container_liveness","rules":[]}]}}\n' > "$out"
     return
   fi
+  # 本輪新增的兩條規則（= 工具裡的 NEW_RULES）：all = 兩條都載入（部署完成的世界），
+  # core_plus_snapshot = 只有第一條載入（**部分載入**的形態）。
+  # 刻意用獨立的模式名而不是改寫既有模式：core / all / none 的語意（與既有 case 的
+  # 期望向量）必須一字不動。
   if [ "${RULES_MODE:-core}" = "all" ]; then
+    names="$names AtlasUniverseSnapshotNotPersisted AtlasUniverseRegistryNotPersisted"
+  fi
+  if [ "${RULES_MODE:-core}" = "core_plus_snapshot" ]; then
     names="$names AtlasUniverseSnapshotNotPersisted"
   fi
   {
@@ -289,6 +319,44 @@ for dirpath, _, files in os.walk(root):
         rows.append("%s %d %d %s" % (os.path.relpath(path, root), st.st_size, int(st.st_mtime), digest))
 print("\n".join(sorted(rows)))
 PY
+}
+
+# 從 --json 輸出取某一層的某個欄位（note / predicate / evidence）。判層向量看不到
+# 「note 把規則指錯條」這種錯誤（判層一樣、字卻錯）⇒ 這一節補上那個盲點。
+field_of() {
+  "$PY" - "$1" "$2" "$3" <<'PY'
+import json, sys
+d = json.load(open(sys.argv[1], encoding="utf-8"))
+for layer in d["layers"]:
+    if layer["key"] == sys.argv[2]:
+        v = layer[sys.argv[3]]
+        print(v if isinstance(v, str) else "\n".join(v))
+        break
+PY
+}
+
+check_field() {
+  # $1=case $2=layer $3=欄位 $4=必須出現的子字串 $5=（可選）必須**不**出現的子字串
+  local case_name="$1" layer="$2" field="$3" want="$4" unwanted="${5:-}"
+  local json="$TMP/out-$case_name.json" got
+  if [ ! -f "$json" ]; then
+    # 全形字元緊鄰 `$var` 時，bash 會把它吃進變數名 ⇒ set -u 下這一整行直接中止
+    # （F28；`scripts/ci/check_fullwidth_var_expansion.py` 會擋）⇒ 訊息裡一律用 ${var}。
+    fail "${case_name}: 找不到 ${json}（run_case 沒有產出 --json）"
+    return
+  fi
+  got="$(field_of "$json" "$layer" "$field")"
+  if [[ "$got" != *"$want"* ]]; then
+    fail "${case_name}: ${layer}.${field} 未包含「${want}」"
+    printf '      got: %s\n' "$got"
+    return
+  fi
+  if [ -n "$unwanted" ] && [[ "$got" == *"$unwanted"* ]]; then
+    fail "${case_name}: ${layer}.${field} 竟包含「${unwanted}」（不該出現）"
+    printf '      got: %s\n' "$got"
+    return
+  fi
+  ok
 }
 
 run_case() {
@@ -507,10 +575,32 @@ case_evidence_destroyed() {
   expect_file evidence-destroyed exit=1 L0=WARN L1=UNKNOWN L2=OK L3=OK L4=OK L5=RED
 }
 
+# 21. 傳輸面：**部分載入** —— 本輪新增的兩條規則只有一條在 /api/v1/rules 的載入集合裡。
+#     這是「部署狀態由工具自己判」的關鍵證據：判層是 WARN，而且 note 只能指名**缺的那一條**
+#     （把已載入的那條也講成沒部署 = 誤導）。同時釘住 NEW_RULES 的成員：漏列
+#     AtlasUniverseRegistryNotPersisted 的話這個 case 會變成 OK（不該綠）。
+case_transport_new_rule_partial() {
+  NOW=$E_SEP29_0610 RULES_MODE=core_plus_snapshot
+  build_case transport-new-rule-partial
+  expect_file transport-new-rule-partial exit=0 L0=WARN L1=OK L2=OK L3=OK L4=OK L5=OK
+}
+
+# 22. 產物面：registry（data/state/universe.json）的 mtime 明顯比 snapshot 舊 ⇒ 那一條
+#     寫入路徑可能失敗。**判層仍然是 OK**：L5 的判定式比的是 snapshot 這一個檔（見
+#     layer_artifact 的 predicate），本 PR 只把 registry 的落地訊號逐 stage 印出來、
+#     並把 note 指向偵測它的規則（AtlasUniverseRegistryNotPersisted）。
+#     這個 case 是**敘述契約**的釘子：note 必須指向那條規則，且不得再出現
+#     「目前沒有對應告警」（偵測器落地之後那句話就是假的）。
+case_artifact_registry_signal() {
+  NOW=$E_SEP29_0610 REG_MTIME=$E_SEP24_0602 D_REG_PERSISTED=0 W_REG_PERSISTED=0
+  build_case artifact-registry-signal
+  expect_file artifact-registry-signal exit=0 L0=WARN L1=OK L2=OK L3=OK L4=OK L5=OK
+}
+
 # ══════════════════════════════════════════════════════════════════════════════
 # ② mutation 自證：把某一層的判定式改壞 ⇒ 對應 case 的判層必須改變
 # ══════════════════════════════════════════════════════════════════════════════
-# 沒有這一節，「18 個 case 全綠」只證明斷言沒有牙齒。每一個 mutation 都必須
+# 沒有這一節，「22 個 case 全綠」只證明斷言沒有牙齒。每一個 mutation 都必須
 # (a) 在原始碼裡命中**恰好一次**（否則就是改錯地方，直接 fail），且
 # (b) 讓指定的 case 在指定的層從期望值變成 mutated 值。
 mutate_predicate() {
@@ -586,14 +676,34 @@ fi
 ( case_no_metrics )
 ( case_evidence_destroyed )
 ( case_emission_legit_labels )
+( case_transport_new_rule_partial )
+( case_artifact_registry_signal )
 
 for c in green transport-family-missing transport-rules-not-loaded transport-new-rule-present \
          schedule-heartbeat-overdue schedule-last-run-missed schedule-pending holiday-closure \
          scoring-ranked-zero scoring-universe-empty input-partial emission-label-shape \
          emission-counter-silent artifact-stale artifact-missing artifact-signal-zero \
-         legacy-schema no-metrics evidence-destroyed emission-legit-labels; do
+         legacy-schema no-metrics evidence-destroyed emission-legit-labels \
+         transport-new-rule-partial artifact-registry-signal; do
   run_case "$c"
 done
+
+# 判層向量之外的斷言：**note / evidence 也是契約**（判層相同但指名錯的規則同樣是騙人）。
+# ① green：兩條新規則都還沒部署 ⇒ note 要一併指名（不是只講一條）。
+check_field green L0 note 'AtlasUniverseSnapshotNotPersisted'
+check_field green L0 note 'AtlasUniverseRegistryNotPersisted'
+# ② 規則群整族沒載入 ⇒ 該 RED 的還是 RED，且 note 講的是「規則群沒載入」而不是「新規則沒部署」。
+check_field transport-rules-not-loaded L0 note '沒有載入規則群 atlas_universe_scoring'
+# ③ 兩條新規則都載入 ⇒ note 要講「含本輪新增的 N 條也已載入」。
+check_field transport-new-rule-present L0 note '含本輪新增的 2 條也已載入'
+# ④ **部分載入**：note 只准指名缺的那一條（已載入的那條被講成沒部署就是誤導）。
+check_field transport-new-rule-partial L0 note 'AtlasUniverseRegistryNotPersisted' \
+  'AtlasUniverseSnapshotNotPersisted'
+# ⑤ registry 次要矛盾：note 指向偵測它的規則，且不得再出現「沒有對應告警」的舊敘述。
+check_field artifact-registry-signal L5 note 'AtlasUniverseRegistryNotPersisted' '目前沒有對應告警'
+# ⑥ registry 落地訊號要逐 stage 印出（值本身不改判層，但它必須看得見）。
+check_field artifact-registry-signal L5 evidence \
+  'verdict 的產物訊號 atlas_universe_last_run_registry_persisted: daily=0, weekly=0'
 
 echo "→ mutation 自證（改壞一個判定式 ⇒ 對應的 fixture 必須紅）"
 
@@ -625,9 +735,19 @@ check_mutation emission-missing emission-counter-silent L4 OK \
 check_mutation artifact-stale artifact-stale L5 OK \
   'return mtime is not None and claim is not None and mtime < claim - ARTIFACT_STALE_SECONDS' 'return False'
 
+# 本輪新增的判定式（L0 對 NEW_RULES 的逐條比對：「已載入 = 已部署」）。兩個方向各一個
+# mutation：只做一個方向的話，錯誤發生在另一邊時不會被咬住。
+# ① 把「已載入即視為已部署」改成恆假（永遠把全部新規則當缺席）⇒ 部署完成的 case 必須變 WARN。
+check_mutation new-rule-deployed transport-new-rule-present L0 WARN \
+  'missing_new = [r for r in NEW_RULES if r not in loaded]' 'missing_new = list(NEW_RULES)'
+
+# ② 把比對反過來（只把「已載入的」當缺席）⇒ 全部新規則都沒載入的 case 必須變 OK（假綠）。
+check_mutation new-rule-missing green L0 OK \
+  'missing_new = [r for r in NEW_RULES if r not in loaded]' 'missing_new = [r for r in NEW_RULES if r in loaded]'
+
 echo ""
 if [ "$FAIL" -gt 0 ]; then
   echo "❌ test-verify-universe-run: $PASS passed, $FAIL failed"
   exit 1
 fi
-echo "✅ test-verify-universe-run: $PASS passed（20 個 fixture case + 8 個 mutation）"
+echo "✅ test-verify-universe-run: $PASS passed（22 個 fixture case + 10 個 mutation + 7 個 note/evidence 斷言 + --help）"

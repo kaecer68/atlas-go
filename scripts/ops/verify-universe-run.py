@@ -5,8 +5,9 @@
 # ── 它不取代告警 ───────────────────────────────────────────────────────────────
 # 本工具**不發告警、不改任何狀態、不寫任何檔案**（除了 stdout/stderr）。它的唯一目的，
 # 是把「這次母體到底跑到哪一層、壞在哪一層」變成**可重跑、可稽核**的一件事：
-#   · 生產上的告警（monitoring/rules/atlas_universe_scoring_alerts.yml 的 10 條）是
-#     **持續性**的守門；但「今天的 06:00Z 這一輪到底跑了沒有、產物有沒有落地」這種
+#   · 生產上的告警（monitoring/rules/atlas_universe_scoring_alerts.yml，規則群 RULE_GROUP；
+#     條數 = 下方 CORE_RULES + NEW_RULES）是**持續性**的守門；但「今天的 06:00Z 這一輪
+#     到底跑了沒有、產物有沒有落地」這種
 #     **一次性驗收問題**，需要的是「現在跑一次、印出每一層的讀數與判定」，而不是等 30 分鐘
 #     pending 的規則。本工具就是那個一次性驗收的執行體。
 #   · 因此：**本工具與告警的關係是「同一組真值、兩個消費者」**，不是取代關係。
@@ -53,8 +54,11 @@
 #   (b) 心跳（next_run）在「觸發時刻之後才重啟」的情況下會被重新發佈到下一輪 ⇒
 #       AtlasUniverseRunOverdue **不會** firing。本工具會把這個形狀明確印出來
 #       （L1 的 note：`心跳不會響`），因為它是現行規則的結構性盲點，而不是「沒事」。
-#   (c) `daily_skip_non_trading` / `daily_skip_monday` 是 logging.Debug ⇒ 容器是 INFO
-#       等級時**看不見**。因此 L1 不把「日誌沒有 *_start」當成唯一證據，必須有日曆佐證。
+#   (c) `daily_skip_non_trading` / `daily_skip_monday`（internal/monitoring/universe_scheduler.go
+#       的休市判定）自本輪 PR 起是 logging.Info（改動前是 Debug ⇒ 容器是 INFO 等級時
+#       **看不見**）⇒ 休市（含週一）在日誌裡有正面的休市證據，可與交易日曆互核。
+#       但 L1 仍然**不**把「日誌沒有 *_start」當成唯一證據：日誌會被容器重啟截斷（見 (b)），
+#       所以「日誌缺席」有兩種成因（真的沒跑 / 證據被重啟吃掉），兩者只有日曆能區分。
 #   (d) L4 的 counter 增量需要 Prometheus 的 query API；讀不到時該層回 UNKNOWN。
 #   (e) 本工具讀的是**本機可見的**檔案與端點。若它跑在容器外（生產主機的 repo checkout），
 #       `--workdir` 必須指向 compose 綁定的宿主目錄（`./data:/app/data` ⇒ <repo>/data）。
@@ -128,6 +132,11 @@ M_LAST_RUN_RANKED = "atlas_universe_last_run_symbols_ranked"
 M_LAST_RUN_TRUSTWORTHY = "atlas_universe_last_run_ranked_trustworthy"
 M_LAST_RUN_OUTCOME = "atlas_universe_last_run_outcome"
 M_LAST_RUN_SNAPSHOT_PERSISTED = "atlas_universe_last_run_snapshot_persisted"
+#: registry 的落地訊號（`data/state/universe.json`，Step 7 寫的**第二個**產物），語意與
+#: M_LAST_RUN_SNAPSHOT_PERSISTED 平行：由 monitoring.BuildUniverse 寫檔後**讀回檔案**決定，
+#: 不是由寫入呼叫的意圖決定。拼法與 internal/monitoring/metrics/universe_run.go 的
+#: UniverseMetricLastRunRegistryPersisted 一致（同一組真值、兩個消費者）。
+M_LAST_RUN_REGISTRY_PERSISTED = "atlas_universe_last_run_registry_persisted"
 M_NEXT_RUN = "atlas_universe_next_run_timestamp_seconds"
 M_SNAPSHOT_PERSISTED_TOTAL = "atlas_universe_snapshot_persisted_total"
 M_RANKED_TOTAL = "atlas_universe_symbols_ranked_total"
@@ -136,9 +145,16 @@ M_QUOTES_FETCHED_TOTAL = "atlas_universe_quotes_fetched_total"
 
 STAGES = ("daily", "weekly")
 
-#: 本檔規則群的 alert 名。CORE = 現行已部署的 9 條；NEW = 2026-09-27 這一輪新增的規則。
-#: 新增規則時**必須**把它列在 NEW_RULES，並在部署完成後搬進 CORE_RULES
-#: （部署時序：本 PR 的規則與 binary 一起上，且排在 09-29 驗收之後）。
+#: 本檔規則群的 alert 名，分成兩組**用途不同**（不是「待辦清單」）：
+#:   · CORE_RULES = 現行**已部署**的 9 條。缺席即 RED —— 規則沒載入，這條判定根本不會被評估。
+#:   · NEW_RULES  = 本輪新增的規則。工具會**自己**把它拿去比對 /api/v1/rules 實際載入的集合
+#:     （`layer_transport` 的 `loaded`，逐條比對）：已載入 ⇒ 視為已部署，L0 靜默；未載入
+#:     ⇒ L0 = WARN，並在 note 指名**缺的那幾條**（部署時序刻意排在 09-29 驗收之後 ⇒ 那是
+#:     預期狀態，不是缺口）。
+#:     ⇒ 因此**不需要**人工在部署後把新規則搬進 CORE_RULES（搬了反而會讓「部署前缺席」
+#:     從預期中的 WARN 變成 RED 假警報）。但**仍然必須**把新規則列進 NEW_RULES：
+#:     本工具只能分辨它被告知的兩組，沒被列進來的新規則會被當成「不存在」——
+#:     這個缺口沒有任何自動檢查能發現（`loaded` 比對只檢查「列進來的有沒有在」）。
 RULE_GROUP = "atlas_universe_scoring"
 CORE_RULES = (
     "AtlasUniverseRankedZero",
@@ -151,7 +167,10 @@ CORE_RULES = (
     "AtlasUniverseRunOverdue",
     "AtlasUniverseCounterEmissionMissing",
 )
-NEW_RULES = ("AtlasUniverseSnapshotNotPersisted",)
+NEW_RULES = (
+    "AtlasUniverseSnapshotNotPersisted",
+    "AtlasUniverseRegistryNotPersisted",
+)
 
 #: 每一層在 Prometheus 上的對應規則（互核用；不是判定來源）。
 LAYER_RULES = {
@@ -165,7 +184,10 @@ LAYER_RULES = {
         "AtlasUniverseScreeningAllRejected",
     ),
     "L4": ("AtlasUniverseCounterEmissionMissing", "AtlasUniverseScreenedFamilyMissing"),
-    "L5": ("AtlasUniverseSnapshotNotPersisted",),
+    "L5": (
+        "AtlasUniverseSnapshotNotPersisted",
+        "AtlasUniverseRegistryNotPersisted",
+    ),
 }
 
 #: 判定值。OK/RED 是「有結論」；UNKNOWN/PENDING 是「還沒辦法有結論」（exit 2）；
@@ -744,7 +766,9 @@ def layer_transport(ev: Evidence) -> Layer:
     else:
         ev_lines.append(f"alerts 端點: {ev.alerts.source} — {ev.alerts.error}")
 
-    # 缺席的規則，分成「現行必須在」與「本輪新增（部署排在驗收之後）」。
+    # 缺席的規則，分成「現行必須在（缺席即 RED）」與「本輪新增（部署排在驗收之後）」。
+    # 兩組都用**同一份** loaded 逐條比對 ⇒ 「新規則部署了沒有」是工具自己判的，
+    # 不是靠人在部署後改常數：已載入的新規則不會再出現在 missing_new 裡（靜默）。
     missing_core, missing_new = [], []
     if loaded is not None:
         missing_core = [r for r in CORE_RULES if r not in loaded]
@@ -763,17 +787,22 @@ def layer_transport(ev: Evidence) -> Layer:
         verdict, note = V_UNKNOWN, "metrics 端點讀不到 ⇒ 無法確認輸出族（規則面已確認）"
     elif missing_new:
         verdict, note = V_WARN, (
-            f"本輪新增的規則尚未部署: {', '.join(missing_new)}"
+            f"本輪新增的規則尚未部署（逐條比對 /api/v1/rules 的載入集合，只列缺席的）: "
+            f"{', '.join(missing_new)}"
             "（部署時序刻意排在 09-29 驗收之後 ⇒ 這是預期狀態，不是缺口）"
         )
     else:
-        verdict, note = V_OK, f"metrics 活著、輸出族存在、{RULE_GROUP} 的 {len(CORE_RULES)} 條規則全部載入"
+        verdict, note = V_OK, (
+            f"metrics 活著、輸出族存在、{RULE_GROUP} 的 {len(CORE_RULES)} 條現行規則全部載入"
+            f"（含本輪新增的 {len(NEW_RULES)} 條也已載入 ⇒ 部署已完成）"
+        )
     return Layer(
         key="L0",
         name="傳輸面 transport",
         verdict=verdict,
-        predicate=("metrics 可讀 AND last_run_* 族存在 AND /api/v1/rules 含規則群 "
-                   f"{RULE_GROUP}（現行 {len(CORE_RULES)} 條）"),
+        predicate=(f"metrics 可讀 AND last_run_* 族存在 AND /api/v1/rules 含規則群 {RULE_GROUP}"
+                   f"（現行 {len(CORE_RULES)} 條缺席即 RED；本輪新增 {len(NEW_RULES)} 條"
+                   "逐條比對實際載入集合：已載入即視為已部署／靜默，未載入才 WARN）"),
         reads=reads,
         evidence=ev_lines,
         note=note,
@@ -1130,9 +1159,10 @@ def layer_emission(ev: Evidence) -> Layer:
 
 def layer_artifact(ev: Evidence) -> Layer:
     """產物本身是不是這一輪的？（跑了、有產出、但沒落地 = 產物面）"""
-    reads = [ev.snapshot_path, M_LAST_RUN_FINISHED + "{stage}",
+    reads = [ev.snapshot_path, ev.registry_path, M_LAST_RUN_FINISHED + "{stage}",
              "容器日誌: " + "/".join(LOG_EVENT_START + LOG_EVENT_OK),
-             M_LAST_RUN_SNAPSHOT_PERSISTED + "{stage}"]
+             M_LAST_RUN_SNAPSHOT_PERSISTED + "{stage}",
+             M_LAST_RUN_REGISTRY_PERSISTED + "{stage}"]
     ev_lines = []
     mt = ev.metrics_text
     if ev.snapshot is None:
@@ -1174,6 +1204,16 @@ def layer_artifact(ev: Evidence) -> Layer:
     else:
         ev_lines.append(f"verdict 的產物訊號 {M_LAST_RUN_SNAPSHOT_PERSISTED}: 不存在"
                         "（部署排在 09-29 驗收之後 ⇒ 預期如此；本層改用檔案 mtime 判定）")
+    # 第二個產物（registry）的落地訊號：逐 stage 印出來，形狀與上面那條**對稱**
+    # （同一個 BuildUniverse 寫完檔後讀回檔案決定）。本層**沒有**拿它做判定 —— 它只是
+    # 「registry 有沒有落地」這件事在 /metrics 上的讀數，判定者是規則 AtlasUniverseRegistryNotPersisted。
+    registry_persisted = mt.by_stage(M_LAST_RUN_REGISTRY_PERSISTED) if mt else {}
+    if registry_persisted:
+        ev_lines.append(f"verdict 的產物訊號 {M_LAST_RUN_REGISTRY_PERSISTED}: "
+                        + ", ".join(f"{s}={v:g}" for s, v in registry_persisted.items()))
+    else:
+        ev_lines.append(f"verdict 的產物訊號 {M_LAST_RUN_REGISTRY_PERSISTED}: 序列不存在"
+                        "（尚未部署 ⇒ 預期如此；本層只印讀數、不做判定）")
 
     stale_claim = p_artifact_stale(ev.snapshot_mtime, claim)
     stale_expected = (
@@ -1198,8 +1238,13 @@ def layer_artifact(ev: Evidence) -> Layer:
         verdict, note = V_OK, ("產物是最近一輪的" if claim or t_exp else "沒有『應該更新』的宣稱 ⇒ 無矛盾")
     if ev.registry_mtime is not None and ev.snapshot_mtime is not None:
         if ev.registry_mtime < ev.snapshot_mtime - ARTIFACT_STALE_SECONDS:
-            note += (f"。⚠️ 次要矛盾：universe.json 的 mtime（{fmt_ts(ev.registry_mtime)}）"
-                     "比 snapshot 舊 ⇒ registry 那一條寫入路徑可能失敗（**目前沒有對應告警**，已登記）")
+            note += (f"。⚠️ 次要矛盾：registry（{REGISTRY_REL}）的 mtime"
+                     f"（{fmt_ts(ev.registry_mtime)}）比 snapshot 舊 ⇒ registry 那一條寫入路徑"
+                     "可能失敗。偵測器 = 規則 AtlasUniverseRegistryNotPersisted（讀的落地訊號是 "
+                     f"{M_LAST_RUN_REGISTRY_PERSISTED}，看的是 {REGISTRY_REL}；"
+                     "與第 10 條 AtlasUniverseSnapshotNotPersisted 互斥 —— snapshot 有落地而 "
+                     "registry 沒落地才會 firing）。本層**不**據此改判層：本 PR 只把讀數印出來"
+                     "（見上方逐 stage 的 registry 訊號）")
     return Layer(
         key="L5",
         name="產物面 artifact",

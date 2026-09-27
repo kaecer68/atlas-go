@@ -316,23 +316,42 @@ func NewDailyUniverseRefreshTask(deps UniverseBuilderDeps) func(ctx context.Cont
 		// depend on the host/container TZ either. Production runs with TZ unset,
 		// where UTC and Asia/Taipei agree on the weekday for this instant.
 		local := now.In(universeLocation())
+		// Gate ORDER is a volume decision, not a behavior decision: the pipeline
+		// runs only when every gate passes, so the outcome is identical either way.
+		// What changes is how often a gate can SPEAK. This closure is registered
+		// with Interval: 1m, so a gate that logs before the alignment check logs on
+		// every tick — 1440 lines per non-trading day, and 1440 every Monday for
+		// the weekday gate. Keeping the observable decisions inside the ±1 minute
+		// alignment window bounds them to the ticks in that window (2-3 per
+		// calendar day). NewWeeklyUniverseRebuildTask already ordered its gates
+		// this way for exactly this reason; the daily closure had the opposite
+		// order, which was invisible only because both of its skip logs were at
+		// Debug (see below). The volume claim is pinned by
+		// TestDailySkip_InfoLevelAndDailyVolume, not by this comment.
+		if !alignToTarget(now) {
+			return nil // silent skip — not the trigger minute
+		}
 		// Single-source judgement: marketdata.IsTaiwanTradingDay delegates to
 		// internal/taiwanholidays, so a weekday that is a public holiday (2026-09-28
 		// 教師節, 2026-10-09 國慶補假, ...) is not a trading day here.
+		//
+		// Both skips below used to be logged at Debug while production runs at
+		// ATLAS_LOG_LEVEL=info, so "the market was closed" / "it is Monday" — the
+		// evidence for "the pipeline did not run today, and that is correct" —
+		// left no readable trace at all. That is the same class of defect as the
+		// counters: the decisive fact existed and no consumer could read it. They
+		// are Info now, at the volume argued above.
 		if !marketdata.IsTaiwanTradingDay(local) {
-			logging.Debug("universe_scheduler", "daily_skip_non_trading",
+			logging.Info("universe_scheduler", "daily_skip_non_trading",
 				"date", local.Format("2006-01-02"),
 				"weekday", local.Weekday().String(),
 				"criterion", "marketdata.IsTaiwanTradingDay")
 			return nil
 		}
 		if local.Weekday() == time.Monday {
-			logging.Debug("universe_scheduler", "daily_skip_monday",
+			logging.Info("universe_scheduler", "daily_skip_monday",
 				"note", "weekly rebuild handles Monday")
 			return nil
-		}
-		if !alignToTarget(now) {
-			return nil // silent skip — not the trigger minute
 		}
 
 		logging.Info("universe_scheduler", "daily_refresh_start")
@@ -773,11 +792,18 @@ func BuildUniverse(ctx context.Context, deps UniverseBuilderDeps, fullRebuild bo
 	// snapshot, so it cannot contain a statement about the write that produces it.
 	// The defer below is the only reader, so no exit path can publish the verdict
 	// of a different run.
-	var snapshotPersisted bool
+	//
+	// registryPersisted is the same measurement for the SECOND artifact Step 7
+	// writes (data/state/universe.json). It is a separate local for the same
+	// reason and one more: the two artifacts fail independently (different
+	// writers, different consumers), and a single collapsed signal could not tell
+	// the operator which file to stat.
+	var snapshotPersisted, registryPersisted bool
 	if um != nil {
 		defer func() {
 			verdict := UniverseRunVerdictFor(result, stage, time.Now())
 			verdict.SnapshotPersisted = snapshotPersisted
+			verdict.RegistryPersisted = registryPersisted
 			um.ReportRun(verdict)
 			ReportUniverseHeartbeat(um, time.Now())
 		}()
@@ -1059,13 +1085,34 @@ func BuildUniverse(ctx context.Context, deps UniverseBuilderDeps, fullRebuild bo
 	}
 
 	// Also persist as agents.json-compatible universe registry.
-	registryPath := filepath.Join(deps.WorkDir, "data", "state", "universe.json")
+	//
+	// The registry is the second artifact of this step and it has its own
+	// consumers (the agents.json-compatible view). Until 2026-09-27 a failed
+	// write here produced exactly one warning line and nothing else, so the
+	// observable symptom was "registry stale, snapshot fresh": two consumers of
+	// the same run reading two different universes, with no rule able to see it.
+	// registryPersisted below is that missing signal (it feeds
+	// atlas_universe_last_run_registry_persisted and the
+	// AtlasUniverseRegistryNotPersisted rule).
+	registryPath := UniverseRegistryPath(deps.WorkDir)
 	version := 1
 	if prev, err := LoadUniverseRegistry(registryPath); err == nil {
 		version = prev.Version + 1
 	}
-	if err := WriteUniverseRegistry(registryPath, result, ranked, version); err != nil {
-		logging.Warn("universe_scheduler", "universe_registry_write_error", logging.Err(err))
+	registryErr := WriteUniverseRegistry(registryPath, result, ranked, version)
+	if registryErr != nil {
+		logging.Warn("universe_scheduler", "universe_registry_write_error", logging.Err(registryErr))
+	}
+	// Same read-back discipline as the snapshot: the question is "is the file at
+	// the canonical path this run's?", not "did the write call return nil". The
+	// mtime comparison is what makes a wrong WorkDir, a missing mount or a
+	// silently older file visible.
+	registryPersisted = RegistryPersistedOnDisk(deps.WorkDir, result.Timestamp)
+	if !registryPersisted {
+		logging.Warn("universe_scheduler", "universe_registry_not_persisted",
+			"path", registryPath,
+			"run_started", result.Timestamp.UTC().Format(time.RFC3339),
+			"write_error", registryErr != nil)
 	}
 
 	if snapshotCounter != nil {
@@ -1135,6 +1182,20 @@ func UniverseSnapshotPath(workDir string) string {
 	return filepath.Join(workDir, "data", "state", "universe_snapshot.json")
 }
 
+// UniverseRegistryPath returns the canonical location of the
+// agents.json-compatible universe registry (data/state/universe.json) for a
+// working directory.
+//
+// It exists for the same reason as UniverseSnapshotPath: the writer
+// (BuildUniverse Step 7) and the read-back measurement that judges it
+// (RegistryPersistedOnDisk) must resolve the same path, and a caller that
+// spelled it by hand could drift from the gauge that reports on it. The CLI and
+// the D6 watchlist resolve the snapshot through its helper; the registry had no
+// such single source until 2026-09-27.
+func UniverseRegistryPath(workDir string) string {
+	return filepath.Join(workDir, "data", "state", "universe.json")
+}
+
 // UniverseSnapshot is the canonical on-disk shape of the universe snapshot.
 //
 // There is exactly ONE schema. Both the scheduled pipeline (BuildUniverse) and
@@ -1161,6 +1222,32 @@ type UniverseSnapshot struct {
 // It is exported so non-scheduler callers (the -build-universe CLI) emit the
 // same schema instead of inventing their own.
 func SaveUniverseSnapshot(workDir string, result *UniverseBuildResult, ranked []RankedSymbol) error {
+	// The artifact carries BOTH the ranked list and its own count, and until
+	// 2026-09-27 nothing in the repo compared them: the verifier printed the two
+	// readings side by side without judging, and no rule or test asserted they
+	// agreed. A disagreement is not a cosmetic defect — a reader that counts
+	// entries (rankedSymbolsToAgentSpecs, the D6 watchlist reader, a human) and a
+	// reader that trusts symbols_ranked (the coverage check, -build-universe
+	// status, the verifier's L3) would then be looking at two different markets,
+	// and neither reading would be wrong.
+	//
+	// The guard below is deliberately NON-FATAL and observable:
+	//   - non-fatal, because the snapshot file is the only thing downstream
+	//     readers have; refusing to write would turn a bookkeeping contradiction
+	//     into an outage (every consumer would fall back to an older file, or to
+	//     nothing at all);
+	//   - observable, because a silent contradiction is the failure mode this
+	//     whole audit was about, so it must leave a line an operator can grep:
+	//     universe_ranked_count_mismatch.
+	// See RankedCountConflict for why the invariant holds today and why the
+	// assertion is kept anyway.
+	if declared, persisted, conflict := RankedCountConflict(result, ranked); conflict {
+		logging.Warn("universe_scheduler", "universe_ranked_count_mismatch",
+			"declared_symbols_ranked", declared,
+			"persisted_ranked_entries", persisted,
+			"path", UniverseSnapshotPath(workDir))
+	}
+
 	outDir := filepath.Dir(UniverseSnapshotPath(workDir))
 	if err := os.MkdirAll(outDir, 0o750); err != nil {
 		return fmt.Errorf("create snapshot directory %q: %w", outDir, err)
@@ -1180,6 +1267,35 @@ func SaveUniverseSnapshot(workDir string, result *UniverseBuildResult, ranked []
 		return fmt.Errorf("rename universe snapshot %q: %w", tmpPath, err)
 	}
 	return nil
+}
+
+// RankedCountConflict reports whether a run's declared ranked count
+// (result.SymbolsRanked) disagrees with the length of the ranked list that is
+// about to be persisted with it.
+//
+// Why it is a function instead of two lines inside the writer: the judgement has
+// to be testable in isolation. The writer is the only place that sees both
+// readings at the moment they become one artifact, so the assertion lives there,
+// but a test that could only reach it through a full pipeline run could not
+// drive the contradictory case at all (nothing in the pipeline produces one).
+//
+// Why the contradictory case cannot happen today (measured, not assumed):
+// BuildUniverse assigns result.SymbolsRanked = len(ranked) in Step 4, and no
+// later step filters the slice — Step 5 (RiskExclusionFilter) only counts
+// exclusions into result.SymbolsExcluded. So the invariant holds by
+// construction, and this function is a TRIPWIRE: it is the assertion that fails
+// loudly if a future caller (the writer is exported, and the snapshot schema is
+// the contract its readers rely on) hands over a pair that disagrees.
+//
+// A nil result declares a count of zero, which conflicts with any non-empty
+// list: "a ranked list with no run result attached" is exactly the pair whose
+// count cannot be trusted.
+func RankedCountConflict(result *UniverseBuildResult, ranked []RankedSymbol) (declared, persisted int, conflict bool) {
+	persisted = len(ranked)
+	if result != nil {
+		declared = result.SymbolsRanked
+	}
+	return declared, persisted, declared != persisted
 }
 
 // LoadUniverseSnapshot reads the canonical snapshot written by
@@ -1224,7 +1340,31 @@ const snapshotMtimeTolerance = 2 * time.Second
 // A missing file is false, never an error: "there is no artifact" is exactly
 // the state the alert must see.
 func SnapshotPersistedOnDisk(workDir string, runStart time.Time) bool {
-	info, err := os.Stat(UniverseSnapshotPath(workDir))
+	return artifactPersistedOnDisk(UniverseSnapshotPath(workDir), runStart)
+}
+
+// RegistryPersistedOnDisk reports whether the agents.json-compatible registry at
+// UniverseRegistryPath(workDir) carries a write that is at least as recent as the
+// run that started at runStart.
+//
+// It is the measurement behind atlas_universe_last_run_registry_persisted, and it
+// shares artifactPersistedOnDisk with the snapshot gauge on purpose: the two
+// artifacts are judged by the same rule ("the file at the canonical path is at
+// least as new as this run"), so a difference between the gauges can only come
+// from the filesystem or from the writer — never from two divergent notions of
+// freshness. What differs between them is which file they name, and that is the
+// whole point of having two series (see the constant's comment in
+// internal/monitoring/metrics/universe_run.go).
+//
+// A missing file is false, never an error: "there is no registry" is a state the
+// alert has to see.
+func RegistryPersistedOnDisk(workDir string, runStart time.Time) bool {
+	return artifactPersistedOnDisk(UniverseRegistryPath(workDir), runStart)
+}
+
+// artifactPersistedOnDisk is the shared mtime judgement of both artifact gauges.
+func artifactPersistedOnDisk(path string, runStart time.Time) bool {
+	info, err := os.Stat(path)
 	if err != nil {
 		return false
 	}

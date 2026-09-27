@@ -2224,20 +2224,35 @@ func run(args []string, deps appDeps) error {
 					if snap, sErr := monitoring.LoadUniverseSnapshot(cfg.WorkDir); sErr == nil && snap.Result != nil {
 						snapshotSymbols = snap.Result.SymbolsBuilt
 					}
+					// The artifact's mtime is a second, independent reading. The
+					// coverage percentage above describes whatever the file
+					// contains, so it cannot see a stale file: before 2026-09-27
+					// a 39.7h-old snapshot with 99.9% coverage produced no alert
+					// at all. The age judgement compares the artifact against the
+					// last run the Taiwan trading calendar says should have
+					// written it (monitoring.PreviousUniverseRun), never against
+					// a fixed window — a fixed window fires on every holiday
+					// closure.
+					snapshotMTime := time.Time{}
+					if info, statErr := os.Stat(monitoring.UniverseSnapshotPath(cfg.WorkDir)); statErr == nil {
+						snapshotMTime = info.ModTime()
+					}
 					if totalSymbols > 0 {
-						coveragePct := float64(snapshotSymbols) / float64(totalSymbols) * 100
-						if snapshotSymbols > 0 && coveragePct < 90 {
-							monitor.Alert(monitoring.AlertLevelWarning, "universe_coverage",
-								fmt.Sprintf("Universe coverage %.1f%% (%d/%d symbols) — snapshot may be stale",
-									coveragePct, snapshotSymbols, totalSymbols),
-								map[string]any{
-									"snapshot_symbols": snapshotSymbols,
-									"total_symbols":    totalSymbols,
-									"coverage_pct":     coveragePct,
-								})
-						}
 						um.CoverageMapped.WithLabelValues(metrics.UniverseStageCoverageCheck, "all").Add(int64(snapshotSymbols))
 						um.CoverageTotal.WithLabelValues(metrics.UniverseStageCoverageCheck, "all").Add(int64(totalSymbols))
+					}
+					// One alert category for both findings on purpose: downstream
+					// filters key on "universe_coverage", and the finding's kind
+					// travels in the metadata (CoverageFinding.Kind) so the two
+					// conditions remain distinguishable.
+					for _, finding := range monitoring.AssessUniverseCoverage(monitoring.CoverageInput{
+						SnapshotSymbols: snapshotSymbols,
+						TotalSymbols:    totalSymbols,
+						SnapshotMTime:   snapshotMTime,
+						Now:             now,
+						LastExpectedRun: monitoring.PreviousUniverseRun(now),
+					}) {
+						monitor.Alert(monitoring.AlertLevelWarning, "universe_coverage", finding.Message, finding.Details)
 					}
 					// Check D6 watchlist size.
 					watchlistPath := filepath.Join(cfg.WorkDir, "data", "state", "universe_watchlist.json")
