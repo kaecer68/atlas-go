@@ -1558,6 +1558,143 @@
 - **驗收條件**：故意把一條 `runbook_url` 改成 `.../blob/main/docs/operations/`（目錄）⇒ 檢查 **exit 1**;
   12 處 `wiki.internal` 的既定狀態下 ⇒ **只 warn、不 FAIL**（且有自我測試,不可退化成永遠 PASS）。
 
+### FU-20260927-06 — `AtlasReplayJsonlBehindCsv` 的門檻以**日曆天**計，但修後的真實落後是**1 個交易日** ⇒ 常態下每週約 96% 相位會 firing
+
+- **狀態**：`open`
+- **記錄日期**：2026-09-27
+- **來源**：PR #2079（`fix/20260927-decouple-csv-to-jsonl-conversion`，**未併**）Verification §(c) 的**否證結果**（該 PR 自己寫「✗ 否證：每週仍會 firing 一次」）；本票只把它從 PR body 撈進登記表，**未在本 PR 修**（`monitoring/` 是凍結區）。
+- **事實（位置由我複核；模擬數值引用來源 lane，我未重跑）**：
+  - 門檻是**日曆天**且**嚴格小於**：`monitoring/rules/atlas_replay_alerts.yml:144` 的
+    `atlas_replay_jsonl_latest_date_timestamp_seconds < atlas_replay_csv_latest_date_timestamp_seconds - 2 * 86400`
+    ⇒ **只有日曆落差 ≥3 天才 firing**；`for: 1h`（同檔 `:148`）。
+  - 兩側 gauge 的值都是**資料日 UTC 00:00**（`cmd/atlas/replay_freshness_metrics_task.go:152-155` 的註解明寫「正規化為該日 UTC 00:00」）⇒ 差額必為 86400 的整數倍。
+  - 規則自己的註解把門檻依據寫成**週期**：同檔 `:137-138`「門檻 2d 依據:轉檔週期 = auto_backfill 的 24h ⇒ 單一輪沒跑不 page…連續兩輪沒跑才 page」。
+  - 修後的真實落後＝**1 個交易日、最多到下一次 tick**：`auto_backfill` 是 `Interval: 24 * time.Hour`（`cmd/atlas/operations_tasks.go:106`），
+    而 **jitter 對排程相位沒有作用** —— `runTask` 每個 task 只被 spawn 一次（`internal/apigateway/background.go:264`；另一條路徑 `:341`），
+    jitter 區塊的守衛是 `!task.LastRun().IsZero()`（同檔 `:443`），而第一次執行前 `LastRun` 必為零 ⇒ **相位＝process 啟動時間**，不隨輪次漂移。
+  - **來源 lane 的模擬（我未重跑，引用其數值）**：以**真 `runAutoBackfill`** 驅動 48 相位 × 3 模式（144 次、0 輪失敗）：
+    一般週的缺口後首個交易日（週一）`csv − jsonl = 3 天` ⇒ 台北 `φ ∈ [00:30, 23:30]` 時 **firing（47/48 ≈ 96%）**，
+    只有 `φ ∈ (23:30, 00:30)`（落後窗 <1h、`for: 1h` 不成立）沉默；
+    長假變體（`2026-09-29` 週：中秋 09-25 + 週末 + 09-28 休市）`csv − jsonl = 5 天` ⇒ **該週就會 firing**；
+    週二~週五 CSV 前進永遠只差 1 天 ⇒ 沉默。
+- **為什麼是缺陷（語意不符，不是門檻太鬆）**：規則要表達的是「**連續兩輪轉檔沒跑**」，量到的卻是**日曆落差**；
+  週末被算成真實落後 ⇒「只漏了 1 輪、且下一輪就自我修復」這種**正常**形狀會在每週固定響一次 warning
+  ⇒ 與本 repo 反覆處理的警報疲乏同族（**門檻的單位必須與它宣稱的語意一致**）。
+- **最小修法建議（只建議，未實作；採來源 lane 的選項 ①）**：
+  1. **語意最正確**：export 一個「**落後 session 數**」的 gauge（以交易日曆算 CSV 資料日與 JSONL 資料日的**交易日差**），
+     規則改比 session 數（例如 `> 1` ⇒ 真的漏了不只一輪）。
+     ⚠️ 這會**新增指標面**（`cmd/atlas/replay_freshness_metrics_task.go`）**並且**改規則 ⇒ 兩者都在凍結區，需 owner 排程。
+  2. 次之：`for: 1h → 26h`（量不變，只把窗口拉過一個轉檔週期）—— 便宜，但仍在「日曆天」的語意內繞。
+  3. **不足**：只把門檻由 `- 2 * 86400` 放寬到 `- 3 * 86400` ⇒ 一般週不響，**但長假變體（4~5 天）照樣響**。
+- **驗收條件**：一般週（週一落後 3 天、下一輪追上）⇒ 規則**全程沉默**；真的漏 ≥2 輪 ⇒ **必須 firing**；
+  長假變體 ⇒ 沉默；且有 `promtool test rules` 的正向案例與負向對照（不可退化成永遠 PASS）。
+
+---
+
+### FU-20260927-07 — CSV→JSONL 轉檔**非原子**：`os.Create` 先 truncate 再逐行寫 ⇒ 讀端可能讀到 0-byte 檔
+
+- **狀態**：`open`
+- **記錄日期**：2026-09-27
+- **來源**：PR #2079 的未驗項 ②（該 PR 讓轉檔在**沒有缺口的日子也會評估／執行** ⇒ 這條既有缺陷的**曝露面變大**）。
+- **事實（位置由我複核）**：`internal/importer/twmarket.go:11-34` 的 `ImportTWOpenDataCSVToJSONL`：
+  - `:21` `f, err := os.Create(targetPath)` —— **當場 truncate 目標檔**（舊內容先消失）；
+  - `:27-32` 逐列 `enc.Encode(bar)`（每個資料日 × 每檔一列）⇒ 整段寫入期間檔案都處於**不完整**狀態；
+  - **沒有** temp+rename、**沒有** 檔案鎖。
+- **讀端（位置由我複核）**：JSONL 是 FactorEngine 的正式輸入，於 composition 階段讀入：
+  `internal/orchestrator/composition.go:113` 的 `hp.LoadFromExtendedJSONL(jsonlPath)` → `internal/portfolio/historical_prices.go:57-87` 逐行 `bufio.Scanner`。
+- **來源 lane 的實測（我未重跑）**：30 天 × 300 檔（1,359,000 bytes）的寫入迴圈取樣 ⇒ **1/2012 次觀測為 0 bytes**。
+- **代價**：與讀端存在**短窗**（轉檔寫入期間的交會）；舊碼同形，但修後**執行次數變多** ⇒ 風險上升。
+- **最小修法建議（只建議，未實作）**：寫入**同目錄的暫存檔**後 `os.Rename`（同檔系統的 rename 為原子）⇒ 讀端只會看到「完整舊檔」或「完整新檔」。
+  ⚠️ **權限語意會變（本機實測）**：`os.Create` ⇒ `0644`（＝`0666 & ~umask 0022`），`os.CreateTemp` ⇒ `0600`
+  ⇒ 換法時必須顯式 `Chmod` 回原權限，否則會**默默收緊**檔案權限。
+- **驗收條件**：寫入進行中（或注入延遲）時由讀端開檔 ⇒ 只會拿到合法 JSONL 或舊檔，**不得**出現 0-byte／截斷；
+  轉檔失敗（例如目標路徑是目錄）⇒ **不得**留下半成品檔（有負向對照）。
+
+---
+
+### FU-20260927-08 — 轉檔閘門**單向**：只比「CSV 較新」⇒ JSONL 領先時永不修，而日誌會把它說成「已同步」
+
+- **狀態**：`open`
+- **記錄日期**：2026-09-27
+- **來源**：PR #2079 的未驗項 ③。
+- **事實（位置由我複核，來自該 PR 的新增碼）**：PR #2079 的 `cmd/atlas/operations_tasks.go` 新增 `replayFreshness.conversionNeeded()`：
+  - `csvErr != nil` ⇒ `false`（沒有來源可轉）；
+  - `jsonlErr != nil` ⇒ `true`（**缺檔或不可讀 ⇒ 重建**，這是自我修復路徑）；
+  - 其餘 ⇒ `return f.csvLatest.After(f.jsonlLatest)` —— **只有嚴格「CSV 較新」才轉**。
+- **為什麼是缺陷**：JSONL 若因**外部寫入者**（人工修復、其他工具、`cmd/import-replay`）而**領先或等於** CSV，
+  閘門恆為 false ⇒ 該檔**永遠不會被帶回與 CSV 一致**；而該狀態的日誌只會寫
+  `conversion: skipped (already up to date)` ⇒ **把「不一致」講成「已同步」**（與本 repo 反覆在獵的「宣告與事實不符」同族）。
+- **最小修法建議（只建議，未實作）**：把閘門由「落後」改為**不等**（`!csvLatest.Equal(jsonlLatest)` ⇒ 轉），
+  並讓「不一致但刻意不動」成為**具名**的第三態日誌。
+  ⚠️ 要先決定**語意**：JSONL 領先時轉檔會**覆蓋外部寫入者的資料** ⇒ 這不是實作細節，是 owner 決策（不宜由實作者順手改）。
+- **驗收條件**：JSONL 尾行日期 > CSV 的 fixture ⇒ 下一輪轉檔後兩檔一致；且日誌**不再**把該狀態寫成 `already up to date`。
+
+---
+
+### FU-20260927-09 — **時區錯位**（pre-existing）：`getLatestReplayDate` 回 **UTC 00:00**、`end` 是 **Asia/Taipei 午夜** ⇒ 差的 8h 讓「還有一天缺口」被當成 `gap: none`
+
+- **狀態**：`open`
+- **記錄日期**：2026-09-27
+- **來源**：PR #2079 的未驗項 ④（**pre-existing**，非該 PR 引入；`origin/main` 同形）。
+- **事實（位置由我複核；行號＝`origin/main` `b15105cd`）**：
+  - `cmd/atlas/operations_tasks.go:113` 取 `getLatestReplayDate(...)`；該 helper（`cmd/atlas/bootstrap_helpers.go:89-113`）以
+    `time.Parse("2006-01-02", …)` 解析 ⇒ 得到的是 **UTC 00:00**（CSV 的日期欄只有日期，沒有時區）。
+  - 同檔 `:121` 的 `end` 是 `time.Date(now.Year(), …, 0, 0, 0, 0, now.Location())`，而 `now` 已轉 **Asia/Taipei**（`:118-120`）
+    ⇒ `end` 是**台北午夜**。兩者基準相差 **8 小時**。
+  - PR #2079 保留這個形狀，只把「無缺口」路徑**補上日誌**：`backfill gap: none (csv_latest=… target=…)`。
+- **機制（我用這 12 行的等價重寫做的最小驗算，台北時間；`start = csv_latest + 1 天（跳週末）`）**：
+  - 例（週三 16:00 台北，`csv_latest` = 週二）：`start = 週三 00:00Z`、`end = 週二 16:00Z`（＝台北週三 00:00）
+    ⇒ `start.After(end)` 為**真** ⇒ 走 `gap: none` —— 但 16:00 已過 15:30 收盤基準，正確答案是**有**週三這天缺口。
+  - **對照**（`csv_latest` = 前一交易日，即落後 ≥2 天）⇒ `start < end` ⇒ **照常偵測到缺口**
+    ⇒ 這不是「全盤失效」，是**邊界上少偵測 8 小時**（實際形狀＝該一天的缺口**晚一輪**才回補）。
+  - ⇒ 最直接的症狀是**日誌自相矛盾**：`gap: none` 那行會同時印出 `csv_latest=2026-03-24` 與 `target=2026-03-25`
+    （兩個日期不同卻宣稱「沒有缺口」）⇒ **值班會被這行誤導**。
+- **閘門本身不受影響**：JSONL 閘門兩側都走 `internal/replay.GetLatestDate`（**兩檔皆 UTC 解析**，見 `cmd/atlas/replay_freshness_metrics_task.go:152-167`）
+  ⇒ 本條只影響 **gap 視窗與它的日誌**，不影響轉檔判定（這也是它被判為「日誌缺陷」而非「資料缺陷」的原因）。
+- **最小修法建議（只建議，未實作）**：`latestDate` 與 `end` 一律在**同一基準**比較（建議都取「(亞洲/台北) 的日期」再比，
+  或全部 `time.Date(..., time.UTC)`）；並在日誌同時印出 `timezone` 與 `now`，讓相位可稽核。
+- **驗收條件**：「CSV 落後 1 個交易日」的 fixture ⇒ `gap: none` **不再**出現（日誌與實際缺口一致）；
+  台北 `00:00~08:00` 與 `15:30` 前後的邊界各有一個測試（雙向）。
+
+---
+
+### FU-20260927-10 — `AtlasReplayJsonlBehindCsv` 的**排除步驟已過期**：規則 description 仍以「無缺口的日子結構上不會轉檔」解釋（修好後失效）
+
+- **狀態**：`open`
+- **記錄日期**：2026-09-27
+- **來源**：PR #2079 的未驗項 ⑤（`monitoring/` 是**凍結區** ⇒ 該 PR 刻意不動，**本次只登記**）。
+- **事實（位置由我複核）**：`monitoring/rules/atlas_replay_alerts.yml:165-167` 的立即檢查第 2 點寫：
+  「轉檔是否被執行過（**#2057 之前的已知缺陷**:auto_backfill 在『CSV 最大日+1 > 今天』時**提前 return**，
+  而轉檔在 return 之後，所以**沒有缺口的日子結構上不會轉檔**）」。
+- **為什麼會過期**：那段描述的正是 PR #2079 修的**根因**（轉檔被放在「有缺口」分支內，`:132-133` 的提前 `return` 讓 `:167` 不可達）。
+  **#2079 併入後**該結構性缺陷不再存在 ⇒ 值班會照著 description 去找一個**已經不存在的缺陷**，
+  而正確的判讀前提（「每個 tick 都會評估轉檔」）沒有寫在任何地方 ⇒ 屬「宣告與事實不符」。
+- **最小修法建議（只建議，未實作；需在 #2079 併入後另開一個 `monitoring/` PR）**：
+  1. 把該段改成**現行**語意：「轉檔**每個 tick 都會評估**；判讀時看 `backfill CSV→JSONL conversion` 的三態
+     （`needed` / `skipped (already up to date)` / `failed (non-fatal)`）」，並保留一句**歷史註記**
+     （「#2079 之前：轉檔只在有缺口的分支內」）—— 決策痕跡要留，但必須標明那是**修前**形狀。
+  2. 一併複核同檔其他規則的 description 是否也引用了修前形狀（本票只涵蓋這一處）。
+- **驗收條件**：`grep -n '沒有缺口的日子結構上不會轉檔' monitoring/rules/atlas_replay_alerts.yml` ⇒ 命中只出現在**明確標為修前**的歷史註記內；
+  `promtool check rules monitoring/rules/*.yml` 與 `promtool test rules monitoring/tests/*.yml` 皆 RC=0（本次是純文案，**不得**動 expr）。
+
+---
+
+### FU-20260927-11 — `replay_freshness_metrics_task.go` 的註解把**寫入端**描述成自己做 `strings.TrimSuffix(...)`（#2079 之後寫入端改呼叫 `replayJSONLPath`）
+
+- **狀態**：`open`
+- **記錄日期**：2026-09-27
+- **來源**：PR #2079 的未驗項 ⑥。
+- **事實（位置由我複核）**：
+  - 註解：`cmd/atlas/replay_freshness_metrics_task.go:141-145` 寫「（寫入端把 CSV 轉成 `strings.TrimSuffix(path, ".csv") + ".jsonl"`）——刻意共用同一條推導」。
+  - 修前（`origin/main`）：寫入端 `cmd/atlas/operations_tasks.go:162` **自己**做 `strings.TrimSuffix(d.cfg.ReplayDataPath, ".csv") + ".jsonl"` ⇒ 註解當時**是對的**。
+  - 修後（PR #2079）：寫入端改為 `absJSONL := replayJSONLPath(absCSV)` ⇒ **真的共用同一個函式**（PR body 亦明寫「check 端＝write 端同函式」）。
+- **為什麼要改**：那段註解的用意是「兩端不得漂移」；修好之後，它反而成為**唯一還在說兩端各做一次推導**的地方
+  ⇒ 讀者會以為要繼續防漂移，而事實上是**同一個函式**（同一形狀：宣告落後於事實）。
+- **最小修法建議（只建議，未實作；一行註解，需在 #2079 併入後動）**：
+  把括號那句改成「寫入端（`auto_backfill`）**呼叫同一個** `replayJSONLPath()`」，並保留「刻意共用同一條推導」的結論。
+  ⚠️ **只能動註解**：該檔沒有任何行為變更需求，且不宜在同一個 PR 內順手改監控相關面。
+- **驗收條件**：該檔註解不再描述「寫入端自行 TrimSuffix」的形狀；`gofmt`／`go vet` 不受影響、diff 僅含註解（無行為變更）。
+
 ## 判讀註記（讀告警與做驗收前必讀）
 
 以下三則不是待辦，而是**判讀規則**：已實際造成過一次誤判（含 root 本人），所以寫進登記表。
@@ -1693,7 +1830,8 @@
 - **方法論註記（本次三次「派遣前重新定性」的成果）**：E5（死守門 ≠ 預設 warn）、E13（歸因錯：修者是 #2041 非 #2031）、E19（孤兒 ≠ 死碼：3 支有操作性引用）⇒ 已固化為「先重新定性再派遣」紀律。
 ### FU-20260926-28 — `make ci-full` 的 coverage profile 走**共用** `/tmp` 路徑：其他 lane 的 `rm -f` 讓本 lane 假紅（「coverprofile 缺失或為空」）
 
-- **狀態**：`open`
+- **狀態**：`done`
+- 已由 **#2075**（`963be848`）修好 —— coverage profile/log 改 per-run `mktemp -d` ＋ `trap … EXIT` 私有狀態 ✓
 - **記錄日期**：2026-09-26
 - **來源（多 lane 同日並行實測）**：本機 `make ci-full`（由 `.githooks/pre-push` gate 1b 觸發）在**最後一步**紅：
   `❌ 取不到覆蓋率：coverprofile 缺失或為空（/tmp/atlas-ci-full-coverage.out）`，
@@ -1729,6 +1867,9 @@
 - **驗收條件**：兩個 lane 同時跑 `make ci-full` 時任一 lane 都不會因覆蓋率步驟紅；
   且刻意讓 `go test` 階段的 profile 被外部刪除時，該 lane **仍必須**以非零碼失敗（fail-closed 不回退）。
 - **負向證明（修完後必須具備）**：profile 指向不存在的路徑／產出空 profile ⇒ **必須 `exit 1`**（不得靜默通過）。
+- **2026-09-27 第 3 次獨立確認（另一 lane）**：同一 commit 並行跑**3 個** `make ci-full` ⇒ 該 lane 的失敗訊息竟指向**另一個 worktree** 的檔案 `…/atlas-calib-drift/internal/monitoring/calibration_effective.go`（不是它自己的 worktree）✗
+  —— 正是上面「機制」一節與修法方向第 3 點預測的「共用路徑 ⇒ 失敗訊息對不上真正的那一輪」；該 lane 改用**私有** profile 路徑後 ⇒ `exit 0`、`total: 70.7%` ✓。
+
 
 ---
 
