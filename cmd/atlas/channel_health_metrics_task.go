@@ -146,11 +146,18 @@ func computeChannelStalenessSeconds(rec apigateway.ChannelHealthRecord, now time
 // every alert rule on this gauge matches == 2 (error), and the
 // ok-but-untouched-for-weeks case is already reported by
 // atlas_channel_staleness_overage_seconds.
+//
+// "degraded" (the fetch succeeded while the payload was empty/stale/partial)
+// maps to warn for the same reason (E29-3, 2026-09-27). It used to fall through
+// to 4 "other/unmapped": no alert rule matches 1 or 4 either way, but 4 made the
+// series unreadable (a defined non-ok verdict exported as "unmapped"). A degraded
+// channel that outlives its freshness window no longer stops here — DeriveChannelStatus
+// escalates it to error (→ 2), which is what actually pages.
 func healthStatusValue(status string) float64 {
 	switch status {
 	case "ok":
 		return 0
-	case "warn", "stale":
+	case "warn", "stale", "degraded":
 		return 1
 	case "error":
 		return 2

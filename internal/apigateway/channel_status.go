@@ -51,8 +51,19 @@ const (
 //
 // Rules (in order):
 //  1. no record                 → StatusUnknown
-//  2. record.Status != "ok"     → passthrough (error/warn/degraded/inactive are
-//     already verdicts written by the fetch path)
+//  2. record.Status != "ok"     → passthrough (error/warn/inactive are already
+//     verdicts written by the fetch path). "degraded" is the ONE exception, and
+//     it escalates: a degraded record becomes StatusError once the DATA behind
+//     it is older than contract.EffectiveFreshnessWindow(). "degraded" means the
+//     fetch succeeded while the payload was empty/stale/partial, i.e. no real
+//     data landed; for less than the channel's own freshness window that stays a
+//     warning (whatever was cached is still within its contract), but beyond it
+//     there is no valid cache left, so the channel is broken and the verdict must
+//     be the one the alert path acts on (the gauge maps error → 2, which is what
+//     ChannelHealthStatusError matches). E29-3, 2026-09-27: without this a
+//     degraded record could never escalate — it keeps the fetch timestamp
+//     moving, so no freshness gate saw it, and permanent schema drift was
+//     discoverable only from a process exit code.
 //  3. record.Status == "ok"     → StatusStale when the age of LastFetchAt
 //     exceeds contract.EffectiveFreshnessWindow() (StaleDataThreshold = 48h
 //     when the contract does not declare a window)
@@ -69,6 +80,16 @@ const (
 func DeriveChannelStatus(rec *ChannelHealthRecord, contract ChannelContract, now time.Time) string {
 	if rec == nil {
 		return StatusUnknown
+	}
+	if rec.Status == StatusDegraded {
+		// Rule 2b: a degraded verdict is about the DATA, so it must expire like
+		// one. Anchor = the data's own timestamps, never LastFetchAt (a degraded
+		// fetch still succeeds, so LastFetchAt keeps moving and would make this
+		// branch unreachable — the reason the state could never escalate).
+		if age, _, ok := degradedDataAge(rec, now); ok && age > contract.EffectiveFreshnessWindow() {
+			return StatusError
+		}
+		return StatusDegraded
 	}
 	if rec.Status != StatusOK {
 		return rec.Status
@@ -104,15 +125,72 @@ func DeriveChannelStatusForID(rec *ChannelHealthRecord, channelID string, now ti
 // stale so the admin page and the dashboard payload stay readable instead of
 // showing a bare red/grey pill.
 func DeriveChannelStatusReason(rec *ChannelHealthRecord, contract ChannelContract, now time.Time) string {
-	if DeriveChannelStatus(rec, contract, now) != StatusStale {
-		return ""
+	switch DeriveChannelStatus(rec, contract, now) {
+	case StatusStale:
+		age, ok := lastFetchAge(rec, now)
+		if !ok {
+			return ""
+		}
+		return fmt.Sprintf("資料已 %s 未更新，超過合約更新窗口 %s（最後一次成功抓取 %s）",
+			humanizeAge(age), humanizeWindow(contract.EffectiveFreshnessWindow()), rec.LastFetchAt)
+	case StatusError:
+		// Degraded that outlived its window (rule 2b). Without a reason the
+		// channel page would show a bare "error" that an operator cannot tell
+		// apart from a transport failure.
+		if rec == nil || rec.Status != StatusDegraded {
+			return ""
+		}
+		age, stamp, ok := degradedDataAge(rec, now)
+		if !ok {
+			return ""
+		}
+		return fmt.Sprintf("degraded 已超過合約更新窗口 %s：資料已 %s 未落地（最後一次成功資料 %s）⇒ 升級為 error",
+			humanizeWindow(contract.EffectiveFreshnessWindow()), humanizeAge(age), stamp)
 	}
-	age, ok := lastFetchAge(rec, now)
-	if !ok {
-		return ""
+	return ""
+}
+
+// degradedDataAge returns how long ago the DATA behind a degraded record was
+// last seen, plus the stamp it was read from. It reports the NEWEST of the two
+// data stamps, so the escalation fires only when even the most recent evidence
+// that data exists is older than the window.
+//
+// E29-3 (2026-09-27). The candidate stamps are the record's own data facts:
+//
+//	LastDataAt    — when the upstream itself produced the data;
+//	LastSuccessAt — when a real payload last landed in atlas.
+//
+// LastFetchAt is deliberately NOT a fallback: on a degraded record the fetch
+// succeeded, so it always looks fresh, and measuring anything against it is how
+// a permanently degraded channel stayed invisible.
+//
+// Known residual gap (registered, not fixed here): a degraded record with
+// NEITHER stamp — a channel that has never landed a payload — cannot be timed
+// at all, so it stays degraded. Bounding that case needs either a new fact on
+// the record ("degraded since") or a streak-based rule, and a streak-based rule
+// would page for deliberately deferred upstreams (twse_oddlot and friends).
+func degradedDataAge(rec *ChannelHealthRecord, now time.Time) (time.Duration, string, bool) {
+	if rec == nil {
+		return 0, "", false
 	}
-	return fmt.Sprintf("資料已 %s 未更新，超過合約更新窗口 %s（最後一次成功抓取 %s）",
-		humanizeAge(age), humanizeWindow(contract.EffectiveFreshnessWindow()), rec.LastFetchAt)
+	var newest time.Time
+	var stamp string
+	for _, candidate := range []string{rec.LastDataAt, rec.LastSuccessAt} {
+		if candidate == "" {
+			continue
+		}
+		ts, err := time.Parse(time.RFC3339, candidate)
+		if err != nil {
+			continue
+		}
+		if newest.IsZero() || ts.After(newest) {
+			newest, stamp = ts, candidate
+		}
+	}
+	if newest.IsZero() {
+		return 0, "", false
+	}
+	return now.Sub(newest), stamp, true
 }
 
 // lastFetchAge returns how long ago the record's last fetch happened.
