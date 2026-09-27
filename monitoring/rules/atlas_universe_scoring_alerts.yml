@@ -1,6 +1,7 @@
 # monitoring/rules/atlas_universe_scoring_alerts.yml
 #
-# 母體(universe)評分鏈的可觀測性:10 條規則,全部以「pipeline 的輸出」為主要訊號。
+# 母體(universe)評分鏈的可觀測性:11 條規則,全部以「pipeline 的輸出」為主要訊號。
+# (第 10 / 11 條於 2026-09-27 新增:兩個產物各自的落地訊號。第 1~9 條見下方歷史。)
 #
 # ── 這份檔案的歷史(改動前必讀)───────────────────────────────────────────────
 # 建立 2026-09-25(任務 M):「母體評分失效會響」這一維在生產是零偵測 —— 生產實例
@@ -39,14 +40,18 @@
 #   gathered > 0, filtered == 0                ⇒ 第 5 條 EmptyFiltered
 #   gathered > 0, filtered > 0, trustworthy=0  ⇒ 第 3 條 QuotesMissing
 #   ... trustworthy = 1, ranked == 0            ⇒ 第 1/2 條(同一個訊號,見該條說明)
-#   ... trustworthy = 1, ranked > 0, persisted == 0 ⇒ 第 10 條 SnapshotNotPersisted(2026-09-27 新增)
-#   ... trustworthy = 1, ranked > 0, persisted == 1 ⇒ 健康,不 firing
+#   ... trustworthy = 1, ranked > 0, snapshot 沒落地 ⇒ 第 10 條 SnapshotNotPersisted
+#   ... snapshot 落地,但 registry 沒落地         ⇒ 第 11 條 RegistryNotPersisted
+#   ... trustworthy = 1, ranked > 0, 兩個產物都落地  ⇒ 健康,不 firing
+#   ⚠️ 第 10 與第 11 條**互斥**:第 11 條要求 snapshot_persisted == 1 ⇒「兩個產物都失敗」
+#      只由第 10 條講一次(一個根因不發兩張 page)。改動任一條的閘門時必須維持這個分割。
 # 另有兩條與 verdict 平行的規則:
 #   記帳面沒動(輸出說有產出、counter 6 天沒增量)⇒ 第 9 條 CounterEmissionMissing
 #   預告的下一輪逾時(沒跑)                       ⇒ 第 8 條 RunOverdue
-# 產物沒落地(跑了、有產出,但那張 artifact 沒更新)⇒ 第 10 條 SnapshotNotPersisted(2026-09-27 新增)——
-#   它是**唯一**由「產物本身」回答的規則:verdict 與心跳都在記憶體發佈,舊的 9 條沒有一條看得到這個形狀。
-# 存在性(系列/族被改名或移除)⇒ 第 4 條(記帳面 screened)、第 6 條(本檔其餘輸入族,含第 10 條的輸入)。
+# 產物沒落地(跑了、有產出,但那張 artifact 沒更新)⇒ 第 10/11 條 —— 這兩條是**第一組**由
+#   「產物本身」回答的規則:verdict 與心跳都在記憶體發佈,第 1~9 條沒有一條看得到這個形狀。
+# 存在性(系列/族被改名或移除)⇒ 第 4 條(記帳面 screened)、第 6 條(本檔其餘輸入族,
+#   含兩個產物訊號)。
 #
 # ── 共同約束(改動前必讀)──────────────────────────────────────────────────────
 # (1) **不得用 counter 的絕對值當門檻**。這一族是累積 counter、沒有上界 ⇒ 任何「大於某個
@@ -432,6 +437,7 @@ groups:
             or absent(atlas_universe_last_run_valid)
             or absent(atlas_universe_next_run_timestamp_seconds)
             or absent(atlas_universe_last_run_snapshot_persisted)
+            or absent(atlas_universe_last_run_registry_persisted)
           )
           and on()
           (up{job="atlas-go"} == 1)
@@ -447,12 +453,16 @@ groups:
           description: |
             本檔讀取的 metric family 至少有一個在過去 30 分鐘完全不存在(不是值為 0),
             而 `up{job=atlas-go}` 仍為 1 ⇒ atlas-go 還活著、/metrics 還回得出東西,
-            但規則的輸入不見了。五個輸入是:
+            但規則的輸入不見了。六個輸入是:
               atlas_universe_symbols_ranked_total            (記帳面:第 9 條)
               atlas_universe_quotes_fetched_total            (記帳面)
               atlas_universe_last_run_valid                  (輸出面:第 1/2/3/5/7 條)
               atlas_universe_next_run_timestamp_seconds      (心跳:第 8 條)
               atlas_universe_last_run_snapshot_persisted     (產物面:第 10 條)
+              atlas_universe_last_run_registry_persisted     (產物面:第 11 條)
+            ⚠️ 最後兩個是 2026-09-27 新增的系列(部署與規則同批,排在 09-29 驗收之後)。
+            在那之前它們不存在,本條**本來就會**為它們 firing(缺席的事實優先於部署時序);
+            這正是本條的用途:缺席不得沉默。
 
             這代表什麼:
             - 這是「零偵測」的一種形狀:規則不會 firing,但**不是因為系統健康**,而是因為
@@ -772,7 +782,111 @@ groups:
             2. 為什麼寫不進去:docker logs atlas-go --since 48h 2>&1 | grep -E
                'snapshot_save_error|snapshot_not_persisted|universe_registry_write_error'
                · WorkDir 指到沒有人讀的路徑、目錄權限、磁碟滿、或 data 掛載掉了。
+               · grep 出來的 universe_registry_write_error 屬於**第二個產物**,由第 11 條負責:
+                 若本條與 universe_registry_not_persisted 同時出現,那是兩個寫入路徑的問題,
+                 先修 snapshot 這一側(它是下游唯一讀的東西)。
             3. 掛載與路徑:docker inspect atlas-go 的 Mounts 欄位
                · 期望 <repo>/data ↔ /app/data;WorkDir 必須是容器內的 /app。
+            4. ⚠️ 不要用 counter 絕對值判斷(累積 counter 沒有上界)。
+          runbook_url: "https://github.com/kaecer68/atlas-go/blob/main/docs/operations/universe-run-truth-model.md"
+
+      # ══ 11.（2026-09-27 新增）registry 沒落地:snapshot 更新了,但 universe.json 沒有 ═════
+      # 語意:最近一次完成的執行(valid == 1)這一側說它「可信且有產出」(trustworthy == 1、
+      # ranked > 0),而且**主產物落地了**(last_run_snapshot_persisted == 1),但同一次執行留下的
+      # **第二個產物**訊號(last_run_registry_persisted == 0)說「data/state/universe.json 不是這一輪的」。
+      #
+      # 為什麼需要這條(2026-09-27 的缺口盤查;完整真值階層見
+      # docs/operations/universe-run-truth-model.md):
+      #   Step 7 寫**兩個**檔案 —— universe_snapshot.json(第 10 條守的)與 universe.json
+      #   (agents.json 相容的 registry)。後者寫入失敗在 2026-09-27 之前**只有一行 WARN**
+      #   (universe_registry_write_error),沒有任何規則會響 ⇒ 症狀是「registry 舊、snapshot 新」:
+      #   同一次執行的兩種消費者(讀 snapshot 的 D6 / 覆蓋率檢查 / 人工驗收 vs 讀 registry 的
+      #   agents.json 相容視圖)看到**不同的母體**,而所有訊號都說健康。
+      #
+      # 與第 10 條**互斥**(本條要求 snapshot_persisted == 1):
+      #   · 兩個產物都沒落地 ⇒ 只有第 10 條 firing(一個根因不發兩張 page);
+      #   · snapshot 落地、registry 沒落地 ⇒ 只有本條 firing;
+      #   · 兩者都落地 ⇒ 兩條都沉默。
+      #   ⚠️ 這是刻意用 `== 1` 而不是 `!= 0` 的原因:後者會讓「都失敗」同時點亮兩條規則,
+      #   值班的人會以為有兩個根因。
+      #
+      # 為什麼早期退出不會誤報:與第 10 條同一組閘門(valid / trustworthy / ranked > 0)——
+      # 早退路徑(母體空 / 篩選全滅 / 報價不可用)各自由第 7 / 5 / 3 條負責,
+      # ranked == 0 由第 1/2 條負責。
+      #
+      # Go 端的證據(internal/monitoring/universe_scheduler.go Step 7 的 RegistryPersistedOnDisk):
+      #   與 snapshot 同一個判準(共用 artifactPersistedOnDisk:os.Stat 比對 mtime 與本輪開始時刻),
+      #   只是指到不同的檔案 ⇒ 兩個 gauge 的差異只可能來自檔案系統或寫入端,
+      #   不可能來自「兩套新鮮度定義」。暖機值是 0(process 啟動時本 process 還沒寫過任何檔)。
+      #
+      # ⚠️ 部署時序:與第 10 條同一個 PR、同一批部署,且**排在 2026-09-29 06:00Z 母體驗收之後**。
+      #    若規則先上、binary 後上,序列不存在 ⇒ 本條沉默(sum by(stage) 取不到東西),
+      #    而那個缺席由第 6 條負責回報。
+      - alert: AtlasUniverseRegistryNotPersisted
+        expr: |
+          (
+            sum by (stage) (atlas_universe_last_run_valid{stage=~"daily|weekly"}) == 1
+          )
+          and on (stage)
+          (
+            sum by (stage) (atlas_universe_last_run_ranked_trustworthy{stage=~"daily|weekly"}) == 1
+          )
+          and on (stage)
+          (
+            sum by (stage) (atlas_universe_last_run_symbols_ranked{stage=~"daily|weekly"}) > 0
+          )
+          and on (stage)
+          (
+            sum by (stage) (atlas_universe_last_run_snapshot_persisted{stage=~"daily|weekly"}) == 1
+          )
+          and on (stage)
+          (
+            sum by (stage) (atlas_universe_last_run_registry_persisted{stage=~"daily|weekly"}) == 0
+          )
+        for: 30m
+        labels:
+          severity: "warning"
+          service: "atlas"
+          component: "universe-persistence"
+          wave: "9.2"
+          incident_ref: "universe-registry-persistence-20260927"
+        annotations:
+          summary: "universe registry 沒落地:snapshot 更新了,但 universe.json 沒有(兩個消費者看到不同的母體)"
+          description: |
+            <stage> 這一輪完成了(valid == 1),它的 verdict 說可信且有產出
+            (ranked_trustworthy == 1、ranked > 0),**主產物落地了**
+            (`atlas_universe_last_run_snapshot_persisted{stage}` == 1),
+            但同一次執行留下的第二個產物訊號
+            `atlas_universe_last_run_registry_persisted{stage}` == 0 ⇒
+            **data/state/universe.json 不是這一輪的**。
+
+            證據(全部來自輸出;兩個產物是兩個獨立的檔案、兩個獨立的判斷):
+              atlas_universe_last_run_valid{stage}                        == 1
+              atlas_universe_last_run_ranked_trustworthy{stage}            == 1
+              atlas_universe_last_run_symbols_ranked{stage}                > 0
+              atlas_universe_last_run_snapshot_persisted{stage}            == 1   主產物在
+              atlas_universe_last_run_registry_persisted{stage}            == 0   ← 本條的判定
+            ⚠️ 不要把它當成「產物沒落地」查(那是第 10 條):本條 firing 時 snapshot 是好的,
+            壞的是**同一步的第二個寫入**。兩條規則互斥,不會同時 firing。
+
+            這代表什麼:
+            - 讀 snapshot 的消費者(D6 watchlist、universe_coverage_check、人工驗收)看到的是
+              **這一輪**;而讀 registry(agents.json 相容視圖)的消費者看到的是**上一輪**。
+              兩者都不會報錯 —— 這正是「兩個母體」的危險處:沒有任何一方會發現自己看的是舊的。
+            - 2026-09-27 之前這個狀態的唯一痕跡是一行 WARN(universe_registry_write_error),
+              而警告等級的日誌沒有消費者 ⇒ 它是「零偵測」。
+
+            先查什麼(依序):
+            1. 兩個產物的 mtime 並列(與本條同源,一次指令):
+               ls -l <repo>/data/state/universe_snapshot.json <repo>/data/state/universe.json && date -u
+               · snapshot 新、registry 舊 ⇒ 確認本條;也可以跑 scripts/ops/verify-universe-run.sh,
+                 它的 L5 會把 registry 的 mtime 與新訊號一起印出來。
+            2. 為什麼寫不進去:docker logs atlas-go --since 48h 2>&1 |
+               grep -E 'universe_registry_(write_error|not_persisted)'
+               · 目錄權限、磁碟滿、data 掛載掉了、或 WorkDir 指到沒有人讀的路徑。
+               · 注意 registry 走 .tmp → .bak → rename 的原子寫入;失敗時 .bak 會被還原,
+                 所以檔案會**存在但舊**(而不是消失)。
+            3. 掛載與路徑:docker inspect atlas-go 的 Mounts 欄位
+               · 期望 <repo>/data ↔ /app/data;兩個產物必須在同一個掛載裡。
             4. ⚠️ 不要用 counter 絕對值判斷(累積 counter 沒有上界)。
           runbook_url: "https://github.com/kaecer68/atlas-go/blob/main/docs/operations/universe-run-truth-model.md"

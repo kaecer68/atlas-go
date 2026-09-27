@@ -87,6 +87,32 @@ const (
 	// that gap, and it is measured by reading the file back (see
 	// monitoring.BuildUniverse), never by trusting the write call's intent.
 	UniverseMetricLastRunSnapshotPersisted = "atlas_universe_last_run_snapshot_persisted"
+	// UniverseMetricLastRunRegistryPersisted is 1 when the agents.json-compatible
+	// registry (data/state/universe.json, the SECOND artifact Step 7 writes) was
+	// verified to belong to the last completed run of that stage, 0 when it was
+	// not.
+	//
+	// Why it is a separate series instead of being folded into
+	// last_run_snapshot_persisted (2026-09-27, the same audit that added the
+	// snapshot gauge):
+	//   - the two artifacts have different consumers and different writers. The
+	//     snapshot is what D6 / the coverage check / the verifier read; the
+	//     registry is the agents.json-compatible view. Before this gauge, a
+	//     registry whose write failed produced exactly ONE warning line
+	//     (universe_registry_write_error), so the symptom was "registry stale,
+	//     snapshot fresh" — two consumers of the same run reading two different
+	//     universes, with no rule able to see it.
+	//   - folding them into one gauge would destroy the partition: a rule that
+	//     reads "not persisted" could not tell the operator WHICH artifact to go
+	//     and stat, and the snapshot rule and the registry rule would fire on the
+	//     same series (one root cause, two pages).
+	//   - keeping them apart lets the rules be mutually exclusive: the registry
+	//     rule requires snapshot_persisted == 1, so the case "both writes failed"
+	//     reports once (the snapshot rule) instead of twice.
+	//
+	// Warm-up value is 0 for the same reason as the snapshot gauge: at process
+	// start nothing has been written by this process.
+	UniverseMetricLastRunRegistryPersisted = "atlas_universe_last_run_registry_persisted"
 	// UniverseMetricNextRun is the instant (unix time) at which the scheduler is
 	// next expected to run the pipeline, computed from the Taiwan trading
 	// calendar. It is emitted at process start and after every run, so a missed
@@ -125,6 +151,11 @@ type UniverseRunVerdict struct {
 	// trustworthy verdict with SnapshotPersisted == 0 is the "the run produced a
 	// market verdict that never reached disk" defect.
 	SnapshotPersisted bool
+	// RegistryPersisted is the same measurement for the second artifact Step 7
+	// writes (data/state/universe.json). It is read by the registry rule, which
+	// is scoped to "the snapshot landed but the registry did not" so that the
+	// two persistence rules never page for one root cause.
+	RegistryPersisted bool
 	// FinishedAt is when the run finished; zero means "now".
 	FinishedAt time.Time
 }
@@ -174,6 +205,7 @@ func (m *UniverseMetrics) ReportRun(v UniverseRunVerdict) {
 	m.reportGauge(UniverseMetricLastRunQuotesReturned, float64(v.QuotesReturned), stage)
 	m.reportGauge(UniverseMetricLastRunTrustworthy, boolGauge(v.Trustworthy), stage)
 	m.reportGauge(UniverseMetricLastRunSnapshotPersisted, boolGauge(v.SnapshotPersisted), stage)
+	m.reportGauge(UniverseMetricLastRunRegistryPersisted, boolGauge(v.RegistryPersisted), stage)
 
 	if prev, ok := m.lastOutcome[v.Stage]; ok && prev != "" && prev != v.Outcome {
 		m.reportGauge(UniverseMetricLastRunOutcome, 0, map[string]string{
@@ -228,6 +260,9 @@ func (m *UniverseMetrics) warmUpRunVerdicts(now time.Time) {
 		// statement about an artifact, and at process start nothing has been
 		// written by this process.
 		m.reportGauge(UniverseMetricLastRunSnapshotPersisted, 0, labels)
+		// Same reasoning for the registry artifact: no run of this process has
+		// written data/state/universe.json yet.
+		m.reportGauge(UniverseMetricLastRunRegistryPersisted, 0, labels)
 	}
 }
 

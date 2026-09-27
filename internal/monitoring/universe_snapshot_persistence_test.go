@@ -2,6 +2,8 @@ package monitoring
 
 import (
 	"context"
+	"errors"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -133,6 +135,83 @@ func TestBuildUniverse_PublishesSnapshotPersistedOnMetrics(t *testing.T) {
 
 		if _, err := os.Stat(UniverseSnapshotPath(workDir)); err == nil {
 			t.Fatalf("%s exists although the write was supposed to fail", UniverseSnapshotPath(workDir))
+		}
+	})
+
+	t.Run("registry stale while the snapshot is fresh (the shape gap B was about)", func(t *testing.T) {
+		// The world the registry gauge exists for: the SAME run writes two files,
+		// one of them lands and the other does not. It is arranged by occupying the
+		// registry's TEMPORARY path with a directory, so WriteUniverseRegistry
+		// fails at its first write while SaveUniverseSnapshot (a different path,
+		// and a different temp file) succeeds.
+		//
+		// Why not occupy the registry path itself: WriteUniverseRegistry moves an
+		// existing path aside with `os.Rename(path, path+".bak")` first, and POSIX
+		// renames a directory just as happily as a file — so the write would
+		// SUCCEED and the test would assert the wrong world (measured, not
+		// assumed: the first version of this subtest passed for that reason and
+		// then failed on the fixture-drift assertion).
+		//
+		// Before the registry gauge, this state produced one WARN line and no
+		// signal a rule could read: two consumers of one run, reading two
+		// different mother universes, and every verdict said healthy.
+		workDir := tempDir(t)
+		registryPath := UniverseRegistryPath(workDir)
+		registryTmp := registryPath + ".tmp"
+		if err := os.MkdirAll(registryTmp, 0o750); err != nil {
+			t.Fatalf("MkdirAll: %v", err)
+		}
+		logs := captureLogs(t)
+
+		collector := NewMetricsCollector()
+		um := metrics.NewUniverseMetrics()
+		um.SetOnInc(CollectorOnInc(collector))
+		um.SetRunVerdictSink(GaugeSink(collector))
+		um.WarmUp()
+
+		deps := buildDepsFixture(t, workDir)
+		deps.UniverseMetrics = um
+
+		result, ranked, err := BuildUniverse(ctx, deps, false)
+		if err != nil {
+			t.Fatalf("BuildUniverse: %v", err)
+		}
+		// Guard the fixture: the run must stay healthy, otherwise the two gauges
+		// would read 0/0 and the assertion could pass for the wrong reason.
+		if len(ranked) == 0 || !result.RankedTrustworthy {
+			t.Fatalf("fixture did not stay healthy: ranked=%d trustworthy=%v", len(ranked), result.RankedTrustworthy)
+		}
+
+		body := scrapeUniverseMetrics(t, collector)
+		// The snapshot landed...
+		wantMetricLine(t, body, `atlas_universe_last_run_snapshot_persisted{stage="daily"} 1.000000`)
+		// ...and the registry did not.
+		wantMetricLine(t, body, `atlas_universe_last_run_registry_persisted{stage="daily"} 0.000000`)
+		// The other stage is untouched: a daily failure must not claim anything
+		// about the weekly artifact.
+		wantMetricLine(t, body, `atlas_universe_last_run_registry_persisted{stage="weekly"} 0.000000`)
+
+		if _, err := os.Stat(UniverseSnapshotPath(workDir)); err != nil {
+			t.Errorf("the snapshot should have landed: %v", err)
+		}
+		if _, err := os.Stat(registryPath); !errors.Is(err, fs.ErrNotExist) {
+			t.Errorf("fixture should have blocked the registry write: %s exists (err=%v)", registryPath, err)
+		}
+		// The failure must also be readable in the log stream: the WARN that used
+		// to be the ONLY trace, plus the new "not persisted" line that names the
+		// artifact and whether the write reported an error.
+		for _, want := range []string{"universe_registry_write_error", "universe_registry_not_persisted"} {
+			if !strings.Contains(logs.String(), want) {
+				t.Errorf("log is missing %q: %s", want, logs.String())
+			}
+		}
+		// Disk is the second witness for both readings, exactly as for the
+		// snapshot gauge: stat must agree with the pair of gauges.
+		if !SnapshotPersistedOnDisk(workDir, result.Timestamp) {
+			t.Error("snapshot gauge says 1 but the filesystem says the artifact is not this run's")
+		}
+		if RegistryPersistedOnDisk(workDir, result.Timestamp) {
+			t.Error("registry gauge says 0 but the filesystem says the registry is this run's")
 		}
 	})
 }
