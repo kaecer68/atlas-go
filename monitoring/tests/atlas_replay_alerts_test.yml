@@ -1,0 +1,470 @@
+# monitoring/tests/atlas_replay_alerts_test.yml
+# promtool unit tests（`promtool test rules`）for monitoring/rules/atlas_replay_alerts.yml
+# （2026-09-27,replay 告警缺口）。
+#
+# 為什麼需要（而不是只跑 `promtool check rules`）:check rules 只看 YAML/expr 語法,
+# 驗不到「該 firing 的真的會 firing」「不該 firing 的真的沉默」以及
+# 「序列缺席不得被讀成 0」這三件事。
+#
+# ⚠️ 紀律（與 monitoring/tests/ 其他檔案相同）:expectation 是**完整比對**
+#    （labels + annotations 逐字）。改規則檔的文案時本檔必須在同一個 commit 同步,
+#    否則 gate 會紅在「逐字差異」。
+#
+# 十二個案例對應「真實可能發生」的世界（* = 正面案例,其餘是負向對照）:
+#   A  健康（週四資料日、JSONL 同步、心跳新鮮、sync ok）—— 五條全部沉默
+#   B* 幻影列:最新資料日 = 週六（172800 = 1970-01-03）—— 第 1 條 firing
+#      （重現 2026-08-29~09-25 的 352 列週末幻影;寫入端已由 #2057 根治）
+#   C* 最新資料日晚於當前時刻（345600 = 1970-01-05,週一）—— 第 1 條 firing
+#      （future arm;與 B 不同 arm,所以兩個都要有）
+#   D* JSONL 落後 CSV 3 天（數值 arm）—— 第 2 條 firing
+#   E* JSONL 序列缺席（轉檔從未成功）—— 第 2 條 firing（`unless` arm;
+#      缺席**不得**被當成 0,這是 #1995 的缺陷形狀）
+#   F* CSV 20 天沒有新資料日（星期五,刻意避開週末以免混淆 arm）—— 第 3 條 firing
+#   G* 心跳停在 2 小時前 —— 第 4 條 firing（`time() - ts` arm）
+#   H* replay 指標整族缺席 + 服務在跑 —— 第 4 條 firing（`absent()` arm）
+#   I  replay 指標整族缺席 + 服務沒在跑 —— 五條全部沉默
+#      （不與 AtlasGoTargetDown 對同一個根因重複 paging）
+#   J* replay sync 未落地（gauge 4 = degraded）—— 第 5 條 firing
+#      （gauge 值域:0=ok 1=warn/stale 2=error 3=inactive **4=degraded**;既有規則只比對 ==2,
+#       所以這個值在 2026-09-27 之前完全不觸發任何規則）
+#   K  sync 非 ok 只持續 30 分鐘 —— 五條全部沉默（第 5 條 for: 1h 的負向對照）
+#   L  JSONL 落後 1.5 天 —— 五條全部沉默（第 2 條 2 天門檻的負向對照）
+#
+# 測試時鐘:promtool 的 `time()` 從 epoch(1970-01-01T00:00:00Z) 起算,所以資料日
+# gauge 用 epoch 相對值表示（0 = 週四、172800 = 週六、-1728000 = 20 天前…）,
+# 心跳用 `0+60xN` 模擬每分鐘一次的匯出週期。這是 monitoring/tests/ 既有檔案的同一套作法。
+
+rule_files:
+  - ../rules/atlas_replay_alerts.yml
+
+evaluation_interval: 1m
+
+tests:
+
+  - name: "A 健康（週四資料日、JSONL 同步、心跳新鮮、sync ok）—— 五條全部沉默"
+    interval: 1m
+    input_series:
+      - series: 'atlas_replay_csv_latest_date_timestamp_seconds'
+        values: '0x700'
+      - series: 'atlas_replay_jsonl_latest_date_timestamp_seconds'
+        values: '0x700'
+      - series: 'atlas_replay_freshness_checked_timestamp_seconds'
+        values: '0+60x700'
+      - series: 'atlas_channel_health_status{channel="twse_replay_sync"}'
+        values: '0x700'
+      - series: 'up{job="atlas-go"}'
+        values: '1x700'
+    alert_rule_test:
+      - eval_time: 30m
+        alertname: AtlasReplaySessionDateInvalid
+        exp_alerts: []
+      - eval_time: 30m
+        alertname: AtlasReplayJsonlBehindCsv
+        exp_alerts: []
+      - eval_time: 30m
+        alertname: AtlasReplayCsvStale
+        exp_alerts: []
+      - eval_time: 30m
+        alertname: AtlasReplayFreshnessExporterDown
+        exp_alerts: []
+      - eval_time: 30m
+        alertname: AtlasReplaySyncNotLanding
+        exp_alerts: []
+
+  - name: "B 幻影列（最新資料日=週六）—— 只有第 1 條 firing"
+    interval: 1m
+    input_series:
+      - series: 'atlas_replay_csv_latest_date_timestamp_seconds'
+        values: '172800x700'
+      - series: 'atlas_replay_jsonl_latest_date_timestamp_seconds'
+        values: '172800x700'
+      - series: 'atlas_replay_freshness_checked_timestamp_seconds'
+        values: '0+60x700'
+      - series: 'atlas_channel_health_status{channel="twse_replay_sync"}'
+        values: '0x700'
+      - series: 'up{job="atlas-go"}'
+        values: '1x700'
+    alert_rule_test:
+      - eval_time: 1h
+        alertname: AtlasReplaySessionDateInvalid
+        exp_alerts:
+        - exp_labels:
+            alertname: "AtlasReplaySessionDateInvalid"
+            component: "replay"
+            incident_ref: "replay-phantom-rows-20260829/20260925"
+            service: "atlas-monitoring"
+            severity: "warning"
+            wave: "9.2"
+          exp_annotations:
+            description: "replay CSV 的最新資料日 = 1970-01-03 00:00:00 +0000 UTC（UTC）,\n落在週末或晚於當前時刻 ⇒ 這一列不可能是交易所產生的事實。\n背景:2026-08-29~09-25 曾以 time.Now() 蓋章寫入 396 列幻影,\n寫入端已由 #2057 根治（帶日期的 MI_INDEX + 回應日期守門 + 休市日 guard）。\n立即檢查:\n  1. 最新幾天的資料日與列數（每交易日 44 檔）:\n     tail -n 88 /app/data/replay/tw_extended_90days.csv | cut -d, -f1 | sort | uniq -c\n  2. 寫入端最近的判定結果（是否出現 data-date guard / 非交易日 guard 的 log）:\n     docker logs atlas-cron-replay-sync --since 72h 2>&1 | grep -E \"DailySync|refus|not a Taiwan trading day\"\n  3. 是否為**人工/回填**寫入（backfill 走同一條 IsTaiwanTradingDay 閘門,不該產生週末列）:\n     docker logs atlas-cron-replay-sync --since 72h 2>&1 | grep -E \"backfill\"\n注意:本條只判「週末」與「未來日」;**假日（週間休市）**的幻影列需要交易日曆,\n目前無法在 Prometheus 端判別（見 PR body 的建議票）。\n"
+            runbook_url: "https://github.com/kaecer68/atlas-go/blob/main/docs/operations/local-deploy.md"
+            summary: "replay CSV 的最新資料日不是合法交易日（幻影列特徵）"
+      - eval_time: 1h
+        alertname: AtlasReplayJsonlBehindCsv
+        exp_alerts: []
+      - eval_time: 1h
+        alertname: AtlasReplayCsvStale
+        exp_alerts: []
+      - eval_time: 1h
+        alertname: AtlasReplayFreshnessExporterDown
+        exp_alerts: []
+      - eval_time: 1h
+        alertname: AtlasReplaySyncNotLanding
+        exp_alerts: []
+
+  - name: "C 最新資料日晚於當前時刻（週一 1970-01-05）—— 只有第 1 條 firing（future arm）"
+    interval: 1m
+    input_series:
+      - series: 'atlas_replay_csv_latest_date_timestamp_seconds'
+        values: '345600x700'
+      - series: 'atlas_replay_jsonl_latest_date_timestamp_seconds'
+        values: '345600x700'
+      - series: 'atlas_replay_freshness_checked_timestamp_seconds'
+        values: '0+60x700'
+      - series: 'atlas_channel_health_status{channel="twse_replay_sync"}'
+        values: '0x700'
+      - series: 'up{job="atlas-go"}'
+        values: '1x700'
+    alert_rule_test:
+      - eval_time: 1h
+        alertname: AtlasReplaySessionDateInvalid
+        exp_alerts:
+        - exp_labels:
+            alertname: "AtlasReplaySessionDateInvalid"
+            component: "replay"
+            incident_ref: "replay-phantom-rows-20260829/20260925"
+            service: "atlas-monitoring"
+            severity: "warning"
+            wave: "9.2"
+          exp_annotations:
+            description: "replay CSV 的最新資料日 = 1970-01-05 00:00:00 +0000 UTC（UTC）,\n落在週末或晚於當前時刻 ⇒ 這一列不可能是交易所產生的事實。\n背景:2026-08-29~09-25 曾以 time.Now() 蓋章寫入 396 列幻影,\n寫入端已由 #2057 根治（帶日期的 MI_INDEX + 回應日期守門 + 休市日 guard）。\n立即檢查:\n  1. 最新幾天的資料日與列數（每交易日 44 檔）:\n     tail -n 88 /app/data/replay/tw_extended_90days.csv | cut -d, -f1 | sort | uniq -c\n  2. 寫入端最近的判定結果（是否出現 data-date guard / 非交易日 guard 的 log）:\n     docker logs atlas-cron-replay-sync --since 72h 2>&1 | grep -E \"DailySync|refus|not a Taiwan trading day\"\n  3. 是否為**人工/回填**寫入（backfill 走同一條 IsTaiwanTradingDay 閘門,不該產生週末列）:\n     docker logs atlas-cron-replay-sync --since 72h 2>&1 | grep -E \"backfill\"\n注意:本條只判「週末」與「未來日」;**假日（週間休市）**的幻影列需要交易日曆,\n目前無法在 Prometheus 端判別（見 PR body 的建議票）。\n"
+            runbook_url: "https://github.com/kaecer68/atlas-go/blob/main/docs/operations/local-deploy.md"
+            summary: "replay CSV 的最新資料日不是合法交易日（幻影列特徵）"
+      - eval_time: 1h
+        alertname: AtlasReplayJsonlBehindCsv
+        exp_alerts: []
+      - eval_time: 1h
+        alertname: AtlasReplayCsvStale
+        exp_alerts: []
+      - eval_time: 1h
+        alertname: AtlasReplayFreshnessExporterDown
+        exp_alerts: []
+      - eval_time: 1h
+        alertname: AtlasReplaySyncNotLanding
+        exp_alerts: []
+
+  - name: "D JSONL 落後 CSV 3 天（數值 arm）—— 只有第 2 條 firing"
+    interval: 1m
+    input_series:
+      - series: 'atlas_replay_csv_latest_date_timestamp_seconds'
+        values: '0x700'
+      - series: 'atlas_replay_jsonl_latest_date_timestamp_seconds'
+        values: '-259200x700'
+      - series: 'atlas_replay_freshness_checked_timestamp_seconds'
+        values: '0+60x700'
+      - series: 'atlas_channel_health_status{channel="twse_replay_sync"}'
+        values: '0x700'
+      - series: 'up{job="atlas-go"}'
+        values: '1x700'
+    alert_rule_test:
+      - eval_time: 1h
+        alertname: AtlasReplayJsonlBehindCsv
+        exp_alerts:
+        - exp_labels:
+            alertname: "AtlasReplayJsonlBehindCsv"
+            component: "replay"
+            incident_ref: "replay-jsonl-stall-20260824/20260924"
+            service: "atlas-monitoring"
+            severity: "warning"
+            wave: "9.2"
+          exp_annotations:
+            description: "JSONL（FactorEngine 的正式輸入）落後 CSV 超過 2 天,或 JSONL 序列不存在。\n（兩個 arm 的 alert 值分別是:落後的 JSONL 資料日 / 缺席時以 CSV 資料日代替。）\n歷史實例:2026-08-24~09-24 轉檔停擺一個月,期間沒有任何告警。\n立即檢查（轉檔在 auto_backfill 內執行,不是獨立 cron）:\n  1. 兩個檔案的最新資料日:\n     docker exec atlas-cron-replay-sync tail -n 1 /app/data/replay/tw_extended_90days.csv | cut -d, -f1\n     docker exec atlas-cron-replay-sync tail -n 1 /app/data/replay/tw_extended_90days.jsonl\n  2. 轉檔是否被執行過（#2057 之前的已知缺陷:auto_backfill 在\n     「CSV 最大日+1 > 今天」時**提前 return**,而轉檔在 return 之後,\n     所以沒有缺口的日子結構上不會轉檔）:\n     docker logs atlas-go --since 72h 2>&1 | grep -E \"backfill gap detected|backfill CSV→JSONL conversion\"\n     沒有 backfill gap detected 是**正常的**（沒有缺口就該沒有）,但\n     「JSONL 落後」時要確認 conversion 那行是否出現過。\n  3. 補救（單次,冪等;CSV 不會被改動）:重啟 atlas-go 讓 auto_backfill\n     重新排程,或在主機上手動跑該轉檔（importer.ImportTWOpenDataCSVToJSONL\n     的入口是 auto_backfill 任務;沒有獨立 CLI,所以優先用前者）。\n"
+            runbook_url: "https://github.com/kaecer68/atlas-go/blob/main/docs/operations/local-deploy.md"
+            summary: "replay JSONL 落後 CSV（CSV→JSONL 轉檔停擺或從未成功）"
+      - eval_time: 1h
+        alertname: AtlasReplaySessionDateInvalid
+        exp_alerts: []
+      - eval_time: 1h
+        alertname: AtlasReplayCsvStale
+        exp_alerts: []
+      - eval_time: 1h
+        alertname: AtlasReplayFreshnessExporterDown
+        exp_alerts: []
+      - eval_time: 1h
+        alertname: AtlasReplaySyncNotLanding
+        exp_alerts: []
+
+  - name: "E JSONL 序列缺席（轉檔從未成功）—— 只有第 2 條 firing（unless arm）"
+    interval: 1m
+    input_series:
+      - series: 'atlas_replay_csv_latest_date_timestamp_seconds'
+        values: '0x700'
+      - series: 'atlas_replay_freshness_checked_timestamp_seconds'
+        values: '0+60x700'
+      - series: 'atlas_channel_health_status{channel="twse_replay_sync"}'
+        values: '0x700'
+      - series: 'up{job="atlas-go"}'
+        values: '1x700'
+    alert_rule_test:
+      - eval_time: 1h
+        alertname: AtlasReplayJsonlBehindCsv
+        exp_alerts:
+        - exp_labels:
+            alertname: "AtlasReplayJsonlBehindCsv"
+            component: "replay"
+            incident_ref: "replay-jsonl-stall-20260824/20260924"
+            service: "atlas-monitoring"
+            severity: "warning"
+            wave: "9.2"
+          exp_annotations:
+            description: "JSONL（FactorEngine 的正式輸入）落後 CSV 超過 2 天,或 JSONL 序列不存在。\n（兩個 arm 的 alert 值分別是:落後的 JSONL 資料日 / 缺席時以 CSV 資料日代替。）\n歷史實例:2026-08-24~09-24 轉檔停擺一個月,期間沒有任何告警。\n立即檢查（轉檔在 auto_backfill 內執行,不是獨立 cron）:\n  1. 兩個檔案的最新資料日:\n     docker exec atlas-cron-replay-sync tail -n 1 /app/data/replay/tw_extended_90days.csv | cut -d, -f1\n     docker exec atlas-cron-replay-sync tail -n 1 /app/data/replay/tw_extended_90days.jsonl\n  2. 轉檔是否被執行過（#2057 之前的已知缺陷:auto_backfill 在\n     「CSV 最大日+1 > 今天」時**提前 return**,而轉檔在 return 之後,\n     所以沒有缺口的日子結構上不會轉檔）:\n     docker logs atlas-go --since 72h 2>&1 | grep -E \"backfill gap detected|backfill CSV→JSONL conversion\"\n     沒有 backfill gap detected 是**正常的**（沒有缺口就該沒有）,但\n     「JSONL 落後」時要確認 conversion 那行是否出現過。\n  3. 補救（單次,冪等;CSV 不會被改動）:重啟 atlas-go 讓 auto_backfill\n     重新排程,或在主機上手動跑該轉檔（importer.ImportTWOpenDataCSVToJSONL\n     的入口是 auto_backfill 任務;沒有獨立 CLI,所以優先用前者）。\n"
+            runbook_url: "https://github.com/kaecer68/atlas-go/blob/main/docs/operations/local-deploy.md"
+            summary: "replay JSONL 落後 CSV（CSV→JSONL 轉檔停擺或從未成功）"
+      - eval_time: 1h
+        alertname: AtlasReplaySessionDateInvalid
+        exp_alerts: []
+      - eval_time: 1h
+        alertname: AtlasReplayCsvStale
+        exp_alerts: []
+      - eval_time: 1h
+        alertname: AtlasReplayFreshnessExporterDown
+        exp_alerts: []
+      - eval_time: 1h
+        alertname: AtlasReplaySyncNotLanding
+        exp_alerts: []
+
+  - name: "F CSV 20 天沒有新資料日（星期五,不是週末）—— 只有第 3 條 firing"
+    interval: 1m
+    input_series:
+      - series: 'atlas_replay_csv_latest_date_timestamp_seconds'
+        values: '-1728000x700'
+      - series: 'atlas_replay_jsonl_latest_date_timestamp_seconds'
+        values: '-1728000x700'
+      - series: 'atlas_replay_freshness_checked_timestamp_seconds'
+        values: '0+60x700'
+      - series: 'atlas_channel_health_status{channel="twse_replay_sync"}'
+        values: '0x700'
+      - series: 'up{job="atlas-go"}'
+        values: '1x700'
+    alert_rule_test:
+      - eval_time: 2h
+        alertname: AtlasReplayCsvStale
+        exp_alerts:
+        - exp_labels:
+            alertname: "AtlasReplayCsvStale"
+            component: "replay"
+            service: "atlas-monitoring"
+            severity: "warning"
+            wave: "9.2"
+          exp_annotations:
+            description: "replay CSV 最新資料日 = 20d 2h 0m 0s 前（門檻 14 天）。\n14 天不是憑感覺:應用自己對 replay 資料日的判定就是 <3d ok / <14d warn /\n其後 error（adapter_twse.HealthCheck 與 monitoring/service.checkReplayHealth）。\n立即檢查:\n  1. cron 容器與最近一次執行結果（排程為每日 15:30 UTC）:\n     docker ps -a --filter name=atlas-cron-replay-sync\n     docker logs atlas-cron-replay-sync --since 7d 2>&1 | tail -40\n  2. 是否為「日曆被誤判成休市」（internal/taiwanholidays 已知缺 9 個真實休市日）:\n     docker logs atlas-cron-replay-sync --since 7d 2>&1 | grep \"not a Taiwan trading day\"\n  3. 磁碟空間與寫入權限:\n     docker exec atlas-cron-replay-sync df -h /app/data/replay\n"
+            runbook_url: "https://github.com/kaecer68/atlas-go/blob/main/docs/operations/local-deploy.md"
+            summary: "replay CSV 超過 14 天沒有新資料日（資料寫入停擺）"
+      - eval_time: 2h
+        alertname: AtlasReplaySessionDateInvalid
+        exp_alerts: []
+      - eval_time: 2h
+        alertname: AtlasReplayJsonlBehindCsv
+        exp_alerts: []
+      - eval_time: 2h
+        alertname: AtlasReplayFreshnessExporterDown
+        exp_alerts: []
+      - eval_time: 2h
+        alertname: AtlasReplaySyncNotLanding
+        exp_alerts: []
+
+  - name: "G 心跳停在 2 小時前（time() - ts arm）—— 只有第 4 條 firing"
+    interval: 1m
+    input_series:
+      - series: 'atlas_replay_csv_latest_date_timestamp_seconds'
+        values: '0x700'
+      - series: 'atlas_replay_jsonl_latest_date_timestamp_seconds'
+        values: '0x700'
+      - series: 'atlas_replay_freshness_checked_timestamp_seconds'
+        values: '0x700'
+      - series: 'atlas_channel_health_status{channel="twse_replay_sync"}'
+        values: '0x700'
+      - series: 'up{job="atlas-go"}'
+        values: '1x700'
+    alert_rule_test:
+      - eval_time: 2h
+        alertname: AtlasReplayFreshnessExporterDown
+        exp_alerts:
+        - exp_labels:
+            alertname: "AtlasReplayFreshnessExporterDown"
+            component: "replay"
+            service: "atlas-monitoring"
+            severity: "warning"
+            wave: "9.2"
+          exp_annotations:
+            description: "`replay_freshness_metrics_export`（5m 週期）的心跳序列\n`atlas_replay_freshness_checked_timestamp_seconds` 缺席或已停止 >30 分鐘。\n⚠️ 這代表 AtlasReplaySessionDateInvalid / AtlasReplayJsonlBehindCsv /\nAtlasReplayCsvStale 看到的都是**凍結樣本**,不能當現況 —— 先修這條。\n立即檢查:\n  1. 服務是否剛啟動（指標需要一次 5m 週期才會出現;部署後 5 分鐘內 absent 是預期）:\n     docker exec atlas-go curl -s localhost:18080/metrics | grep atlas_replay_\n  2. 任務是否註冊/執行:\n     docker logs atlas-go --since 30m 2>&1 | grep -E \"replay_freshness|background_task\"\n  3. 檔案是否被搬到非設定路徑（任務讀 cfg.ReplayDataPath）:\n     docker exec atlas-go ls -la /app/data/replay/\n"
+            runbook_url: "https://github.com/kaecer68/atlas-go/blob/main/docs/operations/local-deploy.md"
+            summary: "replay 新鮮度匯出任務沒在跑（序列缺席或心跳停止）"
+      - eval_time: 2h
+        alertname: AtlasReplaySessionDateInvalid
+        exp_alerts: []
+      - eval_time: 2h
+        alertname: AtlasReplayJsonlBehindCsv
+        exp_alerts: []
+      - eval_time: 2h
+        alertname: AtlasReplayCsvStale
+        exp_alerts: []
+      - eval_time: 2h
+        alertname: AtlasReplaySyncNotLanding
+        exp_alerts: []
+
+  - name: "H replay 指標整族缺席 + 服務在跑（absent arm）—— 只有第 4 條 firing"
+    interval: 1m
+    input_series:
+      - series: 'up{job="atlas-go"}'
+        values: '1x700'
+    alert_rule_test:
+      - eval_time: 2h
+        alertname: AtlasReplayFreshnessExporterDown
+        exp_alerts:
+        - exp_labels:
+            alertname: "AtlasReplayFreshnessExporterDown"
+            component: "replay"
+            service: "atlas-monitoring"
+            severity: "warning"
+            wave: "9.2"
+          exp_annotations:
+            description: "`replay_freshness_metrics_export`（5m 週期）的心跳序列\n`atlas_replay_freshness_checked_timestamp_seconds` 缺席或已停止 >30 分鐘。\n⚠️ 這代表 AtlasReplaySessionDateInvalid / AtlasReplayJsonlBehindCsv /\nAtlasReplayCsvStale 看到的都是**凍結樣本**,不能當現況 —— 先修這條。\n立即檢查:\n  1. 服務是否剛啟動（指標需要一次 5m 週期才會出現;部署後 5 分鐘內 absent 是預期）:\n     docker exec atlas-go curl -s localhost:18080/metrics | grep atlas_replay_\n  2. 任務是否註冊/執行:\n     docker logs atlas-go --since 30m 2>&1 | grep -E \"replay_freshness|background_task\"\n  3. 檔案是否被搬到非設定路徑（任務讀 cfg.ReplayDataPath）:\n     docker exec atlas-go ls -la /app/data/replay/\n"
+            runbook_url: "https://github.com/kaecer68/atlas-go/blob/main/docs/operations/local-deploy.md"
+            summary: "replay 新鮮度匯出任務沒在跑（序列缺席或心跳停止）"
+      - eval_time: 2h
+        alertname: AtlasReplaySessionDateInvalid
+        exp_alerts: []
+      - eval_time: 2h
+        alertname: AtlasReplayJsonlBehindCsv
+        exp_alerts: []
+      - eval_time: 2h
+        alertname: AtlasReplayCsvStale
+        exp_alerts: []
+      - eval_time: 2h
+        alertname: AtlasReplaySyncNotLanding
+        exp_alerts: []
+
+  - name: "I replay 指標整族缺席 + 服務沒在跑 —— 五條全部沉默（不與 AtlasGoTargetDown 重複 paging）"
+    interval: 1m
+    input_series:
+      - series: 'up{job="atlas-go"}'
+        values: '0x700'
+    alert_rule_test:
+      - eval_time: 2h
+        alertname: AtlasReplaySessionDateInvalid
+        exp_alerts: []
+      - eval_time: 2h
+        alertname: AtlasReplayJsonlBehindCsv
+        exp_alerts: []
+      - eval_time: 2h
+        alertname: AtlasReplayCsvStale
+        exp_alerts: []
+      - eval_time: 2h
+        alertname: AtlasReplayFreshnessExporterDown
+        exp_alerts: []
+      - eval_time: 2h
+        alertname: AtlasReplaySyncNotLanding
+        exp_alerts: []
+
+  - name: "J replay sync 未落地（gauge 4 = degraded）—— 只有第 5 條 firing"
+    interval: 1m
+    input_series:
+      - series: 'atlas_replay_csv_latest_date_timestamp_seconds'
+        values: '0x700'
+      - series: 'atlas_replay_jsonl_latest_date_timestamp_seconds'
+        values: '0x700'
+      - series: 'atlas_replay_freshness_checked_timestamp_seconds'
+        values: '0+60x700'
+      - series: 'atlas_channel_health_status{channel="twse_replay_sync"}'
+        values: '4x700'
+      - series: 'up{job="atlas-go"}'
+        values: '1x700'
+    alert_rule_test:
+      - eval_time: 2h
+        alertname: AtlasReplaySyncNotLanding
+        exp_alerts:
+        - exp_labels:
+            alertname: "AtlasReplaySyncNotLanding"
+            channel: "twse_replay_sync"
+            component: "replay"
+            incident_ref: "replay-sync-degraded"
+            service: "atlas-monitoring"
+            severity: "warning"
+            wave: "9.2"
+          exp_annotations:
+            description: "`twse_replay_sync` 的通道狀態非 ok（gauge 值 4:\n1=warn/stale、2=error、3=inactive、**4=degraded/未映射**）。\n「degraded」在寫入端有明確語意:**跑了但沒有資料落地**\n（回應日期與請求日不符 ⇒ 拒絕寫入;或 MI_INDEX 回傳的檔都對不上 target 集合）,\n且刻意**不推進 LastSuccessAt**（避免「沒資料卻顯示成功」的謊言）。\n立即檢查:\n  1. 最後一次執行的判定:\n     docker logs atlas-cron-replay-sync --since 48h 2>&1 | tail -30\n     關鍵字:`refusing to write a mis-dated row`、`none matched the`、\n     `not a Taiwan trading day`、`appended`\n  2. 記錄內容（status / last_error / last_success_at）:\n     python3 -c \"import json;d=json.load(open('/Users/kaecer/workspace/atlas/data/state/channel_health.json'));print(json.dumps(d['channels']['twse_replay_sync'],ensure_ascii=False,indent=1))\"\n  3. 補救:下一次每日 run 會自動 gap backfill（5 個日曆日的視窗）;\n     若是上游 MI_INDEX 形狀變了,需要人工確認 symbol 對應。\n"
+            runbook_url: "https://github.com/kaecer68/atlas-go/blob/main/docs/operations/local-deploy.md"
+            summary: "每日 replay sync 沒有把資料寫進 CSV（未落地/降級）"
+      - eval_time: 2h
+        alertname: AtlasReplaySessionDateInvalid
+        exp_alerts: []
+      - eval_time: 2h
+        alertname: AtlasReplayJsonlBehindCsv
+        exp_alerts: []
+      - eval_time: 2h
+        alertname: AtlasReplayCsvStale
+        exp_alerts: []
+      - eval_time: 2h
+        alertname: AtlasReplayFreshnessExporterDown
+        exp_alerts: []
+
+  - name: "K sync 非 ok 只持續 30 分鐘 —— 五條全部沉默（第 5 條 for: 1h 的負向對照）"
+    interval: 1m
+    input_series:
+      - series: 'atlas_replay_csv_latest_date_timestamp_seconds'
+        values: '0x700'
+      - series: 'atlas_replay_jsonl_latest_date_timestamp_seconds'
+        values: '0x700'
+      - series: 'atlas_replay_freshness_checked_timestamp_seconds'
+        values: '0+60x700'
+      - series: 'atlas_channel_health_status{channel="twse_replay_sync"}'
+        values: '4x30 0x700'
+      - series: 'up{job="atlas-go"}'
+        values: '1x700'
+    alert_rule_test:
+      - eval_time: 45m
+        alertname: AtlasReplaySessionDateInvalid
+        exp_alerts: []
+      - eval_time: 45m
+        alertname: AtlasReplayJsonlBehindCsv
+        exp_alerts: []
+      - eval_time: 45m
+        alertname: AtlasReplayCsvStale
+        exp_alerts: []
+      - eval_time: 45m
+        alertname: AtlasReplayFreshnessExporterDown
+        exp_alerts: []
+      - eval_time: 45m
+        alertname: AtlasReplaySyncNotLanding
+        exp_alerts: []
+
+  - name: "L JSONL 落後 1.5 天（未達 2 天門檻）—— 五條全部沉默（第 2 條門檻的負向對照）"
+    interval: 1m
+    input_series:
+      - series: 'atlas_replay_csv_latest_date_timestamp_seconds'
+        values: '0x700'
+      - series: 'atlas_replay_jsonl_latest_date_timestamp_seconds'
+        values: '-129600x700'
+      - series: 'atlas_replay_freshness_checked_timestamp_seconds'
+        values: '0+60x700'
+      - series: 'atlas_channel_health_status{channel="twse_replay_sync"}'
+        values: '0x700'
+      - series: 'up{job="atlas-go"}'
+        values: '1x700'
+    alert_rule_test:
+      - eval_time: 1h
+        alertname: AtlasReplaySessionDateInvalid
+        exp_alerts: []
+      - eval_time: 1h
+        alertname: AtlasReplayJsonlBehindCsv
+        exp_alerts: []
+      - eval_time: 1h
+        alertname: AtlasReplayCsvStale
+        exp_alerts: []
+      - eval_time: 1h
+        alertname: AtlasReplayFreshnessExporterDown
+        exp_alerts: []
+      - eval_time: 1h
+        alertname: AtlasReplaySyncNotLanding
+        exp_alerts: []
