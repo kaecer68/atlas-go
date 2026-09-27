@@ -557,6 +557,7 @@ var taskDescriptions = map[string]string{
 	"template_detector_scan":            "敘事模板掃描",
 	"universe_coverage_check":           "股票宇宙覆蓋率檢查",
 	"channel_health_metrics_export":     "通道健康指標匯出（Prometheus 格式）",
+	"replay_freshness_metrics_export":   "replay CSV/JSONL 最新資料日與探針心跳匯出（Prometheus 格式）",
 	"auto_cycle_update":                 "產業週期指標更新",
 	"regime_calibrate":                  "regime 判定校準",
 	"predictor_calibrate":               "預測器校準",
