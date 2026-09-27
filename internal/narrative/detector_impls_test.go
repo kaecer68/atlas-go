@@ -1,8 +1,9 @@
 // Package narrative — Stage 5 PR#2 detector_impls_test.go
 //
-// Tests the 24 Detector impls registered by NewDefaultDetectorRegistry().
+// Tests the 29 Detector impls registered by NewDefaultDetectorRegistry()
+// (registry-driven count — guarded by detector_count_gate_test.go).
 // Strategy:
-//   - Verify wiring (Theme / Enabled / SetEnabled) for all 24 detectors
+//   - Verify wiring (Theme / Enabled / SetEnabled) for all 29 detectors
 //   - Verify snapshot-pipeline detector (tariff_shock) with synthetic MacroDataSnapshot
 //   - Verify KB-pipeline detector (US_rates_up) with synthetic MarketNarrativeData
 //   - Verify helpers (narrativeEventToResult / severityFromString / sourceDataToMetadata)
@@ -21,10 +22,11 @@ import (
 	"github.com/kaecer68/atlas-go/internal/marketdata"
 )
 
-// allExpectedThemes is the canonical list of 24 trigger themes registered by
+// allExpectedThemes is the canonical list of the 29 trigger themes registered by
 // NewDefaultDetectorRegistry(). Order is irrelevant; the test checks presence.
+// The count is registry-driven — detector_count_gate_test.go keeps it honest.
 var allExpectedThemes = []string{
-	// KB-pipeline (21)
+	// KB-pipeline — macro / micro narrative detectors
 	"US_rates_up",
 	"US_rates_down",
 	"JPY_carry_unwind",

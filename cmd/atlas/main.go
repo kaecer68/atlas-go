@@ -1203,7 +1203,7 @@ func run(args []string, deps appDeps) error {
 				log.Printf("[TemplateDetector] scan store unavailable (%v); routes still registered for reachability", scanStoreErr)
 			}
 			RegisterTemplateDetectorRoutes(mux, detectorRegistry, detectorScanStore)
-			log.Printf("[TemplateDetector] registered /api/detector/* routes (24 detectors + scan store=%v)", detectorScanStore != nil)
+			log.Print(templateDetectorRouteLog(detectorRegistry, detectorScanStore != nil))
 
 			// Wrap detector scan store in adapter to break the
 			// ledger→narrative→eventdriven import cycle.

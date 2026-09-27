@@ -141,7 +141,7 @@ func TestEventTypeToTriggerThemes_PartialRegistry_FiltersUnregistered(t *testing
 }
 
 // TestEventTypeToTriggerThemes_FullRegistry_ReturnsAllDefaults verifies
-// that when the full NewDefaultDetectorRegistry() is used (all 24 themes
+// that when the full NewDefaultDetectorRegistry() is used (all 29 themes
 // registered), every mapped EventType returns its expected theme list.
 func TestEventTypeToTriggerThemes_FullRegistry_ReturnsAllDefaults(t *testing.T) {
 	full := narrative.NewDefaultDetectorRegistry()

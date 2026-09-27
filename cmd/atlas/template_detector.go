@@ -4,7 +4,9 @@
 // subsystem to external callers (notably cmd/atlas-mcp):
 //
 //	GET /api/detector/scan/status?limit=N   → recent ScanResultRow from ledger
-//	GET /api/detector/registry/list          → 24 detectors + enable/disable
+//	GET /api/detector/registry/list          → 29 detectors + enable/disable
+//	                                            (count is registry-driven — never hardcode;
+//	                                             guarded by internal/narrative/detector_count_gate_test.go)
 //
 // Both endpoints are best-effort and unconditional — they must not block
 // startup if the store or registry cannot be constructed.
@@ -12,6 +14,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strconv"
 
@@ -90,4 +93,22 @@ func handleDetectorRegistryList(registry *narrative.DetectorRegistry) http.Handl
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(out)
 	}
+}
+
+// templateDetectorRouteLog builds the startup log line for /api/detector/*.
+//
+// The detector count is read from the registry at runtime and never written
+// down: an earlier version of this line hardcoded a count and kept printing it
+// long after the registry had grown, which leaked a false number into
+// downstream audit output. Never reintroduce a literal count here — the size is
+// whatever the registry registered.
+//
+// Guarded by:
+//   - cmd/atlas/template_detector_count_log_test.go (this message follows the registry)
+//   - internal/narrative/detector_count_gate_test.go (doc/comment count claims)
+func templateDetectorRouteLog(reg *narrative.DetectorRegistry, scanStoreAvailable bool) string {
+	return fmt.Sprintf(
+		"[TemplateDetector] registered /api/detector/* routes (%d detectors + scan store=%v)",
+		len(reg.List()), scanStoreAvailable,
+	)
 }

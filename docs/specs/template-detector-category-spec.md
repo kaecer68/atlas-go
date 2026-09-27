@@ -9,18 +9,18 @@
 
 暴露 template trigger detector scan 的兩類結果給 agent:
 1. 過去 scan ledger 的「最近 N 次」結果(`template_detector_status`)
-2. 註冊表中所有 24 個 detector 的啟用/停用狀態(`detector_registry_list`)
+2. 註冊表中所有 29 個 detector 的啟用/停用狀態(`detector_registry_list`；數量由 registry 決定)
 
 ## 2. Tool 清單(2 個)
 
 | Tool | Description | Handler | Backend |
 |------|-------------|---------|---------|
 | `template_detector_status` | 最近(limit,預設 100)次 trigger theme scan 結果 | `handleTemplateDetectorStatus` | `GET /api/detector/scan/status?limit=N` |
-| `detector_registry_list` | 24 個 template trigger detector 的 theme + enable/disable | `handleDetectorRegistryList` | `GET /api/detector/registry/list` |
+| `detector_registry_list` | 29 個 template trigger detector 的 theme + enable/disable（數量由 registry 決定） | `handleDetectorRegistryList` | `GET /api/detector/registry/list` |
 
 ## 3. 規格重點
 
-- **Source code**: `internal/narrative/detector.go`(24 個 detector)
+- **Source code**: `internal/narrative/detector.go`(29 個 detector；數量由 registry 決定)
 - **Ledger**: `ledger.detector_scan_log`(SQLite 寫入;`detector_scan` 端點仍用 jsonl backend,Stage 8 follow-up)
 - **Auth**: 兩 tool 皆需 `ATLAS_API_KEY`(backend `/api/detector/*` 設為 protected)
 - **DestructiveHint**: 兩 tool 都 false(都是 read-only)
@@ -33,7 +33,7 @@
 ## 5. 測試
 
 - `tools_template_detector_test.go` — handler shape
-- e2e: `curl -H "X-API-Key: $ATLAS_API_KEY" /api/detector/registry/list`(回 200 + 24 detectors JSON)
+- e2e: `curl -H "X-API-Key: $ATLAS_API_KEY" /api/detector/registry/list`(回 200 + 29 detectors JSON)
 
 ## 6. 變更歷史
 

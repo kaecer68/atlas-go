@@ -27,7 +27,7 @@
 | 資金流向 | `internal/marketdata/twse_capital_flow_provider.go` | `TWSECapitalFlow`（外資/投信/自營商） |
 | 七大資金勢力 | `internal/capitalflow/` | Z-score + 共振係數 + 品質分數 |
 | 事件驅動 | `internal/eventdriven/` | 5 日 forward 預測 + ETF 規模×權重 |
-| 敘事引擎 | `internal/narrative/detector_impls.go` | 24 個 template trigger detectors（US_rates_up/down、JPY_carry_unwind、tariff_shock 等） |
+| 敘事引擎 | `internal/narrative/detector_impls.go` | 29 個 template trigger detectors（US_rates_up/down、JPY_carry_unwind、tariff_shock、conflict_deescalation 等） |
 | 策略分層 | `internal/domain/shared/shared.go` | `AgentLayer`（context/macro/sector/style/superinvestor/control） |
 | 策略執行管線 | `internal/orchestrator/executor_pipeline.go` | `ExecuteWithContext()`（RegimeInference → Collection → MomentumCrashProtection → WeightApplication → MacroFlow → ControlLayer） |
 
@@ -496,7 +496,7 @@
 
 ## 附錄 B：敘事事件觸發器與時期的關係
 
-`internal/narrative/detector_impls.go` 中的 24 個 detector 在不同時期有不同的敏感度：
+`internal/narrative/detector_impls.go` 中的 29 個 detector 在不同時期有不同的敏感度：
 
 - **US_rates_up**：所有時期都重要，但在高原和轉折下壓時權重加倍
 - **JPY_carry_unwind**：上升期和黑天鵝期最關鍵（carry trade 反轉）

@@ -1,6 +1,7 @@
 /**
  * Narrative event theme → 中文標籤對映表
- * 與 internal/narrative/templates.go 24 個主題同步
+ * 與 internal/narrative/templates.go 的 29 個主題同步
+ * （由 internal/narrative/frontend_theme_label_sync_test.go 斷言，勿只靠註解）
  * 未知主題會回傳原始 theme ID 並 console.warn
  */
 

@@ -16,7 +16,7 @@ func registerTemplateDetectorTools(mcpSrv *mcp.Server, s *server) {
 
 	countedAddTool(mcpSrv, &mcp.Tool{
 		Name:        "detector_registry_list",
-		Description: autoDescOr("detector_registry_list", "All 24 template trigger detectors registered in the narrative.DetectorRegistry with current enable/disable state. Use to inspect which detectors are active or to verify registry wiring."),
+		Description: autoDescOr("detector_registry_list", "Every template trigger detector registered in the narrative.DetectorRegistry with current enable/disable state. The registry decides how many exist, so this description carries no count. Use to inspect which detectors are active or to verify registry wiring."),
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: new(false)},
 	}, s.handleDetectorRegistryList)
 }

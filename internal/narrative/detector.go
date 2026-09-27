@@ -13,7 +13,7 @@ import (
 // ============================================================================
 // Stage 5 — Template Trigger Detector abstraction layer
 // ----------------------------------------------------------------------------
-// Goal: provide a uniform Detector interface so each of the 24 trigger themes
+// Goal: provide a uniform Detector interface so each of the 29 trigger themes
 // in templates.go can be detected by an independently-registerable,
 // individually-enabled/disabled Detector, without losing the existing
 // detectXxxEvent (KB pipeline) / detectXxxEventFromSnapshot (ingestor pipeline)
@@ -121,8 +121,8 @@ func numericMetadata(m map[string]any) map[string]float64 {
 }
 
 // Detector is the Stage 5 abstraction that wraps a single trigger-theme
-// detection. Each of the 24 templates in templates.go maps to one Detector
-// impl (instantiated in PR#2).
+// detection. Each template in templates.go maps to one Detector impl
+// (instantiated in PR#2). How many that is: ask the registry, not this comment.
 //
 // Contract:
 //   - Theme() returns the trigger_theme string; it must be stable across calls.
