@@ -265,6 +265,11 @@ func cliUsage(flags *flag.FlagSet) string {
 	return cliUsageHeader + "\nFlags:\n" + buf.String()
 }
 
+// liveFlagIgnoredInAPIModeDetail is the operator-visible explanation emitted
+// when `-api` and `-live` are combined. It is a shared constant so the message
+// cannot drift between the dispatch site and its regression test.
+const liveFlagIgnoredInAPIModeDetail = "live flag ignored in api mode by design; live-broker path is research-only (see docs/reference/product-positioning.md §3)"
+
 // cliUsageHeader documents the modes and the positional-subcommand contract.
 const cliUsageHeader = `atlas — Atlas Go trading platform CLI
 
@@ -272,7 +277,8 @@ Usage:
   atlas [flags]                     run a one-shot simulation (default with no positional args)
   atlas -simulate [flags]           run one-shot daily simulation and exit
   atlas -api [flags]                start the dashboard API server
-  atlas -live [flags]               start the live trading orchestrator
+  atlas -live [flags]               start the live trading orchestrator (research-only;
+                                    ignored when -api is also set — see docs/reference/product-positioning.md §3)
   atlas -build-universe MODE        run the SmartUniverse pipeline (run|map|status)
   atlas -check-integrity            validate configs/parameters.json and exit
   atlas prism worker                run the PRISM training-queue worker daemon
@@ -372,7 +378,7 @@ func run(args []string, deps appDeps) error {
 	allowRealtime := flags.Bool("allow-realtime", false, "enable real-time regime detection adapter (default false)")
 	allowHTTPBroker := flags.Bool("allow-http-broker", false, "allow http broker adapter in live mode (default false)")
 	allowRealSigner := flags.Bool("allow-real-signer", false, "allow non-placeholder signer for http broker adapter")
-	liveMode := flags.Bool("live", false, "start live trading orchestrator")
+	liveMode := flags.Bool("live", false, "start live trading orchestrator (research-only; ignored in -api mode by design, see docs/reference/product-positioning.md §3)")
 	forceIntradayCycles := flags.Bool("force-intraday-cycles", false, "bypass market hours check for off-hours testing")
 	logFormat := flags.String("log-format", "text", "log format: text or json")
 	simulateMode := flags.Bool("simulate", false, "run one-shot daily simulation and exit (skip api server)")
@@ -662,6 +668,18 @@ func run(args []string, deps appDeps) error {
 	}
 
 	if *apiMode {
+		// `-live` alongside `-api` is ignored by design, not by accident:
+		// this block returns before the `-live` dispatch at the end of run(),
+		// and the live trading orchestrator is a research-only path (the
+		// live-broker path is explicitly out of product scope and needs a
+		// double opt-in). Say it out loud so a combined invocation is never
+		// mistaken for a silent dispatch bug again.
+		// See docs/reference/product-positioning.md §3.
+		if *liveMode {
+			logging.Warn("main", "live_flag_ignored_in_api_mode",
+				"detail", liveFlagIgnoredInAPIModeDetail)
+		}
+
 		// Pre-initialize janus engine for Gateway channel adapters.
 		janusEngine = janus.NewEngine()
 		janusEngine.EnsureAllRegimes()
@@ -2884,6 +2902,10 @@ func run(args []string, deps appDeps) error {
 		}
 		return nil
 	}
+	// Only reached when -api is NOT set: the api block above returns before
+	// this point, which is exactly what makes a combined `-api -live`
+	// invocation ignore `-live` (that combination logs an explicit
+	// "ignored by design" line at the top of the api block).
 	if *liveMode {
 		return runLiveTrading(cfg, compositionRoot, deps, collector, repo, baselineMgr, *apiAddr, *forceIntradayCycles)
 	}
