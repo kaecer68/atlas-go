@@ -36,6 +36,7 @@
 #
 # expectation 是完整比對(labels + annotations 逐字);每個 case 對全部 11 條規則下斷言,
 # 因此「意外 firing」也會被抓到。改規則檔時本檔必須在同一個 commit 同步。
+# 因此「意外 firing」也會被抓到。改規則檔時本檔必須在同一個 commit 同步(逐字)。
 
 rule_files:
   - ../rules/atlas_universe_scoring_alerts.yml
