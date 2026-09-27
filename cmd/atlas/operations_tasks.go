@@ -26,7 +26,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strings"
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/apigateway"
@@ -100,76 +99,19 @@ func registerOperationsTasks(d operationsDeps) {
 	log.Printf("[Gateway] registered system_health_monitor background task (24h interval)")
 
 	// Register auto_backfill via Gateway.
+	//
+	// The task owns two independent responsibilities (see runAutoBackfill):
+	// fetching missing trading days, and keeping the converted JSONL as new as
+	// the CSV. They are deliberately NOT nested — a day without a gap used to
+	// end the task before the conversion ran, which is how the JSONL froze in
+	// production from 2026-08-24 while the CSV kept growing.
 	_ = d.taskMgr.Register(&apigateway.ScheduledTask{
 		Name:      "auto_backfill",
 		ChannelID: "twse_replay",
 		Interval:  24 * time.Hour,
 		Enabled:   true,
 		Task: func(ctx context.Context) error {
-			absWorkDir, err := filepath.Abs(d.cfg.WorkDir)
-			if err != nil {
-				absWorkDir = d.cfg.WorkDir
-			}
-			latestDate, err := getLatestReplayDate(d.cfg.ReplayDataPath)
-			if err != nil {
-				return fmt.Errorf("backfill replay read: %w", err)
-			}
-			now := time.Now()
-			if tz, err := time.LoadLocation("Asia/Taipei"); err == nil {
-				now = now.In(tz)
-			}
-			end := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
-			if now.Hour() < 15 || (now.Hour() == 15 && now.Minute() < 30) {
-				end = end.AddDate(0, 0, -1)
-			}
-			start := latestDate.AddDate(0, 0, 1)
-			for start.Weekday() == time.Saturday || start.Weekday() == time.Sunday {
-				start = start.AddDate(0, 0, 1)
-			}
-			for end.Weekday() == time.Saturday || end.Weekday() == time.Sunday {
-				end = end.AddDate(0, 0, -1)
-			}
-			if start.After(end) {
-				return nil
-			}
-			startStr := start.Format("2006-01-02")
-			endStr := end.Format("2006-01-02")
-			log.Printf("[Gateway] backfill gap detected: %s to %s", startStr, endStr)
-			bgCtx, cancel := context.WithTimeout(ctx, 5*time.Minute)
-			defer cancel()
-			var cmd *exec.Cmd
-			binaryPath := filepath.Join(absWorkDir, "daily-replay-sync")
-			if _, err := os.Stat(binaryPath); err == nil {
-				cmd = exec.CommandContext(bgCtx, binaryPath, "-csv", d.cfg.ReplayDataPath, "-backfill-start", startStr, "-backfill-end", endStr)
-				cmd.Dir = absWorkDir
-			} else if _, err := exec.LookPath("go"); err == nil {
-				cmd = exec.CommandContext(bgCtx, "go", "run", "./cmd/daily-replay-sync", "-csv", d.cfg.ReplayDataPath, "-backfill-start", startStr, "-backfill-end", endStr)
-				cmd.Dir = absWorkDir
-			} else {
-				return fmt.Errorf("backfill binary not found")
-			}
-			out, err := cmd.CombinedOutput()
-			if err != nil {
-				return fmt.Errorf("backfill failed: %w, output: %s", err, string(out))
-			}
-			log.Printf("[Gateway] backfill success: %s", string(out))
-
-			// Auto-convert CSV to JSONL so the system's replay pipeline
-			// (tw_extended_90days.jsonl) stays in sync with the CSV that
-			// daily-replay-sync appends to. JSONL is the canonical format
-			// consumed by FactorEngine (composition.go:67).
-			absCSV := d.cfg.ReplayDataPath
-			absJSONL := strings.TrimSuffix(d.cfg.ReplayDataPath, ".csv") + ".jsonl"
-			if !filepath.IsAbs(absCSV) {
-				absCSV = filepath.Join(absWorkDir, absCSV)
-				absJSONL = filepath.Join(absWorkDir, absJSONL)
-			}
-			if convErr := importer.ImportTWOpenDataCSVToJSONL(absCSV, absJSONL); convErr != nil {
-				log.Printf("[Gateway] backfill CSV→JSONL conversion warning (non-fatal): %v", convErr)
-			} else {
-				log.Printf("[Gateway] backfill CSV→JSONL conversion: %s", absJSONL)
-			}
-			return nil
+			return runAutoBackfill(ctx, d.cfg, time.Now())
 		},
 	})
 	log.Printf("[Gateway] registered auto_backfill background task (24h interval)")
@@ -558,6 +500,208 @@ func registerOperationsTasks(d operationsDeps) {
 		})
 		log.Printf("[Gateway] registered government_flow_aggregate task (1h interval, weekday 15:00+ Taipei, daily-once guard, BK-13)")
 	}
+}
+
+// runAutoBackfill is the body of the auto_backfill background task.
+//
+// It owns two responsibilities that are deliberately NOT nested:
+//
+//  1. gap backfill  — run cmd/daily-replay-sync over the trading days the
+//     replay CSV is missing (up to today's settled trading day).
+//  2. JSONL refresh — keep the converted JSONL as new as the CSV. The JSONL is
+//     what FactorEngine actually loads (internal/orchestrator/composition.go),
+//     so a JSONL that lags the CSV silently feeds stale prices into scoring.
+//
+// Before fix/20260927-decouple-csv-to-jsonl-conversion the conversion lived
+// inside the "gap detected" branch, so every gap-free day returned early and
+// the conversion never ran. buildFactorEngine (composition.go) only converts
+// when the JSONL is *missing*, therefore an existing JSONL could freeze
+// forever while the CSV kept growing — the production shape measured
+// 2026-08-24 → 2026-09-24 (JSONL frozen at 08-24).
+//
+// now is a parameter instead of time.Now() so the gap window stays testable.
+func runAutoBackfill(ctx context.Context, cfg config.Config, now time.Time) error {
+	absWorkDir, err := filepath.Abs(cfg.WorkDir)
+	if err != nil {
+		absWorkDir = cfg.WorkDir
+	}
+	// The converter needs absolute paths (it must not depend on the process
+	// cwd). The CSV path handed to daily-replay-sync stays exactly as
+	// configured — that part is unchanged.
+	absCSV := cfg.ReplayDataPath
+	absJSONL := replayJSONLPath(absCSV)
+	if !filepath.IsAbs(absCSV) {
+		absCSV = filepath.Join(absWorkDir, absCSV)
+		absJSONL = filepath.Join(absWorkDir, absJSONL)
+	}
+
+	latestDate, err := getLatestReplayDate(cfg.ReplayDataPath)
+	if err != nil {
+		return fmt.Errorf("backfill replay read: %w", err)
+	}
+	if tz, tzErr := time.LoadLocation("Asia/Taipei"); tzErr == nil {
+		now = now.In(tz)
+	}
+	end := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+	if now.Hour() < 15 || (now.Hour() == 15 && now.Minute() < 30) {
+		end = end.AddDate(0, 0, -1)
+	}
+	start := latestDate.AddDate(0, 0, 1)
+	for start.Weekday() == time.Saturday || start.Weekday() == time.Sunday {
+		start = start.AddDate(0, 0, 1)
+	}
+	for end.Weekday() == time.Saturday || end.Weekday() == time.Sunday {
+		end = end.AddDate(0, 0, -1)
+	}
+	// backfillErr is kept instead of returned immediately: the fetch outcome
+	// must not decide whether the JSONL gets refreshed (R1, adversarial
+	// review 2026-09-27 — the previous `return err` here reproduced the very
+	// defect this change removes, just with a narrower window: a failing
+	// daily-replay-sync meant "no conversion this round").
+	var backfillErr error
+	if start.After(end) {
+		// Nothing to fetch. This branch used to `return nil` outright, which
+		// also skipped the conversion. It now logs and falls through, so the
+		// JSONL gate below is always evaluated.
+		log.Printf("[Gateway] backfill gap: none (csv_latest=%s target=%s) — fetch skipped, JSONL freshness gate still evaluated",
+			latestDate.Format(dateLayout), end.Format(dateLayout))
+	} else if err := runReplayGapBackfill(ctx, absWorkDir, cfg.ReplayDataPath,
+		start.Format(dateLayout), end.Format(dateLayout)); err != nil {
+		backfillErr = err
+	}
+
+	// Gap- and fetch-independent: the JSONL is refreshed whenever it is behind
+	// the CSV. The conversion is non-fatal, so its error is intentionally
+	// dropped here (the failure is logged with its own distinguishable token).
+	_ = syncReplayJSONLFromCSV(absCSV, absJSONL)
+	return backfillErr
+}
+
+// runReplayGapBackfill runs cmd/daily-replay-sync over the inclusive
+// [startStr, endStr] window, preferring the prebuilt binary in absWorkDir and
+// falling back to `go run` (both paths unchanged).
+//
+// The 5-minute budget is scoped to this call. In the previous inline version
+// the context (and its defer cancel) stayed armed until the whole task
+// returned.
+func runReplayGapBackfill(ctx context.Context, absWorkDir, csvPath, startStr, endStr string) error {
+	log.Printf("[Gateway] backfill gap detected: %s to %s", startStr, endStr)
+	bgCtx, cancel := context.WithTimeout(ctx, 5*time.Minute)
+	defer cancel()
+	var cmd *exec.Cmd
+	binaryPath := filepath.Join(absWorkDir, "daily-replay-sync")
+	if _, err := os.Stat(binaryPath); err == nil {
+		cmd = exec.CommandContext(bgCtx, binaryPath, "-csv", csvPath, "-backfill-start", startStr, "-backfill-end", endStr)
+		cmd.Dir = absWorkDir
+	} else if _, err := exec.LookPath("go"); err == nil {
+		cmd = exec.CommandContext(bgCtx, "go", "run", "./cmd/daily-replay-sync", "-csv", csvPath, "-backfill-start", startStr, "-backfill-end", endStr)
+		cmd.Dir = absWorkDir
+	} else {
+		return fmt.Errorf("backfill binary not found")
+	}
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("backfill failed: %w, output: %s", err, string(out))
+	}
+	log.Printf("[Gateway] backfill success: %s", string(out))
+	return nil
+}
+
+// dateLayout is the replay data-date layout used by the CSV Date column, the
+// JSONL date field, and internal/replay.GetLatestDate.
+const dateLayout = "2006-01-02"
+
+// replayFreshness holds the newest data date of the replay CSV and of its
+// converted JSONL, or the read error that prevented reading each of them.
+type replayFreshness struct {
+	csvLatest   time.Time
+	jsonlLatest time.Time
+	csvErr      error
+	jsonlErr    error
+}
+
+// conversionNeeded reports whether the JSONL must be rebuilt from the CSV:
+// the CSV holds a newer data date, or the JSONL is missing/unreadable.
+//
+// An unreadable CSV is NOT a reason to convert — there would be nothing to
+// convert from, and the converter would fail with the same error anyway.
+func (f replayFreshness) conversionNeeded() bool {
+	if f.csvErr != nil {
+		return false
+	}
+	if f.jsonlErr != nil {
+		return true
+	}
+	return f.csvLatest.After(f.jsonlLatest)
+}
+
+// compareReplayCSVToJSONL reads both files' newest data date.
+//
+// It goes through internal/replay.GetLatestDate — the very same helper that
+// feeds the freshness gauges atlas_replay_{csv,jsonl}_latest_date_timestamp_seconds
+// (see replay_freshness_metrics_task.go) and therefore the
+// AtlasReplayJsonlBehindCsv rule. Gate and alert must not drift apart, so no
+// second date-parsing implementation is introduced here.
+func compareReplayCSVToJSONL(csvPath, jsonlPath string) replayFreshness {
+	f := replayFreshness{csvLatest: time.Time{}, jsonlLatest: time.Time{}}
+	f.csvLatest, f.csvErr = replayLatestDate(csvPath)
+	if f.csvErr != nil {
+		return f
+	}
+	f.jsonlLatest, f.jsonlErr = replayLatestDate(jsonlPath)
+	return f
+}
+
+// syncReplayJSONLFromCSV refreshes the JSONL from the CSV, but only when the
+// JSONL is actually behind, and logs which of the three outcomes happened.
+//
+// Gate: convert iff the CSV's newest data date is strictly newer than the
+// JSONL's (or the JSONL cannot be read). When the JSONL is already current the
+// file is left untouched — zero work, zero writes.
+//
+// The three outcomes are distinguishable in the logs by these tokens:
+//
+//	conversion: converted                      — file rewritten, caller state: caught up
+//	conversion: skipped (already up to date)   — zero work, file untouched
+//	conversion failed (non-fatal)              — attempted, did not succeed
+//
+// A failure stays non-fatal (a derived file must not fail the task) but is
+// returned so tests and future callers can react; runAutoBackfill ignores it,
+// matching the pre-existing "warning, non-fatal" contract.
+func syncReplayJSONLFromCSV(csvPath, jsonlPath string) error {
+	fresh := compareReplayCSVToJSONL(csvPath, jsonlPath)
+	switch {
+	case fresh.csvErr != nil:
+		// Cannot judge freshness without the source file.
+		log.Printf("[Gateway] backfill CSV→JSONL conversion: skipped (replay CSV unreadable: %v) — csv=%s", fresh.csvErr, csvPath)
+		return nil
+	case !fresh.conversionNeeded():
+		log.Printf("[Gateway] backfill CSV→JSONL conversion: skipped (already up to date) — csv_latest=%s jsonl_latest=%s jsonl=%s",
+			fresh.csvLatest.Format(dateLayout), fresh.jsonlLatest.Format(dateLayout), jsonlPath)
+		return nil
+	case fresh.jsonlErr != nil:
+		// Missing or unreadable JSONL: (re)build it. This is the self-healing
+		// path for "conversion never succeeded" and "file was deleted".
+		log.Printf("[Gateway] backfill CSV→JSONL conversion: needed (JSONL unreadable: %v) — csv_latest=%s jsonl=%s",
+			fresh.jsonlErr, fresh.csvLatest.Format(dateLayout), jsonlPath)
+	default:
+		log.Printf("[Gateway] backfill CSV→JSONL conversion: needed (CSV is newer) — csv_latest=%s jsonl_latest=%s",
+			fresh.csvLatest.Format(dateLayout), fresh.jsonlLatest.Format(dateLayout))
+	}
+
+	if err := importer.ImportTWOpenDataCSVToJSONL(csvPath, jsonlPath); err != nil {
+		log.Printf("[Gateway] backfill CSV→JSONL conversion failed (non-fatal): %v — csv=%s jsonl=%s", err, csvPath, jsonlPath)
+		return err
+	}
+	// Report the resulting data date, not just "we tried": the point of this
+	// task is that the JSONL actually catches up.
+	caughtUp := ""
+	if d, err := replayLatestDate(jsonlPath); err == nil {
+		caughtUp = " jsonl_latest_now=" + d.Format(dateLayout)
+	}
+	log.Printf("[Gateway] backfill CSV→JSONL conversion: converted — csv_latest=%s jsonl=%s%s",
+		fresh.csvLatest.Format(dateLayout), jsonlPath, caughtUp)
+	return nil
 }
 
 // currentTaipeiTradingDate returns the trading-day boundary as of now,
