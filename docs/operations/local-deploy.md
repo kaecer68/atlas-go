@@ -221,7 +221,9 @@ make check-binaries                        # 見坑⑦
 6. **host port 契約**：`atlas-postgres` **55432**、`grafana` **3001**（3000 是 gitea）、`redis` 16379、`atlas` 18080、`fubon-proxy` 18081、`onepager` 18090。repo compose 的預設（5432/3000）是 dev 用，靠步驟 2 的 `.env` 覆寫。
 7. **`make check-binaries` 的語意**：比對「binary buildinfo commit vs HEAD」，所以 compose/docs-only commit 也會報 STALE（非真漂移）；script 另有 `TEMP_FILES[@]` 空陣列在 bash 3.2 崩潰的 bug（#1923 修）。
 8. **fresh worktree 缺 gitignored 前端 dist** → `ci-gate` 失敗（`embed: pattern all:dist`）：從主 worktree `cp -r admin_web/dist client_web/dist`。
-9. **golangci-lint cache 會掃到已刪除的相鄰 worktree**（假 issue）→ `golangci-lint cache clean`。
+9. **本機兩個 CI 假紅燈（dev 工具鏈狀態，不是你的改動）**：
+   (a) `golangci-lint` cache 會重放「已刪除的相鄰 worktree」的 issue — 症狀是 issue 路徑出現 `../<別的 worktree>/` 前綴、伴隨 `[runner/source_code] Failed to get line N for file ...: can't read file`，在 0 個 `.go` 變更的分支上假紅。`make ci-full` 自 2026-09-27（E22）起把 cache 綁到本 worktree 的 git dir（`<git-dir>/golangci-lint-cache`）而不再共用；**手動**跑 `golangci-lint run` 仍用預設共用 cache，遇到時才需 `golangci-lint cache clean`。
+   (b) coverage 步驟曾把 coverprofile 硬編在共用 `/tmp/atlas-ci-full-coverage.out` ⇒ 同機多條 lane 開頭/結尾的 `rm -f` 互刪 ⇒ 症狀 `❌ 取不到覆蓋率：coverprofile 缺失或為空`（`go test` 本身是綠的）；同日起改為每次執行 `mktemp -d` 私有目錄 + `trap` 清理。
 10. **重開機後一鍵恢復**：`bash ~/bin/macmini-recover.sh`（`imac-recover.sh` 為相容 symlink；MacBook wrapper：`macmini-recover`）。launchd idle 排程 agent（watchdog/orbstack，`state = not running` 且 `last exit = 0`）屬正常。
 
 ### Rollback
