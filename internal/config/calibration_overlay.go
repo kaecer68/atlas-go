@@ -300,6 +300,28 @@ func (r CalibrationOverlayReport) AppliedKeys() []string {
 	return keys
 }
 
+// DriftedKeys returns the keys of the *applied* entries whose effective value
+// actually differs from the SSOT value they were layered onto.
+//
+// AppliedKeys answers "what did the loader layer in"; DriftedKeys answers "where
+// does what the process runs on differ from what the repository says". The two
+// differ because an overlay entry may re-state the baseline value (a calibration
+// that converged back onto the reviewed number): that entry is still applied, but
+// it is not drift, and reporting it as drift would make the drift count grow with
+// history instead of with disagreement.
+//
+// The comparison is the loader's own (sameJSONValue): numeric values compare with
+// a relative tolerance, everything else structurally.
+func (r CalibrationOverlayReport) DriftedKeys() []string {
+	keys := make([]string, 0, len(r.Applied))
+	for _, d := range r.Applied {
+		if !sameJSONValue(d.SSOT, d.Effective) {
+			keys = append(keys, d.Key)
+		}
+	}
+	return keys
+}
+
 // ApplyCalibratedOverlayLayer layers the registered overlay onto cfg and returns
 // the (possibly replaced) configuration plus a report of what changed. ssotRaw is
 // the SSOT document cfg was parsed from (nil when the SSOT file is missing); it
@@ -311,7 +333,62 @@ func (r CalibrationOverlayReport) AppliedKeys() []string {
 // cannot be applied, and keeping them would only hide a typo), and entries whose
 // SSOT baseline moved are dropped so a reviewed charter edit wins.
 func ApplyCalibratedOverlayLayer(cfg *ParametersConfig, ssotRaw []byte) (*ParametersConfig, CalibrationOverlayReport) {
-	report := CalibrationOverlayReport{Path: GetCalibratedOverlayPath()}
+	return applyCalibratedOverlayLayer(cfg, ssotRaw, GetCalibratedOverlayPath(), overlayApplyRuntime)
+}
+
+// overlayApplyMode selects the behavior of applyCalibratedOverlayLayer. There are
+// exactly two callers and exactly two modes; a struct beats two bare booleans.
+type overlayApplyMode struct {
+	// mutate writes the reconciled document back (dropping entries that cannot be
+	// applied and recording first-seen baselines). False = observer mode.
+	mutate bool
+	// quiet suppresses the per-entry and aggregate logging. False for the runtime
+	// load (rare, and its log IS the audit trail); true for the observer, which
+	// runs every 5 minutes — the same lines 288 times a day are log spam, not
+	// observability, and the observer reports aggregates as metrics instead.
+	quiet bool
+}
+
+var (
+	// overlayApplyRuntime is the configuration-load behavior, unchanged from
+	// before the observer mode existed.
+	overlayApplyRuntime = overlayApplyMode{mutate: true, quiet: false}
+	// overlayApplyObserver classifies without writing and without logging.
+	overlayApplyObserver = overlayApplyMode{mutate: false, quiet: true}
+)
+
+// InspectCalibratedOverlayLayer classifies the overlay at overlayPath against the
+// SSOT document cfg was parsed from (ssotRaw), with the *same* decision code as
+// ApplyCalibratedOverlayLayer, but as a pure read: it never drops an entry from
+// the document and never rewrites it.
+//
+// It exists for observers. The calibration-freshness metrics exporter runs every
+// 5 minutes, and an observability task must not write: a second read-modify-write
+// cycle on data/state/parameters.calibrated.json races the calibration writer's
+// merge (UpdateCalibrationOverlay does load → merge → save) and can silently drop
+// an entry that was just calibrated. Reconciliation stays where it belongs — the
+// process that loads the configuration it actually runs on.
+//
+// A caller that needs "the configuration the process runs on" wants
+// LoadEffectiveParametersConfig (or ApplyCalibratedOverlayLayer) instead; this one
+// answers "what does the overlay, as it is on disk, do to the baseline".
+func InspectCalibratedOverlayLayer(cfg *ParametersConfig, ssotRaw []byte, overlayPath string) (*ParametersConfig, CalibrationOverlayReport) {
+	return applyCalibratedOverlayLayer(cfg, ssotRaw, overlayPath, overlayApplyObserver)
+}
+
+// applyCalibratedOverlayLayer is the single implementation behind both entry
+// points. mutate=false is the observer mode: identical classification of every
+// entry, zero writes.
+func applyCalibratedOverlayLayer(cfg *ParametersConfig, ssotRaw []byte, overlayPath string, mode overlayApplyMode) (*ParametersConfig, CalibrationOverlayReport) {
+	report := CalibrationOverlayReport{Path: overlayPath}
+	// Observer mode is silent (see overlayApplyMode.quiet): every log call in this
+	// function goes through these three, so the decisions stay identical and only
+	// the noise differs.
+	warn, logError, logInfo := logging.Warn, logging.Error, logging.Info
+	if mode.quiet {
+		silent := func(string, string, ...any) {}
+		warn, logError, logInfo = silent, silent, silent
+	}
 	if cfg == nil || report.Path == "" {
 		return cfg, report
 	}
@@ -319,7 +396,7 @@ func ApplyCalibratedOverlayLayer(cfg *ParametersConfig, ssotRaw []byte) (*Parame
 	ov, err := LoadCalibrationOverlay(report.Path)
 	if err != nil {
 		report.Err = err
-		logging.Warn("calibration_overlay", "overlay_unreadable",
+		warn("calibration_overlay", "overlay_unreadable",
 			logging.FStr("path", report.Path), logging.Err(err))
 		return cfg, report
 	}
@@ -334,6 +411,17 @@ func ApplyCalibratedOverlayLayer(cfg *ParametersConfig, ssotRaw []byte) (*Parame
 	sort.Strings(keys)
 
 	reconcile := false
+
+	// drop removes an entry from the in-memory document so it is not applied and
+	// not kept. Observer mode (mutate=false) leaves the on-disk document exactly
+	// as it was found: the caller is reporting, not repairing.
+	drop := func(key string) {
+		if !mode.mutate {
+			return
+		}
+		delete(ov.Entries, key)
+		reconcile = true
+	}
 
 	// ---- phase 1: dotted-path entries patch the SSOT document ----
 	pathKeys := make([]string, 0, len(keys))
@@ -351,9 +439,8 @@ func ApplyCalibratedOverlayLayer(cfg *ParametersConfig, ssotRaw []byte) (*Parame
 			// the SSOT, so they are dropped loudly rather than applied blind.
 			for _, key := range pathKeys {
 				report.Unknown = append(report.Unknown, key)
-				delete(ov.Entries, key)
-				reconcile = true
-				logging.Warn("calibration_overlay", "overlay_path_entry_dropped_no_ssot_document",
+				drop(key)
+				warn("calibration_overlay", "overlay_path_entry_dropped_no_ssot_document",
 					logging.FStr("key", key), logging.FStr("path", ov.Entries[key].Path), logging.Err(err))
 			}
 		} else {
@@ -361,18 +448,16 @@ func ApplyCalibratedOverlayLayer(cfg *ParametersConfig, ssotRaw []byte) (*Parame
 				entry := ov.Entries[key]
 				if !containerExists(doc, entry.Path) {
 					report.Unknown = append(report.Unknown, key)
-					delete(ov.Entries, key)
-					reconcile = true
-					logging.Warn("calibration_overlay", "overlay_entry_unknown_path",
+					drop(key)
+					warn("calibration_overlay", "overlay_entry_unknown_path",
 						logging.FStr("key", key), logging.FStr("path", entry.Path))
 					continue
 				}
 				curve, _ := getJSONPath(doc, entry.Path)
 				if !baselineMatches(entry.SSOT, curve) {
 					report.Invalidated = append(report.Invalidated, key)
-					delete(ov.Entries, key)
-					reconcile = true
-					logging.Warn("calibration_overlay", "overlay_entry_invalidated_ssot_moved",
+					drop(key)
+					warn("calibration_overlay", "overlay_entry_invalidated_ssot_moved",
 						logging.FStr("key", key), logging.FStr("path", entry.Path),
 						logging.FStr("reconciled_against", describeBaseline(entry.SSOT)),
 						logging.FStr("ssot_now", describeJSONValue(curve)))
@@ -380,16 +465,17 @@ func ApplyCalibratedOverlayLayer(cfg *ParametersConfig, ssotRaw []byte) (*Parame
 				}
 				if !setJSONPath(doc, entry.Path, entry.Value) {
 					report.Unknown = append(report.Unknown, key)
-					delete(ov.Entries, key)
-					reconcile = true
-					logging.Warn("calibration_overlay", "overlay_entry_path_not_settable",
+					drop(key)
+					warn("calibration_overlay", "overlay_entry_path_not_settable",
 						logging.FStr("key", key), logging.FStr("path", entry.Path))
 					continue
 				}
 				patched = true
 				diff := newOverlayDiff(key, entry, curve)
 				report.Applied = append(report.Applied, diff)
-				logOverlayApplication(diff)
+				if !mode.quiet {
+					logOverlayApplication(diff)
+				}
 				if entry.SSOT == nil {
 					entry.SSOT = baselineOf(curve)
 					ov.Entries[key] = entry
@@ -402,7 +488,7 @@ func ApplyCalibratedOverlayLayer(cfg *ParametersConfig, ssotRaw []byte) (*Parame
 		out, err := json.Marshal(doc)
 		if err != nil {
 			report.Err = fmt.Errorf("marshal patched parameters document: %w", err)
-			logging.Error("calibration_overlay", "overlay_patch_marshal_failed", logging.Err(err))
+			logError("calibration_overlay", "overlay_patch_marshal_failed", logging.Err(err))
 			return cfg, report
 		}
 		patchedCfg, err := parseParametersBytes(out)
@@ -410,7 +496,7 @@ func ApplyCalibratedOverlayLayer(cfg *ParametersConfig, ssotRaw []byte) (*Parame
 			// Fail closed: keep the SSOT configuration rather than running on a
 			// document we cannot validate.
 			report.Err = err
-			logging.Error("calibration_overlay", "overlay_patch_parse_failed", logging.Err(err))
+			logError("calibration_overlay", "overlay_patch_parse_failed", logging.Err(err))
 			return cfg, report
 		}
 		cfg = patchedCfg
@@ -432,18 +518,16 @@ func ApplyCalibratedOverlayLayer(cfg *ParametersConfig, ssotRaw []byte) (*Parame
 		accessor, ok := parameterTable[key]
 		if !ok {
 			report.Unknown = append(report.Unknown, key)
-			delete(ov.Entries, key)
-			reconcile = true
-			logging.Warn("calibration_overlay", "overlay_entry_unknown_parameter",
+			drop(key)
+			warn("calibration_overlay", "overlay_entry_unknown_parameter",
 				logging.FStr("param", key), logging.FStr("path", report.Path))
 			continue
 		}
 		ssot := accessor.get(cfg)
 		if !baselineMatches(entry.SSOT, ssot) {
 			report.Invalidated = append(report.Invalidated, key)
-			delete(ov.Entries, key)
-			reconcile = true
-			logging.Warn("calibration_overlay", "overlay_entry_invalidated_ssot_moved",
+			drop(key)
+			warn("calibration_overlay", "overlay_entry_invalidated_ssot_moved",
 				logging.FStr("param", key),
 				logging.FStr("reconciled_against", describeBaseline(entry.SSOT)),
 				logging.FStr("ssot_now", describeJSONValue(ssot)),
@@ -453,16 +537,17 @@ func ApplyCalibratedOverlayLayer(cfg *ParametersConfig, ssotRaw []byte) (*Parame
 		value, ok := numericValue(entry.Value)
 		if !ok {
 			report.Unknown = append(report.Unknown, key)
-			delete(ov.Entries, key)
-			reconcile = true
-			logging.Warn("calibration_overlay", "overlay_entry_non_numeric_parameter",
+			drop(key)
+			warn("calibration_overlay", "overlay_entry_non_numeric_parameter",
 				logging.FStr("param", key), logging.FStr("value", describeJSONValue(entry.Value)))
 			continue
 		}
 		accessor.set(cfg, value)
 		diff := newOverlayDiff(key, entry, ssot)
 		report.Applied = append(report.Applied, diff)
-		logOverlayApplication(diff)
+		if !mode.quiet {
+			logOverlayApplication(diff)
+		}
 		if entry.SSOT == nil {
 			entry.SSOT = baselineOf(ssot)
 			ov.Entries[key] = entry
@@ -470,9 +555,9 @@ func ApplyCalibratedOverlayLayer(cfg *ParametersConfig, ssotRaw []byte) (*Parame
 		}
 	}
 
-	if reconcile {
+	if mode.mutate && reconcile {
 		if err := SaveCalibrationOverlay(report.Path, ov); err != nil {
-			logging.Warn("calibration_overlay", "overlay_reconcile_failed",
+			warn("calibration_overlay", "overlay_reconcile_failed",
 				logging.FStr("path", report.Path), logging.Err(err))
 		} else {
 			report.Reconciled = true
@@ -480,7 +565,7 @@ func ApplyCalibratedOverlayLayer(cfg *ParametersConfig, ssotRaw []byte) (*Parame
 	}
 
 	if len(report.Applied) > 0 || len(report.Invalidated) > 0 || len(report.Unknown) > 0 {
-		logging.Info("calibration_overlay", "overlay_applied",
+		logInfo("calibration_overlay", "overlay_applied",
 			logging.FStr("path", report.Path),
 			logging.FInt("applied", len(report.Applied)),
 			logging.FInt("invalidated", len(report.Invalidated)),
@@ -521,10 +606,31 @@ func newOverlayDiff(key string, entry CalibrationOverlayEntry, ssot any) Calibra
 	return diff
 }
 
-// logOverlayApplication reports one applied entry with both values. A numeric
-// ratio outside the calibration loops' documented per-round window [0.3x, 3x]
-// means the overlay is not the product of a single accepted step — a human
-// should look.
+// The calibration loops' documented per-round window. A numeric ratio outside it
+// means the value layered in is not the product of a single accepted step, so a
+// human should look.
+//
+// It is exported because it is a *contract*, not a log detail: the calibration
+// drift metric (internal/monitoring) reports how many applied entries fall outside
+// it, and the alert on that metric must use the same boundary as the WARN log.
+const (
+	CalibrationOverlaySingleStepWindowMin = 1.0 / 3.0
+	CalibrationOverlaySingleStepWindowMax = 3.0
+)
+
+// RatioOutsideSingleStepWindow reports whether a ratio is outside the documented
+// single-step window. A zero ratio means "not comparable" (a non-numeric entry, or
+// an SSOT value of 0 where a ratio is undefined) and is never outside the window:
+// absence of a comparison is not evidence of an anomaly.
+func RatioOutsideSingleStepWindow(ratio float64) bool {
+	if ratio == 0 {
+		return false
+	}
+	return ratio < CalibrationOverlaySingleStepWindowMin || ratio > CalibrationOverlaySingleStepWindowMax
+}
+
+// logOverlayApplication reports one applied entry with both values, and warns when
+// the ratio is outside the single-step window (see RatioOutsideSingleStepWindow).
 func logOverlayApplication(diff CalibrationOverlayDiff) {
 	logging.Info("calibration_overlay", "overlay_entry_applied",
 		logging.FStr("key", diff.Key),
@@ -534,7 +640,7 @@ func logOverlayApplication(diff CalibrationOverlayDiff) {
 		logging.FFloat64("ratio", diff.Ratio),
 		logging.FStr("method", diff.Method),
 		logging.FStr("calibrated_at", diff.CalibratedAt.Format(time.RFC3339)))
-	if diff.Ratio != 0 && (diff.Ratio < 1.0/3.0 || diff.Ratio > 3.0) {
+	if RatioOutsideSingleStepWindow(diff.Ratio) {
 		logging.Warn("calibration_overlay", "overlay_entry_outside_single_step_window",
 			logging.FStr("key", diff.Key),
 			logging.FStr("ssot", describeJSONValue(diff.SSOT)),
