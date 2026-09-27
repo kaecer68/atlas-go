@@ -11,8 +11,9 @@ test -z "$(gofmt -l .)"
 
 # Git hooks (installs commit-msg / pre-commit / pre-push; sets core.hooksPath=.githooks)
 bash scripts/install-hooks.sh
-# NOTE: scripts/hooks/pre-commit is a DEPRECATED no-op stub (exit 0) — do not copy it
-# into .git/hooks/; it makes it look like hooks are installed when they are not.
+# NOTE: never hand-copy an `exit 0` stub into .git/hooks/ — it makes hooks look
+# installed when they are not. (The legacy stub `scripts/hooks/pre-commit` that caused
+# this was deleted 2026-09-27; `install-hooks.sh` is the only supported installer.)
 ```
 
 > **新 worktree 第一次建置**（`git worktree add ...`）：先跑 **`make embed-dirs`**。
