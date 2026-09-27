@@ -21,7 +21,7 @@
 → 新增 trigger detector 時，先確認應該對應到哪條 pipeline，不要混用。
 
 ### 2. tariff_shock 缺 KB pipeline
-Stage 4 PR#2 的 detector_impls.go 把 tariff_shock 透過 ingestor 的 `detectTariffShockEventFromSnapshot` 包成 snapshot-pipeline detector（其他 23 個用 KB）。這是當時的真實缺口 — KB 沒有 tariff_shock 函式。
+Stage 4 PR#2 的 detector_impls.go 把 tariff_shock 透過 ingestor 的 `detectTariffShockEventFromSnapshot` 包成 snapshot-pipeline detector（其餘走 KB pipeline；29 個中僅 `tariff_shock` 與 `conflict_deescalation` 走 snapshot pipeline）。這是當時的真實缺口 — KB 沒有 tariff_shock 函式。
 
 → Stage 6+ 可考慮新增 `detectTariffShockKBEvent`（讀 TradeNews 或 GeopoliticalGPR proxy）。
 
@@ -35,7 +35,16 @@ Stage 4 PR#2 的 detector_impls.go 把 tariff_shock 透過 ingestor 的 `detectT
 `internal/ledger/detector_scan_store.go` 為了 ScanResultRow 使用 `narrative.Severity` / `Source` 型別而 import narrative。**敘事套件的測試不能 import ledger**，否則 cycle。在敘事套件裡要測 SQLite round-trip 就放到 ledger package 測。
 
 ### 6. 29 templates 數量是 hard gate
-`detector_e2e_test.go:TestE2E_All24ThemesRegistered` 是 regression gate（常數現為 29）。新增/刪除 template **必須同步** `templates.go` 的 `DefaultTemplates()`、`detector_impls.go` 的 detector 結構、`detector_e2e_test.go` 的 expectedCount 常數、`detector_impls_test.go` 的 allExpectedThemes slice。
+`detector_e2e_test.go:TestE2E_AllThemesRegistered` 與 `detector_count_gate_test.go` 是 regression gate：
+
+- `expectedCount` 讀 `documentedDetectorCount` 常數（不再各檔各寫一個數字）。
+- `TestDetectorCount_RegistryMatchesDocumentedCount` 斷言 registry 大小 = 文件寫的數字。
+- `TestDetectorCount_NoStaleCountClaims` 掃描 `countClaimCarriers` 內所有「N detectors / N trigger themes / N templates」敘述，只要有一處與 registry 不符就紅（這條就是為了抓「註解寫 24、實際 29」這種漂移；cmd/atlas 的 startup log 改為執行期計算，不在文字掃描範圍）。
+
+新增/刪除 template **必須同步** `templates.go` 的 `DefaultTemplates()`、`detector_impls.go` 的 detector 結構、`detector_count_gate_test.go` 的 `documentedDetectorCount` 常數、`detector_impls_test.go` 的 `allExpectedThemes` slice。
+
+### 7. 五個主題尚無 InvestmentModel（knownModelGaps）
+`knowledge_base_test.go` 的 `TestAllThemesHaveModel` 現在由 `DefaultTemplates()` 推導主題清單（不再手寫），沒有 model 的主題必須明文列在 `knownModelGaps`：目前是 `conflict_deescalation`、`dollar_softening`、`inflation_cool`、`inflation_moderate`、`us_earnings_boom`。這些主題命中時不會產生 sector bet — 缺口是顯式的，不是被一份過期清單藏起來。補上 model 後測試會要求你從 `knownModelGaps` 刪掉該筆（雙向閘門）。
 
 ## Stage 5 新增的對外介面
 

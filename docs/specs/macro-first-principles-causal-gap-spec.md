@@ -37,8 +37,8 @@
 ```
 數據層   apigateway 10 個宏觀通道（DXY/US10Y/VIX/USD-TWD/油/金/日圓/GPR/三大法人）
    ↓
-事件層   narrative：24 個 Detector（KB pipeline=權威、snapshot pipeline=降級代理）
-         → KnowledgeBase 24 條 CausalTemplate（Steps×Impact + HistoricalHitRate）
+事件層   narrative：29 個 Detector（KB pipeline=權威、snapshot pipeline=降級代理）
+         → KnowledgeBase 29 條 CausalTemplate（Steps×Impact + HistoricalHitRate）
    ↓
 推論層   ① regime 四層傳導鏈（layer_0 宏觀 → layer_4 台股量能 → layer_7 敘事 → layer_root LLM）
          ② TaiwanStressIndex 八維加權

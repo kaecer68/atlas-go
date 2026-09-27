@@ -7,7 +7,7 @@
 `eventdriven` 是 thin adapter — 不持有 detector / template / model，所有 trigger 偵測邏輯位於 `internal/narrative/`。Stage 5 後模組職責僅剩：
 
 1. **Event calendar consumption** — 從 `industry.EventCalendar` 讀取即將到來的 calendar events
-2. **Type → Theme 橋接** — 透過 `EventTypeToTriggerThemes(eventType, registry)` 對應到 24 個 trigger themes
+2. **Type → Theme 橋接** — 透過 `EventTypeToTriggerThemes(eventType, registry)` 對應到 registry 中符合語意的 trigger themes 子集（全部 29 個；數量由 registry 決定）
 3. **NarrativeModelProvider 介接** — 透過 `narrativeAdapter.ListModels()` 拿到 21 個 InvestmentModel
 4. **HTTP endpoint** — `/api/events/prediction` 與 `/api/events/calendar`（cmd/atlas 端）
 
@@ -22,9 +22,9 @@ confidence = sigmoid(net_weight × (drivers + 1))
 - `net_weight`：事件驅動因子的淨權重。
 - `drivers`：同時作用的事件數量。
 
-## 三、Stage 5 擴充：24 個 Trigger Themes
+## 三、Stage 5 擴充：Trigger Themes（Stage 5 當時 24 個；現為 29 個，權威數量由 registry 決定）
 
-模板清單由 `internal/narrative/templates.go` 的 `DefaultTemplates()` 提供，**數量是 hard gate**（detector_e2e_test.go:TestE2E_All24ThemesRegistered 保證）。
+模板清單由 `internal/narrative/templates.go` 的 `DefaultTemplates()` 提供，**數量是 hard gate**（detector_e2e_test.go:TestE2E_AllThemesRegistered 保證；權威數量見 internal/narrative/detector_count_gate_test.go）。
 
 | 主題類別 | trigger_theme 範例 | Pipeline | 對應 Template ID |
 |---|---|---|---|
@@ -49,11 +49,11 @@ type Detector interface {
 
 type DetectorRegistry struct { /* sync.RWMutex + map */ }
 
-func NewDefaultDetectorRegistry() *DetectorRegistry // 24 detector 全啟用
+func NewDefaultDetectorRegistry() *DetectorRegistry // 29 detector 全啟用（數量由 registry 決定，勿硬編）
 func (r *DetectorRegistry) RunAll(ctx, in) ([]DetectionResult, []error) // 並發呼叫
 ```
 
-每個 trigger_theme 一個獨立 detector struct（24 個），預設全部啟用。透過 `Registry.Enable/Disable(theme)` 動態切換。
+每個 trigger_theme 一個獨立 detector struct（29 個；數量由 registry 決定），預設全部啟用。透過 `Registry.Enable/Disable(theme)` 動態切換。
 
 詳細 contract 見 `internal/narrative/detector.go` 與 `detector_impls.go`。
 
@@ -61,8 +61,8 @@ func (r *DetectorRegistry) RunAll(ctx, in) ([]DetectionResult, []error) // 並�
 
 | Pipeline | 輸入 | 來源 | 用途 |
 |---|---|---|---|
-| **KB pipeline** | `MarketNarrativeData` (26 個欄位) | `narrative_detectors.go` (30+ 函式) | Authoritative — 24 個 trigger 中 17 個用此 pipeline |
-| **Snapshot pipeline** | `MacroDataSnapshot` + `MacroDataPoint` | `ingestor.go` (15+ 函式) | Degraded-mode proxy — 當 full MarketNarrativeData 不可用時 fallback。`tariff_shock` 是 Stage 5 唯一仍用此 pipeline 的 detector |
+| **KB pipeline** | `MarketNarrativeData` (26 個欄位) | `narrative_detectors.go` (30+ 函式) | Authoritative — 29 個 trigger 中 21 個用此 pipeline |
+| **Snapshot pipeline** | `MacroDataSnapshot` + `MacroDataPoint` | `ingestor.go` (15+ 函式) | Degraded-mode proxy — 當 full MarketNarrativeData 不可用時 fallback。`tariff_shock` 與 `conflict_deescalation` 用此 pipeline（Stage 5 當時僅 `tariff_shock`） |
 | **Seasonal** | `time.Now().UTC()` 視窗判斷 | `detectSeasonalEvent()` | 6 個季節性 trigger |
 
 **兩 pipeline 不可合併**：narrative_detectors.go:108-113 明確標示 — KB 讀 DXY 綜合指標為 authoritative，snapshot 用 ChangePct 為代理。新增 trigger detector 時須先判斷歸屬。
@@ -75,7 +75,7 @@ func (r *DetectorRegistry) RunAll(ctx, in) ([]DetectionResult, []error) // 並�
 func EventTypeToTriggerThemes(eventType string, registry *narrative.DetectorRegistry) []string
 ```
 
-14 個 TaiwanEventType 中 7 個對應到 24 templates：
+14 個 TaiwanEventType 中 7 個對應到 29 templates：
 
 | EventType | Trigger Theme |
 |---|---|
@@ -115,7 +115,7 @@ CREATE TABLE detector_scan_log (
 原 Stage 5 PR#4 規劃的 2 個 MCP tools 因 scope 過大延後至 follow-up PR：
 
 - `template_detector_status` — 查詢 detector scan 結果（call `/api/detector/scan/status`）
-- `detector_registry_list` — 列出 24 個 detector 與 enable/disable 狀態（call `/api/detector/registry/list`）
+- `detector_registry_list` — 列出 29 個 detector 與 enable/disable 狀態（call `/api/detector/registry/list`）
 
 需要新增：cmd/atlas 2 個 HTTP endpoint + cmd/atlas-mcp tools_template_detector.go + tool count hard gate 106-108 → 108-110 + `docs/reference/tool-catalog.md` 更新 + `go generate ./cmd/atlas-mcp`。
 

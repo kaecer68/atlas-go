@@ -266,7 +266,8 @@ func (s *NarrativeEvidenceSource) LayerID() string { return "layer_7" }
 
 // narrativeThemeScore maps a narrative theme to its regime evidence contribution.
 // Negative = risk-off pressure, positive = risk-on support.
-// D4 P1: expanded from 5 to all 24 detector themes.
+// D4 P1: expanded from 5 to all 29 detector themes (registry-driven count;
+// never hardcode it).
 func narrativeThemeScore(theme string) float64 {
 	switch theme {
 	// ── Risk-off themes (negative contribution) ──

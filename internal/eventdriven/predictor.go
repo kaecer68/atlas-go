@@ -86,7 +86,7 @@ func (s *staticCF) LatestAssessment(context.Context) (capitalflow.CapitalFlowAss
 }
 
 // NewPredictor wires the default narrative.DetectorRegistry so narrative
-// tilt matches all 24 templates (PR-FIX-04, fixes G-06); override via SetNarrativeRegistry.
+// tilt matches all 29 templates (PR-FIX-04, fixes G-06); override via SetNarrativeRegistry.
 func NewPredictor(cal *industry.EventCalendar) *Predictor {
 	return &Predictor{
 		calendar:          cal,
@@ -242,7 +242,7 @@ func computeNarrativeTilt(models []ModelView, themeSet map[string]struct{}) floa
 
 // activeTriggerThemesForDay returns the live set of registered detector
 // themes. With a wired DetectorRegistry this expands the universe to
-// the full 24-template set (replacing the legacy 5-theme subset that
+// the full 29-template set (replacing the legacy 5-theme subset that
 // came from eventTypeToTriggerThemesTable); a nil registry returns nil
 // so the caller treats the day as event-only.
 func activeTriggerThemesForDay(registry *narrative.DetectorRegistry) []string {
@@ -726,11 +726,11 @@ func (p *Predictor) evaluateRevenueSurprise(e industry.CalendarEvent) *RevenueSu
 // eventTypeToThemes maps a Taiwan calendar event type string to its
 // set of legacy calendar-specific theme names used by older
 // InvestmentModel.ActiveThemes. Stage 5 PR#3 introduced a parallel
-// type_theme_mapping.go with the new 24-template trigger theme system;
+// type_theme_mapping.go with the new 29-template trigger theme system;
 // this legacy mapping is preserved for backward compatibility with
 // existing tests and any external callers still using calendar theme
 // names. New callers should prefer EventTypeToTriggerThemes() so that
-// calendar events map to the 24-template trigger themes that drive
+// calendar events map to the 29-template trigger themes that drive
 // narrative models.
 func eventTypeToThemes(eventType string) []string {
 	switch eventType {
