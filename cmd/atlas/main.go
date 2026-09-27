@@ -2478,16 +2478,17 @@ func run(args []string, deps appDeps) error {
 						kimi.SetAnnotationStore(store)
 						defer func() { _ = store.Close() }()
 					}
-					dashboard.SetStrategiesAnnotator(kimi)
-					logging.Info("main", "kimi_annotator_loaded", "backend", kimi.Name())
+					// Issue #1897: the legacy client is NO LONGER the
+					// annotate backend. It is wired further down, after the
+					// Router exists, only as the read-only usage source for
+					// /api/llm_annotator/cost (see setupStrategiesAnnotator).
+					logging.Info("main", "kimi_annotator_loaded", "backend", kimi.Name(), "role", "usage_source")
 				}
 			} else {
-				logging.Info("main", "kimi_annotator_disabled", "hint", "set LLM_ANNOTATOR_API_KEY to enable on-demand attribution")
+				logging.Info("main", "kimi_annotator_disabled", "hint", "set LLM_MINIMAX_API_KEY to enable on-demand attribution")
 			}
 
-			// Phase 1: LLM Router (experimental, X-level). Wraps existing KimiClient via adapter.
-			// Does NOT replace dashboard.SetStrategiesAnnotator(kimi) above — that still receives
-			// the raw *KimiClient required by dashboard_api.go:880 type assertion.
+			// Phase 1: LLM Router (experimental, X-level).
 			// ADR-012 follow-up: the routing table is now read from
 			// configs/llm_router.yaml (ATLAS_LLM_ROUTER_CONFIG_PATH overrides),
 			// falling back to the built-in table when the file is missing or
@@ -2562,6 +2563,38 @@ func run(args []string, deps appDeps) error {
 			// app-level HTTP calls (ADR-012 addendum 4, 2026-09-12). The client
 			// and the ADR-009 capability guard remain in internal/llm for a
 			// future key that works for application traffic.
+			//
+			// NOTE (issue #1897): llmAdapters.NewAnnotatorAdapter(kimi, ...) IS
+			// registered above, under ProviderKimi. No routing chain contains
+			// ProviderKimi, so it is unreachable — but it is a latent
+			// annotate-path bypass and its removal/wiring decision is registered
+			// in the PR body of #1897, deliberately not changed here.
+
+			// Issue #1897: converge the production /annotate endpoint onto the
+			// Router. This MUST run after the providers above are registered:
+			// with an empty failure_attribution chain the router's last-resort
+			// handler answers with an empty output, which /annotate reports as
+			// 502 instead of the "LLM not configured" 503 contract.
+			wiring := setupStrategiesAnnotator(annotateWiringDeps{
+				Dashboard: dashboard,
+				Router:    llmRouter,
+				Config:    routerCfg,
+				Legacy:    kimi,
+			})
+			if wiring.Enabled {
+				logging.Info("main", "strategies_annotator_wired",
+					"backend", wiring.Backend, "path", "router", "reason", wiring.Reason)
+			} else {
+				// kimi != nil means an annotator API key IS configured but no
+				// chain provider is registered: the deprecated
+				// LLM_ANNOTATOR_API_KEY alias is set without the documented
+				// primary LLM_MINIMAX_API_KEY. Surface it instead of silently
+				// degrading /annotate from 200 to 503.
+				logging.Warn("main", "strategies_annotator_disabled",
+					"reason", wiring.Reason,
+					"annotator_key_present", kimi != nil,
+					"hint", "set LLM_MINIMAX_API_KEY so a failure_attribution chain provider is registered")
+			}
 
 			// Wire 4 module hooks (only if flag enabled AND Router exists)
 			if cfg.LLMRationaleTranslationEnabled {
