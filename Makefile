@@ -1024,7 +1024,18 @@ ci-full: ci-gate ci-constitution
 		echo "    ❌ golangci-lint 未安裝。brew install golangci-lint"; \
 		exit 1; \
 	}
-	@golangci-lint run --timeout=5m
+	@# 快取綁到「本 worktree 自己的 git dir」（2026-09-27, E22）:
+	@# 預設 ~/Library/Caches/golangci-lint 是全機共用 ⇒ 別棵 worktree（含已被刪除的）的快取
+	@# issue 會被本 worktree 命中重放（cache key 與 worktree 路徑無關: 只看 module 內相對路徑
+	@# + 內容 hash），症狀 = issue 路徑出現 ../<別的 worktree>/ 前綴 與
+	@# "[runner/source_code] Failed to get line N for file ...: can't read file"；nolint /
+	@# generated-file 這類過濾器讀不到檔案時是 fail-open，於是抑制失效、在 0 個 .go 變更的
+	@# 分支上假紅。改成 per-worktree 後：快取仍跨次執行保溫、worktree 刪除時隨
+	@# .git/worktrees/<name> 一起消失，不再與別條 lane 共用同一批 issue 快取。
+	@# 註: golangci-lint 的 "parallel golangci-lint is running" 鎖在 $TMPDIR/golangci-lint.lock，
+	@# 是全機層級、與 cache 目錄無關 —— 那一個假紅不在本行處理範圍。
+	@# 要覆寫（例如自訂路徑）：GOLANGCI_LINT_CACHE=/path make ci-full
+	@GOLANGCI_LINT_CACHE="$${GOLANGCI_LINT_CACHE:-$$(git rev-parse --absolute-git-dir 2>/dev/null || echo "$${TMPDIR:-/tmp}")/golangci-lint-cache}" golangci-lint run --timeout=5m
 	@echo "    ✅"
 	@echo "  → standalone staticcheck"
 	@command -v staticcheck >/dev/null 2>&1 || { \
@@ -1050,11 +1061,16 @@ ci-full: ci-gate ci-constitution
 	@$(MAKE) --no-print-directory ci-slow
 	@echo "    ✅"
 	@echo "  → coverage threshold (≥60%)"
+	@# 每次執行用「自己的」暫存目錄（2026-09-27, E22）: 舊寫法把 coverprofile/log 硬編在共用
+	@# /tmp/atlas-ci-full-coverage.* 且頭尾都 rm -f ⇒ 同機另一條 lane 開頭/結尾的 rm 會把
+	@# 還在跑的本次 go test 的 coverprofile 從目錄移除（go test 是把 fd 開著寫到收尾），
+	@# 收尾時就變成「取不到覆蓋率：coverprofile 缺失或為空」的假紅燈。trap 負責清理。
 	@set -e; \
-	COV_PROFILE=/tmp/atlas-ci-full-coverage.out; \
-	COV_LOG=/tmp/atlas-ci-full-coverage.log; \
-	COV_FUNC_LOG=/tmp/atlas-ci-full-coverage-func.log; \
-	rm -f "$${COV_PROFILE}" "$${COV_FUNC_LOG}"; \
+	COV_DIR="$$(mktemp -d "$${TMPDIR:-/tmp}/atlas-ci-full-cov.XXXXXX")"; \
+	trap 'rc=$$?; if [ "$${rc}" -eq 0 ]; then rm -rf "$${COV_DIR}"; else echo "    ℹ️  覆蓋率 log 保留（失敗除錯用）：$${COV_DIR}"; fi' EXIT; \
+	COV_PROFILE="$${COV_DIR}/coverage.out"; \
+	COV_LOG="$${COV_DIR}/coverage.log"; \
+	COV_FUNC_LOG="$${COV_DIR}/coverage-func.log"; \
 	if ! go test -coverprofile="$${COV_PROFILE}" $$(go list ./... | grep -v '/cmd/atlas$$') > "$${COV_LOG}" 2>&1; then \
 		echo "    ❌ go test 失敗（覆蓋率步驟）— log: $${COV_LOG}"; \
 		tail -n 40 "$${COV_LOG}"; \
@@ -1077,8 +1093,7 @@ ci-full: ci-gate ci-constitution
 	if awk -v c="$${COVERAGE}" 'BEGIN{exit !(c+0 < 60)}'; then \
 		echo "    ❌ Coverage $${COVERAGE}% 低於 60% 閾值"; \
 		exit 1; \
-	fi; \
-	rm -f "$${COV_PROFILE}" "$${COV_LOG}" "$${COV_FUNC_LOG}"
+	fi
 	@echo "    ✅"
 	@echo "  → orphan artifact check"
 	@ORPHANS=""; \
