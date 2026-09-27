@@ -130,6 +130,14 @@ func EffectiveCardConfig() CardConfig {
 // flag must derive it from this instead of from "the metrics map was non-nil"
 // (issue #1944 Batch 2, E-item): a tracker with samples but an unusable clamp
 // window, or with samples for layers that are not funded, changes nothing.
+//
+// The 1e-12 tolerance below is exact by construction (issue #1944 Batch A1):
+// applyCycleCalibration returns the baseline untouched when no funded layer was
+// nudged, so a no-op is bit-identical; a real nudge moves a layer by
+// ~0.85×LearningRate (0.0425 at the shipped 0.05), far above the tolerance.
+// Before that fix the rebuild alone — a normalize-to-1 round trip rescaled back
+// to the funded sum — moved the weights by up to 4e-5 of rounding residue, which
+// made this report "true" for evidence that changed nothing.
 func CalibrationApplied() bool {
 	base := defaultCardConfig()
 	effective := resolveCardConfig()
@@ -183,7 +191,17 @@ func applyCycleCalibration(cfg CardConfig, cal *CycleCalibration) CardConfig {
 	if baseSum <= 0 {
 		return cfg
 	}
-	calibrated := cal.CalibrateWeights(cfg.LayerWeights)
+	calibrated, nudged := cal.calibratedWeights(cfg.LayerWeights)
+	if !nudged {
+		// No funded layer crossed a hit-rate threshold (or the tracker's opinion
+		// was clamped back onto the base share): the evidence learned nothing
+		// that changes a weight, so return the baseline unchanged instead of a
+		// rebuild of it. Rebuilding would rescale normalized weights back to the
+		// funded sum and move every layer by the 4-dp rounding residue (~4e-5),
+		// which changed the configuration the card runs on without any evidence
+		// behind it (issue #1944 Batch A1).
+		return cfg
+	}
 	calibratedSum := weightSum(calibrated)
 	if calibratedSum <= 0 {
 		return cfg
@@ -202,11 +220,14 @@ func applyCycleCalibration(cfg CardConfig, cal *CycleCalibration) CardConfig {
 			largestLayer, largestWeight = layer, adjusted[layer]
 		}
 	}
-	// Preserve the funded sum exactly: CalibrateWeights normalises through
+	// Preserve the funded sum exactly: the calibration normalises through
 	// normalizeWeights, which rounds each layer to 4 dp, so the rescaled sum
 	// can drift by up to N*5e-5. Absorb that residue into the largest funded
-	// layer (a relative nudge < 1e-3) instead of leaving it to accumulate
-	// across layers.
+	// layer instead of leaving it to accumulate across layers. The absorption
+	// runs only on a calibrated config (a layer was nudged, see above), and the
+	// residue is a relative nudge < 1e-3 — two orders below the LearningRate-sized
+	// change the evidence decided on — so it can never be mistaken for, or hide,
+	// a real weight change.
 	if largestLayer != "" {
 		adjusted[largestLayer] += baseSum - weightSum(adjusted)
 	}
