@@ -3,7 +3,7 @@
 | 項目 | 內容 |
 |---|---|
 | 文件角色 | 「producer 有、consumer 無」「狀態宣稱生效但實際 inert」「死碼」的**單一登記處**，避免同一類缺陷（靜默失效）反覆被發現又重新遺忘 |
-| 狀態 | v4（2026-09-25，issue [#1944](https://github.com/kaecer68/atlas-go/issues/1944) Batch 1 + Batch 2 + Batch 3 + **Batch 4**） |
+| 狀態 | v4（2026-09-25，issue [#1944](https://github.com/kaecer68/atlas-go/issues/1944) Batch 1 + Batch 2 + Batch 3 + **Batch 4**）＋ **Batch A 收尾**（2026-09-27，PR [#2077](https://github.com/kaecer68/atlas-go/pull/2077)） |
 | Batch 2／3／4 權威盤點 | [`../specs/industry-allocation-inert-audit-20260924.md`](../specs/industry-allocation-inert-audit-20260924.md)（Batch 2 §4/§5；Batch 3 §9；**Batch 4 §10**：長尾逐項處置、I29 殘留診斷、ledger/nightly 誠實聲明、可重跑證據） |
 | 靜態閘門一致性 | `scripts/ci/inert-baseline.json` = **179** 筆（Batch 4 前 187）。Batch 4 移除：`config-inert industry.event_sentiment_cap`（已接線）＋7 個 `writer-no-consumer` SAC emitter（`EmitSnapshotStart/Target/Current/Fallback/End`、`EmitPolicyConsumed/Applied`）；`check_inert_closure.sh` exit 0、stale 0 |
 | 判定法 | 對每個欄位／參數／旗標問三題：**有 producer 嗎？有 consumer 讀嗎？有測試嗎？** 三者缺一即列入 |
@@ -20,7 +20,7 @@
 | I34 | `internal/sim` 的 `rotationFunc` 從未被賦值 | 只有宣告與 nil 守衛，無 setter、無指派 ⇒ 輪動邏輯不可能執行 | **移除**（非接線）。輪動已在推薦層實作（`orchestrator.PortfolioRotator` + `PositionEvaluator`），在 sim engine 內再接一條會產生第二套輪動路徑 | `internal/sim/engine.go`（移除 `RotationFunc` 型別／欄位／呼叫點，改註解指向真正的實作位置）、`internal/sim/testdata/sim_api.golden.json`（API 快照同步） |
 | I35 | L1–L5 心法 plugin 是 no-op pass-through | plugin 在生產註冊（`cmd/atlas/main.go` → `WithStrategyTechniques`）且會收 narrative 事件，但 `ProcessRecommendations` 原樣回傳 ⇒ 心法層不影響任何決策 | **明示未啟用**：新增可機讀旗標 `orchestrator.TechniquesLayerActive=false`、attach 時記錄 `pass_through=true`，並在程式碼／本表寫明「看到 strategy_techniques 不等於心法生效」 | `internal/orchestrator/strategy_techniques_plugin.go`；測試 `strategy_techniques_plugin_test.go`（含「回傳同一個 slice」不變式） |
 | I20 | 合成報酬取當日 intraday | `syntheticForwardReturn` 用 `(Last-Open)/Open × 0.8` 當「forward return」⇒ 非前瞻、與訊號同源（自我實現），且平盤日 `forwardReturn=0` ⇒ `Hit=false`（必然 miss） | **修正語意**：改為 regime 條件化的確定性 placeholder（`forward_return.risk_on_*`／`risk_off_*`，agent×symbol×交易日為種子），命名改為 `syntheticPlaceholderReturn`，並在註解寫明「不是 forward return，不得進任何命中率聚合」 | `internal/orchestrator/system.go`；測試 `synthetic_placeholder_return_test.go`（同日不同價格走勢必須得到同值、值域、非必然 miss） |
-| I1 | `CycleCalibration` 校準權重從未被消費 | `resolveCardConfig()` 無條件回 default，但 `IndustryService.SetCycleCalibration` 的註解宣稱「wires it into the global card builder state」 | **接線，但 config-blocked**：程式已消費 calibration（有 layer metrics 才重新分配權重，且**保留原 funded 權重和 0.85**、殘差補進最大層，避免空窗期把 composite coefficient 整體放大 1/0.85）。**但生產端目前不可能產生 metrics**：`configs/parameters.json` 的 `industry.cycle_calibration` 全 0，`window_size=0` 讓 `RecordOutcome` 每次都清空視窗（`outcomes[len-0:]` = 空），實測 20 次 `RecordOutcome` 後 `GetMetrics()` 仍為空 ⇒ 生產仍走預設權重。此依賴 **I3**（Batch 2 第 4 項） | `internal/industry/cycle_status_card.go`（`resolveCardConfig` / `applyCycleCalibration`，global 加 mutex）；測試 `cycle_status_card_calibration_test.go`（含 `TestCycleCalibration_ZeroWindowSizeConfigBlocksCalibration` 把 config-blocked 狀態釘住） |
+| I1 | `CycleCalibration` 校準權重從未被消費 | `resolveCardConfig()` 無條件回 default，但 `IndustryService.SetCycleCalibration` 的註解宣稱「wires it into the global card builder state」 | **接線，但 config-blocked**：程式已消費 calibration（有 layer metrics 才重新分配權重，且**保留原 funded 權重和 0.85**、殘差補進最大層，避免空窗期把 composite coefficient 整體放大 1/0.85；**Batch A 起**：只有在 clamp 後真的有層被移動才重新分配，沒有任何層被 nudge ⇒ **原值回傳**，不再留下重建造成的 4e-5 殘差）。**但生產端目前不可能產生 metrics**：`configs/parameters.json` 的 `industry.cycle_calibration` 全 0，`window_size=0` 讓 `RecordOutcome` 每次都清空視窗（`outcomes[len-0:]` = 空），實測 20 次 `RecordOutcome` 後 `GetMetrics()` 仍為空 ⇒ 生產仍走預設權重。此依賴 **I3**（Batch 2 第 4 項） | `internal/industry/cycle_status_card.go`（`resolveCardConfig` / `applyCycleCalibration`，global 加 mutex）；測試 `cycle_status_card_calibration_test.go`（含 `TestCycleCalibration_ZeroWindowSizeConfigBlocksCalibration` 把 config-blocked 狀態釘住） |
 
 ### 對外狀態語意（Batch 1 定案）
 
@@ -47,7 +47,7 @@
 | I14 | 四個讀取點各讀不同路徑（`data/state/sector_data`、`<ledgerDir>`、`<workDir>/sector_data.json`），實際檔案在 `data/sector_data/`；bridge 僅測試呼叫；缺檔回零 `err=nil` | 通道靜默死亡 | **修正路徑 + 明示未啟用（bridge）**：新增唯一權威 `marketdata.SectorDataDirRel` / `ResolveSectorDataDir()`，四個讀取點改用；provider 記錄載入狀態（`SectorDataState`），apigateway `HealthCheck` 對缺檔／壞時間戳／超過 72h 回 `degraded`；`SectorDataBridgeWired=false`（理由：唯一輸入是無生產刷新者的人工檔，且會把 `EvidenceTier` 由 `estimated` 洗成 `empirical`） | `internal/marketdata/sector_data_provider.go`、`internal/apigateway/adapter_sector_data.go`、`channel_contract.go`、`internal/industry/sector_data_bridge.go`；測試 `TestResolveSectorDataDirMatchesShippedFile`、`TestSectorDataProvider_State*`、`TestSectorDataChannelAdapter_HealthCheck` |
 | I10/I11/I33 | `IndustryCycleModulator`/`NarrativeConvictionModulator` 從未註冊（`With*` 只有測試呼叫）；`SetCycleCard` 無生產呼叫者 | 產業相位／主題命中率算完不影響決策 | **明示未啟用**：`orchestrator.ModulatorWiringActive=false` + 理由（wiring 卡在上游輸入：tracker 只有 config seed、narrative hit rate 是手寫常數） | `internal/orchestrator/plugin_registry.go`；測試 `TestProductionRegistryLeavesConvictionModulatorsUnwired` |
 | 新 N-C1 | `industry.composite_card` config 已填滿但 `defaultCardConfig()` 回硬編碼副本 | 改 config 無效 | **接線**：`defaultCardConfig()` 疊加 config（空/零值保留預設）；shipped config 與硬編碼值相同 ⇒ 今日行為中性 | `internal/industry/cycle_status_card.go`（`applyCompositeCardConfig`） |
-| 新 E1-E3 | 對外硬寫「已生效」：`period_weight_applied: true`（MCP narrative）、`appliedCount++` 不看 `SetParameter` 錯誤、`"calibrated": true` 無條件 | 對外宣稱生效 | **修正**：E1 改 `false` + 誠實 note；E2 先寫入後記錄（全失敗 verdict=`failed`）；E3 改由 `industry.CalibrationApplied()` 推導 | `cmd/atlas-mcp/server/tools_narrative.go`、`internal/config/calibrator.go`、`internal/monitoring/api/industry/handlers.go`；測試 `TestCalibrationApplied_DerivedFromEvidence` |
+| 新 E1-E3 | 對外硬寫「已生效」：`period_weight_applied: true`（MCP narrative）、`appliedCount++` 不看 `SetParameter` 錯誤、`"calibrated": true` 無條件 | 對外宣稱生效 | **修正**：E1 改 `false` + 誠實 note；E2 先寫入後記錄（全失敗 verdict=`failed`）；E3 改由 `industry.CalibrationApplied()` 推導 | `cmd/atlas-mcp/server/tools_narrative.go`、`internal/config/calibrator.go`、`internal/monitoring/api/industry/handlers.go`；測試 `TestCalibrationApplied_DerivedFromEvidence`。**Batch A 再收斂**：E3 的推導本身被修正（重建權重 ≠ 改變權重：無層被 nudge ⇒ 原值回傳），E1/E2/E3 三處各補契約測試（mutation 自證），見 §Batch A 收尾 |
 
 ### Batch 2 剩餘（原清單；Batch 3 已逐項複核並就地標註，**Batch 4 §Batch 4 再複核剩餘項**；見 spec §4/§5/§10）
 
@@ -101,7 +101,7 @@
 | `domain.Quote.Volume` 一欄兩種單位（TWSE=股、Fugle/Fubon=張，差 1000×） | 以「張」計的報價把 NT$10M 量價門檻實質變成 NT$10bn ⇒ 中型股以下靜默全滅（`quotes_status` 仍 ok）；live 管線更讓 `shouldReducePosition` 等絕對門檻全滅 | **已由 #1987 根治**：provider 邊界統一為股（fugle/fubon/fugle-ws ×`domain.SharesPerLot`），消費端換算表 `quoteVolumeLotSources`／`quoteVolumeInShares`／`lots_converted` 全數刪除；邊界由 `provider_volume_contract_test.go` 逐 provider 釘住 |
 | mock provider 被標成可信 | `selectProvider` 無 key 時回 `MockProvider`（假 quote 完整） | 中 | **已接線**：`IsMock()` → `quotes_status=mock`／`ranked_trustworthy=false` |
 | `ParameterSnapshot.NarrativeHitRates` 無來源標記 | theme hit rates 來自 config 常數集 | 中 | **未處理**（登記於此） |
-| `internal/config/configs/parameters.json` 影子副本 | 與 `configs/parameters.json` 不同、無 Go caller，還會誤導 `findRepoRoot` 探測 | 低-中 | **未處理**（刪除需確認部署腳本未引用） |
+| `internal/config/configs/parameters.json` 影子副本 | 與 `configs/parameters.json` 不同、無 Go caller，還會誤導 `findRepoRoot` 探測 | 低-中 | **已處理（移除，Batch A / PR #2077）**：先完成引用盤查才刪 —— `scripts/ tests/ .github/ Dockerfile docker-compose*.yml` **0 處**、跨 worktree **0 處**、生產機 `kmacmini:~/workspace/atlas` **亦只有註解與 docs** ⇒ 無部署腳本／程式引用 ⇒ 刪除；`parameters_smoke_test.go` 改以 `moduleRoot()`（go.mod）定位並印出實際判讀檔（300823B / v1.2 / 2026-06-26 → 321638B / v1.3 / 2026-07-06），另加 `TestNoShadowParametersCopy` 防再犯守衛 |
 
 ### Batch 3 仍未處理（誠實清單）
 
@@ -150,6 +150,17 @@
 - **I21**：**待觀察**——生產者半邊已由 #1949 修，消費端 source/window 固定（`stockpicker-foreign-3d-net-buy`／`120d`）；本批無生產存取，未驗證 `stock_win_rate` 與 `data/state/stock_flows/` 是否已生成。
 - **I27 殘留**：symbol→sector 的值仍是 segment ID（非 canonical L1），未命中仍回 `"other"`。
 - **N-A1 殘留**：`snapshot.projection`（需 projector 回傳 clamped 統計）、`legacy.read`、`fallback.count`、`rollback.drill` 四個 emitter 仍無誠實呼叫點（baseline 已寫明理由）。
-- **其他 Batch 2 中／低項**：`ParameterSnapshot.NarrativeHitRates` 無來源標記、`internal/config/configs/parameters.json` 影子副本、超界 `adjustment_factor` 污染源、config validator 允許負值、`domain.Quote.Volume` 單位未在 provider 邊界統一、`I23` 前端文案（前端 lane）、`I16(a)` volatile 門檻需產品定案、`N-P1`／`N-P2`／`N-U6` 之外的 ledger／前端項。
+- **其他 Batch 2 中／低項**：`ParameterSnapshot.NarrativeHitRates` 無來源標記、超界 `adjustment_factor` 污染源、config validator 允許負值、`domain.Quote.Volume` 單位未在 provider 邊界統一、`I23` 前端文案（前端 lane）、`I16(a)` volatile 門檻需產品定案、`N-P1`／`N-P2`／`N-U6` 之外的 ledger／前端項。
+
+## Batch A 收尾（#1944，2026-09-27，PR [#2077](https://github.com/kaecer68/atlas-go/pull/2077)）
+
+> 基準：`origin/main@b5108fbb`；分支 `fix/20260927-inert-batchA`（squash `433c8ae2`）。範圍：盤查複核後的三項「明確錯誤、小 diff、不碰凍結區」。**不含 I29**（`cmd/atlas/main.go` 的 coverage 半邊會新增一個可能觸發的告警，刻意排在 2026-09-29 06:00Z 決定性驗收之後）。
+
+| 項目 | 處置 | 證據 |
+|---|---|---|
+| `industry.CalibrationApplied()` 對「沒有任何層被調整」回報 `true`（假宣稱） | **修正（語意更強版）**：該函式的推導意圖是對的、實作不是 —— 光是重建權重（normalize 4dp → 還原 funded sum 0.85）就會位移最多 **4e-5**，遠高於 1e-12 容差。新增 `CycleCalibration.calibratedWeights()`（回報 clamp 之後是否真的有層被移動），沒有任何層被 nudge ⇒ `applyCycleCalibration` **原值回傳** ⇒ no-op 位元級等同 baseline | 修前實測：10 筆 `accuracy=0.50` ⇒ `applied=true`（silicon −1.5e-5、business_cycle +5e-6、supply_chain −4e-5，sum 仍 0.85）。`TestCalibrationApplied_NoNudgedLayerIsNotCalibration`（⇒ false）／`TestCalibrationApplied_NudgedLayerIsCalibration`（⇒ true）；移除修正 ⇒ 前者紅。副作用：`GET /api/dashboard/industry-calibration` 的 `calibrated` 在「有 metrics 但無 funded 層被調」時 true→false（`handlers_wave62_happy_paths_test.go` 的 fixture 由 unfunded `layer-a/b` 改為 funded `silicon/business_cycle`） |
+| E1／E2／E3 三處修正無測試釘住（移除修正不會有測試變紅） | **補契約測試**（皆附 mutation 自證：拿掉修正 ⇒ 測試紅） | `TestHandleNarrativeGetEvents_PeriodWeightNotApplied`（E1）、`TestCalibratorVerdict_Table`（E2）、`TestDefaultCardConfig_ConsumesConfigFile`（N-C1 的 config 疊加） |
+| `internal/config/configs/parameters.json` 影子副本 | **移除**（先完成引用盤查才刪） | 盤查：`scripts/ tests/ .github/ Dockerfile docker-compose*.yml` **0 處**、跨 worktree **0 處**、生產機 `kmacmini:~/workspace/atlas` **亦只有註解與 docs**（逐字證據見上方 §Batch 4 表格該列）；smoke test 改 `moduleRoot()` 定位 + 印出實際判讀檔；新增 `TestNoShadowParametersCopy` 防再犯守衛 |
+| `internal/config/calibrator.go` 的 `failedCount > 0` 分支 | **實測否證：目前不可達**（誠實邊界，登記備查；未經最小實驗不得當成事實） | 迴圈只碰得到 `GetParameter` 可解析的名字 = `parameterTable` 條目或已存在的 map sub-key，兩者 `SetParameter` 都成功 ⇒ 窮舉 shipped config 可解析的 **245 個名字：245 寫入成功 / 0 被拒**；不可解析者更早中止（`calibrate: optimize: unknown parameter: <name>`）。故此語意改以純函式 `calibratorVerdict`（行為等價的重構）釘住 |
 
 ---
