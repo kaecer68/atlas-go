@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -713,5 +714,130 @@ func TestSetHistoricalStore(t *testing.T) {
 	svc.SetHistoricalStore(hs)
 	if svc.historicalStore != hs {
 		t.Error("expected SetHistoricalStore to wire the historical store")
+	}
+}
+
+// =============================================================================
+// checkReplayHealth — E29-1: the freshness verdict comes from the data's NEWEST
+// date, never from the file's LAST line.
+//
+// The replay file is append-only and a gap backfill appends days that are OLDER
+// than the newest row, so "last line" ≠ "newest data day". Each case below names
+// the value the last-line reading produced, so the negative proof (remove the
+// newest-date pass) is visible in the failure message.
+// =============================================================================
+
+// writeReplayFile writes a replay fixture and returns its path.
+func writeReplayFile(t *testing.T, content string) string {
+	t.Helper()
+	p := filepath.Join(t.TempDir(), "tw_extended_90days.csv")
+	if err := os.WriteFile(p, []byte(content), 0o644); err != nil {
+		t.Fatalf("write replay fixture: %v", err)
+	}
+	return p
+}
+
+func TestCheckReplayHealth_NewestDataDateBeatsTheLastLine(t *testing.T) {
+	cst := time.FixedZone("CST", 8*60*60)
+	// now = 09-18 (the day after the newest row) ⇒ data age ≈ 1 day.
+	now := time.Date(2026, 9, 18, 9, 0, 0, 0, cst)
+
+	t.Run("csv with an older row appended last", func(t *testing.T) {
+		csv := "Date,Code,Name,TradeVolume,Open,High,Low,Close\n" +
+			"2026-09-16,2330,台積電,1,100,101,99,100\n" +
+			"2026-09-17,2330,台積電,1,100,101,99,100\n" +
+			"2026-09-10,2330,台積電,1,90,91,89,90\n" // gap backfill, written after 09-17
+		status, updated := checkReplayHealth(writeReplayFile(t, csv), now)
+		if status != "ok" || updated != "2026-09-17" {
+			t.Errorf("got %s/%s, want ok/2026-09-17 (reading the last line gives 09-10 ⇒ age 8d ⇒ warn)", status, updated)
+		}
+	})
+
+	t.Run("jsonl rows are unordered", func(t *testing.T) {
+		jsonl := `{"date":"2026-09-17","code":"2330","close":100}` + "\n" +
+			`{"date":"2026-09-10","code":"2330","close":90}` + "\n" +
+			`{"date":"2026-09-16","code":"2330","close":100}` + "\n"
+		status, updated := checkReplayHealth(writeReplayFile(t, jsonl), now)
+		if status != "ok" || updated != "2026-09-17" {
+			t.Errorf("got %s/%s, want ok/2026-09-17 (reading the last line gives 09-16)", status, updated)
+		}
+	})
+}
+
+// TestCheckReplayHealth_StillFlagsRealStaleness is the guard against the other
+// failure mode: taking the newest date must not make every file look fresh.
+func TestCheckReplayHealth_StillFlagsRealStaleness(t *testing.T) {
+	cst := time.FixedZone("CST", 8*60*60)
+	csv := "Date,Code,Name,TradeVolume,Open,High,Low,Close\n" +
+		"2026-09-17,2330,台積電,1,100,101,99,100\n"
+	p := writeReplayFile(t, csv)
+
+	if status, updated := checkReplayHealth(p, time.Date(2026, 9, 25, 9, 0, 0, 0, cst)); status != "warn" || updated != "2026-09-17" {
+		t.Errorf("8 days later: got %s/%s, want warn/2026-09-17", status, updated)
+	}
+	if status, updated := checkReplayHealth(p, time.Date(2026, 10, 7, 9, 0, 0, 0, cst)); status != "error" || updated != "2026-09-17" {
+		t.Errorf("20 days later: got %s/%s, want error/2026-09-17", status, updated)
+	}
+}
+
+// TestCheckReplayHealth_ZeroChangeRatioStillWarns pins the backfill-duplication
+// check the rewrite had to preserve, on the layout it was written for: the
+// 11-column replay schema (Code = column 1, Close = column 8) that
+// internal/replay's CSV samples use.
+func TestCheckReplayHealth_ZeroChangeRatioStillWarns(t *testing.T) {
+	cst := time.FixedZone("CST", 8*60*60)
+	now := time.Date(2026, 9, 18, 9, 0, 0, 0, cst)
+	var b strings.Builder
+	b.WriteString("Date,Code,Name,TradeVolume,TradeValue,Open,High,Low,Close,Change,Transaction\n")
+	for i, code := range []string{"2330", "2317", "2454", "2412"} {
+		// Same closes (column 8) on 09-16 and 09-17 for every code ⇒ ratio 1.0.
+		b.WriteString("2026-09-16," + code + ",n,1,1,10,11,9,10,0," + strconv.Itoa(i) + "\n")
+		b.WriteString("2026-09-17," + code + ",n,1,1,10,11,9,10,0," + strconv.Itoa(i) + "\n")
+	}
+	status, updated := checkReplayHealth(writeReplayFile(t, b.String()), now)
+	if status != "warn" || !strings.Contains(updated, "無變動") {
+		t.Errorf("got %s/%s, want warn with the zero-change reason", status, updated)
+	}
+	if !strings.HasPrefix(updated, "2026-09-17") {
+		t.Errorf("zero-change reason must name the newest date, got %q", updated)
+	}
+}
+
+// TestCheckReplayHealth_ZeroChangeCheckIsInertForTheProductionCSVLayout pins a
+// KNOWN GAP, not a guarantee (registered, deliberately not changed here): the
+// configured file (cmd/daily-replay-sync's 8-column
+// Date,Code,Name,TradeVolume,Open,High,Low,Close — Close = index 7) never
+// satisfies the check's `len(row) < 9` guard, so the ratio safety net cannot
+// fire there even when two whole days carry identical closes. It is asserted so
+// that the eventual fix (reading Close from the header) has to flip this test on
+// purpose: that fix changes what the production channel reports.
+func TestCheckReplayHealth_ZeroChangeCheckIsInertForTheProductionCSVLayout(t *testing.T) {
+	cst := time.FixedZone("CST", 8*60*60)
+	now := time.Date(2026, 9, 18, 9, 0, 0, 0, cst)
+	var b strings.Builder
+	b.WriteString("Date,Code,Name,TradeVolume,Open,High,Low,Close\n")
+	for _, code := range []string{"2330", "2317", "2454", "2412"} {
+		b.WriteString("2026-09-16," + code + ",n,1,10,11,9,10\n")
+		b.WriteString("2026-09-17," + code + ",n,1,10,11,9,10\n")
+	}
+	status, updated := checkReplayHealth(writeReplayFile(t, b.String()), now)
+	if status != "ok" || updated != "2026-09-17" {
+		t.Errorf("got %s/%s, want ok/2026-09-17 (the ratio check is inert for this 8-column layout — see replayZeroChangeRatio)", status, updated)
+	}
+}
+
+func TestCheckReplayHealth_UnreadableShapes(t *testing.T) {
+	cst := time.FixedZone("CST", 8*60*60)
+	now := time.Date(2026, 9, 18, 9, 0, 0, 0, cst)
+
+	if status, updated := checkReplayHealth(filepath.Join(t.TempDir(), "nope.csv"), now); status != "error" || updated != "檔案不存在" {
+		t.Errorf("missing file: got %s/%s, want error/檔案不存在", status, updated)
+	}
+	if status, updated := checkReplayHealth(writeReplayFile(t, "\n\n"), now); status != "error" || updated != "空檔案" {
+		t.Errorf("blank file: got %s/%s, want error/空檔案", status, updated)
+	}
+	// Header only: no row carries a date ⇒ the file cannot be dated.
+	if status, updated := checkReplayHealth(writeReplayFile(t, "Date,Code,Name,TradeVolume,Open,High,Low,Close\n"), now); status != "error" || updated != "無法解析資料日" {
+		t.Errorf("header-only file: got %s/%s, want error/無法解析資料日", status, updated)
 	}
 }

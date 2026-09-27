@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -452,6 +451,29 @@ func checkGeopoliticalHealth(path string, now time.Time) (string, string) {
 	return "error", latest.Format("2006-01-02 15:04:05")
 }
 
+// checkReplayHealth reports the freshness of the replay dataset from the
+// dataset's OWN newest data date.
+//
+// E29-1 (2026-09-27, follow-up 6 of #2057): the verdict used to be read off the
+// FILE ORDER — the last non-blank line. That file is append-only and a gap
+// backfill appends days that are OLDER than the newest row (runGapBackfill runs
+// after the daily sync, and any manual backfill can add history at any time),
+// so "last line" is not "newest data day": one appended older row made a
+// current dataset read as warn/error, while before #2057 a phantom FUTURE row
+// made a stale dataset read as ok forever. File position is not a data fact.
+//
+// The verdict now comes from the maximum data date the file actually contains.
+// For the configured CSV shape (config.GetReplayDataPath →
+// data/replay/<VERSION>) that is the SAME rule the read side uses —
+// replay.GetLatestDate → LoadTWSEOpenDataCSV sorts the dates → the
+// replay_data_latest_date field of this very payload — so the channel verdict
+// and the payload cannot disagree about which day the data is from. NOT covered
+// by that claim: a .jsonl replay file, where replay.latestDateJSONL still reads
+// its LAST non-empty line (a read-side defect, out of scope here).
+//
+// Both replay shapes in this repo are handled: line-oriented JSON (JSONL, one
+// "date" field per line) and the TWSE OpenData CSV (the date is column 0;
+// header rows and any other non-date row are skipped).
 func checkReplayHealth(path string, now time.Time) (string, string) {
 	f, err := os.Open(path)
 	if err != nil {
@@ -459,105 +481,164 @@ func checkReplayHealth(path string, now time.Time) (string, string) {
 	}
 	defer func() { _ = f.Close() }()
 
-	var lastLine string
+	var lines []string
 	scanner := bufio.NewScanner(f)
-	lines := make([]string, 0)
 	for scanner.Scan() {
-		line := scanner.Text()
-		lines = append(lines, line)
+		lines = append(lines, scanner.Text())
+	}
+	if err := scanner.Err(); err != nil {
+		// A line longer than bufio.Scanner's 64KiB token limit would otherwise
+		// end the scan silently, and the "newest day" would be computed from a
+		// prefix of the file — the newest day could be in the part never read.
+		return "error", "讀取失敗: " + err.Error()
+	}
+	blank := true
+	for _, line := range lines {
 		if strings.TrimSpace(line) != "" {
-			lastLine = line
+			blank = false
+			break
 		}
 	}
-	if lastLine == "" {
+	if blank {
 		return "error", "空檔案"
 	}
 
-	trimmed := strings.TrimSpace(lastLine)
+	// Newest and second-newest data date, taken from the rows themselves.
+	newest, prev := "", ""
+	for _, line := range lines {
+		date, ok := replayRowDate(line)
+		if !ok {
+			continue
+		}
+		switch {
+		case newest == "" || date > newest:
+			prev, newest = newest, date
+		case date != newest && date > prev:
+			prev = date
+		}
+	}
+	if newest == "" {
+		return "error", "無法解析資料日"
+	}
+
+	// Zero-change ratio between the newest date and the previous one: a backfill
+	// that replays one session's closes as another is otherwise invisible.
+	if prev != "" {
+		if ratio, compared := replayZeroChangeRatio(lines, newest, prev); compared > 0 && ratio > 0.3 {
+			return "warn", fmt.Sprintf("%s (%.0f%% 標的隔日收盤價無變動，請檢查 backfill 資料)", newest, ratio*100)
+		}
+	}
+
+	t, err := time.Parse("2006-01-02", newest)
+	if err != nil {
+		return "error", "日期解析失敗"
+	}
+	age := now.Sub(t)
+	if age < 3*24*time.Hour {
+		return "ok", newest
+	}
+	if age < 14*24*time.Hour {
+		return "warn", newest
+	}
+	return "error", newest
+}
+
+// replayRowDate extracts the YYYY-MM-DD data date carried by one replay row.
+// JSONL rows state it in a "date" field; CSV rows carry it in column 0
+// ("Date,Code,Name,..." header rows and any other non-date row return false).
+func replayRowDate(line string) (string, bool) {
+	trimmed := strings.TrimSpace(line)
+	if trimmed == "" {
+		return "", false
+	}
 	if strings.HasPrefix(trimmed, "{") {
 		var row struct {
 			Date string `json:"date"`
 		}
-		if err := json.Unmarshal([]byte(lastLine), &row); err != nil {
-			return "error", "JSON 解析失敗"
+		if err := json.Unmarshal([]byte(trimmed), &row); err != nil {
+			return "", false
 		}
-		if row.Date == "" {
-			return "error", "JSON 缺少 date 欄位"
-		}
-		t, err := time.Parse("2006-01-02", row.Date)
-		if err != nil {
-			return "error", "日期解析失敗"
-		}
-		age := now.Sub(t)
-		if age < 3*24*time.Hour {
-			return "ok", row.Date
-		}
-		if age < 14*24*time.Hour {
-			return "warn", row.Date
-		}
-		return "error", row.Date
+		return replayDateOnly(row.Date)
 	}
+	head, _, _ := strings.Cut(trimmed, ",")
+	return replayDateOnly(head)
+}
 
-	// CSV format: date,col2,col3,...
-	parts := strings.Split(lastLine, ",")
-	if len(parts) == 0 {
-		return "error", "格式錯誤"
+// replayDateOnly normalises a date stamp to YYYY-MM-DD: quoted values and full
+// RFC3339 timestamps are accepted, anything else is rejected.
+func replayDateOnly(s string) (string, bool) {
+	s = strings.TrimSpace(s)
+	s = strings.Trim(s, `"`)
+	if len(s) > 10 {
+		s = s[:10]
 	}
-	latestDate := strings.TrimSpace(parts[0])
-	t, err := time.Parse("2006-01-02", latestDate)
+	d, err := time.Parse("2006-01-02", s)
 	if err != nil {
-		return "error", "日期解析失敗"
+		return "", false
 	}
+	return d.Format("2006-01-02"), true
+}
 
-	// Check zero-change ratio for last two dates
-	if len(lines) > 1 {
-		prevCloseByCode := make(map[string]float64)
-		lastCloseByCode := make(map[string]float64)
-		var prevDate string
-		for _, line := range slices.Backward(lines) {
-			row := strings.Split(line, ",")
-			if len(row) < 9 || row[0] == "Date" {
-				continue
-			}
-			date := row[0]
-			if date != latestDate && prevDate == "" {
-				prevDate = date
-			}
-			if date == latestDate && len(row) >= 9 {
-				closeVal, _ := strconv.ParseFloat(strings.TrimSpace(row[8]), 64)
-				lastCloseByCode[row[1]] = closeVal
-			}
-			if date == prevDate && len(row) >= 9 {
-				closeVal, _ := strconv.ParseFloat(strings.TrimSpace(row[8]), 64)
-				prevCloseByCode[row[1]] = closeVal
-			}
+// replayZeroChangeRatio returns the share of codes whose close is identical on
+// newDate and prevDate, plus how many codes were comparable (0 = nothing to
+// judge). The column mapping (1 = Code, 8 = Close) and the 0.3 threshold are
+// byte-for-byte the loop it replaces; that mapping is the 11-column replay
+// schema from internal/replay (Date,Code,Name,TradeVolume,TradeValue,Open,High,
+// Low,Close,Change,Transaction — see twse_csv_test.go samples).
+//
+// KNOWN GAP (registered, deliberately NOT changed here): the file this is
+// pointed at (config.GetReplayDataPath → data/replay/tw_extended_90days.csv,
+// written by cmd/daily-replay-sync) has 8 COLUMNS — Close is index 7 — so the
+// `len(row) < 9` guard skips every row, `compared` stays 0 and the
+// backfill-duplication safety net never fires in production. Reading Close from
+// the header instead would start warning on the production channel, i.e. a data
+// semantics change that belongs with the backfill repair, not inside a
+// monitoring fix. TestCheckReplayHealth_ZeroChangeCheckIsInertForTheProductionCSVLayout
+// pins today's behavior so that a deliberate fix has to update it.
+func replayZeroChangeRatio(lines []string, newDate, prevDate string) (float64, int) {
+	newClose := make(map[string]float64)
+	prevClose := make(map[string]float64)
+	for _, line := range lines {
+		// Cheap pre-filter: a scorable row needs a 9th column, so a row with
+		// fewer than 8 commas cannot be one. For the production 8-column CSV
+		// this skips every line without allocating a []string per row.
+		if strings.Count(line, ",") < 8 {
+			continue
 		}
-		zeroChange := 0
-		compared := 0
-		for code, lastClose := range lastCloseByCode {
-			if prevClose, ok := prevCloseByCode[code]; ok && prevClose > 0 {
-				compared++
-				if lastClose == prevClose {
-					zeroChange++
-				}
-			}
+		row := strings.Split(line, ",")
+		if len(row) < 9 || strings.TrimSpace(row[0]) == "Date" {
+			continue
 		}
-		if compared > 0 {
-			ratio := float64(zeroChange) / float64(compared)
-			if ratio > 0.3 {
-				return "warn", fmt.Sprintf("%s (%.0f%% 標的隔日收盤價無變動，請檢查 backfill 資料)", latestDate, ratio*100)
-			}
+		date := strings.TrimSpace(row[0])
+		if date != newDate && date != prevDate {
+			continue
+		}
+		// Unparseable closes are kept as 0 (ParseFloat's error is discarded),
+		// exactly like the loop this replaces: such rows are dropped later by
+		// the prevClose > 0 guard, and skipping them here instead would change
+		// the denominator of the ratio.
+		closeVal, _ := strconv.ParseFloat(strings.TrimSpace(row[8]), 64)
+		if date == newDate {
+			newClose[row[1]] = closeVal
+		} else {
+			prevClose[row[1]] = closeVal
 		}
 	}
-
-	age := now.Sub(t)
-	if age < 3*24*time.Hour {
-		return "ok", latestDate
+	zeroChange, compared := 0, 0
+	for code, lastClose := range newClose {
+		prevCloseVal, ok := prevClose[code]
+		if !ok || prevCloseVal <= 0 {
+			continue
+		}
+		compared++
+		if lastClose == prevCloseVal {
+			zeroChange++
+		}
 	}
-	if age < 14*24*time.Hour {
-		return "warn", latestDate
+	if compared == 0 {
+		return 0, 0
 	}
-	return "error", latestDate
+	return float64(zeroChange) / float64(compared), compared
 }
 
 func checkCapitalFlowHealth(dir string, now time.Time) (string, string) {
