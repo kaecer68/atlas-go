@@ -1187,6 +1187,13 @@ func buildParameterSnapshot() *shared.ParameterSnapshot {
 	if cfg.NarrativeConviction.ThemeHitRates.Value != nil {
 		snap.NarrativeHitRates = make(map[string]float64, len(cfg.NarrativeConviction.ThemeHitRates.Value))
 		maps.Copy(snap.NarrativeHitRates, cfg.NarrativeConviction.ThemeHitRates.Value)
+		// Carry the declared provenance alongside the map so no consumer has to
+		// guess whether these rates were measured (issue #1944 Batch B). The
+		// shipped block declares heuristic, i.e. a hand-authored prior set.
+		snap.NarrativeHitRatesSource = string(cfg.NarrativeConviction.ThemeHitRates.Source)
+		if snap.NarrativeHitRatesSource == "" {
+			snap.NarrativeHitRatesSource = shared.NarrativeHitRatesSourceUnspecified
+		}
 	}
 	if cfg.Industry.PhaseScores.Value.ScoreExpansion != 0 || cfg.Industry.PhaseScores.Value.ScoreRecovery != 0 {
 		snap.IndustryPhaseScores = map[string]float64{

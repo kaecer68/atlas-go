@@ -47,6 +47,10 @@ func (p SiliconCyclePhase) String() string {
 // SiliconIndicators holds the input indicators for silicon cycle phase detection.
 // All values are year-over-year percentages except DRAMSpotPriceTrend which is
 // a normalized trend signal.
+//
+// Two fields do NOT carry the period or the statistic their names declare; see
+// ExtractSiliconIndicators and the SiliconIndicator* constants (issue #1944
+// Batch B).
 type SiliconIndicators struct {
 	// TSMCMonthlyRevenueYoY is 台積電月營收年增率 (fraction, e.g. 0.25 = +25%).
 	TSMCMonthlyRevenueYoY float64
@@ -58,6 +62,11 @@ type SiliconIndicators struct {
 	DRAMSpotPriceTrend float64
 
 	// TaiwanSemiconductorIndexMA is 台灣半導體指數偏離季線比例 (fraction).
+	//
+	// The name/intent is the deviation above the quarterly moving average, but
+	// the only production producer supplies a SINGLE-DAY return instead
+	// (SiliconTWIndexIsMADeviation=false). IndexMAPercentThreshold is therefore
+	// compared against a one-day move and the 1→2 trigger cannot fire.
 	TaiwanSemiconductorIndexMA float64
 
 	// TSMCCapexGuidance is 台積電資本支出指引變動 (fraction, negative = cut).
@@ -97,19 +106,45 @@ type SiliconCycleParams struct {
 	HistoryWindowSize int
 }
 
-// Silicon indicator provenance (issue #1944 Batch 2, Q6 I22).
+// Silicon indicator provenance (issue #1944 Batch 2, Q6 I22; corrected by issue
+// #1944 Batch B, 2026-09-27).
 //
 // These constants pin what the six SiliconIndicators inputs actually are, so a
-// steady phase is never read as "no signal" when the truth is "no producer".
-// They are asserted by TestSiliconIndicatorProvenance.
+// steady phase is never read as "no signal" when the truth is "the input does
+// not mean what its name says". They are asserted by
+// TestSiliconIndicatorProvenance.
 const (
-	// SiliconTWIndexProducerAvailable reports whether any production provider
-	// writes MacroDataSnapshot.TaiwanSemiIndex. It does not: only the struct
-	// definition and the macro merge helper reference the field
-	// (internal/marketdata/macro_provider.go), so
-	// SiliconIndicators.TaiwanSemiconductorIndexMA is always 0 and the 1→2
-	// overheat branch that reads it ("index above MA") cannot fire today.
-	SiliconTWIndexProducerAvailable = false
+	// SiliconTWIndexWriterWired reports whether a production path writes
+	// MacroDataSnapshot.TaiwanSemiIndex. It does: the twse_sector_index gateway
+	// channel (registered in macroDataGatewayAdapter.fetchFresh) feeds
+	// applyTWSESectorIndex (internal/monitoring/gateway_adapter.go) from a real
+	// TWSE MI_INDEX provider (internal/apigateway/adapter_twse_sector_index.go),
+	// and the channel is refreshed by a 15-minute background task
+	// (cmd/atlas/operations_tasks.go). NewMacroDataGatewayAdapter is constructed
+	// in cmd/atlas/main.go and internal/monitoring/dashboard_api.go.
+	//
+	// Batch 2 shipped the opposite claim ("only the struct definition and the
+	// macro merge helper reference the field", so the value is always 0). That
+	// claim was false; see SiliconTWIndexIsMADeviation for the reason the 1→2
+	// overheat trigger is unreachable despite the live writer.
+	SiliconTWIndexWriterWired = true
+
+	// SiliconTWIndexIsMADeviation reports whether the written value carries the
+	// semantics both the 1→2 trigger and the field name claim, i.e. "the index
+	// sits this far ABOVE its moving average". It does not: the channel writes
+	// latest.ReturnPct (internal/apigateway/adapter_twse_sector_index.go) — the
+	// index's SINGLE-DAY return — and ExtractSiliconIndicators passes it through
+	// as ChangePct/100.
+	//
+	// Consequence: IndexMAPercentThreshold (shipped 0.20; Go doc "index exceeds
+	// MA by this") is compared against a one-day return, which real TAISEMI data
+	// cannot reach, so ExpansionConfirmed → PhaseOverheat never fires and
+	// PhaseOverheat is unreachable in production. This — a semantic/scale
+	// mismatch, not a missing producer — is the real gap. Fixing it means
+	// computing the actual MA deviation (or wiring a YoY/MA series), NOT lowering
+	// the threshold; the sibling SOX trigger is unreachable for the same reason
+	// (see SiliconSOXIndicatorIsYoY).
+	SiliconTWIndexIsMADeviation = false
 
 	// SiliconSOXIndicatorIsYoY reports whether the SOX-derived inputs are
 	// annual figures as their names claim. They are not: the Yahoo ^SOX
@@ -468,6 +503,9 @@ func (e *SiliconCycleTracker) String() string {
 //   - DRAMSpotPriceTrend:     MacroDataSnapshot.DRAMSpotPrice.ChangePct / 100
 //     (MU stock daily change serves as a high-frequency DRAM proxy)
 //   - TaiwanSemiconductorIndexMA: MacroDataSnapshot.TaiwanSemiIndex.ChangePct / 100
+//     — NOTE: the channel that writes that field stores latest.ReturnPct, i.e.
+//     the index's daily return, not the "deviation above MA" the name and
+//     IndexMAPercentThreshold (0.20) assume (see SiliconTWIndexIsMADeviation).
 //   - TSMCCapexGuidance:      snap.CapexGrowth.Value/100 when the sector_data
 //     channel produced it; otherwise an implied value derived from TSMC
 //     revenue YoY (see capexProxy* below)
@@ -480,8 +518,9 @@ func (e *SiliconCycleTracker) String() string {
 // fields are zero-valued, so providers that have not yet been integrated do
 // not poison phase detection.
 //
-// Callers must not treat a steady phase as "no signal": two of the six inputs
-// have no production producer at the period their names declare (see the
+// Callers must not treat a steady phase as "no signal": two of the six inputs do
+// not carry the period or statistic their names declare, so the transitions that
+// read them are unreachable while the upstream values look populated (see the
 // SiliconIndicator* constants and the doc block above).
 func ExtractSiliconIndicators(snap marketdata.MacroDataSnapshot) SiliconIndicators {
 	tsmcRevYoY := snap.TSMCRevenue.ChangePct / 100.0
