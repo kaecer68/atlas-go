@@ -21,6 +21,8 @@
 #   negproof_require_file "$REPO_ROOT/scripts/secret-scan.sh" "受測掃描器" || exit 1
 #   negproof_expect 1 "含合成憑證的 tracked 檔必須被擋下" "$LOG" -- bash scripts/secret-scan.sh || { negproof_show_log "$LOG"; exit 1; }
 #   negproof_expect_output '__negtest_secret__.py' "$LOG" "擋下的必須是那個 fixture" || { negproof_show_log "$LOG"; exit 1; }
+#   negproof_expect_output_line '__negtest_secret__.py' '[telegram_bot_token]' "$LOG" \
+#     "擋下的必須是 fixture，且必須由這條規則擋下" || { negproof_show_log "$LOG"; exit 1; }
 #
 # 契約：
 #   * 呼叫端**不要**用 `set -e` 包住 negproof_expect（它自己處理 rc，回傳 0/1）。
@@ -102,6 +104,34 @@ negproof_expect_output() {
     return 0
   fi
   negproof_err "[${desc}] 輸出不含 '${pattern}' ⇒ 擋下的**不是**我們要證明的東西（擋錯 = 沒證明到）"
+  return 1
+}
+
+# negproof_expect_output_line <needleA> <needleB> <log 檔> <說明>
+#   必須有**同一行**同時含 A 與 B ⇒ 證明「A（我們造的 fixture）是被 B（該閘門的**專屬規則 id**）擋下的」。
+#   為什麼不能只斷言「輸出含 fixture 檔名」（issue #2011 的下一層）：那證明的是「**有東西**擋下」。
+#   若目標規則壞了、卻由**另一條規則**順手擋下同一個 fixture，舊寫法照樣綠燈 —— 這是「看似有牙齒、
+#   其實咬錯地方」的假安心。把「**正確的規則**擋下」變成可執行斷言，是 requirement 的下一層收緊。
+#   B 傳**規則 id 字面值**（如 `[R2]`、`[telegram_bot_token]`），不要傳自由文字。
+#   用 awk 的 index()（字面子字串比對）：不做 regex 轉義，也避開 `grep | grep` 在 `pipefail` 下的
+#   SIGPIPE（141）地雷（同 revert-guard-negative-proof.sh 的 `| head` 事故）。
+negproof_expect_output_line() {
+  local a="${1:-}" b="${2:-}" log="${3:-}" desc="${4:-輸出內容}"
+  if [ -z "${a}" ] || [ -z "${b}" ]; then
+    negproof_err "[${desc}] 比對字串是空的（A='${a}' B='${b}'）⇒ 空字串會被當成「永遠命中」（空值即通過）"
+    return 1
+  fi
+  if [ ! -f "${log}" ]; then
+    negproof_err "[${desc}] 找不到 log 檔 '${log}'"
+    return 1
+  fi
+  # shellcheck disable=SC2016  # awk 程式碼裡的 $0 是 awk 的，不是 shell 的
+  if awk -v a="${a}" -v b="${b}" \
+       'index($0, a) && index($0, b) { found = 1; exit } END { exit(found ? 0 : 1) }' "${log}"; then
+    echo "  ✅ [${desc}] 有同一行同時含 '${a}' 與 '${b}'"
+    return 0
+  fi
+  negproof_err "[${desc}] 沒有任一行同時含 '${a}' 與 '${b}' ⇒ 擋下的**不是這條規則**（規則壞了卻由別的規則代擋 = 假安心）"
   return 1
 }
 
