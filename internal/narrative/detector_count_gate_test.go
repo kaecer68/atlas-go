@@ -4,23 +4,33 @@
 // code comments, the cmd/atlas startup log and several specs kept saying "24".
 // The startup log line leaked that stale number into a downstream atlas-wiki CI
 // audit. Hand-written numbers drift; assertions do not. This file turns the claim
-// "the docs and the registry agree on how many detectors exist" into two
+// "the docs and the registry agree on how many detectors exist" into three
 // executable assertions:
 //
 //  1. TestDetectorCount_RegistryMatchesDocumentedCount — the registry size must
 //     equal documentedDetectorCount, the number the documents state. Add or
 //     remove a detector without bumping the constant and this test is red.
-//  2. TestDetectorCount_NoStaleCountClaims — every "N detectors" / "N trigger
-//     themes" claim inside countClaimCarriers must carry the live registry size,
-//     so a comment or spec that keeps a stale number is caught here instead of in
+//  2. TestDetectorCount_NoStaleCountClaims — every detector/theme/template count
+//     claim inside countClaimCarriers must carry the live registry size, so a
+//     comment or spec that keeps a stale number is caught here instead of in
 //     someone's audit log.
+//  3. TestDetectorCount_ClaimClassifier_Contract — pins what the text gate
+//     catches and what it deliberately lets through, so a future "simplification"
+//     of the classifier cannot silently reopen a hole.
 //
-// The cmd/atlas startup log is NOT part of the text gate: it computes the count
-// from the registry at runtime (templateDetectorRouteLog in
-// cmd/atlas/template_detector.go, asserted in
-// cmd/atlas/template_detector_count_log_test.go).
+// The cmd/atlas startup log is covered twice: cmd/atlas/main.go is in
+// countClaimCarriers (a re-hardcoded literal there is a stale claim), and
+// cmd/atlas/template_detector_count_log_test.go asserts that the emitted line
+// follows the registry.
 //
-
+// Known blind spots of the text gate — deliberate, documented, not accidental:
+//   - a claim only counts when the number and the keyword sit together on ONE
+//     line ("detectors\ntotal: 24" is invisible);
+//   - spelled-out numbers ("twenty-four detectors") are invisible;
+//   - numbers separated from the keyword by other words ("24 of the templates")
+//     are invisible;
+//   - files outside countClaimCarriers are not scanned at all. When you add a
+//     file that states the count, add it to countClaimCarriers.
 package narrative
 
 import (
@@ -43,17 +53,19 @@ import (
 //  3. re-run the narrative package tests.
 const documentedDetectorCount = 29
 
-// countClaimCarriers are the files whose "N detectors" / "N trigger themes"
-// claims describe the CURRENT default registry. Every such claim must equal the
-// live registry size.
+// countClaimCarriers are the files whose detector/theme/template count claims
+// describe the CURRENT default registry. Every such claim must equal the live
+// registry size.
 //
 // Files that intentionally keep a dated number are deliberately not here:
 // CHANGELOG.md (historical PR record), docs/decisions/* (dated decision
 // records), docs/ATLAS_CONSTITUTION_AUDIT.md (v1.1 audit snapshot rows quoting
-// the then-current requirement), docs/specs/macro-first-principles-causal-gap-spec.md
-// (change record of the 24 -> 29 move), client_web/tests/capital-causality.spec.ts
-// (its mock builds 24 rows on purpose).
+// the then-current requirement label), docs/specs/macro-first-principles-causal-gap-spec.md
+// (change record of the 24 -> 29 move), docs/specs/industry-allocation-inert-audit-20260924.md
+// (dated audit), client_web/tests/capital-causality.spec.ts (its mock builds 24
+// rows on purpose).
 var countClaimCarriers = []string{
+	"cmd/atlas/main.go",
 	"cmd/atlas/template_detector.go",
 	"cmd/atlas-mcp/server/tools_template_detector.go",
 	"internal/narrative/detector.go",
@@ -66,21 +78,42 @@ var countClaimCarriers = []string{
 	"internal/eventdriven/type_theme_mapping.go",
 	"internal/eventdriven/type_theme_mapping_test.go",
 	"internal/orchestrator/regime_inference.go",
+	"shared_web/static/js/shared/theme-labels.js",
+	"shared_web/static/js/shared/constants.js",
 	"docs/specs/eventdriven-spec.md",
 	"docs/specs/template-detector-category-spec.md",
 	"docs/ATLAS_METHODOLOGY.md",
 }
 
-// detectorCountClaim matches a phrase that states how many detectors, trigger
-// themes or templates the default registry has. The leading digits are the
-// claim.
-var detectorCountClaim = regexp.MustCompile(
-	`(?i)(?:all\s+)?\d+\s*個?\s*(?:template[-\s]trigger\s*)?(?:detectors?|templates?|trigger[_ ]themes?|themes?)\b`)
+// forwardClaimPatterns match a phrase where the NUMBER LEADS: "24 detectors",
+// "29 個 detector", "all 24 themes", "29-template", "26 個主題".
+var forwardClaimPatterns = []*regexp.Regexp{
+	regexp.MustCompile(`(?i)\d+\s*個?\s*(?:template[-\s]trigger\s*)?(?:detectors?|templates?|trigger[_ ]themes?|themes?|偵測器|模板|主題)`),
+	regexp.MustCompile(`(?i)\d+-(?:detectors?|templates?)`),
+}
 
-// unrelatedCountContexts mark numbers that count something else: Wave 9
-// detectors, the Stage 5 detector subsystem, "PR#2 shipped 24" history, and
-// "＋5 個 detector struct" change records.
-var unrelatedCountContexts = []string{"wave", "stage", "pr#", "＋", "新增", "增加"}
+// reverseClaimPatterns match a phrase where the NUMBER TRAILS: "detector
+// count: 24", "number of detectors = 24", "detector 總數 24".
+var reverseClaimPatterns = []*regexp.Regexp{
+	regexp.MustCompile(`(?i)(?:number\s+of\s+detectors?|(?:detector|template|theme)s?\s*(?:count|總數|數量))[^0-9\n]{0,16}\d+`),
+}
+
+// legacyCountContexts mark a number that counts something else: Wave 9
+// detectors, the Stage 5 detector subsystem, "PR#2 shipped N" history, and
+// "＋N 個 detector struct" change records. A marker only counts when it sits
+// within legacyContextWindow characters of the number — an adversarial review
+// found that a wide window let a current-state claim hide behind a distant
+// "Stage 5" mention.
+var legacyCountContexts = []string{"wave", "stage", "pr#", "＋", "新增", "增加"}
+
+// legacyContextWindow is how close a legacyCountContexts marker must be.
+const legacyContextWindow = 16
+
+// countClaim is one count statement the gate judges.
+type countClaim struct {
+	number int
+	text   string
+}
 
 // TestDetectorCount_RegistryMatchesDocumentedCount pins the documented number to
 // the live registry from four angles, so a partial change cannot slip through.
@@ -116,42 +149,71 @@ func TestDetectorCount_NoStaleCountClaims(t *testing.T) {
 		}
 
 		for i, line := range strings.Split(string(raw), "\n") {
-			for _, loc := range detectorCountClaim.FindAllStringIndex(line, -1) {
-				claim := line[loc[0]:loc[1]]
-				if hasUnrelatedCountContext(line[:loc[0]]) || precededByFractionOrDigit(line[:loc[0]]) {
-					continue
-				}
-				got, convErr := firstInt(claim)
-				if convErr != nil {
-					t.Errorf("%s:%d claim %q has no leading number: %v", rel, i+1, claim, convErr)
-					continue
-				}
-				if got != live {
-					t.Errorf("%s:%d states %q but the registry has %d detectors — fix the file (or the registry)", rel, i+1, strings.TrimSpace(claim), live)
+			for _, claim := range staleCountClaims(line) {
+				if claim.number != live {
+					t.Errorf("%s:%d states %q but the registry has %d detectors — fix the file (or the registry)", rel, i+1, claim.text, live)
 				}
 			}
 		}
 	}
 }
 
-// hasUnrelatedCountContext reports whether the text before a claim names a
-// different detector family or a change record.
-func hasUnrelatedCountContext(before string) bool {
-	window := strings.ToLower(before)
-	if len(window) > 40 {
-		window = window[len(window)-40:]
-	}
-	for _, marker := range unrelatedCountContexts {
-		if strings.Contains(window, marker) {
-			return true
+// staleCountClaims returns the count claims in one line that describe the
+// default registry. Numbers that belong to another detector family (Wave 9, the
+// Stage 5 subsystem), to a dated change record, or to a requirement label like
+// "19/24 themes" are not claims and are dropped.
+func staleCountClaims(line string) []countClaim {
+	var out []countClaim
+
+	for _, pat := range forwardClaimPatterns {
+		for _, loc := range pat.FindAllStringIndex(line, -1) {
+			if !judgeable(line, loc[0]) {
+				continue
+			}
+			if n, ok := nthInt(line[loc[0]:loc[1]], 0); ok {
+				out = append(out, countClaim{number: n, text: line[loc[0]:loc[1]]})
+			}
 		}
 	}
-	return false
+
+	for _, pat := range reverseClaimPatterns {
+		for _, loc := range pat.FindAllStringIndex(line, -1) {
+			if !judgeable(line, loc[0]) {
+				continue
+			}
+			nums := intsIn(line[loc[0]:loc[1]])
+			if len(nums) == 0 {
+				continue
+			}
+			out = append(out, countClaim{number: nums[len(nums)-1], text: line[loc[0]:loc[1]]})
+		}
+	}
+
+	return out
 }
 
-// precededByFractionOrDigit reports whether a claim is part of a fraction label
-// such as "Narrative 19/24 themes", which names a requirement, not the registry
-// size of today.
+// judgeable reports whether a claim starting at start describes the default
+// registry: not preceded nearby by a legacy marker, and not part of a fraction
+// label such as "Narrative 19/24 themes".
+func judgeable(line string, start int) bool {
+	before := strings.ToLower(line[:start])
+
+	window := before
+	if len(window) > legacyContextWindow {
+		window = window[len(window)-legacyContextWindow:]
+	}
+	for _, marker := range legacyCountContexts {
+		if strings.Contains(window, marker) {
+			return false
+		}
+	}
+
+	return !precededByFractionOrDigit(line[:start])
+}
+
+// precededByFractionOrDigit reports whether a number is part of a fraction label
+// ("19/24 themes") or continues a longer number. Both name something other than
+// the registry size of today.
 func precededByFractionOrDigit(before string) bool {
 	trimmed := strings.TrimRight(before, " \t")
 	if len(trimmed) == 0 {
@@ -161,21 +223,95 @@ func precededByFractionOrDigit(before string) bool {
 	if last >= '0' && last <= '9' {
 		return true
 	}
-	// "19/24 themes" names a requirement label, not today's registry size.
-	return last == '/' && len(trimmed) >= 2 && trimmed[len(trimmed)-2] >= '0' && trimmed[len(trimmed)-2] <= '9'
+	return last == '/' && len(trimmed) >= 2 && isASCIIDigit(trimmed[len(trimmed)-2])
 }
 
-// firstInt returns the first decimal number in claim.
-func firstInt(claim string) (int, error) {
-	idx := strings.IndexFunc(claim, func(r rune) bool { return r >= '0' && r <= '9' })
-	if idx < 0 {
-		return 0, strconv.ErrSyntax
+// intsIn returns every decimal number in s, in order.
+func intsIn(s string) []int {
+	var out []int
+	for i := 0; i < len(s); i++ {
+		if !isASCIIDigit(s[i]) {
+			continue
+		}
+		end := i
+		for end < len(s) && isASCIIDigit(s[end]) {
+			end++
+		}
+		if n, err := strconv.Atoi(s[i:end]); err == nil {
+			out = append(out, n)
+		}
+		i = end
 	}
-	end := idx
-	for end < len(claim) && claim[end] >= '0' && claim[end] <= '9' {
-		end++
+	return out
+}
+
+// nthInt returns the idx-th decimal number in s.
+func nthInt(s string, idx int) (int, bool) {
+	nums := intsIn(s)
+	if idx < 0 || idx >= len(nums) {
+		return 0, false
 	}
-	return strconv.Atoi(claim[idx:end])
+	return nums[idx], true
+}
+
+func isASCIIDigit(b byte) bool { return b >= '0' && b <= '9' }
+
+// TestDetectorCount_ClaimClassifier_Contract pins the text gate's behaviour in
+// both directions. The "caught" cases include the escapes an independent
+// adversarial review of the first version of this gate actually demonstrated;
+// the "skipped" cases are the legacy forms that must NOT fail the build.
+//
+// If you change the patterns or the legacy window: fix this table first (it
+// encodes the intent), then the carrier files.
+func TestDetectorCount_ClaimClassifier_Contract(t *testing.T) {
+	cases := []struct {
+		name string
+		line string
+		want []int
+	}{
+		// Must be caught — these all describe the current registry.
+		{"english plural", "//\tGET /api/detector/registry/list → 24 detectors + enable/disable", []int{24}},
+		{"all N themes", "// used (all 24 themes registered)", []int{24}},
+		{"hyphenated template", "// the full 24-template set", []int{24}},
+		{"hyphenated detector", "// so the 24-detector scan reports the window", []int{24}},
+		{"chinese 個 detector", "// 註冊所有 24 個 detector", []int{24}},
+		{"chinese 偵測器", "// 共 24 個偵測器", []int{24}},
+		{"chinese 主題", "// 與 templates.go 24 個主題同步", []int{24}},
+		{"reverse count", "// detector count: 24", []int{24}},
+		{"reverse number of", "// Number of detectors = 24", []int{24}},
+		{"reverse chinese", "// detector 總數 24", []int{24}},
+		{"distant stage mention does not excuse a current claim", "// Stage 5 detector registry 現況：24 detectors 全啟用。", []int{24}},
+		{"distant PR mention does not excuse a current claim", "// PR#2 之後，本系統目前共有 24 detectors 全啟用。", []int{24}},
+		{"correct number is also a claim", "// registers all 29 detectors, default-enabled.", []int{29}},
+
+		// Must be skipped — other detector families, change records, labels.
+		{"wave 9 detectors", "// but in runLiveTrading every Wave 9 detector (and the rest of the live", nil},
+		{"stage 5 subsystem", "// Exposes two read-only HTTP endpoints that proxy the Stage 5 detector", nil},
+		{"pr 2 history", "// PR#2 shipped 24 detectors and 23 unit tests.", nil},
+		{"plus-N change record", "// — ＋5 個 detector struct + NewDefaultDetectorRegistry()", nil},
+		{"requirement fraction label", "| D4 | Narrative 19/24 themes 進入 regime inference | ✅ | #1372 |", nil},
+		{"legacy theme subset is not a registry claim", "// the full set (replacing the legacy 5-theme subset that", nil},
+		{"no number at all", "// the registry decides how many detectors exist", nil},
+		{"spelled-out number (documented blind spot)", "// twenty-four detectors ship by default", nil},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := staleCountClaims(tc.line)
+			gotNums := make([]int, 0, len(got))
+			for _, c := range got {
+				gotNums = append(gotNums, c.number)
+			}
+			if len(gotNums) != len(tc.want) {
+				t.Fatalf("staleCountClaims(%q) = %v, want %v", tc.line, gotNums, tc.want)
+			}
+			for i := range gotNums {
+				if gotNums[i] != tc.want[i] {
+					t.Fatalf("staleCountClaims(%q) = %v, want %v", tc.line, gotNums, tc.want)
+				}
+			}
+		})
+	}
 }
 
 // repoRootDir locates the repository root from this test file, falling back to
@@ -192,8 +328,7 @@ func repoRootDir(t *testing.T) string {
 	}
 	for _, cand := range candidates {
 		if _, err := os.Stat(filepath.Join(cand, "go.mod")); err == nil {
-			abs, absErr := filepath.Abs(cand)
-			if absErr == nil {
+			if abs, absErr := filepath.Abs(cand); absErr == nil {
 				return abs
 			}
 			return cand
