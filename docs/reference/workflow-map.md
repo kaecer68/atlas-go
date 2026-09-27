@@ -27,7 +27,7 @@ atlas-go 是**模擬優先、稽核導向的台股投資研究系統**。進入 
 | Mode | Flag | 用途 | Bootstrap 依賴 |
 |------|------|------|--------------|
 | **WA-001 API 服務** | `--api`（預設 :18080） | 啟 Dashboard API server + Gateway + Plugin chain + Fubon-proxy | 完整（Janus, MaturityTracker, fubon-proxy, Gateway） |
-| **WA-002 Live Trading** | `--live` | broker mode（dry-run/paper/live）+ 即時 orchestrator | 完整 + broker config |
+| **WA-002 Live Trading** | `--live` | broker mode（dry-run/paper/live）+ 即時 orchestrator（**研究保留、非產品主線**；與 `--api` 同時給定時被忽略） | 完整 + broker config |
 | **WA-003 Simulation** | `--simulate` | 一次性 daily simulation，結束後 exit | 簡化（runtime + janus） |
 | **WA-004 Build Universe** | `--build-universe {run\|map\|scrape\|status}` | SmartUniverseBuilder pipeline，exit | 輕量（只跑 universe 子系統） |
 | **WA-005 Prism Worker** | subcommand `prism worker` | lightweight daemon（PRISM cohort training 子任務） | 輕量（不需要完整 runtime） |
@@ -230,7 +230,7 @@ Initial → Plan → ToolCall → Reflect
 | `-api` | false | 啟 Dashboard API server |
 | `-addr` | `:18080` | API listen address（見 `internal/constants/port.go`）|
 | `-swagger` | false | 啟 Swagger docs endpoints |
-| `-live` | false | 啟 live trading orchestrator |
+| `-live` | false | 啟 live trading orchestrator（**研究保留，非產品主線**；與 `-api` 同時給定時被忽略並印明示 log，見 `docs/reference/product-positioning.md` §3）|
 | `-simulate` | false | one-shot simulation，exit |
 | `-build-universe` | "" | `run/map/scrape/status` |
 | `-use-llm-sector-agents` | "" | L2.4 override（"true"/"false"）|

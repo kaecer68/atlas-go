@@ -49,7 +49,7 @@
 | MCP tools | 117–119 個（其中五功能相關 23 個） | ✅ |
 | 排程任務（scheduler 註冊） | 87–91 個 | ⚠️ 修正自 ~97 |
 | 前端 | shared_web SPA 同時供 client_web + admin_web | ✅ |
-| 運行時 | 單一 binary `atlas -api -live` + 獨立 cron 容器 | ✅ |
+| 運行時 | 單一 binary `atlas -api -live` + 獨立 cron 容器（2026-09-27 更正：`-live` 已自生產 compose 移除；該旗標在 `-api` 模式下本就被忽略，live 路徑為研究保留） | ✅ |
 | 狀態資料 | data/state 242MB JSONL（recommendation_outcomes 45,661 筆） | ✅ |
 
 ---
