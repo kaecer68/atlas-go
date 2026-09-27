@@ -39,3 +39,25 @@ func CollectorOnInc(collector *MetricsCollector) metrics.OnInc {
 		collector.RecordCounter(counterName, value, maps.Clone(labels))
 	}
 }
+
+// GaugeSink returns a metrics.UniverseRunVerdictSink that writes the per-run
+// verdict gauges into the MetricsCollector that backs /metrics.
+//
+// It is deliberately NOT built on CounterVec/OnInc: the gauges describe the
+// pipeline's OUTPUT (what the last run produced), and the 2026-09-25 production
+// incident was a defect *in the counter sink path* (single-label series dropped)
+// that left the counter side silently empty while the pipeline was healthy. A
+// verdict that shares the counter wiring would have been lost by the same
+// defect, which is the whole reason it exists — see metrics/universe_run.go.
+//
+// A nil collector yields a nil sink, which ReportRun treats as "not wired".
+func GaugeSink(collector *MetricsCollector) metrics.UniverseRunVerdictSink {
+	if collector == nil {
+		return nil
+	}
+	return func(name string, value float64, labels map[string]string) {
+		// Clone for the same reason as CollectorOnInc: the collector keeps the
+		// map it is handed.
+		collector.RecordGauge(name, value, maps.Clone(labels))
+	}
+}
