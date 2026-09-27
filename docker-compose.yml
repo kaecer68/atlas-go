@@ -16,7 +16,13 @@ services:
         WARMUP: ${ATLAS_WARMUP:-}
     container_name: atlas-go
     restart: unless-stopped
-    command: ["-api", "-live", "-addr", ":18080", "-fubon-port", "18081"]  
+    # `-live` was removed here on 2026-09-27. It never took effect: `-api`
+    # returns from its own dispatch block before the `-live` check, so the
+    # live trading orchestrator never started in production. The live-broker
+    # path is research-only and NOT a product feature (see
+    # docs/reference/product-positioning.md §3 "不做" list); combining the
+    # flags now prints an explicit "ignored by design" log line.
+    command: ["-api", "-addr", ":18080", "-fubon-port", "18081"]
     ports:
       - "18080:18080"
     env_file:
