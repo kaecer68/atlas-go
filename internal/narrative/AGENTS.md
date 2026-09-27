@@ -39,7 +39,11 @@ Stage 4 PR#2 的 detector_impls.go 把 tariff_shock 透過 ingestor 的 `detectT
 
 - `expectedCount` 讀 `documentedDetectorCount` 常數（不再各檔各寫一個數字）。
 - `TestDetectorCount_RegistryMatchesDocumentedCount` 斷言 registry 大小 = 文件寫的數字。
-- `TestDetectorCount_NoStaleCountClaims` 掃描 `countClaimCarriers` 內所有「N detectors / N trigger themes / N templates」敘述，只要有一處與 registry 不符就紅（這條就是為了抓「註解寫 24、實際 29」這種漂移；cmd/atlas 的 startup log 改為執行期計算，不在文字掃描範圍）。
+- `TestDetectorCount_NoStaleCountClaims` 掃描 `countClaimCarriers` 內所有 detector/theme/template 數量敘述（前導式 `N detectors` / `N-template`、中文 `N 個偵測器` / `N 個主題`、後導式 `detector count: N` / `偵測器總數 N`、`(N) detectors`、全形數字…），只要一處與 registry 不符就紅。
+- `TestDetectorCount_LegacyAllowlistIsNarrow`：唯一允許放行的是 `legacyCountLines`（逐檔、逐字串明列：Wave／Stage 子系統的 detector 措辭、憲章需求的 fraction 標籤）。**沒有「看起來像歷史就跳過」的啟發式** — 第一版用距離視窗，一句現況敘述只要前面掛著 `Stage 5` 這類 marker 就整句被放行（本檔寫這段說明時被自己的閘門抓過兩次，正好證明它會咬人）。
+- `TestDetectorCount_ClaimFilesAreClassified`：`cmd/atlas/` 與 `internal/narrative/` 底下任何「有講數量」的檔案，必須是 carrier 或明列在 `unclassifiedClaimFiles`（附理由）⇒ 新增這種檔案不可能再像當初 `cmd/atlas/main.go` 那樣被漏掉。
+- `TestDetectorCount_ClaimClassifier_Contract`：pattern 層的雙向契約表（含明文記錄的盲區：英文數字 `twenty-four`、數字與關鍵字分離、跨行）。改 pattern 前先改這張表。
+- `frontend_theme_label_sync_test.go`：直接斷言前端 `theme-labels.js` / `constants.js` 的 key 集合 == Go 側 `NewDefaultDetectorRegistry()` / `DefaultThemeDurations()`（註解不再自我保證）。
 
 新增/刪除 template **必須同步** `templates.go` 的 `DefaultTemplates()`、`detector_impls.go` 的 detector 結構、`detector_count_gate_test.go` 的 `documentedDetectorCount` 常數、`detector_impls_test.go` 的 `allExpectedThemes` slice。
 
