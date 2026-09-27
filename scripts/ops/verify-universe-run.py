@@ -93,15 +93,31 @@ SNAPSHOT_REL = os.path.join("data", "state", "universe_snapshot.json")
 REGISTRY_REL = os.path.join("data", "state", "universe.json")
 HOLIDAY_SOURCE_REL = os.path.join("internal", "taiwanholidays", "taiwan_holidays.go")
 
-#: 這一族 metric 的合法 label 名。**出現別的 label 名就是缺陷**（2026-06-22~09-25 的
-#: 生產實例把 label 值當成 label 名，於是出現 `{daily="failed"}`，而正確形狀的單標籤
-#: 系列被整個丟掉）。本工具用它做「counter 標籤形狀檢查」。
-UNIVERSE_LABEL_NAMES = frozenset(
-    {"stage", "result", "reason", "outcome", "instance", "job", "bucket", "kind"}
+#: **規則實際讀的 counter**。這些系列的標籤形狀是規則能不能用的前提 ⇒ 檢查最嚴
+#: （必須帶 `stage`，且不得出現「值被當成 label 名」）。
+COUNTERS_THE_RULES_READ = (
+    "atlas_universe_symbols_ranked_total",
+    "atlas_universe_quotes_fetched_total",
+    "atlas_universe_symbols_screened_total",
+    "atlas_universe_symbols_filtered_total",
+    "atlas_universe_symbols_gathered_total",
 )
-#: counter 的「值」如果被寫成 label 名，一定是這個缺陷 —— 這些字串是 stage/bucket 的值，
-#: 不可能是 label 名。
-LABEL_NAME_LOOKING_LIKE_VALUE = ("daily", "weekly", "coverage_check", "passed", "failed")
+#: counter 的「值」如果被寫成 label 名，一定是 2026-06-22~09-25 的那個缺陷 ——
+#: 這些字串是 stage / bucket 的**值**，不可能是 label 名（label 名一律是 `stage` /
+#: `result` / `reason` / `outcome`…）。
+LABEL_NAME_LOOKING_LIKE_VALUE = (
+    "daily", "weekly", "coverage_check", "passed", "failed",
+)
+#: 這一族裡**合法但不在上面那份清單**的 label 名（2026-09-27 由生產資料實證補上）。
+#: 為什麼要列出來：本檢查一度用「label 名不在白名單裡就報警」，結果在生產的
+#: `atlas_universe_coverage_mapped_total{industry="all",stage="daily"}` 與
+#: `atlas_universe_narrative_errors_total{error_type="scrape_error",stage="daily"}`
+#: 上誤報 —— 那兩個 label 是合法的（#1943 起的 coverage 稽核與 narrative 分類）。
+#: 教訓：形狀檢查要盯的是**值被當成名字**這個指紋，不是「有沒有一個沒見過的 label」。
+KNOWN_EXTRA_LABEL_NAMES = frozenset({
+    "industry", "error_type", "bucket", "kind", "reason", "result", "outcome",
+    "instance", "job",
+})
 
 #: metric 名（= atlas_universe_* 家族的權威拼法；不要在本檔發明新的拼法）。
 M_LAST_RUN_VALID = "atlas_universe_last_run_valid"
@@ -274,25 +290,29 @@ class MetricsText:
     def label_shape_problems(self) -> list:
         """counter 標籤形狀檢查（L4 的第一件事）。
 
-        回傳 list of (metric_line, 問題說明)。合法的形狀是
-        `{stage="daily"|"weekly"}`（+ 可選 result/reason）；出現
-        `{daily="..."}`（label 值被當成 label 名）或**完全沒有 stage label**
-        都是 2026-06-22~09-25 的生產缺陷形狀，讀它算出來的增量一定是假讀數。
+        回傳 list of (metric_line, 問題說明)。判準刻意分成兩級：
+
+        ① **規則讀的 counter**（`COUNTERS_THE_RULES_READ`）必須帶 `stage` label
+           ⇒ 少了他，`sum by (stage)` / `{stage=~...}` 全部選不到，規則變成零偵測。
+        ② **任何** `atlas_universe_*_total` 系列只要出現「label 名是 stage/bucket 的**值**」
+           （`{daily="failed"}`）就是缺陷 —— 那是 2026-06-22~09-25 的生產指紋
+           （label 值被當成 label 名、單標籤系列被整個丟掉）。
+
+        ⚠️ 刻意**不**用「label 名不在白名單裡就報警」：那會在合法的
+        `{industry="all",stage="daily"}`（coverage 稽核）與
+        `{error_type="scrape_error",stage="daily"}`（narrative 分類）上誤報。
+        這個誤判是 2026-09-27 用**生產的真實 /metrics** 跑出來才發現的
+        （見 tests/scripts/test-verify-universe-run.sh 的 emission-legit-labels case）。
         """
         problems = []
         for s in self.samples:
-            if not s.name.startswith("atlas_universe_"):
-                continue
-            if not s.name.endswith("_total"):
+            if not s.name.startswith("atlas_universe_") or not s.name.endswith("_total"):
                 continue
             bad = [k for k in s.labels if k in LABEL_NAME_LOOKING_LIKE_VALUE]
-            unknown = [k for k in s.labels if k not in UNIVERSE_LABEL_NAMES]
             if bad:
                 problems.append((s.line(), f"label 名 {bad} 是 stage/bucket 的**值**，不是 label 名"))
-            elif unknown:
-                problems.append((s.line(), f"發明出來的 label 名 {unknown}"))
-            elif "stage" not in s.labels:
-                problems.append((s.line(), "counter 沒有 stage label（單標籤系列被丟進無標籤系列）"))
+            elif s.name in COUNTERS_THE_RULES_READ and "stage" not in s.labels:
+                problems.append((s.line(), f"{s.name} 沒有 stage label（規則選不到這個系列）"))
         return problems
 
 
@@ -1096,8 +1116,8 @@ def layer_emission(ev: Evidence) -> Layer:
         name="發射面 emission",
         verdict=verdict,
         predicate=(
-            f"① {M_RANKED_TOTAL}/{M_SCREENED_TOTAL} 的每個系列都帶 stage label（不得出現 {{daily=...}}）"
-            f" ② NOT(出輸出說 ranked>0 且 <6d 內完成 且 increase(...[{EMISSION_WINDOW}])==0)"
+            "① 規則讀的 counter 都帶 stage label（不得出現 {daily=...} 這種值當名字的 series）"
+            f" ② NOT(輸出說 ranked>0 且 <6d 內完成 且 increase(...[{EMISSION_WINDOW}])==0)"
         ),
         reads=reads,
         evidence=ev_lines,

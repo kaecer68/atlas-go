@@ -175,7 +175,7 @@ trustworthy == 1, ranked > 0, persisted == 1 ⇒ 健康（除非記帳面斷線 
    promtool case `T`（firing）/ `U`（`ranked == 0` ⇒ 不得 firing）/ `V`（訊號整族缺席 ⇒ 第 6 條 firing），
    以及 `scripts/ci/promtool-mutation-negative-proof.sh`（三個外科式突變必須被咬住）。
 4. **本文件 ＋ 工具**：`scripts/ops/verify-universe-run.sh`（唯讀、判層、exit code）與
-   `tests/scripts/test-verify-universe-run.sh`（19 個 fixture case ＋ 8 個判定式突變）。
+   `tests/scripts/test-verify-universe-run.sh`（20 個 fixture case ＋ 8 個判定式突變）。
 
 ### ⚠️ 部署時序（讀 PR body 的那一段）
 
@@ -198,6 +198,10 @@ trustworthy == 1, ranked > 0, persisted == 1 ⇒ 健康（除非記帳面斷線 
 | 規則 | 規則群 `atlas_universe_scoring` 9 條全部載入、全部 `inactive` |
 | 告警 | `AtlasUniverse*` = **0 條**（唯一 active 的是 `CalibrationArtifactStale`，與母體無關） |
 | 日誌 | 72h 內 `universe_scheduler` 事件 **0 行**（實際只涵蓋 5h21m） |
+
+（上表是**用真實生產讀數**餵給工具驗證過的：`/metrics` 的 65 行、`/api/v1/rules` 的 9 條規則、
+`universe_snapshot.json` 的 `result` 全部取自當次實查輸出。同一組讀數也順手抓到工具的一個**假陽性**
+（標籤形狀檢查對合法的 `industry` / `error_type` label 誤報）—— 見 [§7.7](#7-已知限制誠實列出)。）
 
 **工具怎麼判（誠實版）**：
 
@@ -251,3 +255,8 @@ echo $?                                       # 0 全綠 / 1 有層成立應告�
 6. **診斷工具本身的覆蓋範圍**：`scripts/ops/verify-universe-run.py` 的判定式有 8 個突變測試釘住
    （`tests/scripts/test-verify-universe-run.sh`）；**新增判定式時必須同時加一個突變**，
    否則它會變成一份「永遠說沒問題」的檢查。
+7. **標籤形狀檢查的精度**：它只盯兩個指紋 ——「規則讀的 counter 有沒有 `stage`」與
+   「有沒有出現 `{daily=...}` 這種值當名字的 series」。刻意**不**做「label 名不在白名單裡就報警」：
+   那會在 `{industry="all",stage="daily"}`（coverage 稽核）與 `{error_type="scrape_error",...}`
+   （narrative 分類）上誤報。這個誤判是 2026-09-27 用**生產的真實 `/metrics`** 跑工具才發現的，
+   regression 由 case `emission-legit-labels` 釘住。

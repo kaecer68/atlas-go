@@ -101,6 +101,9 @@ write_metrics() {
     if [ -n "${LEGACY_LABEL_LINE:-}" ]; then
       printf '%s\n' "$LEGACY_LABEL_LINE"
     fi
+    if [ -n "${EXTRA_METRIC_LINES:-}" ]; then
+      printf '%s\n' "$EXTRA_METRIC_LINES"
+    fi
   } > "$out"
 }
 
@@ -480,6 +483,20 @@ case_no_metrics() {
   expect_file no-metrics exit=2 L0=UNKNOWN L1=UNKNOWN L2=OK L3=OK L4=UNKNOWN L5=OK
 }
 
+# 20. 發射面③（**假陽性迴歸**）：這一族裡有「合法但少見」的 label 名
+#     （coverage 稽核的 `industry`、narrative 分類的 `error_type`）。形狀檢查若寫成
+#     「label 名不在白名單裡就報警」，就會在**健康**的生產資料上誤報 —— 這個誤判是
+#     2026-09-27 用生產的真實 /metrics 跑出來才發現的，因此必須有一個 case 釘住它。
+case_emission_legit_labels() {
+  NOW=$E_SEP29_0610
+  EXTRA_METRIC_LINES='atlas_universe_coverage_mapped_total{industry="all",stage="daily"} 1599
+atlas_universe_coverage_total{industry="all",stage="daily"} 1600
+atlas_universe_narrative_errors_total{error_type="scrape_error",stage="daily"} 0
+atlas_universe_narrative_events_scraped_total{stage="daily"} 4'
+  build_case emission-legit-labels
+  expect_file emission-legit-labels exit=0 L0=WARN L1=OK L2=OK L3=OK L4=OK L5=OK
+}
+
 # 19. 重啟把證據銷毀的形狀：應執行時刻（09-29 06:00）之後才重啟（09-29 07:30），
 #     日誌只涵蓋到 07:30 之後、process 也才剛起來 ⇒ 「那一輪跑了沒有」**不可查**。
 #     ⇒ L1 = UNKNOWN（不是 RED：把「我不知道」報成「壞了」會浪費一次值班）。
@@ -568,12 +585,13 @@ fi
 ( case_legacy_schema )
 ( case_no_metrics )
 ( case_evidence_destroyed )
+( case_emission_legit_labels )
 
 for c in green transport-family-missing transport-rules-not-loaded transport-new-rule-present \
          schedule-heartbeat-overdue schedule-last-run-missed schedule-pending holiday-closure \
          scoring-ranked-zero scoring-universe-empty input-partial emission-label-shape \
          emission-counter-silent artifact-stale artifact-missing artifact-signal-zero \
-         legacy-schema no-metrics evidence-destroyed; do
+         legacy-schema no-metrics evidence-destroyed emission-legit-labels; do
   run_case "$c"
 done
 
@@ -612,4 +630,4 @@ if [ "$FAIL" -gt 0 ]; then
   echo "❌ test-verify-universe-run: $PASS passed, $FAIL failed"
   exit 1
 fi
-echo "✅ test-verify-universe-run: $PASS passed（19 個 fixture case + 8 個 mutation）"
+echo "✅ test-verify-universe-run: $PASS passed（20 個 fixture case + 8 個 mutation）"
