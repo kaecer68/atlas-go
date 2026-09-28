@@ -71,6 +71,7 @@
 | `cmd/backfill-taifex-oi` | TAIFEX 外資期貨未平倉歷史（FinMind 版，2026-07-25 #1338 移除，FinMind 402） | marketdata, constants, monitoring | ❌ Removed |
 | `cmd/backfill-taifex-oi-v2` | TAIFEX 外資期貨未平倉歷史回填（官網 CSV 逐日 → macro snapshot `foreign_futures_oi_net`，macrobackfill 模式） | —（stdlib + x/text） | ✅ Utility |
 | `cmd/backfill-futures-bars` | 期貨日行情（TX/MTX 等）歷史回補：期交所官網 CSV（≤31 天分段、MS950、表頭哨兵）→ backend-aware `futures_bars`，並推導連續契約 splice 事件寫入 `futures_rollovers`（規格 `docs/specs/futures-bars-firstparty-spec.md`，issue #2111） | marketdata, ledger, domain, config | ✅ Utility |
+| `cmd/futures-shadow-eval` | 期貨跨市場訊號**影子評估**：由 `futures_bars` 算特徵（跨月價差／OI 變化）→ 影子預測 → 寫入**獨立**表 `futures_shadow_predictions`（不碰 live 校準）並印命中率；所有門檻／權重必填（零隱藏係數）；無資料即 no-op（規格 `docs/specs/futures-crossmarket-signal-spec.md`，issue #2111） | futures, ledger, marketdata, domain, config | ✅ Utility |
 | `cmd/backfill-institutional-investors` | 三大法人日成交明細回填 | marketdata, constants, monitoring | ✅ Utility |
 | `cmd/backfill-month-revenue` | 月營收回填（FinMind） | marketdata, constants, monitoring | ✅ Utility |
 | `cmd/backfill-financial-statements` | 財務報表回填 | marketdata, constants, monitoring | ✅ Utility |
