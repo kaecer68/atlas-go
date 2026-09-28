@@ -1,7 +1,6 @@
 package marketdata
 
 import (
-	"errors"
 	"fmt"
 	"sort"
 	"time"
@@ -107,9 +106,6 @@ func BuildContinuousSeries(bars []domain.FuturesBar, method domain.AdjustMethod)
 	// 讓稽核看得到缺口（SpliceValid() 為 false）。
 	return out, rollovers, nil
 }
-
-// FuturesRolloverValidationError 於連續序列無法安全建構時回報（保留給嚴格模式）。
-var FuturesRolloverValidationError = errors.New("futures rollover validation failed")
 
 // futuresSegment 是一段「同一個月契約作為前月」的連續交易日。
 type futuresSegment struct {

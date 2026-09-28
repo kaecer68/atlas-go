@@ -16,10 +16,9 @@ import (
 
 // fakeFetcher 讓 CLI 的核心路徑可以在不連網的情況下被測。
 type fakeFetcher struct {
-	bars    []domain.FuturesBar
-	err     error
-	calls   int
-	lastEnd time.Time
+	bars  []domain.FuturesBar
+	err   error
+	calls int
 }
 
 func (f *fakeFetcher) FetchFuturesBars(_ context.Context, _ []string, _, _ time.Time) ([]domain.FuturesBar, error) {

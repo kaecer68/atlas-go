@@ -214,12 +214,12 @@ func runWith(ctx context.Context, cfg cliConfig, fetcher futuresBarsFetcher, sto
 	}
 	if fetchErr != nil {
 		stats.fetchErrors++
-		fmt.Fprintf(os.Stderr, "[warn] 部分區段失敗（仍寫入成功段）: %v\n", fetchErr)
+		_, _ = fmt.Fprintf(os.Stderr, "[warn] 部分區段失敗（仍寫入成功段）: %v\n", fetchErr)
 	}
 	stats.rows = len(bars)
 
 	if cfg.dryRun {
-		fmt.Fprintf(out, "dry-run: contracts=%v rows=%d chunks=%d source=%s backend=%s force=%v\n",
+		_, _ = fmt.Fprintf(out, "dry-run: contracts=%v rows=%d chunks=%d source=%s backend=%s force=%v\n",
 			cfg.contracts, stats.rows, stats.chunks, cfg.source, backendName(cfg, appCfg), cfg.force)
 		return fetchErr
 	}
@@ -238,7 +238,7 @@ func runWith(ctx context.Context, cfg cliConfig, fetcher futuresBarsFetcher, sto
 		stats.rollovers = n
 	}
 
-	fmt.Fprintf(out, "backfill-futures-bars: contracts=%v rows=%d written=%d rollovers=%d chunks=%d source=%s backend=%s window=%s..%s (openapi_calls=%d csv_calls=%d)\n",
+	_, _ = fmt.Fprintf(out, "backfill-futures-bars: contracts=%v rows=%d written=%d rollovers=%d chunks=%d source=%s backend=%s window=%s..%s (openapi_calls=%d csv_calls=%d)\n",
 		cfg.contracts, stats.rows, stats.written, stats.rollovers, stats.chunks, cfg.source,
 		backendName(cfg, appCfg),
 		cfg.start.Format("2006-01-02"), cfg.end.Format("2006-01-02"),
