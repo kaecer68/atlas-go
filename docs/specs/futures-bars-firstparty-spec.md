@@ -295,6 +295,11 @@ type FuturesContractSpec struct {
    不得靜默降級（沿用 `NewFullStore` 的既有行為）。
 3. **嚴禁**硬編碼 `data/state/atlas.db` 路徑（traps.md：production 為 Postgres-first）。
 
+**釘子測試（強制）**：`TestNewFuturesBarStore_EnvPostgresNeverFallsBackToSQLite`
+—— 環境宣告 `postgres` 但未注入連線池時，**即使 `ATLAS_SQLITE_PATH` 指向一個可寫檔**，
+工廠也必須回錯誤；測試同時證明「同環境下的 sqlite 後端是可用的」，
+以排除「其實是環境壞掉才報錯」的假陽性（`internal/ledger/futures_bar_store_test.go`）。
+
 ### 5.2 後端解析表
 
 | `ATLAS_STORE_BACKEND` | 實作 | 備註 |
@@ -348,8 +353,11 @@ CREATE TABLE IF NOT EXISTS futures_rollovers (
 ```go
 type FuturesBarStore interface {
     RecordFuturesBars(ctx context.Context, bars []domain.FuturesBar) (int, error)
-    LoadFuturesBars(ctx context.Context, contract, contractMonth string, start, end time.Time, session domain.FuturesSession) ([]domain.FuturesBar, error)
-    LoadLatestFuturesBars(ctx context.Context, contract string) ([]domain.FuturesBar, error) // 每到期月/時段最新一根
+    // contractMonth / session 為空字串 = 不過濾。
+    LoadFuturesBars(ctx context.Context, contract, contractMonth string, session domain.FuturesSession, start, end time.Time) ([]domain.FuturesBar, error)
+    LoadLatestFuturesBars(ctx context.Context, contract string) ([]domain.FuturesBar, error)
+    RecordFuturesRollovers(ctx context.Context, rollovers []domain.FuturesRollover) (int, error)
+    LoadFuturesRollovers(ctx context.Context, contract string) ([]domain.FuturesRollover, error)
 }
 ```
 
@@ -397,12 +405,44 @@ adjusted(t) = raw_{segment(t)}(t) + Σ_{k : R_k > t} diff_k
 | 換倉日前 N 日提前換倉 | 提前到流動性高峰 | 貼近實務交易 | 引入未經實證的 N；本階段先用「最後交易日」這個**可稽核**的確定規則 |
 | 只存原始、不建連續序列 | — | 最保守 | 階段 1 需要即時可用的連續序列；純函式可重算，不落庫調整值 |
 
-**落地方式**：本階段以**純函式** `marketdata.BuildContinuousSeries(bars []domain.FuturesBar, spec FuturesContractSpec, method AdjustMethod) ([]ContinuousBar, []RolloverEvent, error)`
-實作（含單元測試：合成資料 → 已知 splice → 已知期望值），
-並把推導出的 splice 事件寫入 `futures_rollovers` 表作為**稽核錨點**；
-**不落庫**整條調整後序列（可重算；避免與原始 bar 不一致的風險）。
+**落地方式**：本階段以**純函式**實作，型別放在 `domain`（避免 `ledger → marketdata` 的反向依賴）：
 
-### 6.4 回溯性陷阱（規範）
+```go
+// internal/domain/futures_continuous.go
+domain.FuturesRollover        // splice 事件（含 PriceDiff *float64）
+domain.FuturesContinuousBar   // 調整後 bar（同時保留原始值與 CumulativeDiff）
+domain.AdjustNone | domain.AdjustPriceDiff
+
+// internal/marketdata/futures_continuous.go
+marketdata.BuildContinuousSeries(bars []domain.FuturesBar, method domain.AdjustMethod)
+    ([]domain.FuturesContinuousBar, []domain.FuturesRollover, error)
+```
+
+- **golden test**（`futures_continuous_test.go`）：合成 3 段、已知 splice（diff 8 與 7）⇒
+  逐根斷言 `AdjustedClose` 與 `CumulativeDiff`（115/116/117、119/120、121），
+  並斷言量與 OI **未被調整**。任何人改動調整法或換倉推導，這個測試必紅。
+- **splice 事件落庫**：`futures_rollovers` 表（`FuturesBarStore.RecordFuturesRollovers`），
+  由 CLI 於每次回補後推導並寫入（`-rollovers`，預設開）。
+- **不落庫**整條調整後序列（可重算；避免與原始 bar 不一致的副本漂移）。
+
+### 6.4 重算契約（可執行步驟；規範）
+
+任何人都必須能用「原始 bar ＋ splice 事件」重算出同一條連續序列。步驟：
+
+1. 取原始 bar：`SELECT contract, contract_month, trade_date, session, open, high, low, close, volume, open_interest
+   FROM futures_bars WHERE contract = :c ORDER BY trade_date`。
+2. 過濾：只留 `session='regular'`（canonical）且 `contract_month` 符合 `^\d{6}$`（排除週契約與價差組合）。
+3. 決定每日前月：對交易日 `t`，前月 = 「該月契約的最後一個有資料日 ≥ `t`」的月份中**最小**者。
+4. 取 splice 事件：`SELECT roll_date, from_month, to_month, price_diff FROM futures_rollovers
+   WHERE contract = :c ORDER BY roll_date`。
+5. 計算累積平移：對第 `j` 段（第 j 個前月區間）的任一根，
+   `cum_j = Σ_{k>=j} price_diff[k]`（`price_diff IS NULL` 的 splice 以 0 計入，並應被視為缺口而告警）。
+6. `adjusted_price = raw_price + cum_j`；`volume`、`open_interest` **不變**。
+7. 驗證：在每個換倉日 `R_k`，`close(from, R_k) + cum_k` 必須等於 `close(to, R_k) + cum_{k+1}`（同日兩契約的調整後收盤相等）。
+
+> 步驟 7 就是「序列連續」的可執行定義；若不成立，代表 splice 或前月推導有誤。
+
+### 6.5 回溯性陷阱（規範）
 
 - 連續序列**重算即變**：新增換倉日會平移所有更舊的段 ⇒ 調整後的值**不得**與原始 bar 混存於同一張表。
 - 任何下游客戶端若快取調整值，必須以 `(contract, computed_at)` 失效。
@@ -448,30 +488,46 @@ adjusted(t) = raw_{segment(t)}(t) + Σ_{k : R_k > t} diff_k
 | 契約不存在於回應（過濾後為空） | `ErrNoData` | 不記失敗 |
 
 **metrics**：實測 `internal/marketdata` 目前**沒有任何 prometheus 指標**（grep 0 命中），
-因此本階段不強行發明新指標；改為：
-（a）provider 提供 `Observer` 介面（預設 no-op）供未來接 `internal/monitoring`；
+因此本階段不強行發明新指標；改為 **Observer seam**：
+（a）provider 提供 `FuturesBarsObserver` 介面（預設 no-op），**由 `cmd/backfill-futures-bars` 實作並注入**
+（生產消費者，非只有測試在用）；未來要接 `internal/monitoring` 的 `GaugeSink` 只需換一個實作；
 （b）breaker 狀態既有 `BreakerInfo()` 可觀測；
 （c）backfill CLI 的摘要即為該次回補的稽核紀錄。
-→ 若後續要在 channel page 顯示期貨 bar 新鮮度，屬**另案**（需動 `internal/monitoring` 與 rules，本階段不做）。
+
+> **本階段決策（業主 2026-09-28 定案）**：**不做真 prometheus 指標**。
+> 真指標要動 `internal/monitoring` ＋ rules ＋ 測試（且涉及「新增 required check 需先問」），
+> 屬**獨立工作流**。期貨資料新鮮度指標 ＋ 告警規則（promtool 模式）已列為 **#2111 待辦**，
+> 由 Observer seam 承接（見 §11）。
 
 ---
 
 ## 9. 測試（含突變釘子）
 
-| 測試 | 內容 | 釘住什麼 |
+實際落地的測試（檔名 → 測試名）：
+
+| 測試（實際名稱） | 檔案 | 釘住什麼 |
 |---|---|---|
-| `TestParseFutDataDownCSV_Sample` | 以 §12 的真實 CSV fixture（2026-09-21~24、TX＋MTX）解析 | 欄位索引與型別（idx 9 量、10 結算、11 OI、17 時段） |
-| `TestFetchBarsRange_HeaderSentinel_RejectsAlertPage` | 餵 §12 的 `negative_range_limit.html` | **200-but-error**：必須回 `ErrSchema`，**不得**回空 slice ＋ nil |
-| `TestParseCSV_HeaderOnlyIsNoData` | 只有表頭的 CSV（1998/07/20 實測樣態） | `ErrNoData`（≠ `ErrSchema`） |
-| `TestParseCSV_SkipsSpreadCombos` | 含 `202706/202709` 的列 | 價差組合不得入庫 |
-| `TestParseCSV_WeeklyContracts` | 含 `202609W5` | 週契約可入庫、但連續序列排除 |
-| `TestCanonicalSessionIsRegular` | 同日兩列 | canonical＝`一般`；OI 只在一般列 |
-| `TestMissingValuesAreNilNotZero` | `-` / `NULL` | 缺值 → `nil`（**不得** → 0） |
-| `TestChunkDateRange_MaxThirtyOneDays` | 分段函式 | 每段相差 ≤ 31 天 |
-| `TestThirdWednesdayMatchesIndustry` | 期貨套件的第三個星期三 | 與 `internal/industry` 的既有實作**同值** |
-| `TestBuildContinuousSeries_BackAdjust` | 合成 3 段、已知 splice | 調整值等於手算期望值；OI 不變 |
-| `TestFuturesBarStore_BackendResolution` | `postgres` 未注入 pool | **必須 error**（不得降級 sqlite） |
-| `TestSQLiteFuturesBarStore_RoundTrip` | upsert → load | PK 冪等、缺值以 NULL 存取 |
+| `TestParseFuturesCSVBars_TXSample` | `internal/marketdata/taifex_futures_bars_test.go` | 欄位對映與值（量 37750、結算 48053、OI 101502、時段）＋盤後列 OI／結算為 nil |
+| `TestParseFuturesCSVBars_HeaderSentinelRejectsAlertPage` | 同上 | **200-but-error**：alert 頁必須回 `ErrSchema`，且**不是** ErrNoData 世界 |
+| `TestVerifyFuturesCSVHeader_Sentinel` | 同上 | 哨兵函式本身（錯誤訊息必須指出 sentinel；避免「釘子空轉」，見下） |
+| `TestParseFuturesCSVBars_HeaderOnlyIsNoData` | 同上 | 只有表頭 → 0 列且**不是** schema error（1998-07-20 實測樣態） |
+| `TestParseFuturesCSVBars_SkipsSpreadCombos` | 同上 | `202706/202709` 不得入庫 |
+| `TestParseFuturesCSVBars_WeeklyContracts` | 同上 | `202609W5` 可入庫、`IsMonthlyContractMonth` 為 false |
+| `TestParseFuturesCSVBars_MissingValuesAreNilNotZero` | 同上 | `-`/`NULL` → nil；量 `0` → 非 nil 的 0 |
+| `TestParseFuturesCSVBars_HeaderDrivenMapping` | 同上 | 欄序改變仍正確（表頭驅動，非硬編索引） |
+| `TestParseFuturesCSVBars_MissingRequiredColumn` / `_NonNumericValueIsSchemaError` / `_ShortRowIsSchemaErrorNotPanic` | 同上 | 缺欄／非數字／短列 ⇒ typed `ErrSchema`（不可 panic、不可靜默） |
+| `TestParseFuturesCSVBars_UnknownSessionIsNotRegular` | 同上 | 未知時段不得歸類為一般 |
+| `TestParseFuturesOpenAPIBars` / `_RejectsHTML` | 同上 | JSON 對映（`Last`→Close）；HTML ⇒ `ErrSchema` |
+| `TestChunkFuturesDateRange_MaxThirtyOneDays` | 同上 | 分段 ≤ 31 天、連續、不重疊、涵蓋端點 |
+| `TestFetchFuturesBarsRange_ChunksAndParses` / `_SentinelPropagatesErrSchema` / `_HeaderOnlyIsNoData` / `TestFetchLatestFuturesBars_OpenAPI` / `_NoMatchingRowsIsNoData` | 同上 | 端到端（含 charset 轉碼）與三向錯誤分類 ＋ no-data 不記 breaker 失敗 |
+| `TestFuturesContractSpecFor` / `TestFuturesLastTradingDay` / `TestIsMonthlyContractMonth` / `TestFuturesSessionFromTAIFEX` | `internal/marketdata` | 契約參考表（200／50）、第三個星期三（2026-09 → 09-16） |
+| `TestBuildContinuousSeries_BackAdjustGolden` | `internal/marketdata/futures_continuous_test.go` | **golden**：3 段、splice 8 與 7 ⇒ 調整後 115/116/117、119/120、121；量與 OI 不變 |
+| `TestBuildContinuousSeries_NoAdjust` / `_InvalidSpliceKeepsEventWithNilDiff` / `_RejectsUnknownMethod` / `_SkipsNonCanonicalAndNonMonthly` | 同上 | 替代調整法、無效 splice 不補值、未知調整法、週契約與盤後排除 |
+| `TestNewFuturesBarStore_PostgresRequiresPool` / `_EnvPostgresNeverFallsBackToSQLite` / `_EnvSQLiteHonoursPath` / `_UnknownBackendFailsLoudly` / `_SQLiteRequiresPath` / `_BackendDispatch` | `internal/ledger/futures_bar_store_test.go` | **後端判定**（#2107）：宣告 postgres 無 pool ⇒ 錯誤且不降級；sqlite 用組態路徑；未知後端不 fallback |
+| `TestSQLiteFuturesBarStore_RoundTrip` / `TestJSONLFuturesBarStore_RoundTrip` | 同上 | upsert 冪等、缺值 NULL 語意、範圍與時段過濾、latest |
+| `TestSQLiteFuturesBarStore_RolloversRoundTrip` / `TestJSONLFuturesBarStore_RolloversRoundTrip` | 同上 | splice 事件落庫（冪等；無效 splice 存 NULL） |
+| `TestPostgresFuturesBarStore_RoundTrip` | `internal/ledger/futures_bar_store_postgres_test.go`（`//go:build integration`） | **真實 PG**：pgx 路徑的 nil ↔ NULL、upsert、rollovers（本機無 DATABASE_URL 時 skip，CI 有 PG 時必須跑） |
+| `TestParseContracts` / `TestResolveStore_EnvPostgresNeverFallsBackToSQLite` / `TestResolveStore_ExplicitBackendWins` / `TestRunWith_WritesBarsAndRollovers` / `TestRunWith_DryRunDoesNotWrite` | `cmd/backfill-futures-bars/main_test.go` | CLI 契約、後端不降級、端到端寫入（bar ＋ splice）、dry-run 不落地 |
 
 **突變釘子（mutation pin）要求**：每個「關鍵欄位」都要有一個**專門斷言其值**的測試，
 且該測試必須在**人為改壞對應程式碼後變紅**。本階段至少執行下列 3 個突變並記錄結果：
@@ -483,6 +539,20 @@ adjusted(t) = raw_{segment(t)}(t) + Σ_{k : R_k > t} diff_k
 | M3 | 把 `-`（缺值）改成 `0` | `TestMissingValuesAreNilNotZero` 紅 |
 
 > 實作階段必須**實際執行**這 3 個突變並把「紅燈證據」寫進 PR 的 Verification 段，不可只寫在規格裡。
+
+**已執行結果（2026-09-28，PR #2113）**
+
+| # | 突變 | 目標測試 | 結果 |
+|---|---|---|---|
+| M1 | 成交量對映 `get("成交量")` → `get("結算價")` | `TestParseFuturesCSVBars_TXSample` | 🔴 RED：`volume = 48053, want 37750` |
+| M2 | 移除表頭哨兵 | `TestVerifyFuturesCSVHeader_Sentinel` ＋ alert-page 測試 | 🔴 RED（**第一次是 GREEN，見下**） |
+| M3 | 缺值 `-` ⇒ `&0.0` 而非 nil | `TestParseFuturesCSVBars_MissingValuesAreNilNotZero` | 🔴 RED：`missing values must be nil` |
+
+> **M2 的教訓（釘子空轉）**：第一次施作 M2 後測試**仍是綠的** —— 因為原測試只斷言
+> `errors.Is(err, ErrSchema)`，而移除哨兵後 HTML 頁仍會因「缺少必要欄位」回 `ErrSchema`。
+> 修正：新增直接測哨兵函式的 `TestVerifyFuturesCSVHeader_Sentinel`，並在 alert-page 測試加上
+> 「錯誤訊息必須指出 header sentinel」的斷言 ⇒ 重跑 M2 才變紅。
+> **結論：只斷言錯誤「類別」不足以構成釘子；必須斷言錯誤「原因」。**
 
 ---
 
@@ -501,11 +571,17 @@ adjusted(t) = raw_{segment(t)}(t) + Σ_{k : R_k > t} diff_k
 
 ## 11. 未解問題 / 後續
 
-1. **Tick 級資料**（`/TimeAndSalesData`）本階段未採用；若階段 1 需要盤中訊號再評估（含 payload 體積與 rate limit）。
-2. **盤後合併 bar** 未定義（雙軌已入庫，未來可加）。
-3. **期貨 bar 新鮮度告警**（channel page／prometheus rules）屬另案，需動 `internal/monitoring`。
+1. **[#2111 待辦｜已定案延後] 期貨資料新鮮度指標 ＋ 告警規則**：以 promtool 單元測試模式
+   （`promtool test rules`）撰寫「futures_bars 最新交易日 vs 交易日曆」的告警，
+   並把 `FuturesBarsObserver` 接上 `internal/monitoring` 的 metrics bridge。
+   **本階段不做**（業主 2026-09-28 定案）：需動 `internal/monitoring` ＋ rules ＋ 測試，
+   屬獨立工作流，且涉及「新增 required CI check 需先問」。目前由 §8 的 Observer seam 取代。
+2. **Tick 級資料**（`/TimeAndSalesData`）本階段未採用；若階段 1 需要盤中訊號再評估（含 payload 體積與 rate limit）。
+3. **盤後合併 bar** 未定義（雙軌已入庫，未來可加）。
 4. **跨商品擴充**（TXO、個股期貨）需先擴 §3 契約表；本階段只 TX/MTX。
 5. `commodity_id=all` 的單月 4.3 MB 是否值得（一次性全市場回補）——本階段不做。
+6. **連續序列落庫**：現行決策為不落庫（§6.3）。若未來有 SQL 消費者需要，另開表，
+   但必須附「重算契約」（§6.4）的一致性測試，避免副本漂移。
 
 ---
 

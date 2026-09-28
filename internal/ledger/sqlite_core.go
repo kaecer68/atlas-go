@@ -283,6 +283,35 @@ func InitSchema(db *sql.DB) error {
 	CREATE INDEX IF NOT EXISTS idx_stock_signal_outcomes_symbol_date ON stock_signal_outcomes(symbol, trigger_date);
 	CREATE INDEX IF NOT EXISTS idx_stock_signal_outcomes_source_date ON stock_signal_outcomes(source, trigger_date);
 	CREATE INDEX IF NOT EXISTS idx_stock_win_rate_key ON stock_win_rate(symbol, source, rolling_window);
+
+	CREATE TABLE IF NOT EXISTS futures_bars (
+		contract TEXT NOT NULL,
+		contract_month TEXT NOT NULL,
+		trade_date TEXT NOT NULL,
+		session TEXT NOT NULL,
+		open REAL,
+		high REAL,
+		low REAL,
+		close REAL,
+		volume INTEGER,
+		settlement_price REAL,
+		open_interest INTEGER,
+		source TEXT NOT NULL,
+		fetched_at TEXT NOT NULL,
+		PRIMARY KEY (contract, contract_month, trade_date, session)
+	);
+
+	CREATE TABLE IF NOT EXISTS futures_rollovers (
+		contract TEXT NOT NULL,
+		roll_date TEXT NOT NULL,
+		from_month TEXT NOT NULL,
+		to_month TEXT NOT NULL,
+		price_diff REAL,
+		computed_at TEXT NOT NULL,
+		PRIMARY KEY (contract, roll_date, from_month, to_month)
+	);
+
+	CREATE INDEX IF NOT EXISTS idx_futures_bars_contract_date ON futures_bars(contract, trade_date);
 	`
 
 	if _, err := db.Exec(schema); err != nil {
