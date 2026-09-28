@@ -271,3 +271,6 @@ docs/archive/
 
 # 2026-09-18: docker-compose 手動備份（部署前快照，不進版控；原本留在工作區被當成未追蹤檔）
 *.bak-*
+
+# Prime Agent session artifacts (handoffs, runbooks, PR-body drafts). Never repo-committed.
+session-artifacts/
