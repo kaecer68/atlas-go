@@ -129,7 +129,7 @@
 
 ---
 
-## U · Utility（輔助工具）— 8 packages
+## U · Utility（輔助工具）— 9 packages
 
 CLI 工具、資料轉換、一次性驗證。非 runtime 一部分。
 
@@ -143,6 +143,7 @@ CLI 工具、資料轉換、一次性驗證。非 runtime 一部分。
 | `taiwanholidays` | 台灣交易日曆單一來源 — lunar/固定假日表（2021-2040；表外年份不可判定，不猜日期，#1973 D3）、PreviousTradingDay | `IsTaiwanTradingDay`, `PreviousTradingDay` | P1-8 新增（2026-08-23）；消除 marketdata/industry 雙份 drift |
 | `reconcile` | session summary 雙寫對帳 — PG vs JSONL 對稱差、單邊缺口回填（B6） | `cmd/reconcile-sessions` | 工具層，非 runtime；conflicts 永不自動覆寫 |
 | `testdb` | PG 整合測試 DATABASE_URL 政策（CI fail-loud / 本地 skip） | `URL`, `Require`, `Connect`, `Pool` | utility，僅測試用（2026-08-28, WP3 M6） |
+| `futures` | 期貨跨市場訊號純函式 — 跨月價差結構／OI 日變化／法人部位／PCR ＋ 影子預測（T+1 同契約標籤）；零隱藏係數，**不接決策路徑** | `cmd/futures-shadow-eval` | 工具層，離線量測；影子列寫獨立表（2026-09-28 新增，#2111） |
 
 ---
 
