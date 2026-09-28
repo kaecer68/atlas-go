@@ -2,7 +2,7 @@
 
 > 進入 `internal/<mod>/` 工作前，先讀該目錄下的 `AGENTS.md`（或 `CONSTITUTION.md`）。模組特有陷阱寫在裡面，跳過會踩坑。
 >
-> **總計**：82 個模組（29 S / 33 E / 9 X / 1 A / 9 U）；2026-09-24 新增 `sectormap`（#1943）、`stockflows`（#1945）；2026-09-25 新增 `symbolindustry`（#1943），並按實際列數校正 S/U/X 計數。保留 AGENTS.md 的 hot-path 覆蓋模組共 **15** 個（2026-07-11 從 27 合併精簡，清單見下方）。
+> **總計**：83 個模組（29 S / 33 E / 9 X / 1 A / 10 U）；2026-09-24 新增 `sectormap`（#1943）、`stockflows`（#1945）；2026-09-25 新增 `symbolindustry`（#1943），並按實際列數校正 S/U/X 計數。保留 AGENTS.md 的 hot-path 覆蓋模組共 **15** 個（2026-07-11 從 27 合併精簡，清單見下方）。
 
 > **v0.0.2.0 變更（2026-07-24）**：成熟度重分組——swarm X→A、replay/capitalflow/forecast/retail/strategy_ranker/stress/reporting/subscription 升至 E；sectorallocation 補加入 X；calibration 補加入 U。
 > **2026-08-07 補齊**：16 個實際存在但未索引模組補入（S: constants/experiment/janus/live；E: acceptance/eventquality/marketexplain/methodology/observability/userstate；X: alerting/llm/llm_annotator/stocktools；U: backfill/buildinfo）。
@@ -109,7 +109,7 @@
 |------|------|
 | `swarm` | 目錄已刪除（PR #963）；模擬引擎已降級為 pass-through；保留條目供歷史參考 |
 
-### U · Utility（輔助工具，9 個）
+### U · Utility（輔助工具，10 個）
 
 | 模組 | 關鍵主題 |
 |------|---------|
@@ -122,6 +122,7 @@
 | `backfill` | ledger 狀態一次性修復工具（drift from canonical）|
 | `reconcile` | session summary 雙寫對帳 — PG vs JSONL 對稱差 + 單邊缺口回填（`cmd/reconcile-sessions`，B6）|
 | `buildinfo` | runtime metadata — version/commit hash/build time |
+| `futures` | 期貨跨市場訊號純函式 — 跨月價差結構／OI 日變化／法人部位／PCR ＋ 影子預測（T+1 同契約標籤；零隱藏係數，見 `docs/specs/futures-crossmarket-signal-spec.md`，2026-09-28 新增） |
 
 ## 15 個保留 AGENTS.md（2026-07-11 從 27 合併精簡）
 

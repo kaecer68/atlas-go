@@ -143,6 +143,7 @@
 | `docs/specs/universe-quote-reliability-spec.md` | Universe 報價鏈可靠性（殘量 fallback、逐檔 arm 護欄與實測參數、no_data/not_covered 與 fetch_error 的信任閘門、全市場覆蓋層與 TPEx 表；#1986） | ✅ |
 | `docs/specs/branch-revert-guard-spec.md` | 合併結果驗證 + diff 衛生閘門（evil merge＝FAIL、落後假刪除＝WARN；`merge-tree` 判定、allowlist、誠實邊界；#1993）| ✅ |
 | `docs/specs/futures-bars-firstparty-spec.md` | 期貨日行情（first-party）資料層規格：上游端點契約（OpenAPI＋官網 CSV、表頭哨兵、≤31 天分段）、獨立領域型別、backend-aware 儲存、連續契約 back-adjust、backfill CLI；#2111 | ✅ |
+| `docs/specs/futures-crossmarket-signal-spec.md` | 期貨跨市場訊號規格（階段 1：影子評估，不接線）：特徵定義（跨月價差／OI 變化／法人／PCR）、T+1 同契約標籤、零隱藏係數紀律、獨立影子儲存、突變釘子；#2111 | ✅ |
 | `docs/jev/JEV-USAGE-CONTRACT.md` | Jev（TypeSafe System One）在本生態的使用契約（傳輸層 / 判斷設計 / 門檻校準 / 評估紀律 / fail-open） | ✅ |
 | `docs/jev/JEV-EVAL-FRAMEWORK.md` | Jev 預測力評估框架契約（task spec 介面、PIT 分離、指標定義、門檻與分級紀律、洩漏探針、擴充介面；#1968） | ✅ |
 | `docs/jev/JEV-EVAL-STAGE1-INDUSTRY-L1.md` | Stage 1 E0 實測：canonical L1 產業層（GT 口徑、窗口與排除理由、分級結論、成本、Stage 2/3 需求；#1968） | ✅ |

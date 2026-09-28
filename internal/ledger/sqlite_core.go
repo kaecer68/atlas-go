@@ -312,6 +312,33 @@ func InitSchema(db *sql.DB) error {
 	);
 
 	CREATE INDEX IF NOT EXISTS idx_futures_bars_contract_date ON futures_bars(contract, trade_date);
+
+	CREATE TABLE IF NOT EXISTS futures_shadow_predictions (
+		contract TEXT NOT NULL,
+		trade_date TEXT NOT NULL,
+		model_version TEXT NOT NULL,
+		near_month TEXT,
+		term_structure TEXT,
+		spread_points REAL,
+		spread_bp REAL,
+		oi_near_trend TEXT,
+		oi_near_change_pct REAL,
+		near_return_pct REAL,
+		foreign_oi_change INTEGER,
+		pcr_oi_ratio REAL,
+		pcr_oi_ratio_change REAL,
+		score REAL,
+		terms_used INTEGER,
+		predicted_direction TEXT,
+		confidence REAL,
+		label_return_pct REAL,
+		actual_direction TEXT,
+		hit INTEGER,
+		created_at TEXT NOT NULL,
+		PRIMARY KEY (contract, trade_date, model_version)
+	);
+
+	CREATE INDEX IF NOT EXISTS idx_futures_shadow_contract_date ON futures_shadow_predictions(contract, trade_date);
 	`
 
 	if _, err := db.Exec(schema); err != nil {
