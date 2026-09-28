@@ -1753,6 +1753,47 @@ export interface FugleQuoteResponse {
   total: string;
 }
 
+export interface FuturesBar {
+  contract: string;
+  contract_month: string;
+  trade_date: string;
+  session: string;
+  open?: number | null;
+  high?: number | null;
+  low?: number | null;
+  close?: number | null;
+  volume?: number | null;
+  settlement_price?: number | null;
+  open_interest?: number | null;
+  source: string;
+}
+
+export interface FuturesContinuousBar {
+  trade_date: string;
+  contract: string;
+  contract_month: string;
+  session: string;
+  open?: number | null;
+  high?: number | null;
+  low?: number | null;
+  close?: number | null;
+  adjusted_open?: number | null;
+  adjusted_high?: number | null;
+  adjusted_low?: number | null;
+  adjusted_close?: number | null;
+  volume?: number | null;
+  open_interest?: number | null;
+  cumulative_diff: number;
+}
+
+export interface FuturesRollover {
+  contract: string;
+  roll_date: string;
+  from_month: string;
+  to_month: string;
+  price_diff?: number | null;
+}
+
 export interface GARCHParameters {
   omega: string;
   alpha: string;
@@ -5145,6 +5186,20 @@ export interface submitTaskResponse {
 export interface supplyChainGraphJSON {
   nodes: string[];
   correlations: Record<string, number>;
+}
+
+export interface taifexFuturesBarRaw {
+  Date: string;
+  Contract: string;
+  "ContractMonth(Week)": string;
+  Open: string;
+  High: string;
+  Low: string;
+  Last: string;
+  Volume: string;
+  SettlementPrice: string;
+  OpenInterest: string;
+  TradingSession: string;
 }
 
 export interface taifexLargeTraderRaw {
