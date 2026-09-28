@@ -171,6 +171,23 @@ internal/ledger/historical_store.go:797-802（SQLite 版）
   ① 校準器確實按 `ModelVersion` 分組／過濾（程式碼證據）；② 證明不可能污染；
   兩者都成立後才回來討論合流。
 
+### 7.1 另一條可行路徑：`is_synthetic`（評估後不採用）
+
+repo **原本就有**一個隔離機制：`internal/ledger/historical_store.go:26-27` 的
+`FilterSynthetic = true` / `IncludeSynthetic = false` ⇒ 預設查詢**排除 `is_synthetic = 1`** 的列
+（`LoadPredictionBacktestRange` 的 SQL 即帶 `AND is_synthetic = 0`）。
+因此理論上也可以把影子列寫進共用表並標記 `is_synthetic = 1`。
+
+**為何仍選獨立表**：
+
+1. **語意**：`is_synthetic` 是「這列不是真實生產預測」的旗標，語意與「這是另一個模型的影子實驗」不同；混用會讓未來讀者難以分辨。
+2. **不依賴他人記得過濾**：任何新查詢只要忘了帶 `is_synthetic`（或使用 `IncludeSynthetic` 變體）就會把影子列吃進來；
+   獨立表在**schema 層**排除這個可能，不靠呼叫端自律。
+3. **欄位自由度**：影子列需要的欄位（`terms_used`、各特徵值）與 `prediction_backtest` 的預測語意不同，
+   硬塞會讓該表承載兩種模型。
+
+⇒ 結論不變：**獨立表**。此節保留紀錄，供未來若真的需要合流時重新評估。
+
 儲存形狀（backend-aware；`ATLAS_STORE_BACKEND` 決定，postgres 未注入 pool ⇒ **錯誤，不降級**）：
 
 | 後端 | 實作 |
@@ -230,6 +247,7 @@ internal/ledger/historical_store.go:797-802（SQLite 版）
 | M1 | 跨月價差結構方向反轉（contango 給 +1） | `TestBuildShadowSeries_Golden` | 🔴 `d1 = 2026-01-05/up, want 2026-01-05/down` |
 | M2 | 前一天缺資料時以當日充當前一日 | `TestOIChangeAt_Golden` | 🔴 `first day trend = flat, want unavailable` |
 | M3 | 標籤跨契約（移除 month 過濾） | 序列級 ＋ 函式級 | 單點：**GREEN（等價突變）**；兩處同時移除：🔴 |
+| M4 | 影子列**同時**寫進 live 表 `prediction_backtest` | `TestShadowEvalDoesNotWriteLiveCalibrationTable` | 🔴 `shadow evaluation must NOT write the live calibration table, found 1 rows` |
 
 > **M3 的教訓（比紅燈更有價值）**：單獨移除 `nextDaySameMonthReturn` 的 month 過濾**不會**改變行為，
 > 因為 `closeFor` 內還有第二道 month 過濾；反之亦然。這是**等價突變（equivalent mutant）**，

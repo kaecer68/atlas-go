@@ -272,3 +272,51 @@ func TestParseArgs_RejectsUnknownContract(t *testing.T) {
 		t.Fatalf("want unknown-contract error, got %v", err)
 	}
 }
+
+// TestShadowEvalDoesNotWriteLiveCalibrationTable 是本階段最重要的隔離釘子：
+// 影子評估**不得**在 live 校準使用的 prediction_backtest 表留下任何列。
+//
+// 背景（已用程式碼證據確認，見 spec §7）：
+// internal/calibration/predictor_calibrator.go:63 以
+// LoadPredictionBacktestRange(ctx, "", "", 90) 讀資料，而它的 SQL
+// （internal/ledger/historical_store.go:797-802）只過濾日期與 is_synthetic，
+// **WHERE 完全沒有 model_version** ⇒ 只要有任何列寫進該表，就會改變
+// predictor_* 的貝氏校準分數。
+//
+// 這支測試直接對 DB 斷言，不依賴「呼叫了哪個 store」：
+// 跑完影子評估後，futures_shadow_predictions 必須有列、prediction_backtest 必須為 0 列。
+func TestShadowEvalDoesNotWriteLiveCalibrationTable(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "atlas.db")
+	store, err := ledger.NewSQLiteFuturesShadowStoreFromPath(dbPath)
+	if err != nil {
+		t.Fatalf("open shadow store: %v", err)
+	}
+	out := newOutFile(t)
+	reader := &fakeReader{bars: map[string][]domain.FuturesBar{"TX": txBars()}}
+	if err := runWith(context.Background(), testCLIConfig(), reader, store, out); err != nil {
+		t.Fatalf("runWith: %v", err)
+	}
+
+	db, err := ledger.OpenSQLiteDB(dbPath)
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	defer func() { _ = db.Close() }()
+
+	// 反向對照：影子表必須真的有列，否則「live 表為 0」可能只是「什麼都沒跑」的假綠。
+	var shadowRows int
+	if err := db.QueryRow("SELECT COUNT(*) FROM futures_shadow_predictions").Scan(&shadowRows); err != nil {
+		t.Fatalf("count shadow rows: %v", err)
+	}
+	if shadowRows == 0 {
+		t.Fatal("shadow rows were not written — the isolation assertion below would be vacuous")
+	}
+
+	var liveRows int
+	if err := db.QueryRow("SELECT COUNT(*) FROM prediction_backtest").Scan(&liveRows); err != nil {
+		t.Fatalf("count prediction_backtest: %v", err)
+	}
+	if liveRows != 0 {
+		t.Fatalf("shadow evaluation must NOT write the live calibration table, found %d rows", liveRows)
+	}
+}
