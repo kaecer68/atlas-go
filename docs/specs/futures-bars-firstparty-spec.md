@@ -353,8 +353,11 @@ CREATE TABLE IF NOT EXISTS futures_rollovers (
 ```go
 type FuturesBarStore interface {
     RecordFuturesBars(ctx context.Context, bars []domain.FuturesBar) (int, error)
-    LoadFuturesBars(ctx context.Context, contract, contractMonth string, start, end time.Time, session domain.FuturesSession) ([]domain.FuturesBar, error)
-    LoadLatestFuturesBars(ctx context.Context, contract string) ([]domain.FuturesBar, error) // 每到期月/時段最新一根
+    // contractMonth / session 為空字串 = 不過濾。
+    LoadFuturesBars(ctx context.Context, contract, contractMonth string, session domain.FuturesSession, start, end time.Time) ([]domain.FuturesBar, error)
+    LoadLatestFuturesBars(ctx context.Context, contract string) ([]domain.FuturesBar, error)
+    RecordFuturesRollovers(ctx context.Context, rollovers []domain.FuturesRollover) (int, error)
+    LoadFuturesRollovers(ctx context.Context, contract string) ([]domain.FuturesRollover, error)
 }
 ```
 
@@ -500,20 +503,31 @@ marketdata.BuildContinuousSeries(bars []domain.FuturesBar, method domain.AdjustM
 
 ## 9. 測試（含突變釘子）
 
-| 測試 | 內容 | 釘住什麼 |
+實際落地的測試（檔名 → 測試名）：
+
+| 測試（實際名稱） | 檔案 | 釘住什麼 |
 |---|---|---|
-| `TestParseFutDataDownCSV_Sample` | 以 §12 的真實 CSV fixture（2026-09-21~24、TX＋MTX）解析 | 欄位索引與型別（idx 9 量、10 結算、11 OI、17 時段） |
-| `TestFetchBarsRange_HeaderSentinel_RejectsAlertPage` | 餵 §12 的 `negative_range_limit.html` | **200-but-error**：必須回 `ErrSchema`，**不得**回空 slice ＋ nil |
-| `TestParseCSV_HeaderOnlyIsNoData` | 只有表頭的 CSV（1998/07/20 實測樣態） | `ErrNoData`（≠ `ErrSchema`） |
-| `TestParseCSV_SkipsSpreadCombos` | 含 `202706/202709` 的列 | 價差組合不得入庫 |
-| `TestParseCSV_WeeklyContracts` | 含 `202609W5` | 週契約可入庫、但連續序列排除 |
-| `TestCanonicalSessionIsRegular` | 同日兩列 | canonical＝`一般`；OI 只在一般列 |
-| `TestMissingValuesAreNilNotZero` | `-` / `NULL` | 缺值 → `nil`（**不得** → 0） |
-| `TestChunkDateRange_MaxThirtyOneDays` | 分段函式 | 每段相差 ≤ 31 天 |
-| `TestThirdWednesdayMatchesIndustry` | 期貨套件的第三個星期三 | 與 `internal/industry` 的既有實作**同值** |
-| `TestBuildContinuousSeries_BackAdjust` | 合成 3 段、已知 splice | 調整值等於手算期望值；OI 不變 |
-| `TestFuturesBarStore_BackendResolution` | `postgres` 未注入 pool | **必須 error**（不得降級 sqlite） |
-| `TestSQLiteFuturesBarStore_RoundTrip` | upsert → load | PK 冪等、缺值以 NULL 存取 |
+| `TestParseFuturesCSVBars_TXSample` | `internal/marketdata/taifex_futures_bars_test.go` | 欄位對映與值（量 37750、結算 48053、OI 101502、時段）＋盤後列 OI／結算為 nil |
+| `TestParseFuturesCSVBars_HeaderSentinelRejectsAlertPage` | 同上 | **200-but-error**：alert 頁必須回 `ErrSchema`，且**不是** ErrNoData 世界 |
+| `TestVerifyFuturesCSVHeader_Sentinel` | 同上 | 哨兵函式本身（錯誤訊息必須指出 sentinel；避免「釘子空轉」，見下） |
+| `TestParseFuturesCSVBars_HeaderOnlyIsNoData` | 同上 | 只有表頭 → 0 列且**不是** schema error（1998-07-20 實測樣態） |
+| `TestParseFuturesCSVBars_SkipsSpreadCombos` | 同上 | `202706/202709` 不得入庫 |
+| `TestParseFuturesCSVBars_WeeklyContracts` | 同上 | `202609W5` 可入庫、`IsMonthlyContractMonth` 為 false |
+| `TestParseFuturesCSVBars_MissingValuesAreNilNotZero` | 同上 | `-`/`NULL` → nil；量 `0` → 非 nil 的 0 |
+| `TestParseFuturesCSVBars_HeaderDrivenMapping` | 同上 | 欄序改變仍正確（表頭驅動，非硬編索引） |
+| `TestParseFuturesCSVBars_MissingRequiredColumn` / `_NonNumericValueIsSchemaError` / `_ShortRowIsSchemaErrorNotPanic` | 同上 | 缺欄／非數字／短列 ⇒ typed `ErrSchema`（不可 panic、不可靜默） |
+| `TestParseFuturesCSVBars_UnknownSessionIsNotRegular` | 同上 | 未知時段不得歸類為一般 |
+| `TestParseFuturesOpenAPIBars` / `_RejectsHTML` | 同上 | JSON 對映（`Last`→Close）；HTML ⇒ `ErrSchema` |
+| `TestChunkFuturesDateRange_MaxThirtyOneDays` | 同上 | 分段 ≤ 31 天、連續、不重疊、涵蓋端點 |
+| `TestFetchFuturesBarsRange_ChunksAndParses` / `_SentinelPropagatesErrSchema` / `_HeaderOnlyIsNoData` / `TestFetchLatestFuturesBars_OpenAPI` / `_NoMatchingRowsIsNoData` | 同上 | 端到端（含 charset 轉碼）與三向錯誤分類 ＋ no-data 不記 breaker 失敗 |
+| `TestFuturesContractSpecFor` / `TestFuturesLastTradingDay` / `TestIsMonthlyContractMonth` / `TestFuturesSessionFromTAIFEX` | `internal/marketdata` | 契約參考表（200／50）、第三個星期三（2026-09 → 09-16） |
+| `TestBuildContinuousSeries_BackAdjustGolden` | `internal/marketdata/futures_continuous_test.go` | **golden**：3 段、splice 8 與 7 ⇒ 調整後 115/116/117、119/120、121；量與 OI 不變 |
+| `TestBuildContinuousSeries_NoAdjust` / `_InvalidSpliceKeepsEventWithNilDiff` / `_RejectsUnknownMethod` / `_SkipsNonCanonicalAndNonMonthly` | 同上 | 替代調整法、無效 splice 不補值、未知調整法、週契約與盤後排除 |
+| `TestNewFuturesBarStore_PostgresRequiresPool` / `_EnvPostgresNeverFallsBackToSQLite` / `_EnvSQLiteHonoursPath` / `_UnknownBackendFailsLoudly` / `_SQLiteRequiresPath` / `_BackendDispatch` | `internal/ledger/futures_bar_store_test.go` | **後端判定**（#2107）：宣告 postgres 無 pool ⇒ 錯誤且不降級；sqlite 用組態路徑；未知後端不 fallback |
+| `TestSQLiteFuturesBarStore_RoundTrip` / `TestJSONLFuturesBarStore_RoundTrip` | 同上 | upsert 冪等、缺值 NULL 語意、範圍與時段過濾、latest |
+| `TestSQLiteFuturesBarStore_RolloversRoundTrip` / `TestJSONLFuturesBarStore_RolloversRoundTrip` | 同上 | splice 事件落庫（冪等；無效 splice 存 NULL） |
+| `TestPostgresFuturesBarStore_RoundTrip` | `internal/ledger/futures_bar_store_postgres_test.go`（`//go:build integration`） | **真實 PG**：pgx 路徑的 nil ↔ NULL、upsert、rollovers（本機無 DATABASE_URL 時 skip，CI 有 PG 時必須跑） |
+| `TestParseContracts` / `TestResolveStore_EnvPostgresNeverFallsBackToSQLite` / `TestResolveStore_ExplicitBackendWins` / `TestRunWith_WritesBarsAndRollovers` / `TestRunWith_DryRunDoesNotWrite` | `cmd/backfill-futures-bars/main_test.go` | CLI 契約、後端不降級、端到端寫入（bar ＋ splice）、dry-run 不落地 |
 
 **突變釘子（mutation pin）要求**：每個「關鍵欄位」都要有一個**專門斷言其值**的測試，
 且該測試必須在**人為改壞對應程式碼後變紅**。本階段至少執行下列 3 個突變並記錄結果：
@@ -525,6 +539,20 @@ marketdata.BuildContinuousSeries(bars []domain.FuturesBar, method domain.AdjustM
 | M3 | 把 `-`（缺值）改成 `0` | `TestMissingValuesAreNilNotZero` 紅 |
 
 > 實作階段必須**實際執行**這 3 個突變並把「紅燈證據」寫進 PR 的 Verification 段，不可只寫在規格裡。
+
+**已執行結果（2026-09-28，PR #2113）**
+
+| # | 突變 | 目標測試 | 結果 |
+|---|---|---|---|
+| M1 | 成交量對映 `get("成交量")` → `get("結算價")` | `TestParseFuturesCSVBars_TXSample` | 🔴 RED：`volume = 48053, want 37750` |
+| M2 | 移除表頭哨兵 | `TestVerifyFuturesCSVHeader_Sentinel` ＋ alert-page 測試 | 🔴 RED（**第一次是 GREEN，見下**） |
+| M3 | 缺值 `-` ⇒ `&0.0` 而非 nil | `TestParseFuturesCSVBars_MissingValuesAreNilNotZero` | 🔴 RED：`missing values must be nil` |
+
+> **M2 的教訓（釘子空轉）**：第一次施作 M2 後測試**仍是綠的** —— 因為原測試只斷言
+> `errors.Is(err, ErrSchema)`，而移除哨兵後 HTML 頁仍會因「缺少必要欄位」回 `ErrSchema`。
+> 修正：新增直接測哨兵函式的 `TestVerifyFuturesCSVHeader_Sentinel`，並在 alert-page 測試加上
+> 「錯誤訊息必須指出 header sentinel」的斷言 ⇒ 重跑 M2 才變紅。
+> **結論：只斷言錯誤「類別」不足以構成釘子；必須斷言錯誤「原因」。**
 
 ---
 

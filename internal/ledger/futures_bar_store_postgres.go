@@ -86,7 +86,7 @@ func (s *PostgresFuturesBarStore) LoadFuturesBars(ctx context.Context, contract,
 		return nil, fmt.Errorf("query futures bars: %w", err)
 	}
 	defer rows.Close()
-	return scanFuturesBars(rows)
+	return scanFuturesBarsPG(rows)
 }
 
 // LoadLatestFuturesBars 回傳每個到期月最新一日的 bar。
@@ -105,7 +105,45 @@ func (s *PostgresFuturesBarStore) LoadLatestFuturesBars(ctx context.Context, con
 		return nil, fmt.Errorf("query latest futures bars: %w", err)
 	}
 	defer rows.Close()
-	return scanFuturesBars(rows)
+	return scanFuturesBarsPG(rows)
+}
+
+// pgFuturesBarRows 是 pgx.Rows 的最小介面。
+type pgFuturesBarRows interface {
+	Next() bool
+	Scan(dest ...any) error
+	Err() error
+}
+
+// scanFuturesBarsPG 用 pgx 原生可空型別掃描（`*float64` / `*int64` 對 NULL 會給 nil）。
+//
+// 刻意**不**與 SQLite 路徑共用 scanner：SQLite 走 database/sql（`sql.NullFloat64`），
+// Postgres 走 pgx（原生指標）。兩者對 NULL 的表示法不同，共用會讓其中一條路徑
+// 只在真實 PG 上才會壞掉（而本機沒有 PG 可測）。
+func scanFuturesBarsPG(rows pgFuturesBarRows) ([]domain.FuturesBar, error) {
+	var out []domain.FuturesBar
+	for rows.Next() {
+		var (
+			b          domain.FuturesBar
+			dateStr    string
+			sessionStr string
+		)
+		if err := rows.Scan(&b.Contract, &b.ContractMonth, &dateStr, &sessionStr,
+			&b.Open, &b.High, &b.Low, &b.Close, &b.Volume, &b.SettlementPrice, &b.OpenInterest, &b.Source); err != nil {
+			return nil, fmt.Errorf("scan futures bar: %w", err)
+		}
+		date, err := time.ParseInLocation("2006-01-02", dateStr, time.UTC)
+		if err != nil {
+			return nil, fmt.Errorf("parse trade_date %q: %w", dateStr, err)
+		}
+		b.TradeDate = date
+		b.Session = domain.FuturesSession(sessionStr)
+		out = append(out, b)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate futures bars: %w", err)
+	}
+	return out, nil
 }
 
 // RecordFuturesRollovers upsert splice 事件。
