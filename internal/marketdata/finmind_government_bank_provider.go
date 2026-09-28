@@ -120,6 +120,7 @@ func NewFinMindGovernmentBankProvider(apiKey, stateDir string) *FinMindGovernmen
 	GlobalQuotaRegistry().Register("finmind_sponsor", tracker)
 	return &FinMindGovernmentBankProvider{
 		client: &FinMindClient{
+			baseURL:      finmindBaseURL,
 			apiKey:       apiKey,
 			httpClient:   httpclient.NewFactory().NewClient(30 * time.Second),
 			rateLimiter:  rate.NewLimiter(rate.Every(time.Hour/finmindGovBankRateLimit), finmindGovBankBurst),
