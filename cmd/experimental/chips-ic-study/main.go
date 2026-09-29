@@ -18,7 +18,6 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"math"
 	"os"
 	"path/filepath"
 	"sort"
@@ -27,6 +26,8 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+
+	"github.com/kaecer68/atlas-go/cmd/experimental/internal/icstudy"
 )
 
 type outcome struct {
@@ -237,108 +238,6 @@ func computeFeatures(outcomes []outcome, sbl map[string][]sblPoint, tdcc map[str
 	return out
 }
 
-func spearman(xs, ys []float64) float64 {
-	n := len(xs)
-	if n < 8 {
-		return math.NaN()
-	}
-	rx := rank(xs)
-	ry := rank(ys)
-	var d2 float64
-	for i := 0; i < n; i++ {
-		d := rx[i] - ry[i]
-		d2 += d * d
-	}
-	return 1 - 6*d2/float64(n*(n*n-1))
-}
-
-func rank(xs []float64) []float64 {
-	type pair struct {
-		v float64
-		i int
-	}
-	ps := make([]pair, len(xs))
-	for i, v := range xs {
-		ps[i] = pair{v, i}
-	}
-	sort.Slice(ps, func(a, b int) bool { return ps[a].v < ps[b].v })
-	r := make([]float64, len(xs))
-	i := 0
-	for i < len(ps) {
-		j := i
-		for j+1 < len(ps) && ps[j+1].v == ps[i].v {
-			j++
-		}
-		avg := float64(i+j+2) / 2
-		for k := i; k <= j; k++ {
-			r[ps[k].i] = avg
-		}
-		i = j + 1
-	}
-	return r
-}
-
-type icStats struct {
-	Feature string  `json:"feature"`
-	N       int     `json:"n_dates"`
-	SumN    int     `json:"total_obs"`
-	MeanIC  float64 `json:"mean_ic"`
-	StdIC   float64 `json:"std_ic"`
-	ICIR    float64 `json:"icir"`
-	PosPct  float64 `json:"positive_pct"`
-}
-
-func computeIC(rows []featRow, feat func(featRow) float64, minPerDate int) icStats {
-	byDate := map[string][]featRow{}
-	for _, r := range rows {
-		if math.IsNaN(feat(r)) {
-			continue
-		}
-		byDate[r.date] = append(byDate[r.date], r)
-	}
-	var ics []float64
-	total := 0
-	for _, rs := range byDate {
-		if len(rs) < minPerDate {
-			continue
-		}
-		xs := make([]float64, len(rs))
-		ys := make([]float64, len(rs))
-		for i, r := range rs {
-			xs[i] = feat(r)
-			ys[i] = r.forwardReturn
-		}
-		ic := spearman(xs, ys)
-		if !math.IsNaN(ic) {
-			ics = append(ics, ic)
-			total += len(rs)
-		}
-	}
-	st := icStats{N: len(ics), SumN: total}
-	if len(ics) == 0 {
-		return st
-	}
-	var sum float64
-	for _, v := range ics {
-		sum += v
-	}
-	st.MeanIC = sum / float64(len(ics))
-	var ss float64
-	pos := 0
-	for _, v := range ics {
-		ss += (v - st.MeanIC) * (v - st.MeanIC)
-		if v > 0 {
-			pos++
-		}
-	}
-	st.StdIC = math.Sqrt(ss / float64(len(ics)))
-	if st.StdIC > 0 {
-		st.ICIR = st.MeanIC / st.StdIC
-	}
-	st.PosPct = float64(pos) / float64(len(ics)) * 100
-	return st
-}
-
 type bucketRow struct {
 	Bucket     string  `json:"bucket"`
 	N          int     `json:"n"`
@@ -471,14 +370,14 @@ func main() {
 		{"tdcc_retail_pct_wow", func(f featRow) float64 { return f.fTDCCRetail }},
 		{"tdcc_big_conc_wow", func(f featRow) float64 { return f.fTDCCBig }},
 	}
-	var allICS []icStats
+	var allICS []icstudy.Stats
 	var md strings.Builder
 	md.WriteString("# Chips IC Study (P0)\n\n")
 	fmt.Fprintf(&md, "Generated: %s | outcomes: %d | SBL join: %d | TDCC join: %d\n\n",
 		time.Now().Format(time.RFC3339), len(outcomes), withSBL, withTDCC)
 	md.WriteString("| feature | dates | obs | mean IC | std | ICIR | positive % |\n|---|---|---|---|---|---|---|\n")
 	for _, f := range features {
-		st := computeIC(feats, f.fn, 10)
+		st := icstudy.ComputeIC(feats, func(r featRow) string { return r.date }, f.fn, func(r featRow) float64 { return r.forwardReturn }, 10)
 		allICS = append(allICS, st)
 		note := ""
 		if st.SumN > 0 && st.StdIC == 0 {
