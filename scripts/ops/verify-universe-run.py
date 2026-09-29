@@ -39,6 +39,11 @@
 #                          以及 vs 最後一次應執行時刻）。← 這是 2026-09-27 才被補上的缺口：
 #                          「跑了、有產出、但產物沒落地」在舊的 9 條規則下**完全無人覆蓋**。
 #
+#   ── 附錄（證據，**不參與判層**）──────────────────────────────────────────────
+#   排除原因細分：把 `snapshot.result.symbols_excluded_reasons`（issue #2019）依階段印出，
+#   並把兩條恆等式並排核對。它不改任何 verdict、不改 exit code；欄位不存在時只印
+#   「未提供（本次 run 未帶細分）」，**不補 0**（0 是有效讀數）。
+#
 # ── exit code（給自動化用）──────────────────────────────────────────────────────
 #   0 = 全綠（可含 WARN；WARN 是「這個維度還沒上線」，不是「母體壞了」）
 #   1 = 至少一層出現「應告警」條件（RED）—— 與告警規則同一組判定式
@@ -94,6 +99,23 @@ ARTIFACT_STALE_SECONDS = 120
 EMISSION_WINDOW = "6d"
 
 SNAPSHOT_REL = os.path.join("data", "state", "universe_snapshot.json")
+#: 排除原因細分（issue #2019）：`snapshot.result.symbols_excluded_reasons`。
+#:
+#: 這一節是**證據，不是判層**：它不參與任何 predicate、不改變任何 verdict、
+#: 也不影響 exit code（0/1/2/3 的語意完全不變）。它的用途只有一個 —— 讓「為什麼是這個
+#: 排除數」在驗收的當下就看得到，而不必回頭翻 log 或重跑母體建構。
+EXCLUDED_REASONS_FIELD = "symbols_excluded_reasons"
+#: 欄位不存在時的固定字串。**不得補 0**：0 是有效讀數（該階段跑過、且沒排除任何檔），
+#: 「本次 run 沒帶細分」與「細分為 0」是兩個不同的世界 —— 與 channel-health gauge 的
+#: absent-vs-present-zero 同一條原則（欄位不得說謊）。
+EXCLUDED_REASONS_ABSENT = "未提供（本次 run 未帶細分）"
+#: 細分 key 的階段前綴 → 顯示用的階段名（未知前綴一律歸「其他」並照樣印出，
+#: 不因詞彙不認識就把它藏起來）。
+EXCLUDED_REASONS_STAGES = (
+    ("risk_", "風控(Step5)"),
+    ("screener_", "選股(Step4)"),
+)
+EXCLUDED_REASONS_OTHER_STAGE = "其他(concentration_cap 等)"
 REGISTRY_REL = os.path.join("data", "state", "universe.json")
 HOLIDAY_SOURCE_REL = os.path.join("internal", "taiwanholidays", "taiwan_holidays.go")
 
@@ -722,6 +744,94 @@ def _int_field(result, name):
     if isinstance(v, bool) or not isinstance(v, (int, float)):
         return None
     return int(v)
+
+
+def excluded_reasons_map(result) -> dict | None:
+    """取 `result.symbols_excluded_reasons`；不存在或型別不對回 None（**不是 `{}`**）。
+
+    None 的語意是「本次 run 沒帶細分」；空 dict 會被視為同一件事（沒有東西可讀），
+    因為細分一旦寫入就一定帶滿 14 個 canonical key（見 monitoring 的
+    universe_exclusion_reasons.go）。
+    """
+    if not isinstance(result, dict):
+        return None
+    value = result.get(EXCLUDED_REASONS_FIELD)
+    if not isinstance(value, dict) or not value:
+        return None
+    normalized = {}
+    for key, count in value.items():
+        if isinstance(count, bool) or not isinstance(count, (int, float)):
+            return None  # 型別不對 ⇒ 當成沒帶，不猜（0 是有效讀數，猜錯就是說謊）
+        normalized[str(key)] = int(count)
+    return normalized
+
+
+def excluded_reasons_lines(ev: Evidence) -> list:
+    """把排除原因細分渲染成人看的行（唯讀、無判定）。
+
+    三段輸出：
+      · 細分本體（依階段分組，key 排序固定 ⇒ 輸出可 diff）；
+      · 兩條恆等式的核對（只是把數字並排，讓人一眼看出總數對不對得上）；
+      · 缺席時**只印** EXCLUDED_REASONS_ABSENT，不補任何 0。
+    """
+    lines = []
+    result = (ev.snapshot or {}).get("result") if ev.snapshot else None
+    reasons = excluded_reasons_map(result)
+    if reasons is None:
+        if ev.snapshot is None:
+            lines.append(f"細分            = {EXCLUDED_REASONS_ABSENT}（snapshot 讀不到：{ev.snapshot_error}）")
+        else:
+            lines.append(f"細分            = {EXCLUDED_REASONS_ABSENT}")
+        return lines
+
+    lines.append(f"細分            = 提供（{len(reasons)} 個 key）")
+    grouped = {name: [] for _, name in EXCLUDED_REASONS_STAGES}
+    grouped[EXCLUDED_REASONS_OTHER_STAGE] = []
+    for key in sorted(reasons):
+        stage = EXCLUDED_REASONS_OTHER_STAGE
+        for prefix, name in EXCLUDED_REASONS_STAGES:
+            if key.startswith(prefix):
+                stage = name
+                break
+        grouped[stage].append(f"{key}={reasons[key]}")
+    for name in list(dict.fromkeys([n for _, n in EXCLUDED_REASONS_STAGES] + [EXCLUDED_REASONS_OTHER_STAGE])):
+        if not grouped[name]:
+            continue
+        label = f"{name:<16}"
+        lines.append(f"  {label} = {' '.join(grouped[name])}")
+
+    # 核對（不影響判層）：把兩條恆等式並排，缺項就說缺項，不假設成立。
+    def _field(name):
+        if not isinstance(result, dict):
+            return None
+        value = result.get(name)
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            return None
+        return int(value)
+
+    excluded = _field("symbols_excluded")
+    risk_total = reasons.get("risk_total")
+    if excluded is None or risk_total is None:
+        lines.append("  核對(不影響判層) = 無法核對：缺少 symbols_excluded 或 risk_total")
+    else:
+        verdict = "一致" if excluded == risk_total else "不一致"
+        lines.append(f"  核對(不影響判層) = symbols_excluded {excluded} vs risk_total {risk_total} → {verdict}")
+
+    filtered = _field("symbols_filtered")
+    ranked = _field("symbols_ranked")
+    screener_total = reasons.get("screener_total")
+    cap = reasons.get("concentration_cap")
+    if None in (filtered, ranked, screener_total, cap):
+        lines.append("  核對(不影響判層) = 無法核對：缺少 symbols_filtered / symbols_ranked / screener_total / concentration_cap")
+    else:
+        rhs = ranked + screener_total + cap
+        verdict = "一致" if filtered == rhs else "不一致"
+        lines.append(
+            f"  核對(不影響判層) = symbols_filtered {filtered} vs symbols_ranked {ranked}"
+            f" + screener_total {screener_total} + concentration_cap {cap} = {rhs} → {verdict}"
+        )
+    lines.append("  語意: key 缺席=該階段未跑；key=0=該階段跑過且未排除任何檔；Step2 industry filter 不在此細分內")
+    return lines
 
 
 # ── L0 傳輸面 ────────────────────────────────────────────────────────────────
@@ -1492,6 +1602,10 @@ def print_report(ev: Evidence, layers, args) -> None:
         if l.rules:
             out.append(f"        Prometheus 對應規則: {', '.join(l.rules)}")
         out.append("")
+    out.append("── 排除原因細分（snapshot.result.symbols_excluded_reasons）──")
+    out.append("（證據，不參與判層：本節不影響任何 verdict 或 exit code）")
+    out.extend(excluded_reasons_lines(ev))
+    out.append("")
     code, reds, indet = overall_exit(layers)
     label = {EXIT_GREEN: "GREEN", EXIT_RED: "RED", EXIT_INDETERMINATE: "INDETERMINATE"}[code]
     out.append("── 總結 ──")
@@ -1512,6 +1626,11 @@ def print_report(ev: Evidence, layers, args) -> None:
 
 def print_json(ev: Evidence, layers, args) -> None:
     code, reds, indet = overall_exit(layers)
+    # 排除原因細分（issue #2019）：**附加**欄位。缺席時是 null，不是空物件、更不是 0
+    # —— 0 是有效讀數（跑過且沒排除任何檔），「沒帶細分」必須讀得出來（同一條
+    # absent-vs-present-zero 原則）。既有的 exit_code / layers / red_layers 等欄位
+    # 一字不動：工具鏈（jq / 驗收腳本）相容。
+    reasons = excluded_reasons_map((ev.snapshot or {}).get("result") if ev.snapshot else None)
     print(json.dumps({
         "tool": "verify-universe-run",
         "version": TOOL_VERSION,
@@ -1522,6 +1641,8 @@ def print_json(ev: Evidence, layers, args) -> None:
         "exit_code": code,
         "red_layers": reds,
         "indeterminate_layers": indet,
+        "excluded_reasons": reasons,
+        "excluded_reasons_present": reasons is not None,
         "layers": [
             {
                 "key": l.key,

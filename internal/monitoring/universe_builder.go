@@ -384,7 +384,87 @@ func NewScoringScreener(scr screener.Screener, factorEng FactorScoreProvider) *S
 //  6. Sort descending by Score.
 //  7. Apply MaxIndustryConcentration cap.
 //  8. Take TopN.
+//
+// It is the ranked-list-only form of RankWithStats. Callers that persist or
+// report the pipeline outcome must use RankWithStats: three of the drops above
+// leave no trace in the returned slice.
 func (s *ScoringScreener) Rank(universe []string, quotes map[string]domain.Quote) []RankedSymbol {
+	ranked, _ := s.RankWithStats(universe, quotes)
+	return ranked
+}
+
+// RankStats is the auditable accounting of one rank call: where every candidate
+// went between the input slice and the ranked output (issue #2019). Before it
+// existed, three of these drops were invisible — the binary screener, symbols
+// the factor engine could not score, and the concentration cap — and the four
+// volume/price causes were log-only.
+//
+// The fields stay raw counts (rather than a map) so the arithmetic can be
+// asserted with integer identities instead of by adding up keys, and so a new
+// stage can be added without touching the vocabulary of the stages that already
+// existed.
+type RankStats struct {
+	// Input is the number of candidate symbols handed to the screener.
+	Input int
+	// NoQuote / ZeroVolume / BelowTurnoverFloor / BelowPriceFloor are the four
+	// volume-and-price filter causes (see filterStats).
+	NoQuote            int
+	ZeroVolume         int
+	BelowTurnoverFloor int
+	BelowPriceFloor    int
+	// Survivors passed the volume and price filters.
+	Survivors int
+	// BinaryRejected counts survivors dropped by the injected binary screener.
+	BinaryRejected int
+	// NoFactorScore counts survivors the factor engine could not score at all;
+	// scoreAndRank drops those entries entirely (SP4 §9).
+	NoFactorScore int
+	// BeforeCap is the number of scored symbols before the industry
+	// concentration cap; ConcentrationCap is how many the cap removed.
+	BeforeCap        int
+	ConcentrationCap int
+	// TopNTruncated counts ranked symbols cut by the TopN limit. It is the
+	// ranking cut, not an exclusion, and it is reported so the arithmetic in
+	// ExclusionReasons closes.
+	TopNTruncated int
+	// Ranked is the length of the returned slice.
+	Ranked int
+}
+
+// ScreenerTotal is every symbol the screener stage removed between its input
+// and the ranked output, TopN cut included. The concentration cap is counted
+// separately (it runs on the scored list, after the screener's own filtering).
+func (rs RankStats) ScreenerTotal() int {
+	return rs.NoQuote + rs.ZeroVolume + rs.BelowTurnoverFloor + rs.BelowPriceFloor +
+		rs.BinaryRejected + rs.NoFactorScore + rs.TopNTruncated
+}
+
+// ExclusionReasons renders the accounting as the canonical snapshot map (see
+// universe_exclusion_reasons.go for the vocabulary and the identities).
+//
+// screener_total is included even though it is the sum of the six screener_*
+// keys: it is what the snapshot identities are stated against
+// (symbols_filtered = symbols_ranked + screener_total + concentration_cap), and
+// a reader should not have to add six numbers to test a claim.
+func (rs RankStats) ExclusionReasons() map[string]int {
+	return map[string]int{
+		ExclusionReasonScreenerNoQuote:            rs.NoQuote,
+		ExclusionReasonScreenerZeroVolume:         rs.ZeroVolume,
+		ExclusionReasonScreenerBelowTurnoverFloor: rs.BelowTurnoverFloor,
+		ExclusionReasonScreenerBelowPriceFloor:    rs.BelowPriceFloor,
+		ExclusionReasonScreenerBinaryRejected:     rs.BinaryRejected,
+		ExclusionReasonScreenerNoFactorScore:      rs.NoFactorScore,
+		ExclusionReasonScreenerTopNTruncated:      rs.TopNTruncated,
+		ExclusionReasonScreenerTotal:              rs.ScreenerTotal(),
+		ExclusionReasonConcentrationCap:           rs.ConcentrationCap,
+	}
+}
+
+// RankWithStats is Rank plus the exclusion accounting. Callers that persist or
+// alert on the pipeline outcome must use this form; Rank remains for callers
+// that only need the ranked list.
+func (s *ScoringScreener) RankWithStats(universe []string, quotes map[string]domain.Quote) ([]RankedSymbol, RankStats) {
+	stats := RankStats{Input: len(universe)}
 	normalizedQuotes := normalizeQuotes(quotes)
 
 	// Pre-compute normalized universe once so downstream filters avoid
@@ -394,18 +474,23 @@ func (s *ScoringScreener) Rank(universe []string, quotes map[string]domain.Quote
 		normalizedUniverse[i] = normalizeSymbol(sym)
 	}
 
-	survivors, stats := s.applyVolumeAndPriceFilters(normalizedUniverse, normalizedQuotes)
+	survivors, filter := s.applyVolumeAndPriceFilters(normalizedUniverse, normalizedQuotes)
+	stats.NoQuote = filter.NoQuote
+	stats.ZeroVolume = filter.ZeroVolume
+	stats.BelowTurnoverFloor = filter.BelowTurnoverFloor
+	stats.BelowPriceFloor = filter.BelowPriceFloor
+	stats.Survivors = filter.Passed
 	// "0 ranked" has several very different causes and one of them (a quote
 	// provider that answers without a volume field) already looked like a
 	// market verdict once — issue #1944 I25. The breakdown is logged on every
 	// run so a filter wipe-out is attributable from the production log alone.
 	logging.Info("universe_builder", "scoring_filters",
-		"input", stats.Input,
-		"no_quote", stats.NoQuote,
-		"zero_volume", stats.ZeroVolume,
-		"below_turnover_floor", stats.BelowTurnoverFloor,
-		"below_price_floor", stats.BelowPriceFloor,
-		"survivors", stats.Passed)
+		"input", filter.Input,
+		"no_quote", filter.NoQuote,
+		"zero_volume", filter.ZeroVolume,
+		"below_turnover_floor", filter.BelowTurnoverFloor,
+		"below_price_floor", filter.BelowPriceFloor,
+		"survivors", filter.Passed)
 
 	// Binary pass/fail via the injected screener.
 	// Per screener contract errors are non-fatal; fall back to the survivors.
@@ -414,13 +499,27 @@ func (s *ScoringScreener) Rank(universe []string, quotes map[string]domain.Quote
 	if err != nil {
 		passed = survivors
 	}
+	// A screener-contract error falls back to the survivors, which is
+	// indistinguishable from "the screener passed everything" in the counts
+	// below. The error itself is already logged by the caller path, and the
+	// fallback is deliberate (non-fatal), so the accounting reports what
+	// actually happened to the symbols rather than inventing a rejection.
+	stats.BinaryRejected = len(survivors) - len(passed)
 
-	ranked := s.scoreAndRank(passed, normalizedQuotes)
-	ranked = s.ApplyConcentrationCap(ranked)
+	scored := s.scoreAndRank(passed, normalizedQuotes)
+	stats.NoFactorScore = len(passed) - len(scored)
+	stats.BeforeCap = len(scored)
+
+	capped, removed := s.ApplyConcentrationCapWithStats(scored)
+	stats.ConcentrationCap = removed
+
+	ranked := capped
 	if s.TopN > 0 && len(ranked) > s.TopN {
+		stats.TopNTruncated = len(ranked) - s.TopN
 		ranked = ranked[:s.TopN]
 	}
-	return ranked
+	stats.Ranked = len(ranked)
+	return ranked, stats
 }
 
 // filterStats attributes every symbol that left the Layer-2 volume/price
@@ -534,9 +633,19 @@ func (s *ScoringScreener) scoreAndRank(passed []string, quotes map[string]domain
 	return ranked
 }
 
+// ApplyConcentrationCapWithStats is ApplyConcentrationCap plus the number of
+// symbols the cap removed (issue #2019: the removal used to be silent, so a
+// capped run could not be told apart from a run whose industries were within
+// the limit).
+func (s *ScoringScreener) ApplyConcentrationCapWithStats(ranked []RankedSymbol) (kept []RankedSymbol, removed int) {
+	kept = s.ApplyConcentrationCap(ranked)
+	return kept, len(ranked) - len(kept)
+}
+
 // ApplyConcentrationCap removes the lowest-scoring symbols from any industry
 // whose count exceeds MaxIndustryConcentration * len(ranked). The returned
-// slice is re-sorted descending by Score.
+// slice is re-sorted descending by Score. Callers that must report how many
+// symbols were removed use ApplyConcentrationCapWithStats.
 func (s *ScoringScreener) ApplyConcentrationCap(ranked []RankedSymbol) []RankedSymbol {
 	if len(ranked) == 0 {
 		return ranked
