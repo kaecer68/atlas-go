@@ -63,10 +63,11 @@ type SiliconIndicators struct {
 
 	// TaiwanSemiconductorIndexMA is 台灣半導體指數偏離季線比例 (fraction).
 	//
-	// The name/intent is the deviation above the quarterly moving average, but
-	// the only production producer supplies a SINGLE-DAY return instead
-	// (SiliconTWIndexIsMADeviation=false). IndexMAPercentThreshold is therefore
-	// compared against a one-day move and the 1→2 trigger cannot fire.
+	// It is the deviation above the quarterly (60 trading session) moving
+	// average, computed by SiliconIndexMA from the daily index levels archived in
+	// data/state/macro/ (SiliconTWIndexIsMADeviation=true). The upstream channel
+	// still publishes a single-day return; that value is only used when no series
+	// is available, and the fallback is reported (SiliconIndexMAReason*).
 	TaiwanSemiconductorIndexMA float64
 
 	// TSMCCapexGuidance is 台積電資本支出指引變動 (fraction, negative = cut).
@@ -129,22 +130,33 @@ const (
 	// overheat trigger is unreachable despite the live writer.
 	SiliconTWIndexWriterWired = true
 
-	// SiliconTWIndexIsMADeviation reports whether the written value carries the
-	// semantics both the 1→2 trigger and the field name claim, i.e. "the index
-	// sits this far ABOVE its moving average". It does not: the channel writes
-	// latest.ReturnPct (internal/apigateway/adapter_twse_sector_index.go) — the
-	// index's SINGLE-DAY return — and ExtractSiliconIndicators passes it through
-	// as ChangePct/100.
+	// SiliconTWIndexIsMADeviation reports whether TaiwanSemiconductorIndexMA
+	// carries the semantics both the 1→2 trigger and the field name claim, i.e.
+	// "the index sits this far ABOVE its moving average".
 	//
-	// Consequence: IndexMAPercentThreshold (shipped 0.20; Go doc "index exceeds
-	// MA by this") is compared against a one-day return, which real TAISEMI data
-	// cannot reach, so ExpansionConfirmed → PhaseOverheat never fires and
-	// PhaseOverheat is unreachable in production. This — a semantic/scale
-	// mismatch, not a missing producer — is the real gap. Fixing it means
-	// computing the actual MA deviation (or wiring a YoY/MA series), NOT lowering
-	// the threshold; the sibling SOX trigger is unreachable for the same reason
-	// (see SiliconSOXIndicatorIsYoY).
-	SiliconTWIndexIsMADeviation = false
+	// It now does. The upstream channel still writes latest.ReturnPct (the index's
+	// single-day return) into MacroDataSnapshot.TaiwanSemiIndex — that wire format
+	// is unchanged — but ExtractSiliconIndicators no longer passes it through:
+	// SiliconIndexMA derives the value from the archived daily index LEVELS
+	// (data/state/macro/YYYY-MM-DD.json, taiwan_semi_index.value) as the deviation
+	// above the SiliconIndexMAWindowSessions (60 trading session) moving average.
+	//
+	// This constant is a real kill switch, not documentation: flipping it back to
+	// false restores the previous single-day passthrough bit-for-bit (no series
+	// read, no behavior change), which is the rollback path for the I22-overheat
+	// change (docs/reference/inert-registry.md).
+	//
+	// Reachability, measured rather than assumed: with the fix, production data
+	// on 2026-09-30 read TAISEMI 1616.78 against a 60-session mean of 1538.91,
+	// i.e. +5.06% — below the shipped IndexMAPercentThreshold (0.20), so the phase
+	// does not flip on the change day. The trigger is now reachable when a real
+	// ≥20%-above-季線 episode occurs; it is no longer unreachable by construction.
+	//
+	// Threshold semantics are untouched: the fix computes the statistic the
+	// threshold was written for instead of lowering the threshold to fit a
+	// one-day move. The sibling SOX trigger is still unreachable for the same
+	// scale reason and is NOT fixed here (see SiliconSOXIndicatorIsYoY).
+	SiliconTWIndexIsMADeviation = true
 
 	// SiliconSOXIndicatorIsYoY reports whether the SOX-derived inputs are
 	// annual figures as their names claim. They are not: the Yahoo ^SOX
@@ -502,10 +514,11 @@ func (e *SiliconCycleTracker) String() string {
 //     historical correlation between SOX YoY and WSTS billings YoY)
 //   - DRAMSpotPriceTrend:     MacroDataSnapshot.DRAMSpotPrice.ChangePct / 100
 //     (MU stock daily change serves as a high-frequency DRAM proxy)
-//   - TaiwanSemiconductorIndexMA: MacroDataSnapshot.TaiwanSemiIndex.ChangePct / 100
-//     — NOTE: the channel that writes that field stores latest.ReturnPct, i.e.
-//     the index's daily return, not the "deviation above MA" the name and
-//     IndexMAPercentThreshold (0.20) assume (see SiliconTWIndexIsMADeviation).
+//   - TaiwanSemiconductorIndexMA: the deviation of the Taiwan semiconductor
+//     index above its 60-session moving average, from the daily index levels in
+//     data/state/macro/ (see SiliconIndexMA). The upstream channel's single-day
+//     return is used ONLY when no series is available, and that fallback is
+//     reported through SiliconIndexMADeviation.Reason, never silently.
 //   - TSMCCapexGuidance:      snap.CapexGrowth.Value/100 when the sector_data
 //     channel produced it; otherwise an implied value derived from TSMC
 //     revenue YoY (see capexProxy* below)
@@ -552,7 +565,7 @@ func ExtractSiliconIndicators(snap marketdata.MacroDataSnapshot) SiliconIndicato
 		TSMCMonthlyRevenueYoY:          tsmcRevYoY,
 		GlobalSemiconductorBillingsYoY: soxChange * 0.85, // SOX → billings scaling (~85% correlation)
 		DRAMSpotPriceTrend:             dramTrend,
-		TaiwanSemiconductorIndexMA:     snap.TaiwanSemiIndex.ChangePct / 100.0,
+		TaiwanSemiconductorIndexMA:     SiliconIndexMA(snap.TaiwanSemiIndex),
 		TSMCCapexGuidance:              capexSignal,
 		PhiladelphiaSOXIndexYoY:        soxChange,
 	}

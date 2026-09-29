@@ -41,7 +41,7 @@
 
 | # | 項目 | 原症狀 | 處置 | 證據 |
 |---|---|---|---|---|
-| I22 | 矽循環三處斷裂：config 被忽略（`_ = cfg`）、capex 訊號硬編碼 ±0.05 永遠跨不過 `< -0.10` 門檻、`window_size=0` 清空相位歷史 | 過熱相位與收縮轉移在生產不可達 | **接線 + 修正**：`getSiliconParams()` 讀 `industry.silicon_cycle`（僅非零覆寫）；capex 優先取 `MacroDataSnapshot.CapexGrowth`（原為有 producer 無 consumer 的欄位），否則用營收 YoY 等比例推估（`capexProxyScale=1.0`、clamp ±0.50）⇒ 衰退 ≥10% 即跨門檻；`HistoryWindowSize<=0` = 不修剪 | `internal/industry/silicon_cycle.go`；測試 `TestGetSiliconParams_ConsumesConfigFile`、`TestExtractSiliconIndicators_CapexReachesCutThreshold`、`TestExtractSiliconIndicators_PrefersSectorDataCapex`、`TestPhaseHistoryWindowZeroDoesNotWipe`、`TestSiliconIndicatorProvenance`。**未修（明示）＋敘述更正（Batch B）**：SOX/billings 實為單日變動（`SiliconSOXIndicatorIsYoY=false`）。TW semi index 的 writer **存在且已接線**（`twse_sector_index` channel → `monitoring.applyTWSESectorIndex`，15 分鐘生產任務；`SiliconTWIndexWriterWired=true`），但寫入的是**單日報酬**（`latest.ReturnPct`）而非欄名／門檻假設的「高於 MA 的幅度」（`SiliconTWIndexIsMADeviation=false`）⇒ 1→2 的兩條 trigger 皆不可達，`PhaseOverheat` 在生產不可達。Batch 2 原敘述「TW semi index 無 producer」**與事實不符**（Batch B 更正）；具名缺口登記見 §Batch B 收斂 |
+| I22 | 矽循環三處斷裂：config 被忽略（`_ = cfg`）、capex 訊號硬編碼 ±0.05 永遠跨不過 `< -0.10` 門檻、`window_size=0` 清空相位歷史 | 過熱相位與收縮轉移在生產不可達 | **接線 + 修正**：`getSiliconParams()` 讀 `industry.silicon_cycle`（僅非零覆寫）；capex 優先取 `MacroDataSnapshot.CapexGrowth`（原為有 producer 無 consumer 的欄位），否則用營收 YoY 等比例推估（`capexProxyScale=1.0`、clamp ±0.50）⇒ 衰退 ≥10% 即跨門檻；`HistoryWindowSize<=0` = 不修剪 | `internal/industry/silicon_cycle.go`；測試 `TestGetSiliconParams_ConsumesConfigFile`、`TestExtractSiliconIndicators_CapexReachesCutThreshold`、`TestExtractSiliconIndicators_PrefersSectorDataCapex`、`TestPhaseHistoryWindowZeroDoesNotWipe`、`TestSiliconIndicatorProvenance`。**未修（明示）＋敘述更正（Batch B）**：SOX/billings 實為單日變動（`SiliconSOXIndicatorIsYoY=false`）。TW semi index 的 writer **存在且已接線**（`twse_sector_index` channel → `monitoring.applyTWSESectorIndex`，15 分鐘生產任務；`SiliconTWIndexWriterWired=true`），但寫入的是**單日報酬**（`latest.ReturnPct`）而非欄名／門檻假設的「高於 MA 的幅度」（`SiliconTWIndexIsMADeviation=false`）⇒ 1→2 的兩條 trigger 皆不可達，`PhaseOverheat` 在生產不可達。Batch 2 原敘述「TW semi index 無 producer」**與事實不符**（Batch B 更正）；具名缺口登記見 §Batch B 收斂。**2026-09-30 更新（#2160）**：MA 偏離半邊**已修**（`SiliconTWIndexIsMADeviation` false→true、`ExtractSiliconIndicators` 走真 MA60 偏離 ⇒ `PhaseOverheat` 可達）；SOX 半邊仍未修（同型缺口）。 |
 | I3 | `industry.cycle_calibration` config 全 0，`WindowSize=0` 使 `RecordOutcome` 每次清空視窗 ⇒ metrics 永遠空 | I1 的接線在生產無證據 | **merge 補預設 + 語意修正**：`mergeIndustryDefaults` 新增 all-zero → 預設（10/0.05/0.55/0.45/0.05/0.40/30）；`WindowSize<=0` = 不修剪；`WeightClampMax<=WeightClampMin` 視為未設定校準（回傳 base weights，不清空） | `internal/config/parameters_merge.go`、`internal/industry/cycle_calibration.go`；測試 `TestMergeIndustryDefaults_CycleCalibrationAllZero`、`TestShippedConfigCycleCalibrationIsUsable`、`TestCycleCalibration_ZeroWindowSizeKeepsOutcomes`。**I1 因此在本批後才真正閉環**（生產 producer = `auto_daily_simulation` → `RecordCycleCalibrationOutcome`） |
 | I2 | `cycle_calibrate` 用第三份硬編碼權重呼叫 `CalibrateWeights` 後只 log `len()` 就丟棄 | 算了沒消費 | **明示未啟用（診斷）**：改回報實際生效的 `EffectiveCardConfig()`，log 明寫 `applied=false` / `fallback_reason=diagnostic_only_no_writeback`；刪除硬編碼副本 | `cmd/atlas/calibration_tasks.go`、`internal/industry/cycle_status_card.go`（`EffectiveCardConfig`） |
 | I14 | 四個讀取點各讀不同路徑（`data/state/sector_data`、`<ledgerDir>`、`<workDir>/sector_data.json`），實際檔案在 `data/sector_data/`；bridge 僅測試呼叫；缺檔回零 `err=nil` | 通道靜默死亡 | **修正路徑 + 明示未啟用（bridge）**：新增唯一權威 `marketdata.SectorDataDirRel` / `ResolveSectorDataDir()`，四個讀取點改用；provider 記錄載入狀態（`SectorDataState`），apigateway `HealthCheck` 對缺檔／壞時間戳／超過 72h 回 `degraded`；`SectorDataBridgeWired=false`（理由：唯一輸入是無生產刷新者的人工檔，且會把 `EvidenceTier` 由 `estimated` 洗成 `empirical`） | `internal/marketdata/sector_data_provider.go`、`internal/apigateway/adapter_sector_data.go`、`channel_contract.go`、`internal/industry/sector_data_bridge.go`；測試 `TestResolveSectorDataDirMatchesShippedFile`、`TestSectorDataProvider_State*`、`TestSectorDataChannelAdapter_HealthCheck` |
@@ -233,7 +233,7 @@
 | **I19 殘留** | production 無 LLM driver 注入點（`LLMSectorAgentDriverWired=false`）、旗標預設 false | 需設計決定 | 需產品裁決是否啟用 |
 | **N-A1 殘留（4 emitter）** | `snapshot.projection`／`legacy.read`／`fallback.count`／`rollback.drill` 仍無誠實呼叫點（baseline 已寫明理由） | 需設計決定 | 需先有誠實資料來源 |
 | **N-A5** | `SectorDriverDeltasSupplied=false`：六個 driver delta map 全空 ⇒ 投影恆等 strategic prior | 需設計決定（供給 delta 是行為變更） | 另票 |
-| **I22-overheat（Batch B 新登記）** | `PhaseOverheat` 在生產完全不可達（見下節） | 需設計決定 | 2026-09-29 06:00Z 驗收之後 |
+| **I22-overheat（Batch B 新登記）** | ~~`PhaseOverheat` 在生產完全不可達~~ **已修（#2160，2026-09-30 合併 `c81d3433`）**：`SiliconTWIndexIsMADeviation` false→true、`ExtractSiliconIndicators` 改走真 MA60 偏離 ⇒ 1→2 可達 | 已修（業主 2026-09-30 授權提前變更、以 #2160 上線日為分界；回滾＝常數翻回 false ⇒ 逐位元回舊） | 2026-09-30 |
 | **I27 殘留** | symbol→sector 的值仍是 segment ID（非 canonical L1），未命中仍回 `"other"` | 可修 | 另票 |
 | 超界 `adjustment_factor` 污染源 | 生產 4 個超界值（含負值），來源早於／繞過 `cmd/calibrate-seasonal --update` 守門 | 需生產資料 | 另票 |
 | config validator 允許負 `adjustment_factor` | `parameters_validate.go` 只檢查 `!= 0`（實證 2 個負值載入成功） | 需設計決定（現行修法會擋掉 production 啟動） | 與上一列同批 |
@@ -245,12 +245,12 @@
 
 | 項目 | 內容 |
 |---|---|
-| 症狀 | 矽循環相位機制的 `ExpansionConfirmed → PhaseOverheat`（1→2）兩條 trigger 在生產都不可能成立，故 `PhaseOverheat` 整個相位不可達 ⇒ 「過熱相位偵測」實質失效（`GetPhaseName`／`IsFavorable`／卡片分數的 overheat 分支在生產永遠走不到）。 |
+| 症狀 | 矽循環相位機制的 `ExpansionConfirmed → PhaseOverheat`（1→2）兩條 trigger 在生產都不可能成立，故 `PhaseOverheat` 整個相位不可達 ⇒ 「過熱相位偵測」實質失效（`GetPhaseName`／`IsFavorable`／卡片分數的 overheat 分支在生產永遠走不到）。**2026-09-30 更新（#2160）**：MA 偏離半邊已修 ⇒ 症狀解除；SOX 半邊仍為**同型缺口**（單日變動 vs `0.40` 門檻，`SiliconSOXIndicatorIsYoY=false`，見 §前述「未修（明示）」）。 |
 | 真因（**非**「沒有 producer」） | ① 索引線：`SiliconIndicators.TaiwanSemiconductorIndexMA` 的值是 `MacroDataSnapshot.TaiwanSemiIndex.ChangePct/100`，而唯一 writer（`monitoring.applyTWSESectorIndex`，經 `twse_sector_index` channel ＋ 15 分鐘生產任務）寫入的是 `latest.ReturnPct`＝**當日報酬**；門檻 `IndexMAPercentThreshold`（shipped `0.20`，Go 註解「index exceeds MA by this」）卻被當成「高於 MA 的幅度」比較 ⇒ 需要 TAISEMI **單日 +20%**。② SOX 線：值為 SOX **單日**變動，門檻 `SOXExtremeThreshold=0.40` 需要單日 +40%。 |
 | 修法方向（**不是**改門檻） | 依 config rationale 與欄名，門檻語意是「相對 MA 的偏離」⇒ 應修**實作**：改為計算真正的 MA 偏離（或接 TWSE 半導體指數歷史序列自算 MA），使 `TaiwanSemiconductorIndexMA` 名副其實；SOX 線同理需接真正的 YoY 序列或改語意。**門檻值不動**——把 0.20 降到單日報酬可及之處，等於用單日資料冒充 MA 偏離（與 Batch 2 對 SOX 的判定一致）。 |
 | 風險 | 修好後 `PhaseOverheat` 會**開始可能觸發**（曝光調整 −0.90 等相位分數會實際生效），屬**行為變更** ⇒ 需獨立 PR ＋ 驗收窗，並排在 2026-09-29 06:00Z 決定性驗收之後。 |
 | 為何不與本 PR 同時修 | 本 PR 是敘述更正／登記；改實作＝改生產行為。 |
-| 證據 | `TestSiliconIndicatorProvenance`（`SiliconTWIndexWriterWired=true`、`SiliconTWIndexIsMADeviation=false`、可達性斷言）、`TestApplyTWSESectorIndex`（writer 存在）、`cmd/atlas/operations_tasks.go`（15 分鐘任務）、`configs/parameters.json` 的 `industry.silicon_cycle.rationale`。 |
+| 證據 | `TestSiliconIndicatorProvenance`（`SiliconTWIndexWriterWired=true`、`SiliconTWIndexIsMADeviation=`**`true`**（2026-09-30 前為 false）、可達性斷言）、`TestApplyTWSESectorIndex`（writer 存在）、`internal/industry/silicon_index_ma.go`＋`silicon_index_ma_test.go`（#2160：`TestComputeSiliconIndexMADeviation`、`TestSiliconIndexMA_DeviatingSeriesReachesOverheat`、`…FlatSeriesDoesNotReachOverheat`、`…KillSwitchRestoresLegacy`、`…AbsentSeriesFallsBackAndReportsWhy`、`…TradingDayFilterDropsCarryForwardFiles`、`…ReadingIsMemoisedPerDay`、`…ConsumptionPathObservable`）、`cmd/atlas/operations_tasks.go`（15 分鐘任務）、`configs/parameters.json` 的 `industry.silicon_cycle.rationale`。 |
 | 同句錯誤的另一處 | 審計快照 `docs/specs/industry-allocation-inert-audit-20260924.md:85` 仍寫「`TaiwanSemiconductorIndexMA` 無任何 producer」。該檔依慣例（Batch A 起）不在本 PR 的允許範圍內，**未動**；以本表更正敘述為準。 |
 
 ---
@@ -279,7 +279,7 @@
 
 | 項 | 理由 |
 |---|---|
-| **I22-overheat**（`PhaseOverheat` 生產不可達） | **會改變行為**（相位由不可達變可達、−0.90 曝光調整生效）⇒ 延後到 #1971 之後；且「靜默」半邊已滿足（`silicon_cycle.go:68` 明載 `SiliconTWIndexIsMADeviation=false` ＋ 本表 ＋ baseline 附理由） |
+| **I22-overheat**（`PhaseOverheat` 生產不可達） | ~~延後到 #1971 之後~~ **業主 2026-09-30 授權提前變更**（#1971 註記：以上線日分界、可回滾、變更後輸出改變屬預期），已由 **#2160** 實作；且「靜默」半邊已滿足（`silicon_cycle.go:68` 明載 `SiliconTWIndexIsMADeviation=false` ＋ 本表 ＋ baseline 附理由） |
 | **I27 殘留**（symbol→sector 值語意） | 改**值** ⇒ 會改變既有命中率口徑 ⇒ 污染觀察窗 |
 | 超界 `adjustment_factor` ＋ validator 只擋 `!=0` | 需先回答「正確界為何、那 4 個值是否合法」；且會擋 production 啟動 |
 | I7／I30 | 跨 lane（`internal/marketdata/**`／`.github/**`） |
