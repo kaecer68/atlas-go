@@ -234,7 +234,7 @@ func finite(v float64) *float64 {
 	return &v
 }
 
-// Aggregate summarises a per-date IC series (population standard deviation, so
+// Aggregate summarizes a per-date IC series (population standard deviation, so
 // ICIR is mean/std exactly as reported by the earlier chips study).
 func Aggregate(ics []float64) Stats {
 	st := Stats{N: len(ics)}

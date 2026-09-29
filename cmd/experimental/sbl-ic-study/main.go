@@ -1064,8 +1064,14 @@ func (q quintileRow) MarshalJSON() ([]byte, error) {
 		Counts  []int      `json:"bucket_n"`
 		Spread  *float64   `json:"q5_minus_q1_pct"`
 	}
-	return json.Marshal(shadow{Feature: q.Feature, Horizon: q.Horizon, Group: q.Group,
-		Buckets: buckets, Counts: q.Counts, Spread: finite(q.Spread)})
+	return json.Marshal(shadow{
+		Feature: q.Feature,
+		Horizon: q.Horizon,
+		Group:   q.Group,
+		Buckets: buckets,
+		Counts:  q.Counts,
+		Spread:  finite(q.Spread),
+	})
 }
 
 // ------------------------------------------------------------------- reports
@@ -1125,7 +1131,7 @@ func writeReport(path string, rep report) error {
 		fmt.Sprintf("Minimum cross-section: %d rows/date for the `all` column, %d rows/date inside a size tercile.",
 			rep.PanelStats["min_symbols"], rep.PanelStats["min_group"]), rep.Primary)
 	writeStatsTable(&b, "2. Broad-era grid",
-		fmt.Sprintf("Only dates whose labelled cross-section reaches %d rows (the pre-2026-06-25 era carries ~114 quoted symbols, large caps only).",
+		fmt.Sprintf("Only dates whose labeled cross-section reaches %d rows (the pre-2026-06-25 era carries ~114 quoted symbols, large caps only).",
 			rep.PanelStats["broad_min"]), rep.Broad)
 	writeStatsTable(&b, "3. Partial (control) grid",
 		"`partial:mom` removes the ranked 5d/20d past returns; `partial:mom+t86` also removes ranked 5-day foreign net buying — the registered increment test.",
@@ -1202,12 +1208,16 @@ func dumpRowsCSV(path string, rows []row) error {
 	}
 	defer func() { _ = f.Close() }()
 	w := bufio.NewWriter(f)
-	fmt.Fprintln(w, "date,symbol,group,industry,chg5,net5,balpct,mom5,mom20,t86,turn20,fwd1,fwd5,fwd20,sync")
+	if _, err := fmt.Fprintln(w, "date,symbol,group,industry,chg5,net5,balpct,mom5,mom20,t86,turn20,fwd1,fwd5,fwd20,sync"); err != nil {
+		return err
+	}
 	for _, r := range rows {
-		fmt.Fprintf(w, "%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s\n",
+		if _, err := fmt.Fprintf(w, "%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s\n",
 			r.date, r.symbol, r.group, r.industry,
 			csvF(r.chg5), csvF(r.net5), csvF(r.balpct), csvF(r.mom5), csvF(r.mom20), csvF(r.t86),
-			csvF(r.turn20), csvF(r.fwd1), csvF(r.fwd5), csvF(r.fwd20), csvF(r.sync))
+			csvF(r.turn20), csvF(r.fwd1), csvF(r.fwd5), csvF(r.fwd20), csvF(r.sync)); err != nil {
+			return err
+		}
 	}
 	return w.Flush()
 }
@@ -1227,9 +1237,9 @@ func main() {
 	flag.StringVar(&opt.tdccDir, "tdcc-dir", "data/state/tdcc_dispersion", "TDCC weekly dispersion directory")
 	flag.StringVar(&opt.flowsDir, "flows-dir", "data/state/stock_flows", "per-symbol T86 flow directory")
 	flag.IntVar(&opt.tdccLagDays, "tdcc-lag-days", 5, "TDCC publication lag in calendar days (PIT safety)")
-	flag.IntVar(&opt.minSymbols, "min-symbols", 60, "minimum labelled cross-section per date")
+	flag.IntVar(&opt.minSymbols, "min-symbols", 60, "minimum labeled cross-section per date")
 	flag.IntVar(&opt.minGroup, "min-group", 20, "minimum rows inside a size tercile per date")
-	flag.IntVar(&opt.broadMin, "broad-min", 500, "labelled cross-section size that marks a date as broad-universe")
+	flag.IntVar(&opt.broadMin, "broad-min", 500, "labeled cross-section size that marks a date as broad-universe")
 	flag.StringVar(&symbolPat, "symbol-pattern", `^[0-9]{4}$`, "regexp a symbol must match to enter the universe")
 	flag.StringVar(&opt.out, "out", "", "report prefix (writes .md and .json)")
 	flag.StringVar(&opt.dumpRows, "dump-rows", "", "optional CSV path for the assembled study rows (audit / independent re-derivation)")
@@ -1329,11 +1339,11 @@ func main() {
 			symbolPat, len(p.symbols), legacyETF),
 		fmt.Sprintf("%d of %d rows (%.1f%%) could not use a TDCC share count and fell back to a turnover-derived share estimate for sbl_balance_pct.",
 			missing, len(rows), float64(missing)/float64(len(rows))*100),
-		fmt.Sprintf("TDCC share counts sum the holder tiers and deliberately drop the published `total` and `差異數調整` rows; keeping either roughly doubles the implied share count (2330: 25.93bn vs 51.86bn shares)."),
+		"TDCC share counts sum the holder tiers and deliberately drop the published `total` and `差異數調整` rows; keeping either roughly doubles the implied share count (2330: 25.93bn vs 51.86bn shares).",
 		fmt.Sprintf("sbl_borrow_balance is non-zero in %d of %d SBL observations, so the supply-side (借券餘額) hypotheses stay unmeasurable with the current ingestion — consistent with the known ingestion gap.", borrowRows, borrowTotal))
 	for _, l := range labelDefs {
 		if bd := broadDates(rows, l.fn, opt.broadMin); len(bd) > 0 && bd[0] > dates[0] {
-			rep.Notes = append(rep.Notes, fmt.Sprintf("%s: the first reference date whose labelled cross-section reaches %d symbols is %s; earlier dates are a large-cap-only sample (~114 fugle-quoted names).",
+			rep.Notes = append(rep.Notes, fmt.Sprintf("%s: the first reference date whose labeled cross-section reaches %d symbols is %s; earlier dates are a large-cap-only sample (~114 fugle-quoted names).",
 				l.name, opt.broadMin, bd[0]))
 		}
 	}
@@ -1370,7 +1380,7 @@ func main() {
 				rep.Broad = append(rep.Broad, c)
 			}
 		}
-		rep.Notes = append(rep.Notes, fmt.Sprintf("broad era for %s: %d of %d reference dates reach >= %d labelled rows.", l.name, thick, len(dates), opt.broadMin))
+		rep.Notes = append(rep.Notes, fmt.Sprintf("broad era for %s: %d of %d reference dates reach >= %d labeled rows.", l.name, thick, len(dates), opt.broadMin))
 	}
 
 	for _, c := range rep.Criteria {
