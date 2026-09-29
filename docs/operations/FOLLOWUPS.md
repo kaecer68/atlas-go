@@ -1994,6 +1994,29 @@
 - **本 session 由 child 更正我的次數**：≥8（上列 3、5、6、7、8 皆屬此類）⇒ 我已把「**派遣前先驗當前狀態**」收緊為固定紀律
 - **待辦**：E40/E41/E42 的部署後驗收（規則＋binary 一起、09-29 06:00Z 之後）；E43 由 wiki 維護線修；`snapshot_persisted_total` 語意、I29 分母半邊、`VolumeScope` 契約欄位、`PhaseOverheat` 語意錯配等皆已立列
 
+### FU-20260929-01 — 生產 `quotes` 在 2026-06-25 之前只有 ~114 檔 ⇒ per-stock 量測的寬基樣本只剩 44–63 個交易日
+
+- **狀態**：`open`
+- **記錄日期**：2026-09-29
+- **來源**：issue **#2093**（SBL per-stock 訊號價值量測）；工具 `cmd/experimental/sbl-ic-study`（本 PR 新增）
+- **現況**（2026-09-29 唯讀查生產）：`quotes` 共 **67,125 列 / 853 標的 / 2026-01-02 → 2026-09-29**，但逐日檔數在 **2026-06-24 前僅 114 檔**（`source='fugle_candles'`，大型權值），**2026-06-29 起才 834+ 檔**（`source='finmind_backfill'` 自 2026-06-25 起）。
+  復現：`docker exec atlas-postgres psql -U atlas -d atlas -Atc "select date,count(*) from quotes where date < '2026-07-01' group by 1 order by 1 desc limit 5"`
+- **影響**：事前註冊的樣本「SBL 2026-03-02 → 2026-09-24 **全市場**（~144 交易日）」實際不可得。可用的**寬基**（≥500 檔有標籤）日期數：T+1 **63**、T+5 **59**、T+20 **44**、同窗同步 **57**；其餘日期只有 ~114 檔大型股 ⇒ (a) T+20 的 `n_dates >= 60` 判準**結構上無法達成**（與訊號好壞無關）；(b) 2026-06-25 前的「小型/中型」分位只是大型股裡較小者。
+- **最小修法建議（只建議，未實作）**：把 FinMind 全市場回填往前推到 2026-01（或至少推到 SBL 起點 2026-03-02），再重跑 `cmd/experimental/sbl-ic-study` —— 判準與工具都不必改，缺的只是價格廣度。量測工具已把「每個視野的寬基日期數」寫進報告 §8，避免下一個人再次把「樣本不足」誤讀成「沒有訊號」。
+
+---
+
+### FU-20260929-02 — `sbl_borrow_balance` 在全部 316,171 筆 SBL 觀測中皆為 0 ⇒ 借券供給面無法量測
+
+- **狀態**：`open`
+- **記錄日期**：2026-09-29
+- **來源**：同 FU-20260929-01（#2093；同一份報告 §8 的自動註記）
+- **現況**：`data/state/sbl/*_sbl.json`（生產 **144 檔 / 2026-03-02 → 2026-09-24**）的 `sbl_borrow_balance` **非零筆數 = 0 / 316,171**；`internal/marketdata/twse_sbl_provider.go` 的 FinMind 路徑只填 `sbl_short_balance` / `sbl_short_volume` / `sbl_return_volume` 三欄。
+  復現：`jq -r '.[].sbl_borrow_balance' data/state/sbl/20260924_sbl.json | sort -u`（輸出只有 `0`），或看量測工具報告 §8 的自動註記。
+- **影響**：供給面（券源 / 借券餘額）的分類學與後續檢定今天做不到；**不影響**已完成的 forward-IC 結論 —— 該結論只用到已填充的 3 個欄位，且 `sbl_borrow_balance` 為 0 不會產生「假訊號」，只會讓「供給面」這一格留白。
+
+---
+
 ## 相關文件
 
 - [universe-scoring-ranked-zero-20260925.md](universe-scoring-ranked-zero-20260925.md)
