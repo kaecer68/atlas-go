@@ -2122,6 +2122,92 @@ PY
 > 的兩處校正，來自 **#1944**（inert 追蹤需求）／**#2146**（I29 分母改 pipeline 母體＋N-P1／N-P2，`daa55a25`）／
 > **#2148**（`internal/monitoring` 測試側並發安全）的結案與複核。
 
+### FU-20260929-08 — Darwinian 權重對「未登記 agentID」**靜默 return**（G3 缺口；可即辦、零行為）
+
+- **狀態**：`open`
+- **記錄日期**：2026-09-29
+- **來源**：`#1944` T2／G3 分析（root 指派）；本 session 的靜默 no-op 家族
+- **現況**：`internal/portfolio/darwinian_weights.go:321-323` 的 `recordOutcome()`：
+  `w, exists := m.weights[agentID]` ⇒ `if !exists { return }` ⇒ **未登記 agent 的 outcome 被靜默丟棄**（無 log、無計數）。
+  ⚠️ 同檔 `:961-963`（`ResetAgent()`）是 `return false`＝**具名回傳值**，呼叫端可判 ⇒ **不同型缺陷，不要一起改**（本條只處理 `recordOutcome`）。
+- **影響**：weights map 未含該 id 時（拼字不一致、載入失敗、21 個 key 之外的 id），該 agent 的訊號**永久不進 Darwinian 權重且不留痕** —— 無從分辨「沒有訊號」與「訊號被丟掉」。
+- **處置（可即辦、零行為）**：補一則 **WARN**（`agent_id` ＋「weights map 未含此 id」；量多時可一次性節流）⇒ 只增加可見度，**不改權重計算**。
+
+---
+
+### FU-20260929-09 — Form B：`atlas_agent_recommendation_skips_total{agent_id,reason}`（趨勢需求出現時再做）
+
+- **狀態**：`open`
+- **記錄日期**：2026-09-29
+- **來源**：`#1944` T2 的觀測面缺口分析（Form B）
+- **現況**：skip 歸因目前是**結構化輸出**（`internal/orchestrator/executor_collection.go:80` 的 label 映射：
+  `skips_no_quote`／`skips_not_tradable`／`skips_factor_quality_gate`／`skips_executor_declined`，以及
+  `skips_by_agent` 的 per-(agent, reason) 明細，`:460`）＋ trace/log；**沒有 Prometheus counter**（實查 `grep atlas_agent_recommendation_skips_total` ⇒ 0 命中）。
+- **邊界**：agent **21** × reason **4**（`no_quote`／`not_tradable`／`factor_quality_gate`／`executor_declined`）
+  ⇒ **84 條 series**（有界 ✓，符合本 repo 的基數紀律）。
+- **處置**：**先不做**。單場次歸因用現行結構化輸出已足夠；只有出現「跨場次趨勢／告警」需求時才新增 counter。
+
+---
+
+### FU-20260929-10 — 4 個 criteria 擋住的 agent 校準（**值語意 ⇒ 觀察窗後**）
+
+- **狀態**：`open`
+- **記錄日期**：2026-09-29
+- **來源**：T2 線的校準分析（root 轉述）；agent 定義實查於 `configs/agents.json`
+- **現況**：
+  - `stockpicker-winrate-01`（`configs/agents.json:645`，`enabled: true`）：校準門檻**遠超可達**；且**準則／母體不匹配**
+    —— 以 **ETF 母體**套用**股票級**門檻 ⇒ 結構上不可能通過，與訊號好壞無關。
+  - `leo-satellite-desk-01`：邊緣（貼近門檻）。
+- **影響**：這幾個 agent 的參數**永遠不會被校準**，但其「未達標」會被讀成模型表現差而非判準錯配。
+- **處置**：需要改**門檻值語意**（準則與母體對齊）⇒ **排在 `#1971` 觀察窗（期滿 2026-10-28）之後**。
+
+---
+
+### FU-20260929-11 — tradability／quote 語意（T2 結論）：A 型是**場次層級**（**值語意 ⇒ 窗後**）
+
+- **狀態**：`open`
+- **記錄日期**：2026-09-29
+- **來源**：T2 線的生產讀數（**2026-09-29 場次 `session-20260929-daily`**；數字為該線實測，非本條作者量測）
+- **現況**：A 型 —— `internal/orchestrator/executor_collection.go:112` 家族（`:118` `no_quote`：報價集完全沒有該符號；
+  `:124` `not_tradable`：有報價但 `IsTradable=false`）—— 佔**全部 skip 的 86%（881/1027）**，
+  且**各 agent 總數 47–54 幾乎一致** ⇒ 這是**場次層級**現象（整體報價面），**不是**個別 agent 的判斷差異。
+- **待辦（兩段）**：
+  1. **子分支分辨**：`#2155` 的**拆標籤**已上線（`no_tradable_quote` → `no_quote` ＋ `not_tradable`）
+     ⇒ **下一場**即可直接分辨（已追蹤場次偏 `not_tradable`；未追蹤批次路徑偏 `no_quote`）。
+  2. **修法**：改的是**值語意** ⇒ **排在 `#1971` 觀察窗之後**。
+- **影響**：未分辨前，把 A 型讀成「agent 挑不到股票」會誤導策略調整方向。
+
+---
+
+### FU-20260929-12 — T2 追蹤入口（T1 已上線、診斷已收斂為 A 型場次層級）
+
+- **狀態**：`open`
+- **記錄日期**：2026-09-29
+- **來源**：`#1944` T1／T2 系列（`#2153`／`#2155`）；本條為**追蹤入口**，不重複其餘條目的細節
+- **現況**：
+  - **T1（`#2153`）已上線**：推薦收集器的三個靜默 skip 已可量測，並已有**第一份生產讀數** ✓
+  - **T2（`#2155`）已上線**：skip 歸因**拆標籤**（`no_quote`／`not_tradable`）＋ **per-agent × per-reason**（21×4＝84）＋
+    無場次 ID 時降為 DEBUG（避免雜訊）✓（已隨小部署窗口進入生產：`/api/version` = `6f64c223`）
+  - 診斷**已收斂**：A 型為**場次層級**（見 `FU-20260929-11`）
+- **剩餘工作**：① **下一場**用拆標籤分辨 `no_quote` vs `not_tradable` 子分支 ② 窗後修**值語意**（指向 `FU-20260929-11`）
+- **同批已結**：`screened_symbols.jsonl` 的 rejects-only 敘述（I36）**已由 `#2154` 修掉**（測試釘住）⇒ 不另立條目。
+
+---
+
+### FU-20260929-13 — `#2151`：replay／extended 價格序列未做**公司行為調整**（**值語意 ⇒ 窗後**）
+
+- **狀態**：`open`
+- **記錄日期**：2026-09-29
+- **來源**：issue **`#2151`**（OPEN）
+- **現況**：replay/extended 的價格序列未做公司行為（分割／減資）調整 ⇒ **索引式** `ret20`／`volatility`
+  對分割符號產生**假跌**（實證：3/44 檔）。
+- **影響**：任何以「索引」抓取該序列的因子在分割日附近會看到不存在的崩跌 ⇒ 汙染特徵與回測結論。
+- **處置**：修法改的是**數值語意** ⇒ **排在 `#1971` 觀察窗之後**（窗內僅允許零行為誠實化變體）。
+
+> **來源注記（2026-09-30 第三批）**：`FU-20260929-08`～`-13` 來自 `#1944` 的 T1／T2 系列
+> （`#2153` T1、`#2155` T2 拆標籤、`#2154` I36 敘述修正）與 G3 缺口盤查；其中 T2 的生產讀數由 T2 線實測，
+> 本批僅登錄（來源具名於各條）。
+
 ## 相關文件
 
 - [universe-scoring-ranked-zero-20260925.md](universe-scoring-ranked-zero-20260925.md)
