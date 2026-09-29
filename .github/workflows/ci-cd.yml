@@ -455,8 +455,10 @@ jobs:
             - 'internal/liveness/**'
             - 'internal/testdb/**'
             - 'internal/config/**'
+            # 只在該 cmd 已有 PG integration 測試時才加進來（否則只是空跑 13 分鐘）；新增測試後同 PR 一併補上。
             - 'cmd/migrate-data/**'
             - 'cmd/run-stockpicker-backtest/**'
+            - 'cmd/backfill-futures-bars/**'
             - 'migrations/**'
             - '**/*.sql'
 
