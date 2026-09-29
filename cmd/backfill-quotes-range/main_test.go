@@ -787,7 +787,9 @@ func TestRun_DeclaredPostgresWithoutDSNWritesNoSQLiteFile(t *testing.T) {
 	t.Setenv("FINMIND_API_KEY", "unit-test-key")
 
 	var out bytes.Buffer
-	err := run([]string{"-start", "2026-03-02", "-end", "2026-03-04", "-symbols", "2330"}, &out)
+	// -workdir 也指向 temp：即使未來這裡改成建得出 provider，配額狀態檔也不會
+	// 落進套件目錄（2026-09-29 誤入版控事故的形狀）。
+	err := run([]string{"-start", "2026-03-02", "-end", "2026-03-04", "-symbols", "2330", "-workdir", dir}, &out)
 	if err == nil {
 		t.Fatalf("want error: declared postgres without a DSN\n%s", out.String())
 	}
@@ -840,7 +842,7 @@ func TestRun_HappyPathThroughRealFlagParsing(t *testing.T) {
 	restore := swapFetcher(t, fake)
 
 	var out bytes.Buffer
-	err := run([]string{"-start", "2026-03-02", "-end", "2026-03-04", "-symbols", "2330"}, &out)
+	err := run([]string{"-start", "2026-03-02", "-end", "2026-03-04", "-symbols", "2330", "-workdir", dir}, &out)
 	restore()
 	if err != nil {
 		t.Fatalf("run: %v\n%s", err, out.String())
@@ -897,7 +899,7 @@ func TestRun_NoSymbolsUsesStoreKeys(t *testing.T) {
 	}}
 	restore := swapFetcher(t, fake)
 	var out bytes.Buffer
-	err := run([]string{"-start", "2026-03-02", "-end", "2026-03-03"}, &out)
+	err := run([]string{"-start", "2026-03-02", "-end", "2026-03-03", "-workdir", dir}, &out)
 	restore()
 	if err != nil {
 		t.Fatalf("run: %v\n%s", err, out.String())
@@ -922,6 +924,20 @@ func swapFetcher(t *testing.T, f stockPriceRangeFetcher) func() {
 	return func() { newFetcher = prev }
 }
 
+// swapFetcherRecordingStateDir 換掉 newFetcher seam 並記錄它收到的 stateDir
+// （用來釘住配額狀態檔的落點），還原由 t.Cleanup 負責。
+func swapFetcherRecordingStateDir(t *testing.T, f stockPriceRangeFetcher) *[]string {
+	t.Helper()
+	prev := newFetcher
+	seen := []string{}
+	newFetcher = func(_ config.Config, stateDir string) (stockPriceRangeFetcher, error) {
+		seen = append(seen, stateDir)
+		return f, nil
+	}
+	t.Cleanup(func() { newFetcher = prev })
+	return &seen
+}
+
 func newTempSQLiteStoreAt(t *testing.T, path string) *ledger.SQLiteQuoteStore {
 	t.Helper()
 	store, err := ledger.NewSQLiteQuoteStoreFromPath(path)
@@ -938,4 +954,73 @@ func slicesContains(hay []string, needle string) bool {
 		}
 	}
 	return false
+}
+
+// ─── 配額狀態檔的落點（2026-09-29 誤入版控事故的釘子） ───────────────────────
+
+// TestStateDirFor 釘住預設值：<workdir>/data/state，**不是 cwd**。
+func TestStateDirFor(t *testing.T) {
+	if got, want := stateDirFor("/srv/atlas", ""), filepath.Join("/srv/atlas", "data", "state"); got != want {
+		t.Fatalf("stateDirFor = %q, want %q", got, want)
+	}
+	if got := stateDirFor("", ""); got != filepath.Join(".", "data", "state") {
+		t.Fatalf("stateDirFor(\"\", \"\") = %q, want ./data/state", got)
+	}
+	if got := stateDirFor("/srv/atlas", "/tmp/state"); got != "/tmp/state" {
+		t.Fatalf("explicit -state-dir must win, got %q", got)
+	}
+	// 負控制：預設值不得等於 cwd（那正是事故形狀）。
+	if got := stateDirFor("/srv/atlas", ""); got == "/srv/atlas" || got == "." {
+		t.Fatalf("default state dir must not be the working directory, got %q", got)
+	}
+}
+
+// TestRun_QuotaStateDirLandsUnderWorkdir 是事故形狀的端到端釘子：
+// run() 必須把 stateDir 傳成 <workdir>/data/state（顯式 -state-dir 則覆寫），
+// 且**不得**在 cwd 產生 finmind_daily_quota.json。
+func TestRun_QuotaStateDirLandsUnderWorkdir(t *testing.T) {
+	dir := t.TempDir()
+	workdir := t.TempDir()
+	t.Setenv("ATLAS_STORE_BACKEND", "sqlite")
+	t.Setenv("ATLAS_SQLITE_PATH", filepath.Join(dir, "atlas.db"))
+
+	seen := swapFetcherRecordingStateDir(t, &fakeRangeFetcher{
+		bars: [][]domain.DailyBar{barsFor("2330.TW", "2026-03-02", "2026-03-03")},
+	})
+
+	var out bytes.Buffer
+	if err := run([]string{
+		"-start", "2026-03-02", "-end", "2026-03-03", "-symbols", "2330", "-workdir", workdir,
+	}, &out); err != nil {
+		t.Fatalf("run: %v\n%s", err, out.String())
+	}
+	if len(*seen) != 1 {
+		t.Fatalf("newFetcher called %d times, want 1", len(*seen))
+	}
+	if want := filepath.Join(workdir, "data", "state"); (*seen)[0] != want {
+		t.Fatalf("stateDir = %q, want %q（runtime state 不得落在 cwd）", (*seen)[0], want)
+	}
+
+	// 顯式 -state-dir 勝出。
+	custom := t.TempDir()
+	if err := run([]string{
+		"-start", "2026-03-02", "-end", "2026-03-03", "-symbols", "2330",
+		"-workdir", workdir, "-state-dir", custom,
+	}, &out); err != nil {
+		t.Fatalf("run with -state-dir: %v\n%s", err, out.String())
+	}
+	if (*seen)[1] != custom {
+		t.Fatalf("stateDir = %q, want the explicit -state-dir %q", (*seen)[1], custom)
+	}
+
+	// 反向對照：cwd（＝測試的套件目錄）不得出現配額狀態檔。
+	cwd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	for _, name := range []string{"finmind_daily_quota.json", "finmind_daily_quota.json.lock"} {
+		if _, statErr := os.Stat(filepath.Join(cwd, name)); statErr == nil {
+			t.Fatalf("%s 出現在 cwd(%s)：runtime state 汙染了套件目錄", name, cwd)
+		}
+	}
 }

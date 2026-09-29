@@ -41,6 +41,9 @@
 // 撞到配額／IP 封鎖／breaker open 時本 CLI **立即中止**（見 fatalUpstreamError），
 // 剩餘檔數留給下次執行續傳。
 //
+// 配額狀態檔（finmind_daily_quota.json）落在 **<workdir>/data/state**（-state-dir
+// 可覆寫）——見 stateDirFor：它是 runtime state，不可以落在 cwd。
+//
 // 用法：
 //
 //	backfill-quotes-range -start 2026-03-02 -end 2026-06-24              # 全 store 既有標的
@@ -79,6 +82,10 @@ const (
 	defaultWorkDir = "."
 	// migrationsRelDir 是相對 workDir 的 migration 目錄。
 	migrationsRelDir = "sql/migrations"
+	// defaultStateDirRel 是相對 workDir 的 FinMind 配額狀態目錄
+	// （<workDir>/data/state —— 平台既有的權威位置，跨 process 的每日上限
+	// 就是靠所有 process 共用這一個狀態檔才成立）。
+	defaultStateDirRel = "data/state"
 	// quotesRangeSource 是本 CLI 寫入 quotes 的 producer 標籤。
 	//
 	// 比 marketdata 的 provider 身分（"finmind"）精確一級：事後稽核要能分辨
@@ -144,6 +151,7 @@ func run(args []string, out io.Writer) error {
 		backend    = fs.String("backend", "", "儲存後端 jsonl|sqlite|postgres（預設：讀 ATLAS_STORE_BACKEND；不得硬編 sqlite）")
 		workDir    = fs.String("workdir", defaultWorkDir, "atlas repo root；postgres 後端讀 <workdir>/sql/migrations，也是 FinMind 配額狀態目錄")
 		pgDSN      = fs.String("pg-dsn", "", "PostgreSQL DSN（預設：$DATABASE_URL）；僅 postgres 後端需要")
+		stateDir   = fs.String("state-dir", "", "FinMind 每日配額狀態目錄（預設：<workdir>/data/state；不放在 cwd，避免 runtime state 汙染呼叫者的工作目錄）")
 		force      = fs.Bool("force", false, "重抓整個窗口並覆寫既有列（預設只補缺少的交易日，既有列不動）")
 		dryRun     = fs.Bool("dry-run", false, "只抓取與統計，不寫入")
 	)
@@ -199,7 +207,7 @@ func run(args []string, out io.Writer) error {
 		backend: *backend, resolvedBackend: resolved, workDir: *workDir, pgDSN: *pgDSN,
 		force: *force, dryRun: *dryRun,
 	}
-	fetcher, err := newFetcher(appCfg, *workDir)
+	fetcher, err := newFetcher(appCfg, stateDirFor(*workDir, *stateDir))
 	if err != nil {
 		return err
 	}
@@ -208,11 +216,30 @@ func run(args []string, out io.Writer) error {
 
 // newRangeFetcher 建出共用的 FinMind 客戶端（rate limiter ＋ 每日配額 tracker
 // 都是該 client 的單一實例，與平台其他 FinMind 消費端同一組常數）。
-func newRangeFetcher(appCfg config.Config, workDir string) (stockPriceRangeFetcher, error) {
+//
+// stateDir 是配額狀態檔的目錄（見 stateDirFor）：生產一律 <workdir>/data/state，
+// 與其他 process 共用同一份檔案，跨 process 的每日上限才有效。
+func newRangeFetcher(appCfg config.Config, stateDir string) (stockPriceRangeFetcher, error) {
 	if strings.TrimSpace(appCfg.FinMindAPIKey) == "" {
 		return nil, errors.New("FinMind API key missing: set FINMIND_API_KEY (the range fetch is authenticated)")
 	}
-	return marketdata.GetSharedFinMindClient(appCfg.FinMindAPIKey, workDir), nil
+	return marketdata.GetSharedFinMindClient(appCfg.FinMindAPIKey, stateDir), nil
+}
+
+// stateDirFor 決定 FinMind 每日配額狀態檔的目錄。
+//
+// 顯式 -state-dir 優先；否則 <workdir>/data/state。**刻意不用 cwd**：狀態檔是
+// runtime state，落在 cwd 會污染呼叫者的工作目錄（2026-09-29 實測：狀態檔被寫進
+// cmd/backfill-quotes-range/ 並誤入版控 —— 測試的 cwd 就是套件目錄）。生產的權威
+// 位置是 <workdir>/data/state，平台其他 FinMind 消費端也讀同一份（跨 process flock）。
+func stateDirFor(workDir, explicit string) string {
+	if s := strings.TrimSpace(explicit); s != "" {
+		return s
+	}
+	if strings.TrimSpace(workDir) == "" {
+		workDir = defaultWorkDir
+	}
+	return filepath.Join(workDir, defaultStateDirRel)
 }
 
 // newFetcher 是 run() 建構 provider 的 seam（生產 = newRangeFetcher）。
