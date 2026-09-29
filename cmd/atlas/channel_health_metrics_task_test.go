@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -361,4 +362,87 @@ func TestHealthStatusValue(t *testing.T) {
 			t.Errorf("healthStatusValue(%q) = %v, want %v", status, got, want)
 		}
 	}
+}
+
+// TestExportChannelHealthMetrics_TwseOddlotRetirementClosesTheAlertLoop —
+// issue #2134. The production alert ChannelHealthStatusError{channel="twse_oddlot"}
+// was firing because the leftover record was status="degraded" and
+// DeriveChannelStatus escalates a degraded record to error once its data is
+// older than the 48h contract window (E29-3 rule 2b): the gauge became 2, which
+// is the only value the alert rules match. This test pins both ends through the
+// real export path, so "remove the registration and hope" cannot silently
+// regress into a permanent page again.
+func TestExportChannelHealthMetrics_TwseOddlotRetirementClosesTheAlertLoop(t *testing.T) {
+	now := time.Date(2026, 9, 29, 7, 0, 0, 0, time.UTC)
+
+	exportedStatus := func(t *testing.T, rec *apigateway.ChannelHealthRecord) float64 {
+		t.Helper()
+		dir := t.TempDir()
+		stateDir := filepath.Join(dir, "data", "state")
+		if err := os.MkdirAll(stateDir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		wrapper := struct {
+			Channels map[string]*apigateway.ChannelHealthRecord `json:"channels"`
+		}{
+			Channels: map[string]*apigateway.ChannelHealthRecord{"twse_oddlot": rec},
+		}
+		data, err := json.MarshalIndent(wrapper, "", "  ")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(stateDir, "channel_health.json"), data, 0o644); err != nil {
+			t.Fatal(err)
+		}
+
+		collector := monitoring.NewMetricsCollector()
+		if err := exportChannelHealthMetrics(dir, collector, now); err != nil {
+			t.Fatal(err)
+		}
+		rec2 := httptest.NewRecorder()
+		monitoring.PrometheusHandler(collector).ServeHTTP(rec2, httptest.NewRequest(http.MethodGet, "/metrics", nil))
+
+		const prefix = `atlas_channel_health_status{channel="twse_oddlot"} `
+		for _, line := range strings.Split(rec2.Body.String(), "\n") {
+			if !strings.HasPrefix(line, prefix) {
+				continue
+			}
+			// Prometheus text format renders gauges as floats ("2.000000").
+			value, parseErr := strconv.ParseFloat(strings.TrimSpace(strings.TrimPrefix(line, prefix)), 64)
+			if parseErr != nil {
+				t.Fatalf("unparseable gauge value in %q: %v", line, parseErr)
+			}
+			return value
+		}
+		t.Fatalf("no %s line in /metrics:\n%s", prefix, rec2.Body.String())
+		return -1
+	}
+
+	t.Run("pre-fix production record exports 2 (the firing condition)", func(t *testing.T) {
+		// Measured in production 2026-09-29.
+		got := exportedStatus(t, &apigateway.ChannelHealthRecord{
+			Status:        apigateway.StatusDegraded,
+			LastFetchAt:   "2026-09-27T12:59:28Z",
+			LastSuccessAt: "2026-09-07T00:18:11Z",
+			LastError:     "twse_oddlot: 上游回傳空/停用資料（stale payload）",
+		})
+		if got != 2 {
+			t.Fatalf("pre-fix record exported status %v, want 2 (that is the state the retirement removes)", got)
+		}
+	})
+
+	t.Run("retired record exports 3 (no alert rule matches)", func(t *testing.T) {
+		got := exportedStatus(t, &apigateway.ChannelHealthRecord{
+			Status:        apigateway.StatusInactive,
+			LastFetchAt:   "2026-09-29T06:40:00Z",
+			LastSuccessAt: "2026-09-07T00:18:11Z",
+			LastError:     "BFI84U 上游已由 TWSE 移除（2026-08）⇒ 本 channel 永久退役，不再抓取；零售商零股失衡輸入改由 twse_capital_flow 代理",
+		})
+		if got != 3 {
+			t.Fatalf("retired record exported status %v, want 3 (inactive; ChannelHealthStatusError matches == 2 only)", got)
+		}
+		if healthStatusValue(apigateway.StatusInactive) != 3 {
+			t.Fatal("healthStatusValue(inactive) must stay 3: the retirement depends on it")
+		}
+	})
 }

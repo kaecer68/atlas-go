@@ -10,6 +10,14 @@ related:
 
 # channel 健康狀態單一真相規格
 
+> **2026-09-29 更新（issue #2134）**：本規格的基準案例 `twse_oddlot` 已**退役**。
+> - 上游 BFI84U 由 TWSE 移除（2026-08，改服務「得為融資融券有價證券停券預告表」；`MI_INDEX type=ODDLOT` 回空）⇒ 通道無可恢復性。
+> - **抓取路徑移除**：`register_adapters.go` 不再註冊 adapter（`twse_oddlot` 與 dash alias `twse-oddlot` 兩者皆不再註冊），啟動時改寫入 `status="inactive"` + 退役原因。
+> - **為何不能只移除註冊**：殘留 record 為 `degraded`，§2.2 規則 2b 會在資料齡超過契約窗口（48h）時升級為 `error`、gauge 變 `2` ⇒ 告警`ChannelHealthStatusError{channel="twse_oddlot"}` 永久 firing（實測 2026-09-29：record `degraded`、`last_success 2026-09-07`、gauge `2`）。`inactive` 是直通狀態、不升級、被 `Alerts()` 過濾、gauge 對映 `3`（無規則匹配）。
+> - **消費端不受影響**：零售商零股失衡輸入（`a6_odd_lot`）改由 `twse_capital_flow` 代理（`monitoring.NewOddLotFetcher` → `oddLotFromCapitalFlow`，`-tanh(totalNet/30)`）；代理不可用時**回 error、不回 0**，A6 落到 `A6OddLotFallback=0.5`。
+> - 同型同判準：`twse_etf`（TWT44U 移除、Fubon PCF 替代）維持未註冊／`inactive`，本次只對齊敘述，不動其實作。
+> - 本規格的判定語意（§2）**未變**：退役只是讓某一條 record 不再走「degraded 過期 ⇒ error」的升級路徑，不是放寬規則、不是抑制告警。
+
 ## 1. 問題（2026-09-24 生產實證）
 
 同一個 channel 在同一秒出現多個互相矛盾的判定：
@@ -54,6 +62,7 @@ related:
 ## 3. 驗收
 
 - 同類掃描：所有 record × 契約窗口，`ok`-but-expired 的 channel 在各層都必須是 `stale`（修前只有 `twse_oddlot`）。
+- 退役回歸（2026-09-29, #2134）：`internal/apigateway/register_adapters_retired_test.go`（未註冊 ＋ 兩個 ID 皆 `inactive` ＋ 導出值 `≠2` ＋ source-level 禁止任何生產路徑再探測該 ID）、`internal/monitoring/gateway_adapter_test.go`（代理唯一來源、不得回 0）、`cmd/atlas/channel_health_metrics_task_test.go`（修前 `degraded` 過期 ⇒ `2`、退役 ⇒ `3` 兩態）、`internal/monitoring/known_issues_test.go`（敘述必須寫明 RETIRED 與替代輸入）。
 - 測試：
   - `internal/apigateway/channel_status_test.go`（判定表、`FetchOutcomeStatus`、DB mirror 值、PG 端到端）
   - `internal/apigateway/gateway_empty_payload_test.go`（空 payload → `degraded`；非交易日 → `ok`）

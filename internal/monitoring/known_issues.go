@@ -1,17 +1,27 @@
 package monitoring
 
-// KnownIssue describes a long-standing channel failure that has been
-// investigated, documented, and consciously deferred (workaround in place,
-// root cause external to atlas). The /api/dashboard/channel-health endpoint
-// surfaces these as a `known_issue` field on each channel so the dashboard
-// UI can render a "known issue" badge instead of a raw error.
+// KnownIssue describes a channel-level condition that has been investigated and
+// documented. The /api/dashboard/channel-health endpoint surfaces these as a
+// `known_issue` field on each channel so the dashboard UI can render a
+// "known issue" badge instead of a raw error.
 //
-// PR-C (kaecer 2026-08-05 dispatch) added this for two channels that have
-// been failing 60+ days without a fix landing: twse_etf and twse_oddlot.
-// Both go through TWSE upstream endpoints that have either rate-limited
-// our outbound IP or changed their response shape — neither root cause
-// is on the atlas side, so we surface the issue as "known" rather than
-// acting like atlas is broken.
+// Two shapes live in this registry, and the badge must tell them apart:
+//
+//   - RETIRED (2026-09-29 onward, issue #2134): the upstream is gone for good,
+//     the fetch path has been removed, and a replacement input is wired. The
+//     channel record reads "inactive", so it neither pages nor looks broken;
+//     the badge carries the history plus the reason the channel is off.
+//     twse_oddlot (→ twse_capital_flow proxy) and twse_etf (→ Fubon PCF) are
+//     both in this shape.
+//   - DEAD ALIAS: the canonical channel is healthy and only a leftover runtime
+//     ID is stale (taifex-daily).
+//
+// PR-C (kaecer 2026-08-05 dispatch) added the first entries for two channels
+// that had been failing 60+ days without a fix landing: twse_etf and
+// twse_oddlot. The early "TWSE rate-limited our outbound IP" hypothesis was
+// later FALSIFIED — TWSE removed or repurposed both reports, there is no
+// atlas-side fix, and (issue #2134) the two channels were RETIRED instead of
+// being left to page forever.
 type KnownIssue struct {
 	Key         string `json:"key"`
 	Title       string `json:"title"`
@@ -51,8 +61,8 @@ var knownIssues = map[string]KnownIssue{
 	// produces two different IDs for the same logical channel.
 	"twse_etf": {
 		Key:          "twse_etf_upstream_60d",
-		Title:        "TWSE ETF subscription aggregate report removed (TWT44U → 404)",
-		Description:  "TWSE's ETF net-subscription aggregate report (www.twse.com.tw/exchangeReport/TWT44U) was removed. Container-probed 2026-08-10: HTTP 307 → page-not-found.html (404) for any date/params, while STOCK_DAY_ALL returns 200 — NOT an IP block (the earlier 403/rate-limit hypothesis was wrong). No public equivalent for the 申購贖回淨額 aggregate exists as of 2026-08: TWSE OpenAPI opendata (44 datasets) has no ETF-subscription dataset; FinMind has only ETF holdings; the ETFortune portal publicizes NAV/PCF/premium-discount but not net-subscription statistics. NOTE: this is a gap in the aggregate statistic specifically — ETF investor information (NAV, PCF, premium/discount) remains public. Impact: the twse_etf channel cannot serve the full-market aggregate; as of 2026-08-17 subC3 (ETFNetSubscription) consumes the Fubon PCF provider (internal/marketdata/fubon_etf_provider.go — 富邦投信官網申購買回清單, 8 支主力 ETF TWD 加權淨申購) as a directional proxy with real nonzero values (B03 superseded 2026-08-17).",
+		Title:        "TWSE ETF subscription aggregate report removed (TWT44U → 404) — channel RETIRED (not fetched; input served by Fubon PCF)",
+		Description:  "RETIRED (2026-09-29 verification, issue #2134): no atlas code path fetches this channel. Registration is gated on the TWSE_ETF_API_KEY opt-in flag, which production does not set, so the adapter is not in the gateway registry and the record is written as `inactive` at startup (register_adapters.go) — the channel page shows 未啟用 with this reason and no alert rule matches. The consumers are unaffected: ETF net-subscription (RSI-tw subC3) reads the Fubon PCF provider (marketdata.NewFubonETFProvider, wired 2026-08-17). This entry is kept as the historical record and to keep the dashboard badge. Historical investigation follows. TWSE's ETF net-subscription aggregate report (www.twse.com.tw/exchangeReport/TWT44U) was removed. Container-probed 2026-08-10: HTTP 307 → page-not-found.html (404) for any date/params, while STOCK_DAY_ALL returns 200 — NOT an IP block (the earlier 403/rate-limit hypothesis was wrong). No public equivalent for the 申購贖回淨額 aggregate exists as of 2026-08: TWSE OpenAPI opendata (44 datasets) has no ETF-subscription dataset; FinMind has only ETF holdings; the ETFortune portal publicizes NAV/PCF/premium-discount but not net-subscription statistics. NOTE: this is a gap in the aggregate statistic specifically — ETF investor information (NAV, PCF, premium/discount) remains public. Impact: the twse_etf channel cannot serve the full-market aggregate; as of 2026-08-17 subC3 (ETFNetSubscription) consumes the Fubon PCF provider (internal/marketdata/fubon_etf_provider.go — 富邦投信官網申購買回清單, 8 支主力 ETF TWD 加權淨申購) as a directional proxy with real nonzero values (B03 superseded 2026-08-17).",
 		DocumentedAt: "2026-08-05T00:00:00Z",
 		TrackingURL:  "https://github.com/kaecer68/atlas-go/issues/1573",
 	},
@@ -60,26 +70,26 @@ var knownIssues = map[string]KnownIssue{
 	// ID observed at runtime. See note above.
 	"twse-etf": {
 		Key:          "twse_etf_upstream_60d_dash_alias",
-		Title:        "TWSE ETF subscription data: upstream unresponsive (dash alias)",
-		Description:  "Same upstream issue as twse_etf. The runtime channel_health record carries the channel ID \"twse-etf\" (dash-separated) instead of \"twse_etf\" (underscore-separated). This alias exists so the dashboard can render the known-issue badge on both forms until the channel-ID naming inconsistency is investigated and unified upstream.",
+		Title:        "TWSE ETF subscription data: upstream unresponsive (dash alias) — channel RETIRED",
+		Description:  "RETIRED with the canonical channel (issue #2134). Same upstream issue as twse_etf. The runtime channel_health record carries the channel ID \"twse-etf\" (dash-separated) instead of \"twse_etf\" (underscore-separated). Like the canonical form, no atlas code path fetches this ID and the ETF net-subscription input comes from the Fubon PCF provider instead; the alias entry exists so the dashboard renders the badge on both spellings until the channel-ID naming inconsistency is investigated and unified upstream.",
 		DocumentedAt: "2026-08-05T01:00:00Z",
 		TrackingURL:  "https://github.com/kaecer68/atlas-go/issues/1573",
 	},
 	"twse_oddlot": {
 		Key:          "twse_oddlot_upstream_60d",
-		Title:        "TWSE odd-lot trading report removed (BFI84U repurposed)",
-		Description:  "TWSE's odd-lot trading report has been removed. Confirmed 2026-08: exchangeReport/BFI84U now returns the 得為融資融券有價證券停券預告表 (margin suspension notice) report with a flat {stat,title,fields,data} shape, and MI_INDEX type=ODDLOT returns an empty data set — no public equivalent remains. Workaround (short-term redirect): the a6_odd_lot retail sub-indicator derives a contrarian proxy from twse_capital_flow's total institutional net instead of showing 0 (internal/monitoring/gateway_adapter.go NewOddLotFetcher → oddLotFromCapitalFlow).",
+		Title:        "TWSE odd-lot trading report removed (BFI84U repurposed) — channel RETIRED 2026-09-29 (input served by twse_capital_flow proxy)",
+		Description:  "RETIRED (issue #2134): the fetch path is gone and the record is written status=\"inactive\" at startup (register_adapters.go), so the channel neither fetches nor pages. The retail imbalance input (a6_odd_lot) comes from twse_capital_flow: monitoring.NewOddLotFetcher → oddLotFromCapitalFlow derives a contrarian proxy from the institutional net total and REFUSES (error, no zero value) when the proxy input is unusable, so a6_odd_lot falls back to its neutral parameter instead of a fabricated 0. Why the retirement was needed: the leftover record from the last fetch attempt was status=\"degraded\", which DeriveChannelStatus escalates to ERROR once the data is older than the 48h contract window (E29-3 rule 2b) — measured in production 2026-09-29 (record degraded, last_success 2026-09-07, atlas_channel_health_status=2) it kept ChannelHealthStatusError firing permanently with no possible recovery. Historical investigation follows. TWSE's odd-lot trading report has been removed. Confirmed 2026-08: exchangeReport/BFI84U now returns the 得為融資融券有價證券停券預告表 (margin suspension notice) report with a flat {stat,title,fields,data} shape, and MI_INDEX type=ODDLOT returns an empty data set — no public equivalent remains.",
 		DocumentedAt: "2026-08-05T00:00:00Z",
-		TrackingURL:  "https://github.com/kaecer68/atlas-go/issues?q=is%3Aissue+twse_oddlot",
+		TrackingURL:  "https://github.com/kaecer68/atlas-go/issues/2134",
 	},
 	// dash alias of twse_oddlot — same upstream issue, different channel
 	// ID observed at runtime. See note above.
 	"twse-oddlot": {
 		Key:          "twse_oddlot_upstream_60d_dash_alias",
-		Title:        "TWSE odd-lot trading data: upstream schema changed (dash alias)",
-		Description:  "Same upstream issue as twse_oddlot. The runtime channel_health record carries the channel ID \"twse-oddlot\" (dash-separated) instead of \"twse_oddlot\" (underscore-separated). This alias exists so the dashboard can render the known-issue badge on both forms until the channel-ID naming inconsistency is investigated and unified upstream.",
+		Title:        "TWSE odd-lot trading data: upstream schema changed (dash alias) — channel RETIRED 2026-09-29",
+		Description:  "RETIRED with the canonical channel (issue #2134): register_adapters.go writes the same \"inactive\" verdict for this dash-separated ID as for twse_oddlot, because an environment that still carries the frozen \"circuit breaker open for channel twse-oddlot\" record would otherwise keep firing on the alias. Same upstream issue as twse_oddlot. The runtime channel_health record carries the channel ID \"twse-oddlot\" (dash-separated) instead of \"twse_oddlot\" (underscore-separated); the retail imbalance input comes from twse_capital_flow (monitoring.NewOddLotFetcher), and the badge is kept on both spellings until the channel-ID naming inconsistency is investigated and unified upstream.",
 		DocumentedAt: "2026-08-05T01:00:00Z",
-		TrackingURL:  "https://github.com/kaecer68/atlas-go/issues?q=is%3Aissue+twse_oddlot",
+		TrackingURL:  "https://github.com/kaecer68/atlas-go/issues/2134",
 	},
 
 	// PR-G (kaecer 2026-08-05). The runtime channel_health record

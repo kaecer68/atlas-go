@@ -13,8 +13,8 @@ RSI-tw 由三個加權組件構成：
 
 | 組件 | 權重 | 子指標 | 資料來源 |
 |------|------|--------|----------|
-| **Part A** | 40% | A1 融資餘額 Z-score / A2 當沖比率 / A3 維持率代理 / A4 VIX 映射 / A5 週選擇權 PCR / A6 零股交易失衡 | MacroDataSnapshot + 滾動歷史 |
-| **Part C** | 25% | C1 散戶期貨 OI / C2 機構法人流向 / C3 ETF 申購贖回（⚠️ 資料源已移除 2026-08，subC3 停用回 0 + IsFallback） | Gateway channels（taifex_daily, twse_oddlot, twse_etf） |
+| **Part A** | 40% | A1 融資餘額 Z-score / A2 當沖比率 / A3 維持率代理 / A4 VIX 映射 / A5 週選擇權 PCR / A6 零股交易失衡（輸入＝`twse_capital_flow` 代理，⛔ 原生 `twse_oddlot` 已退役） | MacroDataSnapshot + 滾動歷史 |
+| **Part C** | 25% | C1 散戶期貨 OI / C2 機構法人流向 / C3 ETF 申購贖回（⚠️ 資料源已移除 2026-08，subC3 停用回 0 + IsFallback） | Gateway channels（taifex_daily；C2 機構流向用 `twse_capital_flow`；⛔ `twse_etf`／`twse_oddlot` 已退役，見 §已知限制） |
 | **Part D** | 乘數 | D1 地緣政治風險 / D2 VIX 飆升 / D3 信貸緊縮 / D4 閃崩 | MacroDataSnapshot + Narrative events |
 
 **核心型別**：`RSITwInput`（handler 從 snapshot + fetcher 組裝）、`RSITwSnapshot`（Score / PartAScore / PartCScore / AdjustmentFactor / SubIndicators）、`RSISubIndicator`（Value / Weight / ZScore / IsFallback）、`Calculator`（Singleton，含 90 筆滾動歷史用於 Z-score）。
@@ -39,7 +39,7 @@ RSI-tw 由三個加權組件構成：
 | **無下游消費** | RSI-tw 值僅在前端展示 + orchestrator conviction 微調，未被 risk manager、factor engine 或任何 executor 直接使用。 |
 | **滾動歷史上限固定** | `UpdateHistory()` 最多保留 90 筆，此值寫死在程式碼中。 |
 | **A3 Z-score formula 硬編碼** | `(percentile - 0.5) * 2` 的 midpoint 和 scaling factor 不可調整。 |
-| **零股 buy/sell heuristic** | `twse_oddlot_provider.go` 用 `close > open` 猜買賣方向（BFI84U 無買賣方向欄位）。Audit A14（2026-08-12）標記為已知限制；且 twse_oddlot channel schema changed（known_issue），目前 fetch error → fallback 0.5。 |
+| **零股 buy/sell heuristic** | `twse_oddlot_provider.go` 用 `close > open` 猜買賣方向（BFI84U 無買賣方向欄位）。Audit A14（2026-08-12）標記為已知限制。⛔ **2026-09-29 起該 heuristic 已不在生產路徑**：`twse_oddlot` channel 退役（上游被 TWSE 移除），A6 零股失衡輸入改由 `twse_capital_flow` 的法人淨額代理推導（`monitoring.NewOddLotFetcher` → `oddLotFromCapitalFlow`，`-tanh(totalNet/30)`）；代理取不到可用輸入時**回 error 而非 0**，A6 落到 `A6OddLotFallback=0.5` 中性值（issue #2134）。 |
 
 ---
 

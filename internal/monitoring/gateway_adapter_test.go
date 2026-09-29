@@ -923,49 +923,66 @@ func TestNewTaifexFetcher(t *testing.T) {
 	})
 }
 
+// TestNewOddLotFetcher — issue #2134: the twse_oddlot channel is RETIRED (TWSE
+// removed the upstream in 2026-08, the adapter is no longer registered), so the
+// twse_capital_flow proxy is the only source of the odd-lot retail imbalance
+// input. The two acceptance criteria for the retirement are pinned here:
+//
+//  1. the retired channel must NOT be probed — a Fetch on an unregistered
+//     channel is counted as a circuit-breaker failure and would overwrite the
+//     intentional "inactive" record with a permanent error (the twse_etf lesson,
+//     2026-08-18 §3.3);
+//  2. the fetcher must never surface 0 as if it were data — when the proxy input
+//     is unusable it must fail, so a6_odd_lot falls back to its neutral
+//     parameter instead of a fabricated "no retail skew".
 func TestNewOddLotFetcher(t *testing.T) {
-	t.Run("success", func(t *testing.T) {
+	capitalFlowPayload := func(t *testing.T, foreign, domestic, dealer float64) []byte {
+		t.Helper()
+		snap := marketdata.MacroDataSnapshot{
+			ForeignInvestorNet: marketdata.MacroDataPoint{Symbol: "TAIWAN_FOREIGN", Value: foreign},
+			DomesticFundNet:    marketdata.MacroDataPoint{Symbol: "TAIWAN_DOMESTIC", Value: domestic},
+			DealerNet:          marketdata.MacroDataPoint{Symbol: "TAIWAN_DEALER", Value: dealer},
+		}
+		b, err := json.Marshal(snap)
+		if err != nil {
+			t.Fatalf("marshal macro snapshot: %v", err)
+		}
+		return b
+	}
+
+	t.Run("uses the capital-flow proxy and never probes the retired channel", func(t *testing.T) {
+		var requested []string
 		fetcher := func(ctx context.Context, channelID string) ([]byte, FetchMeta, error) {
-			stats := marketdata.OddLotStats{Date: "2026-01-01", BuyVolume: 100}
-			b, _ := json.Marshal(stats)
-			return b, FetchMeta{}, nil
+			requested = append(requested, channelID)
+			if channelID != "twse_capital_flow" {
+				return nil, FetchMeta{}, fmt.Errorf("unexpected channel %q", channelID)
+			}
+			return capitalFlowPayload(t, 6.0, 2.0, 2.0), FetchMeta{}, nil
 		}
 		f := NewOddLotFetcher(fetcher)
 		stats, err := f(context.Background())
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		if stats.BuyVolume != 100 {
-			t.Errorf("BuyVolume = %d, want 100", stats.BuyVolume)
+		if len(requested) != 1 || requested[0] != "twse_capital_flow" {
+			t.Errorf("fetched %v, want exactly [twse_capital_flow] (twse_oddlot is retired; probing it marks the channel error)", requested)
+		}
+		// totalNet=10 → -tanh(10/30) ≈ -0.3215
+		want := -math.Tanh(10.0 / 30.0)
+		if math.Abs(stats.ImbalanceRatio-want) > 1e-9 {
+			t.Errorf("ImbalanceRatio = %v, want %v", stats.ImbalanceRatio, want)
 		}
 	})
 
-	t.Run("error", func(t *testing.T) {
-		fetcher := func(ctx context.Context, channelID string) ([]byte, FetchMeta, error) {
-			return nil, FetchMeta{}, errors.New("down")
-		}
-		f := NewOddLotFetcher(fetcher)
-		_, err := f(context.Background())
-		if err == nil {
-			t.Fatal("expected error")
-		}
-	})
-
-	t.Run("redirect to capital flow when oddlot removed", func(t *testing.T) {
+	t.Run("never reports 0 when the native upstream is gone", func(t *testing.T) {
+		// The retired channel's payload is what it always is now: nothing usable.
+		// The proxy is the only thing that can answer, and it must answer with a
+		// real value rather than a zero imbalance that reads as real data.
 		fetcher := func(ctx context.Context, channelID string) ([]byte, FetchMeta, error) {
 			if channelID == "twse_oddlot" {
 				return nil, FetchMeta{Stale: true}, nil
 			}
-			if channelID == "twse_capital_flow" {
-				snap := marketdata.MacroDataSnapshot{
-					ForeignInvestorNet: marketdata.MacroDataPoint{Symbol: "TAIWAN_FOREIGN", Value: 6.0},
-					DomesticFundNet:    marketdata.MacroDataPoint{Symbol: "TAIWAN_DOMESTIC", Value: 2.0},
-					DealerNet:          marketdata.MacroDataPoint{Symbol: "TAIWAN_DEALER", Value: 2.0},
-				}
-				b, _ := json.Marshal(snap)
-				return b, FetchMeta{}, nil
-			}
-			return nil, FetchMeta{}, fmt.Errorf("unexpected channel %q", channelID)
+			return capitalFlowPayload(t, -12.0, 3.0, 3.0), FetchMeta{}, nil
 		}
 		f := NewOddLotFetcher(fetcher)
 		stats, err := f(context.Background())
@@ -973,12 +990,49 @@ func TestNewOddLotFetcher(t *testing.T) {
 			t.Fatalf("unexpected error: %v", err)
 		}
 		if stats.ImbalanceRatio == 0 {
-			t.Error("expected non-zero capital-flow-derived imbalance proxy")
+			t.Fatal("ImbalanceRatio = 0: the fetcher must not surface a fabricated zero imbalance")
 		}
-		// totalNet=10 → -tanh(10/30) ≈ -0.3215
-		want := -math.Tanh(10.0 / 30.0)
+		want := -math.Tanh(-6.0 / 30.0)
 		if math.Abs(stats.ImbalanceRatio-want) > 1e-9 {
 			t.Errorf("ImbalanceRatio = %v, want %v", stats.ImbalanceRatio, want)
+		}
+	})
+
+	t.Run("proxy unavailable → error, never a zero-valued success", func(t *testing.T) {
+		cases := []struct {
+			name    string
+			fetcher DataFetcher
+		}{
+			{
+				name: "capital flow fetch fails",
+				fetcher: func(ctx context.Context, channelID string) ([]byte, FetchMeta, error) {
+					return nil, FetchMeta{}, errors.New("down")
+				},
+			},
+			{
+				name: "capital flow payload unparseable",
+				fetcher: func(ctx context.Context, channelID string) ([]byte, FetchMeta, error) {
+					return []byte("not-json"), FetchMeta{}, nil
+				},
+			},
+			{
+				name: "capital flow total net is zero",
+				fetcher: func(ctx context.Context, channelID string) ([]byte, FetchMeta, error) {
+					return capitalFlowPayload(t, 0, 0, 0), FetchMeta{}, nil
+				},
+			},
+		}
+		for _, tc := range cases {
+			t.Run(tc.name, func(t *testing.T) {
+				f := NewOddLotFetcher(tc.fetcher)
+				stats, err := f(context.Background())
+				if err == nil {
+					t.Fatalf("expected error instead of a returned value, got %+v", stats)
+				}
+				if stats != nil {
+					t.Errorf("stats = %+v, want nil on error (a zero-valued success would be indistinguishable from real data)", stats)
+				}
+			})
 		}
 	})
 }

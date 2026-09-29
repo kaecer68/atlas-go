@@ -134,7 +134,8 @@
     {
       "id": "twse_oddlot",
       "source": "TWSE",
-      "status": "registered"
+      "status": "retired",
+      "note": "上游 BFI84U 由 TWSE 移除（2026-08：改服務停券預告表）⇒ 抓取路徑退役、adapter 不再註冊、record 為 inactive（2026-09-29, issue #2134）。channel 身分保留（合約／限流／告警簿記仍以此 id 為準）；零售商零股失衡輸入改由 twse_capital_flow 代理"
     },
     {
       "id": "twse_sbl",

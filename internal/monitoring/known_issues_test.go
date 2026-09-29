@@ -209,3 +209,41 @@ func TestLookupKnownIssue_BDIEmptyQuote(t *testing.T) {
 		}
 	}
 }
+
+// TestKnownIssue_RetiredChannelsSaySo — issue #2134. The known-issue registry
+// used to describe twse_etf / twse_oddlot as long-standing failures that are
+// "consciously deferred". They are neither deferred nor failing any more: the
+// upstreams are gone for good, both fetch paths are retired, and replacement
+// inputs are wired. The badge text is the only place an operator can learn
+// that, so it must say "RETIRED" — otherwise the next reader re-investigates a
+// closed issue (that is exactly how the 60+ day entry kept its misleading
+// "waiting for a fix" framing).
+func TestKnownIssue_RetiredChannelsSaySo(t *testing.T) {
+	retired := map[string]string{
+		"twse_oddlot": "twse_capital_flow", // replacement input
+		"twse-oddlot": "twse_capital_flow",
+		"twse_etf":    "Fubon",
+		"twse-etf":    "Fubon",
+	}
+	for id, replacement := range retired {
+		issue := LookupKnownIssue(id)
+		if issue == nil {
+			t.Errorf("%q missing from the known-issue registry", id)
+			continue
+		}
+		if !strings.Contains(issue.Title, "RETIRED") {
+			t.Errorf("%s title = %q, want it to say RETIRED (the channel is off, not deferred)", id, issue.Title)
+		}
+		if !strings.Contains(issue.Description, "RETIRED") {
+			t.Errorf("%s description must start from the retirement fact, got %q", id, issue.Description)
+		}
+		if !strings.Contains(issue.Description, replacement) {
+			t.Errorf("%s description must name the replacement input %q so the next reader knows where the data comes from", id, replacement)
+		}
+	}
+	// The dead-alias entry (canonical channel healthy) is deliberately NOT a
+	// retirement: taifex-daily must keep its "dead alias" framing.
+	if issue := LookupKnownIssue("taifex-daily"); issue == nil || strings.Contains(issue.Title, "RETIRED") {
+		t.Errorf("taifex-daily is a dead alias of a healthy channel, not a retired channel")
+	}
+}
