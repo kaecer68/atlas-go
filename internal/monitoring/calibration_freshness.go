@@ -28,6 +28,9 @@ package monitoring
 //     staleness/結構判定邏輯：`Fresh` 就是「**沒有任何 freshness finding**」
 //     （`config.IsFreshnessFinding`），與 CLI 的判定同源 ⇒ 不會出現
 //     「CLI 說不新鮮、監控說新鮮」的矛盾（重寫就會有第二套語意）。
+//     唯一與 CLI 不同的參數是**時鐘**：本檔把呼叫端的 `now` 經
+//     `CalibrationValidationOptions.Now` 一路傳進驗證器（CLI 不傳 ⇒ 用 `time.Now()`）。
+//     生產兩邊都是真實時鐘，判定完全相同；差別只在「可注入」。
 //  4. 告警面：新增 `monitoring/rules/calibration_freshness_alerts.yml`，
 //     與既有規則同一棵權威樹（`scripts/ci/check_monitoring_single_source.sh` 會擋
 //     把規則寫到 repo 外的第二棵樹）。
@@ -215,7 +218,19 @@ func observeCalibrationFreshness(collector *MetricsCollector, artifact, path str
 
 	// 重用 CLI 用的那一個判定函式（無 policy ⇒ scope=full，全部 finding 都是 error）。
 	// 這裡只讀 finding 的 **code**：一類決定「能不能評估」，一類決定「新不新鮮」。
-	res, err := config.ValidateCalibration(path, maxAge)
+	//
+	// ⚠️ `Now: now` 是這個檢查的**時鐘接線**，不是裝飾：`collectCalibrationFindings`
+	// 的 mtime/updated_at 判定原本用內部 `time.Since(...)`（真實時鐘），於是本函式
+	// 收下的 `now` 只影響它自己報出的 `age`，卻**控制不住 `Fresh`** —— 一個注入的
+	// 過去時戳仍會被真時鐘判成不新鮮，注入的未來時戳也一樣。那使得任何以固定時戳
+	// 驗證的呼叫端（本套件的測試、以及測試 `cmd/atlas` 任務 closure 的案例）變成
+	// **日期炸彈**：通過與否取決於執行當下的 wall clock。接上 `Now` 之後，
+	// 「判定用哪個時刻」與「呼叫端說的是哪個時刻」是同一個值。
+	// 生產不受影響：任務照樣傳 `time.Now()`（見 cmd/atlas/calibration_freshness_metrics_task.go）。
+	res, err := config.ValidateCalibrationWithOptions(path, config.CalibrationValidationOptions{
+		MaxAge: maxAge,
+		Now:    now,
+	})
 	if err != nil || res == nil {
 		// 無 policy 時 ValidateCalibration 不會回 error；保險起見仍走 fail-closed
 		// 路徑，讓「呼叫面壞掉」也留下可觀測的 0，而不是靜默。

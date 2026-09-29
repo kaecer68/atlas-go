@@ -17,8 +17,28 @@ import (
 )
 
 // writeCalibrationParameters 在 workDir 的慣例路徑寫一份最小但結構有效的
-// parameters.json（只有 ValidateCalibration 真的會讀的欄位）。
+// parameters.json（只有 ValidateCalibration 真的會讀的欄位），並把**檔案 mtime
+// 也釘在 updatedAt**。
+//
+// ⚠️ 為什麼要一起釘 mtime（2026-09-29 修）：驗證器對 mtime **與** updated_at 各發
+// 一個 freshness finding。只寫 updated_at 而讓 mtime 停在真實寫入時間，就等於在
+// fixture 裡留下一條 wall-clock 依賴——測試跑到真實時間離 `updatedAt` 超過契約
+// （48h）的環境時，mtime 那一半會自己翻紅。本檔其餘測試都用固定時戳，因此 mtime
+// 必須是可指定的；mtime 與 updated_at **不一致**的形狀（`cp -p` 還原舊檔）由
+// `internal/monitoring` 的測試覆蓋。
 func writeCalibrationParameters(t *testing.T, workDir string, updatedAt time.Time) string {
+	t.Helper()
+	path := writeCalibrationParametersRaw(t, workDir, updatedAt)
+	if !updatedAt.IsZero() {
+		if err := os.Chtimes(path, updatedAt, updatedAt); err != nil {
+			t.Fatalf("chtimes: %v", err)
+		}
+	}
+	return path
+}
+
+// writeCalibrationParametersRaw 只寫內容，不動 mtime（mtime 由呼叫端決定）。
+func writeCalibrationParametersRaw(t *testing.T, workDir string, updatedAt time.Time) string {
 	t.Helper()
 	dir := filepath.Join(workDir, "configs")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
@@ -193,5 +213,76 @@ func TestCalibrationFreshnessTaskClosure_EmitsMetrics(t *testing.T) {
 	body := scrapeMetrics(t, collector)
 	if want := `atlas_calibration_freshness_ok{artifact="parameters"} 1.000000`; !strings.Contains(body, want) {
 		t.Errorf("任務 closure 沒有輸出預期的序列 %q\n%s", want, body)
+	}
+}
+
+// ⚠️ 這一條就是「日期炸彈」的回歸守衛，也是本 PR 的驗收核心。
+//
+// 為什麼需要它：`exportCalibrationFreshnessMetrics` 收一個 `now`，但那個 `now` 一度
+// 只影響它自己報出的 `age` —— 真正的 freshness 判定在 `config.ValidateCalibration`
+// 內用 `time.Since(...)`（**真實時鐘**）。於是本檔前面那幾條用固定時戳
+// （2026-09-26）的案例會隨真實時間自行翻紅：當 wall clock 走過
+// `fixture_updated_at + 48h`（= 2026-09-28T10:55Z）的那一天，`_FreshArtifact` 就
+// 開始紅，而且紅燈訊息完全指不出原因（它是什麼程式碼都沒改的情況下紅的）。
+//
+// 斷言方式：把注入的時鐘放到**真實時鐘的 ±100 天**，fixture（updated_at 與 mtime）
+// 跟著注入時鐘釘死。兩種錯法各紅一格、方向相反：
+//
+//	· 實作若用真實時鐘 ⇒ 「−100 天」那格會把 65 分鐘前的產物誤判成過期；
+//	· 反之「+100 天」那格會把 72 小時前的產物誤判成新鮮。
+//
+// 同時斷言 `checked_timestamp` 與 `age_seconds` 都等於注入時鐘導出的值 ——
+// 讓「注入的 now 真的走到底」是可觀測的，而不是只有判定恰好對上。
+func TestExportCalibrationFreshnessMetrics_VerdictIsIndependentOfWallClock(t *testing.T) {
+	realNow := time.Now().UTC() // 只用來把注入時鐘推離真實時鐘，不用來判定
+
+	cases := []struct {
+		name      string
+		offset    time.Duration
+		age       time.Duration
+		wantFresh bool
+	}{
+		{"注入時鐘在真實時鐘前 100 天，產物 65 分鐘前寫的 ⇒ 新鮮", -100 * 24 * time.Hour, 65 * time.Minute, true},
+		{"注入時鐘在真實時鐘後 100 天，產物 72 小時前寫的 ⇒ 不新鮮", +100 * 24 * time.Hour, 72 * time.Hour, false},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			now := realNow.Add(tc.offset).Truncate(time.Second)
+			workDir := t.TempDir()
+			path := writeCalibrationParameters(t, workDir, now.Add(-tc.age))
+
+			prev := config.GetParametersConfigPath()
+			t.Cleanup(func() { config.SetParametersConfigPath(prev) })
+			config.SetParametersConfigPath(path)
+
+			collector := monitoring.NewMetricsCollector()
+			obs := exportCalibrationFreshnessMetrics(workDir, collector, now)
+
+			if !obs.RunOK {
+				t.Fatalf("run_ok 必須是 1（檔案可讀、JSON 合法），got code=%q", obs.UnverifiableCode)
+			}
+			if obs.Fresh != tc.wantFresh {
+				t.Fatalf("fresh=%v，want %v（freshness_code=%q）—— 判定跟隨了真實時鐘而不是注入的 now=%s",
+					obs.Fresh, tc.wantFresh, obs.FreshnessCode, now.Format(time.RFC3339))
+			}
+			if got, want := obs.CheckedAt, now; !got.Equal(want) {
+				t.Errorf("CheckedAt=%v，want %v（注入的 now 必須原樣成為檢查時刻）", got, want)
+			}
+
+			body := scrapeMetrics(t, collector)
+			for _, want := range []string{
+				fmt.Sprintf(`atlas_calibration_freshness_checked_timestamp_seconds{artifact="parameters"} %d.000000`, now.Unix()),
+				fmt.Sprintf(`atlas_calibration_freshness_age_seconds{artifact="parameters"} %.6f`, tc.age.Seconds()),
+			} {
+				if !strings.Contains(body, want) {
+					t.Errorf("/metrics 缺少 %q\n--- body ---\n%s", want, body)
+				}
+			}
+			okLine := fmt.Sprintf(`atlas_calibration_freshness_ok{artifact="parameters"} %.6f`, map[bool]float64{true: 1, false: 0}[tc.wantFresh])
+			if !strings.Contains(body, okLine) {
+				t.Errorf("/metrics 缺少 %q\n%s", okLine, body)
+			}
+		})
 	}
 }
