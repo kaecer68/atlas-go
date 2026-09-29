@@ -50,6 +50,58 @@ func IsTaiwanTradingDay(t time.Time) bool {
 	return taiwanholidays.IsTradingDay(t)
 }
 
+// maxTradingDayScan bounds TradingDaysBetween: a gap wider than this is reported
+// as the bound itself. The bound exists only so a pathological input (a corrupt
+// date, a file from 1970) cannot spin the loop; it is far above every threshold
+// that reads the value.
+const maxTradingDayScan = 366
+
+// TradingDaysBetween returns how many Taiwan trading days lie in the half-open
+// interval (from, to] — the trading days strictly AFTER `from`, up to and
+// INCLUDING `to`.
+//
+// The endpoint convention is deliberate, not cosmetic (#2145): the replay
+// converter's steady state is "the CSV has today's session, the JSONL has
+// yesterday's" — the `to` endpoint (the CSV's newest data date) is the day the
+// NEXT conversion will write, so it belongs to the lag. Steady state is
+// therefore 1, not 0; do not "fix" it to 0. The `from` endpoint is already
+// converted and is excluded.
+//
+// Days are compared as Asia/Taipei calendar days (the exchange's day), and
+// non-trading days (weekends and Taiwan public holidays) are skipped through
+// taiwanholidays.IsTradingDay — the single authority for that question. A
+// timestamp whose clock time is late in the UTC day still maps to the session
+// date its data belongs to.
+//
+// from >= to ⇒ 0. The scan stops after maxTradingDayScan days, so a wider span
+// reports the trading-day count inside that window (still far above any
+// threshold that reads the value) instead of looping over the whole range.
+func TradingDaysBetween(from, to time.Time) int {
+	loc := TaiwanLocation()
+	d := atMidnight(from, loc)
+	end := atMidnight(to, loc)
+	if !end.After(d) {
+		return 0
+	}
+	count := 0
+	for i := 0; i < maxTradingDayScan; i++ {
+		d = d.AddDate(0, 0, 1)
+		if d.After(end) {
+			return count
+		}
+		if IsTaiwanTradingDay(d) {
+			count++
+		}
+	}
+	return count
+}
+
+// atMidnight normalizes t to the start of its calendar day in loc.
+func atMidnight(t time.Time, loc *time.Location) time.Time {
+	t = t.In(loc)
+	return time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, loc)
+}
+
 // TaiwanLocation returns the exchange's timezone (Asia/Taipei). Date arithmetic
 // for exchange data MUST be done in exchange-local time: the production cron
 // containers set no TZ env (docker-compose.yml, "cron containers intentionally

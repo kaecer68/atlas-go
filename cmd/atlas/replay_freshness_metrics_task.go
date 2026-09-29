@@ -27,12 +27,15 @@ package main
 // `calibration_freshness_metrics_export` 完全相同的管線：不需要動 production
 // （不新增 cron、不依賴 textfile collector、不新增監控設定樹）。
 //
-// 輸出（3 個 gauge；無 label，各 1 條序列）
+// 輸出（4 個 gauge；無 label，各 1 條序列）
 // ----------------------------------------
 //   atlas_replay_csv_latest_date_timestamp_seconds
 //       replay CSV 內最新的**資料日**（正規化為該日 UTC 00:00 的 Unix 秒）
 //   atlas_replay_jsonl_latest_date_timestamp_seconds
 //       轉檔後 JSONL 內最新的資料日（同上；讀不到時**不輸出**該序列）
+//   atlas_replay_jsonl_behind_trading_days
+//       JSONL 落後 CSV 幾個**交易日**（#2145；穩態＝**1**，不是 0 —— 詳見常數註解）。
+//       兩個日期都讀得到時才輸出（缺席 ≠ 0）。
 //   atlas_replay_freshness_checked_timestamp_seconds
 //       本任務最後一次執行的 Unix 秒（探針心跳）
 //
@@ -56,6 +59,7 @@ import (
 	"github.com/kaecer68/atlas-go/internal/apigateway"
 	"github.com/kaecer68/atlas-go/internal/constants"
 	"github.com/kaecer68/atlas-go/internal/logging"
+	"github.com/kaecer68/atlas-go/internal/marketdata"
 	"github.com/kaecer68/atlas-go/internal/monitoring"
 	"github.com/kaecer68/atlas-go/internal/replay"
 )
@@ -68,6 +72,28 @@ const (
 	MetricReplayJSONLLatestDate = "atlas_replay_jsonl_latest_date_timestamp_seconds"
 	// MetricReplayFreshnessChecked is the probe heartbeat (last run of this task).
 	MetricReplayFreshnessChecked = "atlas_replay_freshness_checked_timestamp_seconds"
+	// MetricReplayJSONLBehindTradingDays is how many Taiwan TRADING days the
+	// replay JSONL is behind the replay CSV by (#2145): the trading days in the
+	// half-open interval (JSONL latest data date, CSV latest data date] — the
+	// CSV endpoint IS included, because it is the session the NEXT conversion
+	// will write.
+	//
+	// ⚠️ Steady state is therefore **1, not 0** ("CSV has today's session, JSONL
+	// has the previous data day"). Do not "fix" a healthy 1 into 0: the metric
+	// counts trading days AFTER the JSONL's newest date, and the rule's
+	// threshold (>= 3) is calibrated against that convention.
+	//
+	// Emitted only when BOTH dates are readable: like the other replay gauges, a
+	// missing input must not be reported as 0 (that would read as "caught up",
+	// the absent-means-zero defect shape of issue #1995). Non-trading days
+	// (weekends and Taiwan holidays) are skipped through the single authority
+	// taiwanholidays.IsTradingDay, which is what makes a long holiday — CSV and
+	// JSONL separated by several calendar days but no trading day — read as 1
+	// instead of firing the old calendar-day rule.
+	//
+	// One series, no labels (there is one replay dataset), matching the rest of
+	// this family.
+	MetricReplayJSONLBehindTradingDays = "atlas_replay_jsonl_behind_trading_days"
 )
 
 // replayFreshnessMetricsInterval 是匯出週期。
@@ -113,11 +139,11 @@ func exportReplayFreshnessMetrics(replayCSVPath string, collector *monitoring.Me
 	}
 	collector.RecordGauge(MetricReplayFreshnessChecked, float64(now.Unix()), nil)
 
-	csvDate, err := replayLatestDate(replayCSVPath)
-	if err != nil {
+	csvDate, csvErr := replayLatestDate(replayCSVPath)
+	if csvErr != nil {
 		logging.Warn("replay_freshness", "csv_latest_date_unreadable",
 			"path", replayCSVPath,
-			"err", err.Error(),
+			"err", csvErr.Error(),
 			"reason", "CSV 讀不到 ⇒ 本輪不輸出資料日序列（不寫 0：0 會被讀成 1970 年）",
 		)
 	} else {
@@ -125,16 +151,26 @@ func exportReplayFreshnessMetrics(replayCSVPath string, collector *monitoring.Me
 	}
 
 	jsonlPath := replayJSONLPath(replayCSVPath)
-	jsonlDate, err := replayLatestDate(jsonlPath)
-	if err != nil {
+	jsonlDate, jsonlErr := replayLatestDate(jsonlPath)
+	if jsonlErr != nil {
 		// 不輸出序列：缺席由規則的 `unless` 子句處理（見檔頭 §刻意設計 2）。
 		logging.Warn("replay_freshness", "jsonl_latest_date_unreadable",
 			"path", jsonlPath,
-			"err", err.Error(),
+			"err", jsonlErr.Error(),
 			"reason", "JSONL 讀不到（轉檔沒跑過或檔案被刪）⇒ 不輸出序列;規則以 unless 判「CSV 有、JSONL 沒有」",
 		)
 	} else {
 		collector.RecordGauge(MetricReplayJSONLLatestDate, float64(jsonlDate.Unix()), nil)
+	}
+
+	// #2145：落後幾個**交易日**（日曆日比較會讓長連假誤報）。
+	// 只在兩個日期都讀得到時輸出 —— 缺席由規則的 `unless` arm 處理，不得寫 0（#1995）。
+	if csvErr == nil && jsonlErr == nil {
+		collector.RecordGauge(
+			MetricReplayJSONLBehindTradingDays,
+			float64(marketdata.TradingDaysBetween(jsonlDate, csvDate)),
+			nil,
+		)
 	}
 }
 
