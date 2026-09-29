@@ -15,14 +15,20 @@ import (
 	"github.com/kaecer68/atlas-go/internal/config"
 )
 
-// testNow 回傳「現在」並截到秒。
+// testNow 回傳本檔固定使用的注入時鐘（截到秒）。
 //
-// ⚠️ 為什麼測試用真時鐘而不是固定的假時間：`config.ValidateCalibration` 內部用
-// `time.Since(...)`（真實時鐘）判定 mtime/updated_at 是否過期，本檔的 `Fresh` 就是
-// 「有沒有 freshness finding」⇒ 若測試注入一個與真時鐘差好幾個小時的 `now`，
-// 判定會跟著真時鐘漂移（假 now 在過去 ⇒ 相對於真 now 變成「過期」）。測試必須讓
-// fixture 與真時鐘對齊；`now` 只用來計算本檔自己報出的 `age`（可精確對齊到秒）。
-func testNow() time.Time { return time.Now().UTC().Truncate(time.Second) }
+// ⚠️ 為什麼是**固定值**（2026-09-29 改）：`config.ValidateCalibration` 一度用內部
+// `time.Since(...)`（真實時鐘）判定 mtime/updated_at，本檔的 `Fresh` 就是「有沒有
+// freshness finding」⇒ 那時注入的 `now` 只影響本檔自己報出的 `age`，控制不住判定，
+// 因此當時被迫讓 fixture 與真時鐘對齊（見 git 歷史）。那個縫已經補上：
+// `CalibrationValidationOptions.Now` 會一路傳進驗證器，本檔的 `now` 現在
+// **完全決定**判定 ⇒ 測試可以、也應該用固定時戳（否則又是一顆日期炸彈：
+// 真時鐘走過 fixture_updated_at + 48h 的那天，測試自己翻紅）。
+//
+// 配套紀律：fixture 的 **mtime 也必須一起釘**（`calibrationFreshnessFixture` 的
+// mtime 參數），因為驗證器對 mtime 也發 freshness finding —— 只釘 updated_at
+// 會留下一條「mtime 用真實寫入時間」的殘餘依賴。
+func testNow() time.Time { return time.Date(2026, 9, 26, 12, 0, 0, 0, time.UTC) }
 
 // calibrationFreshnessFixture 產生一份「結構上有效」的最小 parameters.json。
 // 只放 ValidateCalibration 真的會讀的欄位（updated_at +
@@ -95,7 +101,7 @@ func seriesLine(body, name string) string {
 func TestObserveCalibrationFreshness_FreshArtifactIsFresh(t *testing.T) {
 	now := testNow()
 	updatedAt := now.Add(-65 * time.Minute) // 生產實測的健康值（FU-20260926-07）
-	path := calibrationFreshnessFixture(t, updatedAt, time.Time{})
+	path := calibrationFreshnessFixture(t, updatedAt, now)
 
 	c := NewMetricsCollector()
 	obs := ObserveCalibrationFreshness(c, path, now)
@@ -132,7 +138,8 @@ func TestObserveCalibrationFreshness_StaleArtifactFlipsOK(t *testing.T) {
 	now := testNow()
 	// 版控那份 parameters.json 的實測年齡：updated_at 2026-07-06T01:43:01+08:00 ≈ 82.8 天。
 	updatedAt := now.Add(-72 * time.Hour)
-	path := calibrationFreshnessFixture(t, updatedAt, time.Time{})
+	// mtime 釘在 now（新鮮）⇒ 這一條只驗 updated_at 那一半的判定。
+	path := calibrationFreshnessFixture(t, updatedAt, now)
 
 	c := NewMetricsCollector()
 	obs := ObserveCalibrationFreshness(c, path, now)
@@ -168,7 +175,12 @@ func TestObserveCalibrationFreshness_MtimeStaleMatchesCLI(t *testing.T) {
 	now := testNow()
 	path := calibrationFreshnessFixture(t, now.Add(-30*time.Minute), now.Add(-72*time.Hour))
 
-	cli, err := config.ValidateCalibration(path, CalibrationFreshnessContract)
+	// CLI 那一側也走**注入的時鐘**：真正的等價性命題是「同一個 now 下，gauge 判定
+	// 與 CLI 判定同源」，不是「兩邊各自讀一次 wall clock 剛好一致」。
+	cli, err := config.ValidateCalibrationWithOptions(path, config.CalibrationValidationOptions{
+		MaxAge: CalibrationFreshnessContract,
+		Now:    now,
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -198,7 +210,7 @@ func TestObserveCalibrationFreshness_MtimeStaleMatchesCLI(t *testing.T) {
 // 既不能算新鮮、也不能算「不知道」。
 func TestObserveCalibrationFreshness_NeverCalibratedIsNotFresh(t *testing.T) {
 	now := testNow()
-	path := calibrationFreshnessFixture(t, time.Time{}, time.Time{})
+	path := calibrationFreshnessFixture(t, time.Time{}, now)
 
 	c := NewMetricsCollector()
 	obs := ObserveCalibrationFreshness(c, path, now)
@@ -268,7 +280,7 @@ func TestObserveCalibrationFreshness_MissingFileIsUnverifiable(t *testing.T) {
 // 而據此改文案或改規則，這裡會紅）。
 func TestObserveCalibrationFreshness_UnverifiableFreezesLastKnownSeries(t *testing.T) {
 	now := testNow()
-	path := calibrationFreshnessFixture(t, now.Add(-65*time.Minute), time.Time{})
+	path := calibrationFreshnessFixture(t, now.Add(-65*time.Minute), now)
 	c := NewMetricsCollector()
 
 	ObserveCalibrationFreshness(c, path, now) // 第一輪：可評估、新鮮
@@ -337,7 +349,7 @@ func TestObserveCalibrationFreshness_WholeFamilyPresentFromFirstRun(t *testing.T
 		}
 	}
 
-	path := calibrationFreshnessFixture(t, now.Add(-time.Hour), time.Time{})
+	path := calibrationFreshnessFixture(t, now.Add(-time.Hour), now)
 	ObserveCalibrationFreshness(c, path, now.Add(time.Minute))
 
 	body := scrapeCalibrationFreshness(t, c)
@@ -364,7 +376,7 @@ func TestObserveCalibrationFreshness_WholeFamilyPresentFromFirstRun(t *testing.T
 
 func TestObserveCalibrationFreshness_NilCollectorIsSafe(t *testing.T) {
 	now := testNow()
-	path := calibrationFreshnessFixture(t, now.Add(-time.Hour), time.Time{})
+	path := calibrationFreshnessFixture(t, now.Add(-time.Hour), now)
 
 	obs := ObserveCalibrationFreshness(nil, path, now)
 	if !obs.Fresh {
@@ -375,8 +387,9 @@ func TestObserveCalibrationFreshness_NilCollectorIsSafe(t *testing.T) {
 func TestObserveCalibrationFreshness_ContractBoundary(t *testing.T) {
 	now := testNow()
 	// 用可注入的 maxAge 走到契約邊界，不必等 48 小時。
-	// ⚠️ 刻意不測「剛好等於契約」：判定在 `ValidateCalibration` 內用真時鐘做
-	// `time.Since(...) > maxAge`，相差幾個微秒就會落在另一側 ⇒ 那種案例必然 flaky。
+	// ⚠️ 「剛好等於契約」那一格**以前刻意不測**：判定在 `ValidateCalibration` 內用
+	// 真時鐘做 `time.Since(...) > maxAge`，fixture 寫入與判定之間隔了幾微秒 ⇒ 必然
+	// flaky。時鐘 seam 補上之後兩者都是同一個注入值，邊界可以精確釘住（見下）。
 	cases := []struct {
 		name   string
 		age    time.Duration
@@ -384,12 +397,15 @@ func TestObserveCalibrationFreshness_ContractBoundary(t *testing.T) {
 		fresh  bool
 	}{
 		{"契約內", 47 * time.Hour, 48 * time.Hour, true},
+		{"剛好等於契約（判定是 > 不是 >=）", 48 * time.Hour, 48 * time.Hour, true},
 		{"超過契約 1 分鐘", 48*time.Hour + time.Minute, 48 * time.Hour, false},
 		{"未來時間戳夾到 0", -time.Hour, 48 * time.Hour, true},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			path := calibrationFreshnessFixture(t, now.Add(-tc.age), time.Time{})
+			// mtime 也釘在 now：否則 mtime 的真實寫入時間會混進判定，這一條就不是
+			// 在測 updated_at 的邊界。
+			path := calibrationFreshnessFixture(t, now.Add(-tc.age), now)
 			obs := observeCalibrationFreshness(NewMetricsCollector(), CalibrationArtifactParameters, path, tc.maxAge, now)
 			if obs.Fresh != tc.fresh {
 				t.Errorf("Fresh=%v，want %v（age=%.0fs, contract=%.0fs, code=%q）",

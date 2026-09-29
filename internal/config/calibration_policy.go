@@ -151,4 +151,25 @@ type CalibrationValidationOptions struct {
 	// Policy is the validation policy. Nil means: full freshness scope, no
 	// accepted findings — i.e. any finding fails the run (legacy behavior).
 	Policy *CalibrationValidationPolicy
+
+	// Now is the clock the freshness findings (MTIME_STALE / UPDATED_AT_STALE)
+	// are evaluated against. Zero means time.Now() — the production behavior.
+	//
+	// Why it is a field and not an internal `time.Now()`: the verdict must be a
+	// function of the instant the caller decided to evaluate. Callers that
+	// already carry an explicit `now` (internal/monitoring's probe) and tests
+	// with fixed fixtures otherwise get a verdict computed from the wall clock
+	// instead — a date bomb that detonates on its own once real time walks past
+	// fixture_updated_at + MaxAge, independent of any code change. Injecting the
+	// clock keeps every caller's own time authority intact.
+	Now time.Time
+}
+
+// now returns the clock to evaluate against: the injected one, or time.Now()
+// when the caller did not inject one (every production caller).
+func (o CalibrationValidationOptions) now() time.Time {
+	if o.Now.IsZero() {
+		return time.Now()
+	}
+	return o.Now
 }
