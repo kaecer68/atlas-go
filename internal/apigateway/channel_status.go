@@ -193,6 +193,21 @@ func degradedDataAge(rec *ChannelHealthRecord, now time.Time) (time.Duration, st
 	return now.Sub(newest), stamp, true
 }
 
+// DataAge returns how long ago the DATA behind a record was last seen, plus the
+// stamp it was read from, using the exact rule the degraded→error escalation
+// (rule 2b) uses: the newest of LastDataAt / LastSuccessAt, never LastFetchAt.
+//
+// Exported because a second judgement now depends on the same fact: the
+// "permanently broken channel must be retired or fixed" criterion (issue #2138,
+// internal/monitoring/channel_governance.go) measures the data age in contract
+// windows. Sharing this function is what keeps the governance verdict and the
+// escalation verdict from drifting apart — if they measured different stamps,
+// a channel could be "error" to the alert path and "not bad enough" to the
+// governance path in the same second.
+func DataAge(rec *ChannelHealthRecord, now time.Time) (age time.Duration, stamp string, ok bool) {
+	return degradedDataAge(rec, now)
+}
+
 // lastFetchAge returns how long ago the record's last fetch happened.
 func lastFetchAge(rec *ChannelHealthRecord, now time.Time) (time.Duration, bool) {
 	if rec == nil || rec.LastFetchAt == "" {

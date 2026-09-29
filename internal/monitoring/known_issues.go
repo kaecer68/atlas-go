@@ -1,5 +1,7 @@
 package monitoring
 
+import "sort"
+
 // KnownIssue describes a channel-level condition that has been investigated and
 // documented. The /api/dashboard/channel-health endpoint surfaces these as a
 // `known_issue` field on each channel so the dashboard UI can render a
@@ -33,6 +35,39 @@ type KnownIssue struct {
 	// TrackingURL points to the upstream issue tracker or notes file
 	// for the team to follow up. Optional.
 	TrackingURL string `json:"tracking_url,omitempty"`
+
+	// ── 治理欄位（issue #2138）─────────────────────────────────────────────
+	//
+	// 這些欄位是「永久損壞 channel 必須退役或修復」判準的機械化輸入。它們刻意
+	// **不進 JSON payload**（json:"-"）：對外 API 的 `known_issue` 欄位語意不變，
+	// field contract 零變動，也不新增沒有消費者的對外欄位。治理的消費者只有兩個：
+	//   · CI 的 cmd/check-channel-consistency（靜態：期限）
+	//   · 執行期的 Evaluation（動態：資料齡 × 契約窗）
+	// 定義與成本理由見 internal/monitoring/channel_governance.go 與
+	// docs/specs/channel-health-status-single-truth-spec.md §8。
+
+	// UpstreamRemovedAt is the RFC3339 date of the FIRST-PARTY evidence that the
+	// upstream is permanently unavailable (report removed/repurposed, endpoint
+	// gone). Empty means "this entry is not an availability case" — e.g. a dead
+	// alias whose canonical channel is healthy (taifex-daily). Leaving it empty
+	// is a positive declaration, not an omission: it is how an entry opts out of
+	// the retire-or-fix criterion, and it is visible in one field.
+	UpstreamRemovedAt string `json:"-"`
+	// ReplacementInput names the input that already serves the consumer after
+	// the removal (empty = no usable replacement exists). The criterion's second
+	// condition is exactly this: without a replacement there is nothing to
+	// retire TO, so the channel is a monitor/fix case, not a retire case.
+	ReplacementInput string `json:"-"`
+	// ActionBy is the RFC3339 deadline by which the retire-or-fix decision must
+	// have shipped. Checked by CI: a past deadline with no RetiredAt is a FAILURE
+	// (deterministic, date-driven, and intentional — a WARN is what let the
+	// original case sit unhandled for 60+ days).
+	ActionBy string `json:"-"`
+	// RetiredAt is the RFC3339 date the retirement or fix shipped. It is what
+	// makes a deadline green again: renewing ActionBy without shipping is allowed
+	// (with a documented re-review), but the static report always prints
+	// UpstreamRemovedAt so repeated renewals cannot hide how long it has been.
+	RetiredAt string `json:"-"`
 }
 
 // knownIssues is the static registry of channel-level known issues.
@@ -65,6 +100,13 @@ var knownIssues = map[string]KnownIssue{
 		Description:  "RETIRED (2026-09-29 verification, issue #2134): no atlas code path fetches this channel. Registration is gated on the TWSE_ETF_API_KEY opt-in flag, which production does not set, so the adapter is not in the gateway registry and the record is written as `inactive` at startup (register_adapters.go) — the channel page shows 未啟用 with this reason and no alert rule matches. The consumers are unaffected: ETF net-subscription (RSI-tw subC3) reads the Fubon PCF provider (marketdata.NewFubonETFProvider, wired 2026-08-17). This entry is kept as the historical record and to keep the dashboard badge. Historical investigation follows. TWSE's ETF net-subscription aggregate report (www.twse.com.tw/exchangeReport/TWT44U) was removed. Container-probed 2026-08-10: HTTP 307 → page-not-found.html (404) for any date/params, while STOCK_DAY_ALL returns 200 — NOT an IP block (the earlier 403/rate-limit hypothesis was wrong). No public equivalent for the 申購贖回淨額 aggregate exists as of 2026-08: TWSE OpenAPI opendata (44 datasets) has no ETF-subscription dataset; FinMind has only ETF holdings; the ETFortune portal publicizes NAV/PCF/premium-discount but not net-subscription statistics. NOTE: this is a gap in the aggregate statistic specifically — ETF investor information (NAV, PCF, premium/discount) remains public. Impact: the twse_etf channel cannot serve the full-market aggregate; as of 2026-08-17 subC3 (ETFNetSubscription) consumes the Fubon PCF provider (internal/marketdata/fubon_etf_provider.go — 富邦投信官網申購買回清單, 8 支主力 ETF TWD 加權淨申購) as a directional proxy with real nonzero values (B03 superseded 2026-08-17).",
 		DocumentedAt: "2026-08-05T00:00:00Z",
 		TrackingURL:  "https://github.com/kaecer68/atlas-go/issues/1573",
+
+		// 治理（#2138）：永久移除 ＋ 替代已接線 ＋ 已於 2026-08-17 以富邦 PCF 取代
+		// （subC3 走 marketdata.NewFubonETFProvider）⇒ 條目帶 RetiredAt，期限綠燈。
+		UpstreamRemovedAt: "2026-08-10T00:00:00Z",
+		ReplacementInput:  "Fubon PCF（marketdata.NewFubonETFProvider → monitoring.NewETFFetcher；subC3 已接線 2026-08-17）",
+		ActionBy:          "2026-08-17T00:00:00Z",
+		RetiredAt:         "2026-08-17T00:00:00Z",
 	},
 	// dash alias of twse_etf — same upstream issue, different channel
 	// ID observed at runtime. See note above.
@@ -74,6 +116,12 @@ var knownIssues = map[string]KnownIssue{
 		Description:  "RETIRED with the canonical channel (issue #2134). Same upstream issue as twse_etf. The runtime channel_health record carries the channel ID \"twse-etf\" (dash-separated) instead of \"twse_etf\" (underscore-separated). Like the canonical form, no atlas code path fetches this ID and the ETF net-subscription input comes from the Fubon PCF provider instead; the alias entry exists so the dashboard renders the badge on both spellings until the channel-ID naming inconsistency is investigated and unified upstream.",
 		DocumentedAt: "2026-08-05T01:00:00Z",
 		TrackingURL:  "https://github.com/kaecer68/atlas-go/issues/1573",
+
+		// 治理（#2138）：與 canonical 條目同一個上游事件與同一個替代路徑 ⇒ 同步處置。
+		UpstreamRemovedAt: "2026-08-10T00:00:00Z",
+		ReplacementInput:  "Fubon PCF（marketdata.NewFubonETFProvider → monitoring.NewETFFetcher；subC3 已接線 2026-08-17）",
+		ActionBy:          "2026-08-17T00:00:00Z",
+		RetiredAt:         "2026-08-17T00:00:00Z",
 	},
 	"twse_oddlot": {
 		Key:          "twse_oddlot_upstream_60d",
@@ -81,6 +129,14 @@ var knownIssues = map[string]KnownIssue{
 		Description:  "RETIRED (issue #2134): the fetch path is gone and the record is written status=\"inactive\" at startup (register_adapters.go), so the channel neither fetches nor pages. The retail imbalance input (a6_odd_lot) comes from twse_capital_flow: monitoring.NewOddLotFetcher → oddLotFromCapitalFlow derives a contrarian proxy from the institutional net total and REFUSES (error, no zero value) when the proxy input is unusable, so a6_odd_lot falls back to its neutral parameter instead of a fabricated 0. Why the retirement was needed: the leftover record from the last fetch attempt was status=\"degraded\", which DeriveChannelStatus escalates to ERROR once the data is older than the 48h contract window (E29-3 rule 2b) — measured in production 2026-09-29 (record degraded, last_success 2026-09-07, atlas_channel_health_status=2) it kept ChannelHealthStatusError firing permanently with no possible recovery. Historical investigation follows. TWSE's odd-lot trading report has been removed. Confirmed 2026-08: exchangeReport/BFI84U now returns the 得為融資融券有價證券停券預告表 (margin suspension notice) report with a flat {stat,title,fields,data} shape, and MI_INDEX type=ODDLOT returns an empty data set — no public equivalent remains.",
 		DocumentedAt: "2026-08-05T00:00:00Z",
 		TrackingURL:  "https://github.com/kaecer68/atlas-go/issues/2134",
+
+		// 治理（#2138）：判準的 worked example。上游 2026-08 永久移除、替代路徑
+		// （twse_capital_flow 代理）已存在，卻因為沒有判準而讓告警連續 firing 直到
+		// 2026-09-29 才退役（#2136）。RetiredAt 讓期限轉綠。
+		UpstreamRemovedAt: "2026-08-01T00:00:00Z",
+		ReplacementInput:  "twse_capital_flow 代理（monitoring.NewOddLotFetcher → oddLotFromCapitalFlow）",
+		ActionBy:          "2026-09-29T00:00:00Z",
+		RetiredAt:         "2026-09-29T00:00:00Z",
 	},
 	// dash alias of twse_oddlot — same upstream issue, different channel
 	// ID observed at runtime. See note above.
@@ -90,6 +146,12 @@ var knownIssues = map[string]KnownIssue{
 		Description:  "RETIRED with the canonical channel (issue #2134): register_adapters.go writes the same \"inactive\" verdict for this dash-separated ID as for twse_oddlot, because an environment that still carries the frozen \"circuit breaker open for channel twse-oddlot\" record would otherwise keep firing on the alias. Same upstream issue as twse_oddlot. The runtime channel_health record carries the channel ID \"twse-oddlot\" (dash-separated) instead of \"twse_oddlot\" (underscore-separated); the retail imbalance input comes from twse_capital_flow (monitoring.NewOddLotFetcher), and the badge is kept on both spellings until the channel-ID naming inconsistency is investigated and unified upstream.",
 		DocumentedAt: "2026-08-05T01:00:00Z",
 		TrackingURL:  "https://github.com/kaecer68/atlas-go/issues/2134",
+
+		// 治理（#2138）：與 canonical 條目同一個上游事件與同一個替代路徑 ⇒ 同步處置。
+		UpstreamRemovedAt: "2026-08-01T00:00:00Z",
+		ReplacementInput:  "twse_capital_flow 代理（monitoring.NewOddLotFetcher → oddLotFromCapitalFlow）",
+		ActionBy:          "2026-09-29T00:00:00Z",
+		RetiredAt:         "2026-09-29T00:00:00Z",
 	},
 
 	// PR-G (kaecer 2026-08-05). The runtime channel_health record
@@ -113,6 +175,14 @@ var knownIssues = map[string]KnownIssue{
 		Description:  "The channel ID \"taifex-daily\" (dash-separated) is a dead alias — atlas registered the canonical channel as \"taifex_daily\" (underscore-separated) in apigateway/register_adapters.go and no code path writes to the dash form. The last_success timestamp is frozen at 2026-06-04 with a stale \"i/o timeout\" DNS error, but openapi.taifex.com.tw currently resolves and returns 200 from inside the atlas container. The canonical taifex_daily channel is healthy. This entry exists so the dashboard renders a known-issue badge on the dead alias instead of a confusing red error. The root cause of the dead alias should be investigated separately (likely an early-version registration that was never cleaned up when the channel was renamed).",
 		DocumentedAt: "2026-08-05T03:50:00Z",
 		TrackingURL:  "https://github.com/kaecer68/atlas-go/issues?q=is%3Aissue+taifex_daily_alias",
+
+		// 治理（#2138）：**不適用**。這裡沒有「上游被移除」——canonical 的 taifex_daily
+		// 健康，只有一個早期版本的 dash 形式 ID 沒被清掉。UpstreamRemovedAt 保持空字串
+		// 就是這個宣告（明文寫出「不適用」，避免未來被誤判成該退役的通道）。
+		UpstreamRemovedAt: "",
+		ReplacementInput:  "",
+		ActionBy:          "",
+		RetiredAt:         "",
 	},
 
 	// BDI / CNBC empty quote (2026-09-23 dispatch). CNBC's quote service keeps
@@ -147,7 +217,44 @@ var knownIssues = map[string]KnownIssue{
 		Description:  "CNBC's quote service (quote.cnbc.com/quote-html-webservice/quote.htm?symbols=.BADI&output=json) has answered the Baltic Dry Index symbol `.BADI` with a structurally valid but price-less quote since 2026-09-20T08:35Z: HTTP 200, JSON shape intact, no `last` field, open/high/low all \"0.00\", provider \"CNBC Quote Cache\". Confirmed 2026-09-23 from the atlas host with the production User-Agent (atlas-go/1.0): .SPX=7764.64, .DJI=51863.69, .IXIC=27244.278 came back fresh in the same response window, so this is a per-symbol, data-side upstream outage, NOT an Akamai/UA block (which returns HTML Access Denied) and NOT an atlas-side fault. No usable alternative source exists: Yahoo `^BDI` and `BDIY` are delisted and stooq carries no BDI symbol. Atlas-side handling (2026-09-23 fix): BDIProvider returns typed marketdata.ErrEmptyQuote; the gateway records bdi as status warn (not error, no ChannelHealthStatusError page) and the circuit breaker treats expected-empty as a no-op so repeated empty quotes no longer open the channel breaker (they previously did after 3 consecutive ticks and then served \"circuit breaker open for channel bdi\" while task_liveness.macro_cache_bdi accumulated 800+ consecutive failures). The last-known-good BDI value (3370, 2026-09-20) is preserved in macro snapshots via narrative.mergeWithPrev, so downstream BDI-factor consumers keep a real value. Root-cause notes: ~/workspace/atlas-notes/05-decisions/2026-09-23-bdi-cnbc-empty-quote-root-cause.md",
 		DocumentedAt: "2026-09-23T00:00:00Z",
 		TrackingURL:  "https://github.com/kaecer68/atlas-go/issues?q=is%3Aissue+bdi_cnbc_empty_quote",
+
+		// 治理（#2138）：**不符退役判準，只登記**。上游（CNBC `.BADI`）確實自
+		// 2026-09-20 起永久無價，但**不存在可用的替代來源**（Yahoo 下市、stooq 無此符號、
+		// Baltic Exchange 指數有授權）⇒ 判準的第二條件不成立，退役無處可去。正確處置是
+		// 現行的 expected-empty 處理（warn ＋ last-known-good）＋ 到期重評估上游是否恢復，
+		// 因此 ActionBy 是「重評估期限」而不是「退役期限」。
+		UpstreamRemovedAt: "2026-09-20T08:35:00Z",
+		ReplacementInput:  "",
+		ActionBy:          "2026-12-31T00:00:00Z",
+		RetiredAt:         "",
 	},
+}
+
+// KnownIssueEntry pairs a registry channel ID with its entry. The governance
+// report needs the channel ID (that is what an operator acts on) while the
+// entry's own Key is the stable identifier of the issue.
+type KnownIssueEntry struct {
+	ChannelID string
+	Issue     KnownIssue
+}
+
+// KnownIssueEntries returns every registered known issue with its channel ID,
+// sorted by channel ID.
+//
+// The sorted order is part of the contract: the governance report
+// (cmd/check-channel-consistency) prints these entries, and a map iteration
+// would make its output — and any test on it — non-deterministic.
+func KnownIssueEntries() []KnownIssueEntry {
+	ids := make([]string, 0, len(knownIssues))
+	for id := range knownIssues {
+		ids = append(ids, id)
+	}
+	sort.Strings(ids)
+	out := make([]KnownIssueEntry, 0, len(ids))
+	for _, id := range ids {
+		out = append(out, KnownIssueEntry{ChannelID: id, Issue: knownIssues[id]})
+	}
+	return out
 }
 
 // LookupKnownIssue returns the KnownIssue for the given channelID, or
