@@ -2124,8 +2124,12 @@ PY
 
 ### FU-20260929-08 — Darwinian 權重對「未登記 agentID」**靜默 return**（G3 缺口；可即辦、零行為）
 
-- **狀態**：`open`
+- **狀態**：`done`
 - **記錄日期**：2026-09-29
+- **完成於**：2026-09-29 `c2aa0e8f`（PR [#2159](https://github.com/kaecer68/atlas-go/pull/2159) squash）
+  — `internal/portfolio/darwinian_weights.go:320-322` 補一則**每 (manager, `agent_id`) 一次**的 WARN
+  `outcome_for_unregistered_agent`（`gap = "G3 / FU-20260929-08"`），只增可見度、**不改權重計算**；
+  `ResetAgent()`（`:960-962`）的 `return false` 依原條目註記**未動** ✓
 - **來源**：`#1944` T2／G3 分析（root 指派）；本 session 的靜默 no-op 家族
 - **現況**：`internal/portfolio/darwinian_weights.go:321-323` 的 `recordOutcome()`：
   `w, exists := m.weights[agentID]` ⇒ `if !exists { return }` ⇒ **未登記 agent 的 outcome 被靜默丟棄**（無 log、無計數）。
@@ -2255,6 +2259,78 @@ PY
   是否 enabled ③ 兩個 44 是否**恰好不交集**（若部分交集 ⇒ 基線 < 44，可反推交集大小）。
 - **影響**：在 (a) 完成前，任何「以 `no_quote` 大小比較 agent」的盤查都會**把注入量誤讀成 agent 品質**（本條即為該更正）。
 
+
+### FU-20260930-01 — `GetPhaseWeightMultiplier`（過熱 0.90）**未被任何生產路徑消費**（test-only ⇒ 誤導性風控外觀）
+
+- **狀態**：`open`
+- **記錄日期**：2026-09-30
+- **來源**：`#2160`（I22-overheat 修復）設計審查時發現
+- **現況**：`internal/industry/silicon_cycle.go:414-419` 定義 `GetPhaseWeightMultiplier`（過熱回 0.90），
+  但**全 repo 唯一呼叫點是測試** `internal/industry/silicon_cycle_test.go:276` ⇒ 生產 0 呼叫者。
+  實際接線的曝險路徑是**狀態卡的矽層分數**（`internal/industry/cycle_status_card.go` 的 `buildAdj`：
+  擴張 `+0.5w`、過熱 `−0.1w`），與這個函式無關。
+- **指紋**：`git grep -n 'GetPhaseWeightMultiplier' origin/main`
+  ⇒ 只有 `silicon_cycle.go`（定義／`// GetPhaseWeightMultiplier returns ...` 註解）＋ `silicon_cycle_test.go`（測試）
+- **風險**：函式名與數值**看起來**是風控槓桿，實際上不存在 ⇒ 讀者或後續 agent 可能誤以為
+  「調它就能降曝險」（與 `#1944` inert 家族同型：規則存在但不在生效路徑上）。
+- **最小處置建議（不改變行為 ⇒ 可即辦）**：在其 doc comment 明寫
+  `DECLARED ONLY / NOT ENFORCED`＋理由，並把測試改為**斷言「無生產消費者」的守門測試**
+  （若日後有人接線，測試即紅 ⇒ 迫使同步更新本條目）。要真正接線則是**值語意變更 ⇒ 需設計決定**。
+
+---
+
+### FU-20260930-02 — `macro` 快照保留政策 `MaxAgeDays=90` 對「60 交易日 MA」視窗餘裕不足
+
+- **狀態**：`open`
+- **記錄日期**：2026-09-30
+- **來源**：`#2160`（`internal/industry/silicon_index_ma.go` 需 60 個交易日序列）
+- **現況**：`internal/storage/lifecycle.go:76-80`：`Dir: "macro"`、`MaxAgeDays: 90`、
+  `Pattern: "20*.json"`、`ExcludeFiles: ["latest.json"]`（`margin` 亦為 90）。
+  生產實測（kmacmini，2026-09-30）：`data/state/macro/*.json` **629 檔、最舊 2024-07-01**
+  ⇒ **目前並未在清**；但政策一旦生效（或部署到新主機）⇒ 只剩約 64 個交易日 ⇒ MA60 僅餘 ~4 日緩衝。
+- **指紋**：`ls data/state/macro/*.json | wc -l` ⇒ 629；最早檔名 ⇒ `2024-07-01.json`
+- **風險**：序列深度不足時 `LoadSiliconIndexMADeviation` 走 **fallback ＋ 具名 WARN**（非靜默 ✓）
+  但指標語意退回 legacy（單日報酬）⇒ 對外數值與修後定義不一致。
+- **最小處置建議**：把 `macro` 的 `MaxAgeDays` 提高到 ≥180（≈128 交易日）或改以**交易日數**為保留單位；
+  與 `#1971` 觀察窗無關（純保留策略、不改變任何計算）⇒ **可即辦**。
+
+---
+
+### FU-20260930-03 — `quotes` 壞值（**非公司行為**）待資料修復：`close<=0` ＋ 10 倍價 ＋ 垃圾列
+
+- **狀態**：`open`
+- **記錄日期**：2026-09-30
+- **來源**：`#2151`（公司行為調整）調查；`#2095`（`-14`(b)）複核時另一 lane 以官方還原序列逐檔驗證
+- **現況**（生產實測 2026-09-30）：
+  1. `quotes` 共 **125,615 列**，其中 `close <= 0` **109 列／32 個符號**（`Close=0` 被寫入 ⇒ 停牌/無收盤未表達為缺值）
+  2. `5904.TW` 2026-08-10：原始 `close=720`，而官方還原序列同日為 `72` ⇒ **約 10 倍壞值**（非分割）
+  3. `2380.TW` 2026-06-29：原始 `close=6.6`，官方序列 `23.86 → 21.5` ⇒ **垃圾列**（非乾淨倍數、無股利記錄）
+- **指紋**：`select count(*) from quotes where close <= 0` ⇒ **109**；
+  `select count(*) from quotes` ⇒ **125615**（`atlas-postgres`，2026-09-30）
+- **影響**：任何**未先過 `Close>0`** 的 return／volatility 消費者會把上述日子算成 **−100%**（或 10 倍誤差）。
+  `IsTradable`（`internal/apigateway/adapter_twse.go:131`：`Close > 0 && Volume > 0`）只守住部分路徑。
+- **最小處置建議**：①寫入端把 `close<=0` 視為**缺值**（拒絕或標記，而非 0）②`5904`／`2380` 修值或標缺
+  ③與 `FU-20260930-04` 併做（先盤點再決定修法）。
+
+---
+
+### FU-20260930-04 — 稽核「未守 `Close>0`」的 return／volatility 消費者
+
+- **狀態**：`open`
+- **記錄日期**：2026-09-30
+- **來源**：`#2151`／`FU-20260930-03` 衍生（壞值 × 未守門 = −100% 假訊號）
+- **現況**：尚未逐一盤點。已知主要消費面為 `portfolio.HistoricalPrices` 的
+  `GetCloseSeries`／`MomentumReturn`／`Volatility`（`internal/portfolio/historical_prices.go`）；
+  `#2151` 已在其上做**公司行為**調整，但**未處理壞值**（調整不該處理壞值 ⇒ 兩件事分開）。
+- **指紋**：待產出「消費者 × 是否守 `Close>0`」清單（本條即為該清單的產出任務）
+- **最小處置建議**：產出**表格化盤點**（消費者 `file:line`／是否守門／未守門時對壞列的行為），
+  再決定是否補守門 —— 補守門屬**值語意變更 ⇒ 窗後或需業主授權**。
+
+---
+
+> **來源注記（2026-09-30 第五批）**：`FU-20260930-01`／`-02` 來自 `#2160`（I22-overheat）實作與審查；
+> `-03`／`-04` 來自 `#2151`（公司行為調整）與 `#2095`（注入符號）兩線的交叉調查。
+> 數字皆由**原始欄位重算**（`quotes` 列數、`macro` 檔數與最早日期），機制皆附 `file:line`。
 
 > **來源注記（2026-09-30 第四批／T2 更正）**：`FU-20260929-14` 與 `-11`／`-12` 的更正，來自
 > **T2 讀數的獨立複核**（lane A，依 `~/workspace/atlas-notes/README-t2-reading.md` 的三項先寫死判準）
