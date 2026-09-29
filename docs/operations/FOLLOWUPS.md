@@ -1996,13 +1996,26 @@
 
 ### FU-20260929-01 — 生產 `quotes` 在 2026-06-25 之前只有 ~114 檔 ⇒ per-stock 量測的寬基樣本只剩 44–63 個交易日
 
-- **狀態**：`open`
+- **狀態**：`done`（**已於 2026-09-29 部署窗口解除**；標題與原敘述全數保留，處置與證據見本條文末）
 - **記錄日期**：2026-09-29
 - **來源**：issue **#2093**（SBL per-stock 訊號價值量測）；工具 `cmd/experimental/sbl-ic-study`（**PR #2126** 新增）
 - **現況**（2026-09-29 唯讀查生產）：`quotes` 共 **67,125 列 / 853 標的 / 2026-01-02 → 2026-09-29**，但逐日檔數在 **2026-06-24 前僅 114 檔**（`source='fugle_candles'`，大型權值），**2026-06-29 起才 834+ 檔**（`source='finmind_backfill'` 自 2026-06-25 起）。
   復現：`docker exec atlas-postgres psql -U atlas -d atlas -Atc "select date,count(*) from quotes where date < '2026-07-01' group by 1 order by 1 desc limit 5"`
 - **影響**：事前註冊的樣本「SBL 2026-03-02 → 2026-09-24 **全市場**（~144 交易日）」實際不可得。可用的**寬基**（≥500 檔有標籤）日期數：T+1 **63**、T+5 **59**、T+20 **44**、同窗同步 **57**；其餘日期只有 ~114 檔大型股 ⇒ (a) T+20 的 `n_dates >= 60` 判準**結構上無法達成**（與訊號好壞無關）；(b) 2026-06-25 前的「小型/中型」分位只是大型股裡較小者。
 - **最小修法建議（只建議，未實作）**：把 FinMind 全市場回填往前推到 2026-01（或至少推到 SBL 起點 2026-03-02），再重跑 `cmd/experimental/sbl-ic-study` —— 判準與工具都不必改，缺的只是價格廣度。量測工具已把「每個視野的寬基日期數」寫進報告 §8，避免下一個人再次把「樣本不足」誤讀成「沒有訊號」。
+- **處置（2026-09-29 部署窗口；root 實測）**：quotes range 回補完成 ⇒
+  `select count(distinct symbol) from quotes where date < '2026-06-25'` = **114 → 853** ✓
+  可複現（生產 kmacmini）：
+
+  ```bash
+  docker exec atlas-postgres psql -U atlas -d atlas -Atc \
+    "select count(distinct symbol) from quotes where date < '2026-06-25'"
+  # 期望：853（回補前：114）
+  ```
+- **影響更新**：本阻塞**解除** —— M1 真小型股版本的**樣本條件具備**。
+  **但 #2093 不因此重開**：其結案留言的重開觸發只認 **T+1／T+5**，且 **M1 方向已固定為負** ⇒
+  本條僅更新**前置條件狀態**，不是「訊號結論翻案」。
+- **仍未解（同批觀測的另外兩項阻礙）**：`FU-20260929-02`（`sbl_borrow_balance` 全 0 ⇒ 供給面無法量測）＋ forward IC ≈ 0。
 
 ---
 
@@ -2060,6 +2073,54 @@
 > **來源注記（2026-09-29/30 批次）**：`FU-20260929-03`～`-05` 與 `docs/operations/remediation-manifest.md`
 > 的同步，來自 **#2134**（twse_oddlot 退役，PR #2136）／**#2019**（symbols_excluded 細分，PR #2139）／
 > **#2133**（校準「無改善不得寫入」＋ predictor 誠實標示，PR #2140）／**#2139** 的結案。
+
+### FU-20260929-06 — `#1944` 剩餘 **15 項** inert（唯一權威＝registry 的 bounded 清單；不在此複製明細）
+
+- **狀態**：`open`
+- **記錄日期**：2026-09-29
+- **來源**：issue **#1944**；PR **#2146**（`daa55a25`，`2026-09-29T18:03:39Z` 已併，I29 分母改 pipeline 母體＋N-P1／N-P2 明示）交付其中 3 列；**本條為其餘項目的追蹤入口**
+- **唯一權威（刻意不複製 15 條明細，避免與 registry 形成第二份互相矛盾的清單）**：
+  `docs/reference/inert-registry.md` 的 `#### 仍待處理（bounded 清單）`（**18 列 − #2146 已交付 3 列**〔`I29`（`cmd/atlas` 半邊）／`N-P1`／`N-P2`〕＝ **15 列**）。
+  該 registry 內這 3 列已各自標「（→ **Batch C：已處理**）」，故不需要另立「已交付」清單。
+- **可複現抽取（期望輸出必須逐字相符；以下指令**照抄即可**，勿改字、勿加縮排）**：
+
+```bash
+python3 - <<'PY'
+import re
+src = open('docs/reference/inert-registry.md', encoding='utf-8').read()
+i = src.index('#### 仍待處理（bounded 清單）'); j = src.index('#### 具名缺口', i)
+rows = [l for l in src[i:j].split('\n') if l.startswith('|') and '---' not in l and not l.startswith('| ID')]
+ids = [re.match(r'\|\s*(.+?)\s*\|', r).group(1) for r in rows]
+delivered = {'**I29**（`cmd/atlas` 半邊）', '**N-P1**', '**N-P2**'}
+print('bounded rows:', len(ids), '| open after #2146:', len([x for x in ids if x not in delivered]))
+PY
+# 期望輸出：bounded rows: 18 | open after #2146: 15
+```
+
+- **分流政策（窗內只允許「零行為誠實化」）**：
+  - **會改變生產行為／值者** ⇒ 排在 **#1971 觀察窗（期滿 2026-10-28）之後**；
+  - **只讓宣稱／量測變誠實且不改變行為者** ⇒ **現在做**；
+  - 觀察窗內僅允許**零行為誠實化變體**（WARN log／標記／明示未使用），不得藉此改動數值或觸發條件。
+- **保護分流（依上政策）**：
+  - **受保護（窗後才動）**：`I32`／`I36` 的**修法半邊**／`I19` 殘留／`N-A1` 殘留／`N-A5`／`I22-overheat`／`I27` 殘留／`config validator`（現行修法會擋掉 production 啟動）／`I16(a)`。
+  - **可即辦（零行為）**：`I7`（死碼移除）／`I30`／`I31`（CI 政策）／`I23`（純文字）／`I21` 與 `I36` 的**盤查半邊**（只查不修）。
+
+---
+
+### FU-20260929-07 — `internal/monitoring` 捕捉 harness 的**治本**殘留：暖機 goroutine 的生命週期
+
+- **狀態**：`open`
+- **記錄日期**：2026-09-29
+- **來源**：issue **#2147** → PR **#2148**（測試側並發安全；其 PR body 明寫「洩漏的**治本**修法刻意不塞本 PR，由 root 以 FU 登錄（指向該段註解）」）
+- **已修（#2148，僅測試檔 +100/−3）**：`internal/monitoring/universe_scheduler_holiday_test.go` 的日誌捕捉改為 `syncBuffer`（mutex 保護的 `bytes.Buffer`），`captureLogs`／`captureLogsAt` 回傳它；並新增正向控制 `TestCaptureLogs_IsSafeUnderConcurrentWriters`（8 goroutine × 25 行＋主測試同時讀取 ⇒ 斷言 **200 行不掉**）。
+  ⇒ 這移除的是**整個 race 類別**（任何現在或未來的寫者都受保護），不只是那一個已知洩漏。
+- **殘留（治本未做）**：`NewDashboardAPI()` → `newWiredIndustryService` 啟的**非同步暖機 goroutine**（`go func()` ＋ 120s timeout，註解自陳 "don't block API startup"）會**存續到它所屬測試結束之後**，並透過 `internal/logging` 往**全域 logger** 寫 macro 警告 ⇒ 其下一行 log 可能落進**另一個測試**安裝的 sink（目前可接受，因為同套件斷言的是**排程 skip 訊息**＝不同字串，且暖機另有 120s 上限）。
+- **建議下一步（治本）**：讓暖機具備**可取消的生命週期**（`Close()`／context 取消）⇒ 從根上移除「跨測試寫入」這個類別，而非靠「斷言字串不同」繞過。
+- **註記**：屬 **#1971 觀察窗保護之外**（純測試基建、不動任何生產值或觸發條件）⇒ **可即辦**。
+
+> **來源注記（2026-09-30 第二批）**：`FU-20260929-06`／`-07` 與 `docs/operations/remediation-manifest.md`
+> 的兩處校正，來自 **#1944**（inert 追蹤需求）／**#2146**（I29 分母改 pipeline 母體＋N-P1／N-P2，`daa55a25`）／
+> **#2148**（`internal/monitoring` 測試側並發安全）的結案與複核。
 
 ## 相關文件
 
