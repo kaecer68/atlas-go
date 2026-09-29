@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 	"slices"
+	"sort"
 	"strings"
 	"time"
 
@@ -68,6 +69,23 @@ func collectRecommendations(ctx context.Context, registry domain.AgentRegistry, 
 		factorSnapshot = NewFactorSnapshot(quotes, plugins.factorEngine)
 	}
 
+	// Skip accounting (issue #1944 T1). The three `continue`s below used to be
+	// completely silent: a symbol that never produced a recommendation left
+	// neither a ScreeningReject row nor a metric, so "which gate removed this
+	// agent's candidates" was unanswerable from production data (that is exactly
+	// how B-group agents in the I36 audit became unattributable). The counters are
+	// per (agent, reason) — bounded by 21 agents × 3 reasons — and are emitted
+	// once per session, never per skip.
+	//
+	// Label mapping (see skipReasons below):
+	//   - skips_no_tradable_quote   : no quote at all, or quote.IsTradable == false
+	//   - skips_factor_quality_gate : factor scores EXIST but their average is < 0.40
+	//   - skips_executor_declined   : the executor claimed the spec and returned false
+	// A symbol with NO factor scores at all (preCount == 0) does not stop at the
+	// quality gate — it falls through to skips_executor_declined on purpose, so the
+	// label keeps meaning "we had factor evidence and it was too weak".
+	skips := newSessionSkipCounts()
+
 	for _, agent := range registry.Agents {
 		if !agent.Enabled {
 			continue
@@ -100,6 +118,7 @@ func collectRecommendations(ctx context.Context, registry domain.AgentRegistry, 
 		for _, symbol := range symbols {
 			quote, ok := quotes[symbol]
 			if !ok || !quote.IsTradable {
+				skips.record(agent.ID, skipReasonNoTradableQuote)
 				continue
 			}
 			screenRes, err := plugins.ScreenDetailed(ctx, agent, symbol, quotes)
@@ -147,11 +166,13 @@ func collectRecommendations(ctx context.Context, registry domain.AgentRegistry, 
 				// Factor scores are clamped to [-1, 1] (see portfolio/factor_engine.go);
 				// skip symbols whose average factor score is below the 0.40 quality bar.
 				if preCount > 0 && preTotal/float64(preCount) < 0.40 {
+					skips.record(agent.ID, skipReasonFactorQualityGate)
 					continue
 				}
 			}
 			rec, ok := plugins.Recommendation(agent, quote, prompt, regime, factorSnapshot)
 			if !ok {
+				skips.record(agent.ID, skipReasonExecutorDeclined)
 				continue
 			}
 
@@ -422,6 +443,13 @@ func collectRecommendations(ctx context.Context, registry domain.AgentRegistry, 
 				"quote_count":          len(quotes),
 				"recommendations":      recData,
 				"rejects":              rejSummary,
+				// Skip accounting (issue #1944 T1) — one per session, see
+				// newSessionSkipCounts for the label mapping.
+				"skips_no_tradable_quote":   skips.byReason[skipReasonNoTradableQuote],
+				"skips_factor_quality_gate": skips.byReason[skipReasonFactorQualityGate],
+				"skips_executor_declined":   skips.byReason[skipReasonExecutorDeclined],
+				"skips_total":               skips.total(),
+				"skips_by_agent":            skips.byAgentTotals(),
 			},
 			Confidence: avgConvictionScore(recs),
 		})
@@ -452,7 +480,127 @@ func collectRecommendations(ctx context.Context, registry domain.AgentRegistry, 
 		})
 	}
 
+	// One line per session, and only when something was skipped: a session with no
+	// skips carries no attribution value, and "no line" is unambiguous because the
+	// same session still writes its collect_recommendations trace. Never one line
+	// per skip — that would be a second paging channel (issue #1944 T1).
+	logRecommendationSkips(sessionID, len(registry.Agents), len(quotes), skips)
+
 	return recs, rejects
+}
+
+// ── skip accounting (issue #1944 T1) ───────────────────────────────────────
+
+// Skip reason identifiers. They are stable strings because they travel in the
+// trace payload and in the log line.
+const (
+	skipReasonNoTradableQuote   = "no_tradable_quote"
+	skipReasonFactorQualityGate = "factor_quality_gate"
+	skipReasonExecutorDeclined  = "executor_declined"
+)
+
+// sessionSkipCounts counts, per agent and reason, how many candidates the
+// recommendation collector dropped without leaving any other trace.
+//
+// Semantics (issue #1944 T1 ruling): every skip EVENT increments a counter — no
+// de-duplication by (agent, symbol, reason) — because the question being answered
+// is "how many candidates did this agent lose in this session". The map is
+// bounded by the 21 seeded agents × 3 reasons.
+type sessionSkipCounts struct {
+	byReason  map[string]int
+	byAgent   map[string]map[string]int // agentID → reason → count
+	agentsHit map[string]bool
+}
+
+func newSessionSkipCounts() *sessionSkipCounts {
+	return &sessionSkipCounts{
+		byReason:  map[string]int{},
+		byAgent:   map[string]map[string]int{},
+		agentsHit: map[string]bool{},
+	}
+}
+
+// record counts one skip event for an agent under a reason.
+func (s *sessionSkipCounts) record(agentID, reason string) {
+	s.byReason[reason]++
+	if s.byAgent[agentID] == nil {
+		s.byAgent[agentID] = map[string]int{}
+	}
+	s.byAgent[agentID][reason]++
+	s.agentsHit[agentID] = true
+}
+
+func (s *sessionSkipCounts) total() int {
+	total := 0
+	for _, n := range s.byReason {
+		total += n
+	}
+	return total
+}
+
+// byAgentTotals returns agentID → total skips across reasons, for agents that
+// skipped at least one candidate (empty when nothing was skipped).
+func (s *sessionSkipCounts) byAgentTotals() map[string]int {
+	out := make(map[string]int, len(s.byAgent))
+	for agentID, reasons := range s.byAgent {
+		total := 0
+		for _, n := range reasons {
+			total += n
+		}
+		out[agentID] = total
+	}
+	return out
+}
+
+// topAgentSkipSummary renders the busiest agents as "agent:reason=n" pairs,
+// highest first, capped at limit. Ordering is deterministic (count desc, then
+// agentID, then reason) so two runs over the same session produce the same line.
+func (s *sessionSkipCounts) topAgentSkipSummary(limit int) string {
+	type entry struct {
+		agent  string
+		reason string
+		count  int
+	}
+	entries := make([]entry, 0, len(s.byAgent)*3)
+	for agentID, reasons := range s.byAgent {
+		for reason, count := range reasons {
+			entries = append(entries, entry{agent: agentID, reason: reason, count: count})
+		}
+	}
+	sort.Slice(entries, func(i, j int) bool {
+		if entries[i].count != entries[j].count {
+			return entries[i].count > entries[j].count
+		}
+		if entries[i].agent != entries[j].agent {
+			return entries[i].agent < entries[j].agent
+		}
+		return entries[i].reason < entries[j].reason
+	})
+	if len(entries) > limit {
+		entries = entries[:limit]
+	}
+	parts := make([]string, 0, len(entries))
+	for _, e := range entries {
+		parts = append(parts, fmt.Sprintf("%s:%s=%d", e.agent, e.reason, e.count))
+	}
+	return strings.Join(parts, ",")
+}
+
+// logRecommendationSkips emits the per-session skip summary (at most one line).
+func logRecommendationSkips(sessionID string, agents, quotes int, s *sessionSkipCounts) {
+	if s == nil || s.total() == 0 {
+		return
+	}
+	logging.Info("recommendation_collector", "recommendation_skips",
+		logging.FStr("session_id", sessionID),
+		logging.FInt("no_tradable_quote", s.byReason[skipReasonNoTradableQuote]),
+		logging.FInt("factor_quality_gate", s.byReason[skipReasonFactorQualityGate]),
+		logging.FInt("executor_declined", s.byReason[skipReasonExecutorDeclined]),
+		logging.FInt("skips_total", s.total()),
+		logging.FInt("agents_iterated", agents),
+		logging.FInt("quote_count", quotes),
+		logging.FStr("top_agents", s.topAgentSkipSummary(5)),
+	)
 }
 
 // avgConvictionScore returns the average conviction of recommendations as a
