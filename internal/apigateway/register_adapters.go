@@ -314,10 +314,43 @@ func RegisterChannelAdapters(g *Gateway, workDir string, cfg config.Config, janu
 	g.registry.Register("government_broker", brokerAdapter)
 	logging.Info("apigateway", "adapter_registered", "channel", "government_broker")
 
-	// --- TWSE Odd-Lot Trading (no API key required) ---
-	oddlotAdapter := NewTWSEOddLotChannelAdapter()
-	g.registry.Register("twse_oddlot", oddlotAdapter)
-	logging.Info("apigateway", "adapter_registered", "channel", "twse_oddlot")
+	// --- TWSE Odd-Lot Trading — RETIRED 2026-09-29 (issue #2134) ---
+	//
+	// TWSE removed the odd-lot upstream in 2026-08 (exchangeReport/BFI84U now
+	// serves the 得為融資融券有價證券停券預告表 report and MI_INDEX type=ODDLOT
+	// returns an empty data set — see marketdata.ErrOddLotUpstreamRemoved and
+	// known_issues.go twse_oddlot_upstream_60d), so this channel can never
+	// produce data again and its adapter is no longer registered. The retail
+	// imbalance input comes from twse_capital_flow (monitoring.NewOddLotFetcher
+	// → oddLotFromCapitalFlow).
+	//
+	// WHY an explicit "inactive" record instead of only dropping the
+	// registration: the record left behind by the last fetch attempt is
+	// status="degraded", and DeriveChannelStatus escalates a degraded record to
+	// ERROR once the data behind it is older than the contract freshness window
+	// (E29-3 rule 2b). Dropping the registration alone therefore leaves the
+	// leftover record exporting atlas_channel_health_status=2 forever — which is
+	// exactly what made ChannelHealthStatusError fire permanently in production
+	// (measured 2026-09-29: record degraded, last_success 2026-09-07, contract
+	// window 48h, gauge 2, alert firing). "inactive" is a passthrough status: it
+	// never escalates, UnifiedHealthStore.Alerts() filters it, and the metrics
+	// export maps it to 3 — a value no alert rule matches. The channel page
+	// keeps the verdict plus its reason instead of a permanent red error.
+	//
+	// WHY both IDs: the dash form "twse-oddlot" is the historical runtime ID of
+	// the same upstream (see known_issues.go). No alert rule matches either
+	// spelling once the record is inactive, but an environment that still
+	// carries the frozen "circuit breaker open for channel twse-oddlot" record
+	// (the local dev state dir does) would otherwise keep firing on the alias.
+	// Remove the alias write only together with the alias entry in
+	// known_issues.go — the two are one decision.
+	for _, retiredID := range []string{"twse_oddlot", "twse-oddlot"} {
+		if err := g.Health().Record(retiredID, "inactive",
+			"BFI84U 上游已由 TWSE 移除（2026-08，改服務停券預告表）⇒ 本 channel 永久退役，不再抓取；零售商零股失衡輸入改由 twse_capital_flow 代理（monitoring.NewOddLotFetcher）"); err != nil {
+			logging.Warn("apigateway", "twse_oddlot_inactive_record_failed",
+				"channel", retiredID, "err", err.Error())
+		}
+	}
 
 	// --- TWSE ETF Net Subscription ---
 	// DISABLED 2026-08-10 — TWSE permanently removed the TWT44U aggregate
