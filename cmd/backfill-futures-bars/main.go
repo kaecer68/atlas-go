@@ -10,10 +10,16 @@
 // 刻意不提供「預設 sqlite、Postgres 需明示 flag」的形狀 —— 那正是 #2107 的事故形狀：
 // 生產設了 postgres 卻靜默寫到本機 sqlite artifact，查詢層看到空表。
 //
+// 後端解析為 postgres 時，本 CLI **自己建立連線池並注入** store factory
+// （-pg-dsn，預設讀組態的 DATABASE_URL；migrations 取 <workdir>/sql/migrations），
+// 形狀與 cmd/backfill-period-history-range 一致。沒有 DSN 時以可診斷的錯誤中止，
+// 絕不降級寫到 sqlite —— 這也是 #2107 的一環。
+//
 // 用法：
 //
 //	backfill-futures-bars -contracts TX,MTX -start 2001-01-01 -end 2026-09-24
 //	backfill-futures-bars -contracts TX -start 2026-09-01 -dry-run
+//	backfill-futures-bars -contracts TX -pg-dsn "$DATABASE_URL" -workdir /path/to/atlas
 //
 // 節奏：provider 內建 rate limiter（每 3 秒 1 次）＋ retry ＋ breaker；
 // 分段（每段相差 ≤ 31 天，實測上限）亦由 provider 負責。
@@ -25,11 +31,15 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync/atomic"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgxpool"
+
 	"github.com/kaecer68/atlas-go/internal/config"
+	atlasdb "github.com/kaecer68/atlas-go/internal/db"
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/ledger"
 	"github.com/kaecer68/atlas-go/internal/marketdata"
@@ -40,6 +50,11 @@ const (
 	defaultStartDate = "2001-01-01"
 	defaultPacingMS  = 3000
 	maxRetriesMax    = 3
+	// defaultWorkDir 是 atlas repo root 的預設值；migrations 由 <workDir>/sql/migrations 讀取
+	// （與 cmd/backfill-period-history-range 同慣例）。
+	defaultWorkDir = "."
+	// migrationsRelDir 是相對 workDir 的 migration 目錄。
+	migrationsRelDir = "sql/migrations"
 )
 
 type cliConfig struct {
@@ -47,6 +62,8 @@ type cliConfig struct {
 	start      time.Time
 	end        time.Time
 	backend    string
+	workDir    string
+	pgDSN      string
 	source     string
 	pacingMS   int
 	maxRetries int
@@ -103,6 +120,8 @@ func runFromOSArgs() error {
 		start      = flag.String("start", defaultStartDate, "回補起日 YYYY-MM-DD（Asia/Taipei）")
 		end        = flag.String("end", "", "回補迄日 YYYY-MM-DD（預設：今天 Asia/Taipei）")
 		backend    = flag.String("backend", "", "儲存後端 jsonl|sqlite|postgres（預設：讀 ATLAS_STORE_BACKEND；不得硬編 sqlite）")
+		workDir    = flag.String("workdir", defaultWorkDir, "atlas repo root；postgres 後端讀 <workdir>/sql/migrations")
+		pgDSN      = flag.String("pg-dsn", "", "PostgreSQL DSN（預設：$DATABASE_URL）；僅 postgres 後端需要")
 		source     = flag.String("source", "csv", "資料來源：csv（歷史回補）|openapi（僅最新交易日）")
 		pacingMS   = flag.Int("pacing", defaultPacingMS, "每次上游請求的最小間隔毫秒")
 		maxRetries = flag.Int("max-retries", maxRetriesMax, "每段請求的重試次數上限 0..3")
@@ -151,6 +170,8 @@ func runFromOSArgs() error {
 		start:      startTime,
 		end:        endTime,
 		backend:    *backend,
+		workDir:    *workDir,
+		pgDSN:      *pgDSN,
 		source:     *source,
 		pacingMS:   *pacingMS,
 		maxRetries: *maxRetries,
@@ -183,13 +204,17 @@ func parseContracts(s string) ([]string, error) {
 // run 建立真實 provider 與 store 後執行回補。
 func run(cfg cliConfig) error {
 	appCfg := config.Load()
+	ctx := context.Background()
 
-	store, err := resolveStore(cfg, appCfg)
+	store, closeStore, err := resolveStore(ctx, cfg, appCfg, defaultStoreDeps())
 	if err != nil {
 		return err
 	}
+	// 只有 postgres 後端會開連線池；closer 對其他後端是 no-op。
+	defer closeStore()
+
 	provider := marketdata.NewTAIFEXFuturesBarsProvider()
-	return runWith(context.Background(), cfg, provider, store, appCfg, os.Stdout)
+	return runWith(ctx, cfg, provider, store, appCfg, os.Stdout)
 }
 
 // runWith 是可測的核心：provider／store／輸出都可由呼叫端注入。
@@ -279,20 +304,86 @@ func persistRollovers(ctx context.Context, store ledger.FuturesBarStore, cfg cli
 	return n, nil
 }
 
-// resolveStore 依 flag/環境決定後端；**不降級**。
-func resolveStore(cfg cliConfig, appCfg config.Config) (ledger.FuturesBarStore, error) {
+// storeDeps 是 store wiring 的可注入依賴：生產走真 atlasdb.Init ＋ ledger.SetPostgresPool，
+// 單元測試用 fake（不必真的連上 PostgreSQL 就能驗證「開池 → 注入 → 建 store」的順序）。
+type storeDeps struct {
+	// initPool 建立 Postgres 連線池（生產 = atlasdb.Init：ping ＋ 套用 migrations）。
+	initPool func(ctx context.Context, dsn, migrationsPath string) (*pgxpool.Pool, error)
+	// injectPool 把連線池交給 ledger 的 store factory（生產 = ledger.SetPostgresPool）。
+	injectPool func(pool *pgxpool.Pool)
+}
+
+// defaultStoreDeps 是生產 wiring。
+func defaultStoreDeps() storeDeps {
+	return storeDeps{initPool: atlasdb.Init, injectPool: ledger.SetPostgresPool}
+}
+
+// resolveBackend 回傳本次執行實際使用的後端名。
+//
+// 後端解析**只有這一條路徑**（ledger.ResolveStoreBackend）：-backend 顯式覆寫，
+// 否則沿用 ATLAS_STORE_BACKEND。未知值直接回錯誤（不靜默退回 jsonl）。
+func resolveBackend(cfg cliConfig, appCfg config.Config) (string, error) {
 	if cfg.backend != "" {
-		store, err := ledger.NewFuturesBarStoreForBackend(cfg.backend, appCfg)
-		if err != nil {
-			return nil, err
-		}
-		return store, nil
+		return ledger.ResolveStoreBackend(cfg.backend)
 	}
-	store, err := ledger.NewFuturesBarStore(appCfg)
+	return ledger.ResolveStoreBackend(appCfg.StoreBackend)
+}
+
+// resolveStore 依 flag/環境決定後端；**不降級**。
+//
+// Postgres 路徑的必要步驟（缺一就會在生產以「requires pool」失敗）：
+//  1. 解析後端（resolveBackend，單一決策路徑）
+//  2. 取 DSN（-pg-dsn，預設 $DATABASE_URL）—— 沒有就**明確**報錯，絕不退回 sqlite
+//  3. atlasdb.Init（ping ＋ 套用 migrations）建立連線池
+//  4. 注入 store factory（ledger.SetPostgresPool），**再**建 store
+//
+// 回傳的 closer 負責關閉本函式自己開的連線池；非 postgres 後端為 no-op。
+func resolveStore(ctx context.Context, cfg cliConfig, appCfg config.Config, deps storeDeps) (ledger.FuturesBarStore, func(), error) {
+	noop := func() {}
+
+	backend, err := resolveBackend(cfg, appCfg)
 	if err != nil {
-		return nil, err
+		return nil, nil, fmt.Errorf("futures bar store: %w", err)
 	}
-	return store, nil
+
+	if backend != "postgres" {
+		// jsonl/sqlite 行為不變：完全不碰 DSN。
+		store, err := ledger.NewFuturesBarStoreForBackend(backend, appCfg)
+		if err != nil {
+			return nil, nil, err
+		}
+		return store, noop, nil
+	}
+
+	// DSN 來源：-pg-dsn 優先，其次組態的 DATABASE_URL（config.Load 已讀 $DATABASE_URL）。
+	dsn := cfg.pgDSN
+	if dsn == "" {
+		dsn = appCfg.DatabaseURL
+	}
+	if dsn == "" {
+		// 明確可診斷：說清楚是哪個後端、要補哪個 flag/環境變數。
+		return nil, nil, fmt.Errorf(
+			"futures bar store: backend %q requires a PostgreSQL DSN: pass -pg-dsn or set DATABASE_URL (refusing to fall back to sqlite/jsonl)",
+			backend)
+	}
+
+	workDir := cfg.workDir
+	if workDir == "" {
+		workDir = defaultWorkDir
+	}
+	pool, err := deps.initPool(ctx, dsn, filepath.Join(workDir, migrationsRelDir))
+	if err != nil {
+		return nil, nil, fmt.Errorf("connect postgres: %w", err)
+	}
+
+	deps.injectPool(pool)
+
+	store, err := ledger.NewFuturesBarStoreForBackend(backend, appCfg)
+	if err != nil {
+		pool.Close()
+		return nil, nil, err
+	}
+	return store, pool.Close, nil
 }
 
 func backendName(cfg cliConfig, appCfg config.Config) string {
