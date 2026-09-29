@@ -2163,23 +2163,28 @@ PY
 
 ---
 
-### FU-20260929-11 — tradability／quote 語意（T2 結論）：A 型是**場次層級**（**值語意 ⇒ 窗後**）
+### FU-20260929-11 — T2 結論更正：A 組的真正鑑別閘門是 `factor_quality_gate`（B 型）；`no_quote` 主導是**全域注入基線**（**值語意 ⇒ 窗後**）
 
 - **狀態**：`open`
 - **記錄日期**：2026-09-29
 - **來源**：T2 線的生產讀數（**2026-09-29 場次 `session-20260929-daily`**；數字為該線實測，非本條作者量測）
-- **現況**：A 型 —— `internal/orchestrator/executor_collection.go:112` 家族（`:118` `no_quote`：報價集完全沒有該符號；
-  `:124` `not_tradable`：有報價但 `IsTradable=false`）—— 佔**全部 skip 的 86%（881/1027）**，
-  且**各 agent 總數 47–54 幾乎一致** ⇒ 這是**場次層級**現象（整體報價面），**不是**個別 agent 的判斷差異。
-- **待辦（兩段）**：
-  1. **子分支分辨**：`#2155` 的**拆標籤**已上線（`no_tradable_quote` → `no_quote` ＋ `not_tradable`）
-     ⇒ **下一場**即可直接分辨（已追蹤場次偏 `not_tradable`；未追蹤批次路徑偏 `no_quote`）。
-  2. **修法**：改的是**值語意** ⇒ **排在 `#1971` 觀察窗之後**。
-- **影響**：未分辨前，把 A 型讀成「agent 挑不到股票」會誤導策略調整方向。
+- **現況（已更正；讀數已取得並經獨立複核）**：部署後 `#2155` 拆標籤的實際讀數（trace `session-20260929-daily`，
+  `ts=2026-09-29T20:51:04Z` ≥ 上線 `20:43:21Z`；日誌側同一支回掃描 16 行）**推翻了本條先前的先驗**：
+  1. **`not_tradable` 在部署後 16 行中全為 0** ⇒ 先前的「已追蹤場次偏 `not_tradable`／未追蹤批次路徑偏 `no_quote`」**不成立**。
+  2. **A 組的真正鑑別閘門＝`factor_quality_gate`（B 型）**（per-agent：`semi-desk-01` **4**／`mining-desk-01` **5**／
+     `consumer-desk-01` **5**／`earnings-quality-01` **6**）—— 這才是 agent 自己的判斷差異。
+  3. **`no_quote`（881／85.8%）不是 A 組專屬，而是「全域注入基線」**（機制與資料指紋見 `FU-20260929-14`）：
+     19 個 agent 皆 44、`ai-desk-01` 45、**唯一未被注入的 `stockpicker-winrate-01` 為 0** ⇒ 該值量的是
+     「注入集合 ∩ 當場 quote set」，**不帶 agent 判斷資訊**。
+  4. **可複現**：`881（19×44＋1×45）＋0＋137＋9＝1027` 由 per-agent breakdown 逐項重算即得，與彙總一致；
+     同一場次兩次執行（`20:48:31Z`／`20:51:04Z`）逐項相同。
+- **影響（更正）**：把 A 型讀成「agent 挑不到股票」＝**把注入基線誤讀成 agent 品質**；真正要看的 per-agent 訊號是
+  `factor_quality_gate`（A 組 4–6；全體 2–31）與單一 agent 的 `executor_declined`（9）。
+- **待辦**：修**值語意**（候選集合）⇒ **排在 `#1971` 觀察窗之後**（子分支分辨已完成，不再是待辦）。
 
 ---
 
-### FU-20260929-12 — T2 追蹤入口（T1 已上線、診斷已收斂為 A 型場次層級）
+### FU-20260929-12 — T2 追蹤入口（T1／T2 已上線；**讀數已取得並經獨立複核**；結論分層見 `-11`／機制見 `-14`）
 
 - **狀態**：`open`
 - **記錄日期**：2026-09-29
@@ -2188,8 +2193,12 @@ PY
   - **T1（`#2153`）已上線**：推薦收集器的三個靜默 skip 已可量測，並已有**第一份生產讀數** ✓
   - **T2（`#2155`）已上線**：skip 歸因**拆標籤**（`no_quote`／`not_tradable`）＋ **per-agent × per-reason**（21×4＝84）＋
     無場次 ID 時降為 DEBUG（避免雜訊）✓（已隨小部署窗口進入生產：`/api/version` = `6f64c223`）
-  - 診斷**已收斂**：A 型為**場次層級**（見 `FU-20260929-11`）
-- **剩餘工作**：① **下一場**用拆標籤分辨 `no_quote` vs `not_tradable` 子分支 ② 窗後修**值語意**（指向 `FU-20260929-11`）
+  - 診斷**已收斂並更正**：per-agent 真訊號＝`factor_quality_gate`（**B 型**；A 組 4–6）；`no_quote`（881／85.8%）是
+    **全域注入基線**（`FU-20260929-14`），**不是** agent 品質差異；`not_tradable` 部署後全為 0 ⇒
+    原「tradability 為主」的判斷**不成立**（見 `FU-20260929-11`）。
+  - **讀數**：trace 側 `session-20260929-daily`（`ts` 部署後）＋ 日誌側同一支回掃描 16 行 ⇒ 已由 **lane A 獨立複核**
+    （數字由原始欄位逐項重算一致；`ts` ≥ 上線時間；注入機制作 `file:line` 驗證）。
+- **剩餘工作**：窗後修**值語意**（指向 `FU-20260929-11` 與 `FU-20260929-14`）。
 - **同批已結**：`screened_symbols.jsonl` 的 rejects-only 敘述（I36）**已由 `#2154` 修掉**（測試釘住）⇒ 不另立條目。
 
 ---
@@ -2205,6 +2214,53 @@ PY
 - **處置**：修法改的是**數值語意** ⇒ **排在 `#1971` 觀察窗之後**（窗內僅允許零行為誠實化變體）。
 
 > **來源注記（2026-09-30 第三批）**：`FU-20260929-08`～`-13` 來自 `#1944` 的 T1／T2 系列
+> （`#2153` T1、`#2155` T2 拆標籤、`#2154` I36 敘述修正）與 G3 缺口盤查；其中 T2 的生產讀數由 T2 線實測，
+> 本批僅登錄（來源具名於各條）。
+
+### FU-20260929-14 — `ExpandUniverse(constants.ReplayCSVPath, nil)` 把整組 CSV 符號注入**每個自帶 universe 的 agent** ⇒ 產生與 agent 判斷無關的 `no_quote` 基線（**計數可即辦／值語意 ⇒ 窗後**）
+
+- **狀態**：`open`
+- **記錄日期**：2026-09-29
+- **來源**：T2 讀數的**獨立複核**（lane A）＋ B lane 的 trace 產物（`t2-reading-20260929T205104Z.txt`）
+- **機制（file:line）**：
+  `internal/orchestrator/executor_collection.go:98-115`
+  ```
+  symbols := agent.Universe                                            // :98
+  if len(symbols) == 0 { symbols = DefaultSymbols() … }                // :99-100
+  else { expanded := ExpandUniverse(constants.ReplayCSVPath, nil); … } // :103 ＋ 合併去重 :104-115
+  …
+  if !ok { skips.record(agent.ID, skipReasonNoQuote) }                 // :121
+  ```
+  ⇒ **有自帶 universe 的 agent 一律被注入整份 replay CSV 的符號集**，而這些符號不在當場的 quote set ⇒
+  逐符號記 `no_quote` ⇒ 形成**與 agent 判斷無關的均勻基線**。
+  （`ExpandUniverse` 定義：`internal/orchestrator/executor_symbols.go:136`。）
+- **資料指紋（讀者可自行複驗）**：
+  1. per-agent `no_quote`：**19 個 agent = 44**、`ai-desk-01` = **45**（44 ＋ 它自己 universe 多出的 1 檔）
+     ⇒ `19×44 ＋ 1×45 = 881` ＝ 彙總 `skips_no_quote` ✓
+  2. **唯一未被注入者 `stockpicker-winrate-01` 的 `no_quote` = 0** ✓（它走 `DefaultSymbols()` 分支）
+  3. 總額對帳：`881 ＋ 0（not_tradable）＋ 137（factor_quality_gate）＋ 9（executor_declined）＝ 1027 = skips_total` ✓
+- **措辭（重要）**：日誌側 16 行（同一支回補掃描 14 行 ＋ 追蹤 2 行）數字幾乎相同 ⇒ 只能說
+  「**對場次日期不變（同一掃描內）**」，**不是**「16 個獨立場次各自量到相同值」。
+- **警告（兩個 44 不同義）**：`quote_count=44`（**當場 quote set 大小**）≠ 「注入基線 44」（**replay CSV 符號數**）
+  ⇒ 文件與判讀不得當同義。
+- **讀數陷阱（順帶登記）**：
+  1. **同一份資料兩個鍵名** —— 日誌行用**裸名**（`no_quote=`，來源 `executor_collection.go:641` ＋ 常數 `:510`），
+     trace 用 **`skips_` 前綴**（`skips_no_quote`，`:452`）⇒ join 兩側的工具必踩空。
+  2. 日誌的 `agents_iterated=30` **≠** trace per-agent 的 **21**（30＝迭代過的 agent 數，含零 skip 者）。
+- **待辦（兩支，分流不同）**：
+  - **(a) 計數／可觀測性（零行為 ⇒ 可即辦）**：把「**注入**」與「**agent 自帶**」兩個來源的 skip **分開計數／分開輸出**
+    （例如 `skips_*` 之外多一組 `injected_*`，或 trace 另加欄位）⇒ 只改輸出、**不改候選集合** ⇒ 與 G3 的 WARN 同類。
+  - **(b) 候選集合（值語意 ⇒ 觀察窗後）**：只展開「**該場真的有報價**」的符號 ⇒ 改變候選集合 ⇒ 排在 `#1971` 觀察窗之後。
+- **可選更深檢查（不阻擋）**：① 注入集合與當場 quote set 的**實際集合差** ② `agents_iterated=30` 中**零 skip 的 9 個**是誰、
+  是否 enabled ③ 兩個 44 是否**恰好不交集**（若部分交集 ⇒ 基線 < 44，可反推交集大小）。
+- **影響**：在 (a) 完成前，任何「以 `no_quote` 大小比較 agent」的盤查都會**把注入量誤讀成 agent 品質**（本條即為該更正）。
+
+
+> **來源注記（2026-09-30 第四批／T2 更正）**：`FU-20260929-14` 與 `-11`／`-12` 的更正，來自
+> **T2 讀數的獨立複核**（lane A，依 `~/workspace/atlas-notes/README-t2-reading.md` 的三項先寫死判準）
+> ＋ B lane 的 trace 產物；數字由**原始欄位逐項重算**、注入機制作 **`file:line` 驗證**。
+
+`FU-20260929-08`～`-13` 來自 `#1944` 的 T1／T2 系列
 > （`#2153` T1、`#2155` T2 拆標籤、`#2154` I36 敘述修正）與 G3 缺口盤查；其中 T2 的生產讀數由 T2 線實測，
 > 本批僅登錄（來源具名於各條）。
 
