@@ -243,6 +243,27 @@ type llmSectorAgentsPlugin struct {
 	registry domain.AgentRegistry
 }
 
+// LLMSectorAgentLoopActive reports whether llmSectorAgentsPlugin can change the
+// recommendations it is given (issue #1944 item N-P1 — "pass-through").
+//
+// It cannot, and that is true in BOTH paths, which is why this declaration is
+// about the loop and not about the driver:
+//
+//   - driver == nil: ProcessRecommendations returns its input untouched;
+//   - driver != nil: it builds a SectorAgentLLM and then discards it
+//     (`_ = &SectorAgentLLM{...}`, `_ = rec.Conviction`) without writing a
+//     single field back, and still returns the input untouched.
+//
+// So wiring LLMSectorAgentDriverWired (the narrower, separate declaration for
+// "does production inject a driver") would NOT by itself make the LLM sector
+// agent reach a decision. Activating the loop is therefore a behavior change
+// (LLM-produced sector convictions would start reaching sizing and orders) and
+// is deferred past the #1971 observation window.
+//
+// TestLLMSectorAgentLoop_IsPassThrough holds this constant and the source-level
+// evidence together: changing either one without the other fails.
+const LLMSectorAgentLoopActive = false
+
 func (p *llmSectorAgentsPlugin) Name() string { return "llm_sector_agents" }
 
 func (p *llmSectorAgentsPlugin) Attach(core ServiceRegistry) {

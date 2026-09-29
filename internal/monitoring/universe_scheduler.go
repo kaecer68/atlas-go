@@ -1180,6 +1180,24 @@ func GatherUniverseSymbols(tree ClassificationTreeAccessor, mapper SymbolIndustr
 // as before.
 //
 // Duplicates are removed and symbols are normalized in both paths.
+// UniversePopulationSize returns the number of symbols the universe pipeline is
+// expected to cover, using the same precedence the pipeline itself uses
+// (gatherAllSymbols): the first-party symbol_industry population when the
+// substrate reports one, otherwise the tree+mapper fallback.
+//
+// Exported for the coverage check (issue #1944 item I29): the alert's
+// denominator must be the population the pipeline can SEE, not the
+// classification tree's representative stocks (TotalClassifiedSymbols, 27
+// against the shipped tree). Passing the representative table made the ratio
+// meaningless (1,599/27 ≈ 5922%) and the alert's coverage half unsatisfiable.
+//
+// The mapper is built here from the tree because the substrate population, when
+// present, is what decides the answer; the fallback exists so a deployment
+// without the substrate still gets a real population instead of zero.
+func UniversePopulationSize(tree ClassificationTreeAccessor, substrate industry.SymbolIndustrySubstrate) int {
+	return len(gatherAllSymbols(tree, NewTreeBasedMapper(tree), substrate))
+}
+
 func gatherAllSymbols(tree ClassificationTreeAccessor, mapper SymbolIndustryMapper, substrate industry.SymbolIndustrySubstrate) []string {
 	if population := substratePopulation(substrate); len(population) > 0 {
 		return population

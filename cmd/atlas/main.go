@@ -2215,8 +2215,16 @@ func run(args []string, deps appDeps) error {
 					if wd == time.Saturday || wd == time.Sunday {
 						return nil
 					}
-					// Count total symbols from the shared classification tree.
-					totalSymbols := monitoring.TotalClassifiedSymbols(classTreeAdapter)
+					// Denominator = the population the pipeline is expected to cover
+					// (issue #1944 item I29). It used to be
+					// TotalClassifiedSymbols(tree) — the classification tree's
+					// REPRESENTATIVE stocks (27) — which made the ratio
+					// 1,599/27 ≈ 5922% and the coverage half unsatisfiable. The
+					// population is the same reading the pipeline's own Step 1
+					// uses (first-party symbol_industry population, tree+mapper
+					// fallback), so the ratio now answers "of the symbols this
+					// pipeline can see, how many did the last run build?".
+					populationSymbols := monitoring.UniversePopulationSize(classTreeAdapter, symbolIndustrySub)
 					// Load universe snapshot and count built symbols, through
 					// the canonical reader so this alert reads the same schema
 					// the scheduler and the -build-universe CLI write (N-U3).
@@ -2227,13 +2235,11 @@ func run(args []string, deps appDeps) error {
 					// The artifact's mtime is a second, independent reading. The
 					// coverage percentage above describes whatever the file
 					// contains, so it cannot see a stale file: before 2026-09-27
-					// a 39.7h-old snapshot produced no alert at all. The coverage
-					// comparison could not compensate either — totalSymbols is
-					// the classification tree's REPRESENTATIVE stocks (27), not
-					// the pipeline's universe (symbols_built=1,599), so the ratio
-					// is ≈5922% and `< 90` is unsatisfiable (issue #1944 item
-					// I29 owns that denominator; it is deliberately unchanged
-					// here). The age judgement compares the artifact against the
+					// a 39.7h-old snapshot produced no alert at all, and the
+					// coverage half could not compensate either (its denominator
+					// was the representative-stock table — issue #1944 item I29,
+					// fixed on 2026-09-29 by passing the pipeline population
+					// above). The age judgement compares the artifact against the
 					// last run the Taiwan trading calendar says should have
 					// written it (monitoring.PreviousUniverseRun), never against
 					// a fixed window — a fixed window fires on every holiday
@@ -2242,20 +2248,20 @@ func run(args []string, deps appDeps) error {
 					if info, statErr := os.Stat(monitoring.UniverseSnapshotPath(cfg.WorkDir)); statErr == nil {
 						snapshotMTime = info.ModTime()
 					}
-					if totalSymbols > 0 {
+					if populationSymbols > 0 {
 						um.CoverageMapped.WithLabelValues(metrics.UniverseStageCoverageCheck, "all").Add(int64(snapshotSymbols))
-						um.CoverageTotal.WithLabelValues(metrics.UniverseStageCoverageCheck, "all").Add(int64(totalSymbols))
+						um.CoverageTotal.WithLabelValues(metrics.UniverseStageCoverageCheck, "all").Add(int64(populationSymbols))
 					}
 					// One alert category for both findings on purpose: downstream
 					// filters key on "universe_coverage", and the finding's kind
 					// travels in the metadata (CoverageFinding.Kind) so the two
 					// conditions remain distinguishable.
 					for _, finding := range monitoring.AssessUniverseCoverage(monitoring.CoverageInput{
-						SnapshotSymbols: snapshotSymbols,
-						TotalSymbols:    totalSymbols,
-						SnapshotMTime:   snapshotMTime,
-						Now:             now,
-						LastExpectedRun: monitoring.PreviousUniverseRun(now),
+						SnapshotSymbols:   snapshotSymbols,
+						PopulationSymbols: populationSymbols,
+						SnapshotMTime:     snapshotMTime,
+						Now:               now,
+						LastExpectedRun:   monitoring.PreviousUniverseRun(now),
 					}) {
 						monitor.Alert(monitoring.AlertLevelWarning, "universe_coverage", finding.Message, finding.Details)
 					}
