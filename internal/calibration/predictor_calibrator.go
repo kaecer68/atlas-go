@@ -2,7 +2,12 @@ package calibration
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
+	"os"
+	"path/filepath"
+
+	_ "modernc.org/sqlite" // driver for the read-only predictor-backtest handle
 
 	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/ledger"
@@ -53,8 +58,45 @@ func NewPredictorEvaluator(dbPath string) func(cfg *config.ParametersConfig) (fl
 	}
 }
 
+// openSQLiteReadOnly 以 mode=ro 開啟**既有**的 SQLite 檔；檔案不存在時回錯。
+//
+// 為什麼不用 ledger.OpenSQLiteDB：它是 opens-or-creates（且帶 WAL pragma），
+// 在生產宣告 postgres 的環境下會把被刪掉的 data/state/atlas.db 重建回來
+// （#2107 的成因之一）。mode=ro 讓「不會寫」由 driver 保證，與既有的唯讀
+// reader 同一個慣例（internal/stocktools/win_rate.go OpenWinRateDB、
+// cmd/atlas-mcp/server/tools_stock_winrate.go）。
+func openSQLiteReadOnly(path string) (*sql.DB, error) {
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		return nil, fmt.Errorf("predictor backtest db %s: %w", path, err)
+	}
+	if _, err := os.Stat(abs); err != nil {
+		return nil, fmt.Errorf("predictor backtest db %s: %w", abs, err)
+	}
+	db, err := sql.Open("sqlite", "file:"+filepath.ToSlash(abs)+"?mode=ro&_pragma=busy_timeout(5000)")
+	if err != nil {
+		return nil, fmt.Errorf("open predictor backtest db %s: %w", abs, err)
+	}
+	if err := db.Ping(); err != nil {
+		_ = db.Close()
+		return nil, fmt.Errorf("open predictor backtest db %s: %w", abs, err)
+	}
+	return db, nil
+}
+
+// tryHitRateEval 讀 prediction_backtest 算命中率。
+//
+// 只讀既有檔案、**絕不建立**：檔案不存在時的語意與「表是空的」相同 ⇒ (0,false)，
+// 與原本（OpenSQLiteDB 建出空檔再查失敗）的結果一致，但不再留下垃圾 artifact。
+//
+// 已知缺口（本 PR 不修，需另行核准）：生產的 prediction_backtest writer 已走
+// PostgreSQL（calibration_tasks.go 的 prediction_backtest_reverse_write 用
+// d.HistoricalStore），這個 reader 仍讀 job-local sqlite ⇒ 生產恆為 (0,false)
+// （校準靜默 no-op）。把 reader 換成 backend-aware 的 HistoricalStore 會**改變
+// 生產校準結果**（從恆定 0.5 變成真的依命中率調整參數），因此不在 #2107 的
+// 「不改變既有生產行為」範圍內。
 func tryHitRateEval(dbPath string) (float64, bool) {
-	db, err := ledger.OpenSQLiteDB(dbPath)
+	db, err := openSQLiteReadOnly(dbPath)
 	if err != nil {
 		return 0, false
 	}
