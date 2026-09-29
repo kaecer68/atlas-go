@@ -45,7 +45,7 @@
 | 欄位 | 值 |
 |------|-----|
 | **類型** | Directory（100 個 session 子目錄） |
-| **格式** | `session-YYYYMMDD-daily/`，每目錄含 `summary.json`、`recommendation_outcomes.jsonl`、`screened_symbols.jsonl`、`positions.json`、`experiments.jsonl` |
+| **格式** | `session-YYYYMMDD-daily/`，每目錄含 `summary.json`、`recommendation_outcomes.jsonl`、**`screened_symbols.jsonl`（檔名為歷史包袱：**只寫 screening 失敗者**，通過的符號不落列**）**、`positions.json`、`experiments.jsonl` |
 | **生產者** | `internal/ledger/sessions.go:RecordSessionOutcomes()` |
 | **消費者** | 校準工具、Dashboard API、回測視窗、RiskGate |
 | **描述** | 最完整的 per-session 資料，包含 per-agent forward return（data-architecture.md 層級 1） |

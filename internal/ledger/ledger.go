@@ -739,6 +739,19 @@ func maxDrawdown(values []float64) float64 {
 	return maxDD
 }
 
+// RecordSessionScreeningRejects writes the session's screening REJECTS to
+// sessions/<sessionID>/screened_symbols.jsonl.
+//
+// REJECTS ONLY — despite the filename. A symbol that PASSED screening is never
+// written here, so a reader must not conclude "not in the file ⇒ not screened";
+// the file answers "which symbols failed which criterion", nothing more (issue
+// #1944 I36/T2; pinned by TestScreenedSymbolsArtifact_IsRejectsOnly).
+//
+// The file is created/truncated on every call, including an empty reject list —
+// an EMPTY file therefore means "no rejects", not "no screening". The
+// session-writer transaction path (transaction.go) instead skips the file
+// entirely when there are no rejects, which is pinned separately in
+// transaction_test.go.
 func (s *Store) RecordSessionScreeningRejects(sessionID string, rejects []domain.ScreeningReject) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -760,6 +773,9 @@ func (s *Store) RecordSessionScreeningRejects(sessionID string, rejects []domain
 	return nil
 }
 
+// LoadSessionScreeningRejects reads the session's screening rejects (see
+// RecordSessionScreeningRejects: the artifact is rejects-only, and an empty file
+// is a valid "nothing was rejected").
 func (s *Store) LoadSessionScreeningRejects(sessionID string) ([]domain.ScreeningReject, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()

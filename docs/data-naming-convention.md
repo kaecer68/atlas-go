@@ -360,7 +360,7 @@ session_YYYYMMDD_daily/
 data/state/sessions/session_20260602_daily/
 data/state/sessions/session_20260602_daily/summary.json
 data/state/sessions/session_20260602_daily/recommendation_outcomes.jsonl
-data/state/sessions/session_20260602_daily/screened_symbols.jsonl
+data/state/sessions/session_20260602_daily/screened_symbols.jsonl   # rejects-only（通過 screening 者不落列）
 data/state/sessions/session_20260602_daily/positions.json
 data/state/sessions/session_20260602_daily/experiments.jsonl
 ```
