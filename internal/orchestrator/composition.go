@@ -98,21 +98,8 @@ func buildFactorEngine(runtimeParams *portfolio.RuntimeParameters, macroSnap *ma
 	// breaks when atlas is launched from elsewhere, e.g. IDE or container).
 	fundamentalsPath := filepath.Join(filepath.Dir(replayCSVPath), "fundamentals.json")
 
-	hp := portfolio.NewHistoricalPrices()
+	hp := loadHistoricalPrices(replayCSVPath, jsonlPath)
 
-	// Auto-convert CSV→JSONL if JSONL is missing but CSV exists (P1).
-	if _, err := os.Stat(jsonlPath); os.IsNotExist(err) {
-		if _, csvErr := os.Stat(replayCSVPath); csvErr == nil {
-			logging.Info("composition", "replay JSONL missing, converting from CSV", "csv", replayCSVPath, "jsonl", jsonlPath)
-			if convertErr := importer.ImportTWOpenDataCSVToJSONL(replayCSVPath, jsonlPath); convertErr != nil {
-				logging.Warn("composition", "auto-convert CSV→JSONL failed", "err", convertErr)
-			}
-		}
-	}
-
-	if err := hp.LoadFromExtendedJSONL(jsonlPath); err != nil {
-		logging.Warn("composition", "failed to load historical prices", "err", err)
-	}
 	fp := portfolio.NewFundamentalProvider()
 	if err := fp.LoadFromJSON(fundamentalsPath); err != nil {
 		logging.Warn("composition", "failed to load fundamentals", "err", err)
@@ -390,4 +377,105 @@ func symbolToIndustryID(symbol string) string {
 	default:
 		return ""
 	}
+}
+
+// applyOfficialPriceAdjustments rewrites the pre-event prices of the loaded
+// replay series so that they are comparable with post-event prices, removing the
+// fake cliffs that corporate actions leave behind in an unadjusted series.
+//
+// Background (ticket #2151): the replay/extended series is raw and unadjusted,
+// so index-style consumers saw single-day drops of -66.5% (6669.TW, 2026-09-02
+// stock dividend), -74.8% (0050.TW, 2025-06-18 split) and -85.6% (0052.TW,
+// 2025-11-26 split). The adjustment mechanism already existed
+// (portfolio.HistoricalPrices.AdjustForCorporateActions) but was only reachable
+// through factor_engine_quality.go and no corporate action provider was ever
+// wired in production, and its stock-dividend factor was wrong; see that file.
+//
+// The actions are derived from the official adjusted series
+// (FinMind TaiwanStockPriceAdj) because the dividend-event feed does not carry
+// the 2025 ETF splits. The directory is derived from the replay path:
+//
+//	<replay dir>/../state/price_adjustments/TaiwanStockPriceAdj
+//
+// Semantics: the newest bar keeps its raw close; only pre-event bars change.
+// A symbol without a ratio change (and any symbol absent from the official
+// series) is left untouched, bit for bit.
+//
+// Failure handling: a missing/unreadable directory is a no-op with exactly one
+// log line, so a host without the data keeps today's behavior (this is the
+// documented data-level rollback). Per-symbol failures are isolated: the failing
+// symbol is logged and skipped, the remaining symbols are still adjusted.
+func applyOfficialPriceAdjustments(hp *portfolio.HistoricalPrices, jsonlPath string) {
+	if hp == nil {
+		return
+	}
+	// The directory is derived from the replay path (both live under <data>/), so
+	// no new environment variable is introduced: configs/allowed_env_vars.md
+	// governs os.Getenv usage and Constitution 1.1/1.2 requires the whitelist
+	// route for any new key.
+	dir := filepath.Join(filepath.Dir(filepath.Dir(jsonlPath)), "state", "price_adjustments", "TaiwanStockPriceAdj")
+
+	official, err := marketdata.LoadOfficialAdjustedSeriesDir(dir)
+	if err != nil {
+		logging.Info("composition", "official adjusted prices unavailable; replay prices stay unadjusted",
+			"dir", dir, logging.Err(err))
+		return
+	}
+
+	applied, failed, actionCount, skipped := 0, 0, 0, 0
+	for symbol, officialSeries := range official {
+		raw := hp.CloseSeries(symbol)
+		if len(raw) == 0 {
+			skipped++
+			continue
+		}
+		actions := marketdata.ActionsFromOfficialSeries(symbol, raw, officialSeries, marketdata.DefaultOfficialAdjustedRatioTolerance)
+		if len(actions) == 0 {
+			continue
+		}
+		if adjErr := hp.AdjustForCorporateActions(actions); adjErr != nil {
+			failed++
+			logging.Warn("composition", "official price adjustment failed", logging.Symbol(symbol), logging.Err(adjErr))
+			continue
+		}
+		applied++
+		actionCount += len(actions)
+	}
+	logging.Info("composition", "official price adjustments applied",
+		"symbols_adjusted", applied, "symbols_failed", failed, "actions", actionCount,
+		"symbols_not_in_replay", skipped, "dir", dir)
+}
+
+// loadHistoricalPrices builds the historical price series used by the factor
+// engine, in this order:
+//
+//  1. ensure the replay JSONL exists (P1: convert it from the replay CSV when the
+//     JSONL is missing but the CSV is present),
+//  2. load the JSONL,
+//  3. apply the official corporate-action adjustment.
+//
+// Step 1 MUST run before step 2: the conversion is the only reason the JSONL may
+// appear, so loading first would silently leave the series empty (load failures
+// are warnings) whenever only the CSV exists.
+//
+// Kept as a single seam so that both the ordering and the adjustment are covered
+// by tests: dropping the adjustment call makes
+// TestLoadHistoricalPricesRemovesSplitCliff fail, and loading before the
+// conversion makes TestLoadHistoricalPricesConvertsCsvOnlyReplay fail.
+func loadHistoricalPrices(replayCSVPath, jsonlPath string) *portfolio.HistoricalPrices {
+	if _, err := os.Stat(jsonlPath); os.IsNotExist(err) {
+		if _, csvErr := os.Stat(replayCSVPath); csvErr == nil {
+			logging.Info("composition", "replay JSONL missing, converting from CSV", "csv", replayCSVPath, "jsonl", jsonlPath)
+			if convertErr := importer.ImportTWOpenDataCSVToJSONL(replayCSVPath, jsonlPath); convertErr != nil {
+				logging.Warn("composition", "auto-convert CSV→JSONL failed", "err", convertErr)
+			}
+		}
+	}
+
+	hp := portfolio.NewHistoricalPrices()
+	if err := hp.LoadFromExtendedJSONL(jsonlPath); err != nil {
+		logging.Warn("composition", "failed to load historical prices", "err", err)
+	}
+	applyOfficialPriceAdjustments(hp, jsonlPath)
+	return hp
 }
