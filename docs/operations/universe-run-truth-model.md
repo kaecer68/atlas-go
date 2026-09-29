@@ -188,7 +188,10 @@ trustworthy == 1, ranked > 0, 兩個產物都落地    ⇒ 健康（除非記帳
    以及 `scripts/ci/promtool-mutation-negative-proof.sh`（四個外科式突變必須被咬住，仍只呼叫 promtool 三次）。
 4. **本文件 ＋ 工具**：`scripts/ops/verify-universe-run.sh`（唯讀、判層、exit code）與
    `tests/scripts/test-verify-universe-run.sh`（20 個 fixture case ＋ 8 個判定式突變；2026-09-27 的
-   「可觀測性誠實化」批次擴到 22 個 case ＋ 10 個突變 ＋ 7 個 note/evidence 斷言）。
+   「可觀測性誠實化」批次擴到 22 個 case ＋ 10 個突變 ＋ 7 個 note/evidence 斷言；2026-09-29 的
+   #2019 批次再加 2 個 case（`excluded-reasons-present` / `excluded-reasons-absent`）＋ 6 個
+   報告/JSON 附加欄位斷言，並把那兩個 case 的**期望判層向量與 `green` 寫成完全一樣** ——
+   這是「細分是證據、不是判層」的機械化證明）。
 
 ### ⚠️ 部署時序（讀 PR body 的那一段）
 
@@ -266,8 +269,26 @@ echo $?                                       # 0 全綠 / 1 有層成立應告�
 |------|------|
 | `--expect-run none` | 已知休市 / 不預期有執行（覆寫日曆） |
 | `--grace-seconds N` | 「已預告要跑但還沒跑完」的寬限（預設 7200；驗收當下剛過觸發時刻時會得到 `PENDING`） |
-| `--offline-dir DIR` ＋ `--now EPOCH` | 用 fixture 離線重跑（`tests/scripts/test-verify-universe-run.sh` 就是這樣跑 19 個判層分支） |
+| `--offline-dir DIR` ＋ `--now EPOCH` | 用 fixture 離線重跑（`tests/scripts/test-verify-universe-run.sh` 就是這樣跑 24 個判層分支） |
 | `--logs-file FILE` / `--no-logs` | 不呼叫 docker（唯讀環境或容器在別台時） |
+
+### 附錄（證據，不參與判層）：排除原因細分
+
+2026-09-29（issue #2019）起，完整報告多一節 `── 排除原因細分 ──`：把
+`snapshot.result.symbols_excluded_reasons` 依階段（風控 Step 5／選股 Step 4／concentration cap）
+印出來，並把兩條恆等式並排核對：
+
+```
+symbols_filtered = symbols_ranked + screener_total + concentration_cap
+symbols_excluded = risk_total
+```
+
+* 這一節**不改任何 verdict、不改 exit code**（0/1/2/3 的語意完全不變）；缺項時印「無法核對」，不假設成立。
+* 欄位不存在時只印 **`未提供（本次 run 未帶細分）`**，**不補 0** —— 0 是有效讀數（該階段跑過且未排除
+  任何檔），「沒帶細分」是另一個世界（與 channel-health gauge 的 absent-vs-present-zero 同一條原則）。
+* `--json` 同步附加 `excluded_reasons`（物件或 `null`）與 `excluded_reasons_present`（bool）；
+  既有欄位一字不動（工具鏈相容）。
+* 細分的權威定義在監控端：`internal/monitoring/universe_exclusion_reasons.go`。
 
 **它不取代告警**：它不寫任何檔案、不改任何狀態，只是把「判層」變成可重跑的一件事。
 告警是**持續性**的守門；本工具回答的是「現在這一刻、這一輪到底在哪一層」這種**一次性驗收**問題。

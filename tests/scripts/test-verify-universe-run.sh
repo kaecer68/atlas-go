@@ -21,13 +21,14 @@
 #   ④ note / evidence 斷言：判層向量一樣但**字指錯條**也是一種騙人（例如「部分載入」時把
 #      兩條新規則都講成沒部署）⇒ 這種錯誤只有比對 note 才看得見（check_field）
 #
-# 現有清單（22 個 fixture case）：
+# 現有清單（24 個 fixture case）：
 #   green / transport-family-missing / transport-rules-not-loaded / transport-new-rule-present /
 #   transport-new-rule-partial / schedule-heartbeat-overdue / schedule-last-run-missed /
 #   schedule-pending / holiday-closure / scoring-ranked-zero / scoring-universe-empty /
 #   input-partial / emission-label-shape / emission-counter-silent / emission-legit-labels /
 #   artifact-stale / artifact-missing / artifact-signal-zero / artifact-registry-signal /
-#   legacy-schema / no-metrics / evidence-destroyed
+#   legacy-schema / no-metrics / evidence-destroyed /
+#   excluded-reasons-present / excluded-reasons-absent（issue #2019：細分是證據、不是判層）
 # 現有清單（10 個 mutation）：
 #   heartbeat-overdue / last-run-missing / output-family-missing / scoring-broken /
 #   input-unusable / label-shape-bad / emission-missing / artifact-stale /
@@ -223,6 +224,34 @@ JSON
 }
 JSON
       ;;
+    # 既有 schema ＋ 排除原因細分（issue #2019）。數字自洽：
+    # symbols_filtered(1599) = symbols_ranked(3) + screener_total(1596) + concentration_cap(0)
+    # symbols_excluded(130)  = risk_total(130)，且 screener 子項之和 = screener_total。
+    healthy_reasons)
+      cat > "$out" <<'JSON'
+{
+  "ranked": [{"symbol": "2330"}, {"symbol": "2317"}, {"symbol": "2454"}],
+  "result": {
+    "symbols_built": 1599, "symbols_filtered": 1599, "symbols_ranked": 3, "symbols_excluded": 130,
+    "full_rebuild": false, "timestamp": "2026-09-29T06:00:05Z",
+    "quotes_status": "ok", "quotes_returned": 1581, "quotes_requested": 1599,
+    "quotes_chunks": 32, "quotes_chunks_failed": 0,
+    "quotes_missing_no_data": 12, "quotes_missing_not_covered": 6,
+    "quotes_missing_fetch_error": 0, "quotes_missing_not_attempted": 0,
+    "ranked_trustworthy": true,
+    "symbols_excluded_reasons": {
+      "risk_var_contribution": 0, "risk_volatility": 1, "risk_liquidity": 130,
+      "risk_unspecified": 0, "risk_total": 130,
+      "screener_no_quote": 6, "screener_zero_volume": 0,
+      "screener_below_turnover_floor": 1587, "screener_below_price_floor": 0,
+      "screener_binary_rejected": 0, "screener_no_factor_score": 0,
+      "screener_topn_truncated": 3, "screener_total": 1596,
+      "concentration_cap": 0
+    }
+  }
+}
+JSON
+      ;;
     # 2026-09-17 的舊 schema（quotes_status / ranked_trustworthy 都還不存在）
     legacy)
       cat > "$out" <<'JSON'
@@ -354,6 +383,47 @@ check_field() {
   if [ -n "$unwanted" ] && [[ "$got" == *"$unwanted"* ]]; then
     fail "${case_name}: ${layer}.${field} 竟包含「${unwanted}」（不該出現）"
     printf '      got: %s\n' "$got"
+    return
+  fi
+  ok
+}
+
+# 人看的報告（非 --json）斷言：排除原因細分**只存在於報告與 JSON 附加欄位**（判層看不到它）
+# ⇒ 沒有這一節，「細分到底有沒有印出來」就沒有牙齒。
+check_report() {
+  # $1=case $2=必須出現的字串 $3=（可選）必須**不**出現的字串
+  local name="$1" want="$2" unwanted="${3:-}"
+  local dir="$TMP/f/$name" now out
+  now="$(cat "$dir/now.txt")"
+  out="$TMP/report-$name.txt"
+  bash "$TOOL_SH" --offline-dir "$dir" --workdir "$REPO" --now "$now" > "$out" 2>/dev/null
+  if ! grep -qF -- "$want" "$out"; then
+    fail "${name}: 報告缺少「${want}」"
+    sed -n '1,45p' "$out" | sed 's/^/      /'
+    return
+  fi
+  if [ -n "$unwanted" ] && grep -qF -- "$unwanted" "$out"; then
+    fail "${name}: 報告竟包含「${unwanted}」（不該出現）"
+    return
+  fi
+  ok
+}
+
+# --json 的附加欄位（issue #2019）：缺席必須讀得出來（null / false）—— 不得補 0、不得補空物件。
+check_json_key() {
+  # $1=case $2=key $3=期望的 JSON 字面（null / true / false / 130 …）
+  local name="$1" key="$2" want="$3" got
+  got="$("$PY" - "$TMP/out-$name.json" "$key" <<'PY'
+import json, sys
+# key 支援 "a.b" 的巢狀取值（例如 excluded_reasons.risk_total）；缺任何一層就是 null。
+d = json.load(open(sys.argv[1], encoding="utf-8"))
+for part in sys.argv[2].split("."):
+    d = d.get(part) if isinstance(d, dict) else None
+print(json.dumps(d, ensure_ascii=False))
+PY
+)"
+  if [ "$got" != "$want" ]; then
+    fail "${name}: json.${key} = ${got}，期望 ${want}"
     return
   fi
   ok
@@ -643,6 +713,21 @@ check_mutation() {
 }
 
 
+# 23/24. 排除原因細分（issue #2019）：**細分是證據，不是判層** —— 同一輪世界狀態下
+# 「帶細分」與「不帶細分」的判層向量與 exit code 必須完全相同（差別只在報告與 JSON 的
+# 附加欄位）。這一組的期望值刻意與 green 一字不差，就是把那條界線釘住。
+case_excluded_reasons_present() {
+  NOW=$E_SEP29_0610 SNAPSHOT=healthy_reasons
+  build_case excluded-reasons-present
+  expect_file excluded-reasons-present exit=0 L0=WARN L1=OK L2=OK L3=OK L4=OK L5=OK
+}
+
+case_excluded_reasons_absent() {
+  NOW=$E_SEP29_0610
+  build_case excluded-reasons-absent
+  expect_file excluded-reasons-absent exit=0 L0=WARN L1=OK L2=OK L3=OK L4=OK L5=OK
+}
+
 # ══════════════════════════════════════════════════════════════════════════════
 # ③ 執行
 # ══════════════════════════════════════════════════════════════════════════════
@@ -678,15 +763,36 @@ fi
 ( case_emission_legit_labels )
 ( case_transport_new_rule_partial )
 ( case_artifact_registry_signal )
+( case_excluded_reasons_present )
+( case_excluded_reasons_absent )
 
 for c in green transport-family-missing transport-rules-not-loaded transport-new-rule-present \
          schedule-heartbeat-overdue schedule-last-run-missed schedule-pending holiday-closure \
          scoring-ranked-zero scoring-universe-empty input-partial emission-label-shape \
          emission-counter-silent artifact-stale artifact-missing artifact-signal-zero \
          legacy-schema no-metrics evidence-destroyed emission-legit-labels \
-         transport-new-rule-partial artifact-registry-signal; do
+         transport-new-rule-partial artifact-registry-signal \
+         excluded-reasons-present excluded-reasons-absent; do
   run_case "$c"
 done
+
+# 排除原因細分（issue #2019）的斷言。三條護欄各有對應的斷言：
+#   ① 只增不減 → 報告要有細分那一節（且既有欄位不動，由上面的判層向量不動來證明）；
+#   ② 不改 exit code 語意 → 上列兩個 case 的期望向量與 green 一字不差（run_case 已比對）；
+#   ③ absent 不補 0 → 未帶細分時必須明說「未提供」，且**不得**出現任何細分 key。
+check_report excluded-reasons-present '風控(Step5)' '未提供'
+check_report excluded-reasons-present 'risk_liquidity=130'
+check_report excluded-reasons-present 'screener_total=1596'
+check_report excluded-reasons-present 'symbols_filtered 1599 vs symbols_ranked 3 + screener_total 1596 + concentration_cap 0 = 1599 → 一致'
+check_report excluded-reasons-present 'symbols_excluded 130 vs risk_total 130 → 一致'
+# 缺席時：只有那一行「未提供」，不得補 0（用細分 key 當不該出現的字串）。
+check_report excluded-reasons-absent '未提供（本次 run 未帶細分）' 'risk_liquidity'
+check_report excluded-reasons-absent '未提供（本次 run 未帶細分）' 'screener_total'
+# JSON：附加欄位存在時是物件 + present=true；缺席時是 null + present=false（不是 {}）。
+check_json_key excluded-reasons-present excluded_reasons_present true
+check_json_key excluded-reasons-present excluded_reasons.risk_total 130
+check_json_key excluded-reasons-absent excluded_reasons_present false
+check_json_key excluded-reasons-absent excluded_reasons null
 
 # 判層向量之外的斷言：**note / evidence 也是契約**（判層相同但指名錯的規則同樣是騙人）。
 # ① green：兩條新規則都還沒部署 ⇒ note 要一併指名（不是只講一條）。
@@ -750,4 +856,4 @@ if [ "$FAIL" -gt 0 ]; then
   echo "❌ test-verify-universe-run: $PASS passed, $FAIL failed"
   exit 1
 fi
-echo "✅ test-verify-universe-run: $PASS passed（22 個 fixture case + 10 個 mutation + 7 個 note/evidence 斷言 + --help）"
+echo "✅ test-verify-universe-run: $PASS passed（24 個 fixture case + 10 個 mutation + note/evidence/附加欄位斷言 + --help）"
