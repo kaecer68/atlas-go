@@ -528,8 +528,16 @@ func (d calibrationDeps) registerPredictorCalibrate() {
 		Interval: 24 * time.Hour,
 		Enabled:  true,
 		Task: func(ctx context.Context) error {
-			dbPath := filepath.Join(d.Cfg.LedgerDir, "atlas.db")
-			result, err := calibration.CalibratePredictor(ctx, dbPath)
+			// #2123: 讀取來源改走 backend-aware 的 HistoricalStore（生產 = PG），
+			// 不再讀 job-local sqlite artifact —— 後者在 postgres 部署下永遠是空的，
+			// 讓這條 24h 任務的 evaluator 永遠回中性 0.5（「有跑但沒量到」）。
+			// 沒有注入 store 時**明確失敗**，不退回 sqlite（同 #2107 的紀律）。
+			if d.HistoricalStore == nil {
+				logging.Error("predictor_calibrate", "failed",
+					"err", "HistoricalStore not wired; refusing to fall back to the job-local sqlite artifact")
+				return fmt.Errorf("predictor_calibrate: HistoricalStore not wired")
+			}
+			result, err := calibration.CalibratePredictorWithStore(ctx, d.HistoricalStore)
 			if err != nil {
 				logging.Error("predictor_calibrate", "failed", "err", err.Error())
 				return err
