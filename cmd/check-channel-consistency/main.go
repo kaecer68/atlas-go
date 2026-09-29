@@ -19,6 +19,7 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"math"
 	"os"
 	"regexp"
 	"sort"
@@ -29,6 +30,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/kaecer68/atlas-go/internal/apigateway"
+	"github.com/kaecer68/atlas-go/internal/monitoring"
 )
 
 const (
@@ -70,6 +72,12 @@ type prometheusRules struct {
 func main() {
 	jsonMode := false
 	taskPath, alertPath := defaultTaskSource, defaultAlertSource
+	// The governance deadline check is DATE-DRIVEN, so the instant it judges at
+	// must be injectable: `--now=RFC3339` exists so a test (or a reproduction)
+	// gets the same verdict on any day. The real clock is read exactly once,
+	// here — no judgement function below may call time.Now() (issue #2138,
+	// guardrail 2: determinism).
+	now := time.Now().UTC()
 	for _, arg := range os.Args[1:] {
 		switch {
 		case arg == "--json":
@@ -78,6 +86,13 @@ func main() {
 			taskPath = strings.TrimPrefix(arg, "--tasks=")
 		case strings.HasPrefix(arg, "--rules="):
 			alertPath = strings.TrimPrefix(arg, "--rules=")
+		case strings.HasPrefix(arg, "--now="):
+			parsed, parseErr := time.Parse(time.RFC3339, strings.TrimPrefix(arg, "--now="))
+			if parseErr != nil {
+				fmt.Fprintf(os.Stderr, "invalid --now value (want RFC3339): %v\n", parseErr)
+				os.Exit(2)
+			}
+			now = parsed
 		case arg == "-h" || arg == "--help":
 			usage()
 			return
@@ -88,21 +103,23 @@ func main() {
 		}
 	}
 
-	violations, err := runChecks(taskPath, alertPath)
+	violations, governance, err := runChecks(taskPath, alertPath, now)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "channel consistency check failed: %v\n", err)
 		os.Exit(2)
 	}
 	if jsonMode {
 		if err := json.NewEncoder(os.Stdout).Encode(struct {
-			Tasks      int         `json:"tasks"`
-			Violations []Violation `json:"violations"`
-		}{Tasks: len(violations), Violations: violations}); err != nil {
+			Tasks      int                `json:"tasks"`
+			Violations []Violation        `json:"violations"`
+			Governance []GovernanceReport `json:"governance"`
+		}{Tasks: len(violations), Violations: violations, Governance: governance}); err != nil {
 			fmt.Fprintf(os.Stderr, "json encode: %v\n", err)
 			os.Exit(2)
 		}
 	} else {
 		printViolations(violations)
+		printGovernance(governance)
 	}
 	if len(violations) > 0 {
 		os.Exit(1)
@@ -110,21 +127,27 @@ func main() {
 }
 
 func usage() {
-	fmt.Fprint(os.Stderr, `usage: check-channel-consistency [--json] [--tasks=FILE] [--rules=FILE]
+	fmt.Fprint(os.Stderr, `usage: check-channel-consistency [--json] [--tasks=FILE] [--rules=FILE] [--now=RFC3339]
 
 Checks that scheduled channel-health tasks and Prometheus alert hysteresis
 stay aligned with apigateway.ChannelContracts().
+
+Also applies the "a permanently broken channel must be retired or fixed"
+criterion (issue #2138) to internal/monitoring's known-issue registry: every
+availability case must declare a disposition, and a deadline (ActionBy) that
+passed without a RetiredAt fails this check. --now=… injects the instant the
+deadline is judged at (default: the real clock, read once).
 `)
 }
 
-func runChecks(taskPath, alertPath string) ([]Violation, error) {
+func runChecks(taskPath, alertPath string, now time.Time) ([]Violation, []GovernanceReport, error) {
 	tasks, err := parseScheduledTasks(taskPath)
 	if err != nil {
-		return nil, fmt.Errorf("parse task source %s: %w", taskPath, err)
+		return nil, nil, fmt.Errorf("parse task source %s: %w", taskPath, err)
 	}
 	alerts, err := parseAlertRules(alertPath)
 	if err != nil {
-		return nil, fmt.Errorf("parse alert rules %s: %w", alertPath, err)
+		return nil, nil, fmt.Errorf("parse alert rules %s: %w", alertPath, err)
 	}
 
 	registry := apigateway.ChannelContracts()
@@ -140,6 +163,11 @@ func runChecks(taskPath, alertPath string) ([]Violation, error) {
 	violations = append(violations, checkSchedules(tasks, registry)...)
 	violations = append(violations, checkAlertFor(tasks, alerts)...)
 
+	// Governance (issue #2138): the registry must not be able to keep a
+	// permanently broken channel in a "known but unhandled" state forever.
+	governanceViolations, governance := checkGovernance(now)
+	violations = append(violations, governanceViolations...)
+
 	sort.Slice(violations, func(i, j int) bool {
 		if violations[i].Check != violations[j].Check {
 			return violations[i].Check < violations[j].Check
@@ -149,7 +177,110 @@ func runChecks(taskPath, alertPath string) ([]Violation, error) {
 		}
 		return violations[i].Detail < violations[j].Detail
 	})
-	return violations, nil
+	return violations, governance, nil
+}
+
+// ── governance of known issues (issue #2138) ────────────────────────────────
+
+// GovernanceReport is one row of the governance section. It is printed for
+// EVERY availability case — including the ones that are green — because the
+// total elapsed time is what repeated deadline renewals must not be able to
+// hide (issue #2138, ruling 2).
+type GovernanceReport struct {
+	ChannelID string `json:"channel_id"`
+	// UpstreamRemovedAt is when the permanent removal was first put on record.
+	UpstreamRemovedAt string  `json:"upstream_removed_at,omitempty"`
+	DaysSinceDeclared float64 `json:"days_since_declared,omitempty"`
+	HasReplacement    bool    `json:"has_replacement"`
+	ActionBy          string  `json:"action_by,omitempty"`
+	RetiredAt         string  `json:"retired_at,omitempty"`
+	Overdue           bool    `json:"overdue"`
+}
+
+// governanceForbiddenRemedies is quoted verbatim in the failure detail: the one
+// thing this criterion must never be satisfied by.
+const governanceForbiddenRemedies = "禁止以放寬規則／加抑制／延長契約窗口讓告警消失（那是掩蓋，不是修復）"
+
+// checkGovernance applies the static half of the criterion to every registry
+// entry and returns both the violations and the report rows.
+//
+// It is deterministic in `now` (injected) and has no I/O — the registry is
+// compiled in, so this is a pure function of (registry, now).
+func checkGovernance(now time.Time) ([]Violation, []GovernanceReport) {
+	entries := monitoring.KnownIssueEntries()
+	violations := make([]Violation, 0)
+	report := make([]GovernanceReport, 0, len(entries))
+
+	for _, entry := range entries {
+		deadline := monitoring.EvaluateGovernanceDeadline(entry.ChannelID, entry.Issue, now)
+		if !deadline.AvailabilityCase {
+			// Opted out by declaration (e.g. a dead alias of a healthy channel).
+			// Not printed: this section reports availability cases only.
+			continue
+		}
+		row := GovernanceReport{
+			ChannelID:         entry.ChannelID,
+			UpstreamRemovedAt: entry.Issue.UpstreamRemovedAt,
+			DaysSinceDeclared: math.Round(deadline.DaysSinceDeclared*10) / 10,
+			HasReplacement:    deadline.HasReplacement,
+			ActionBy:          entry.Issue.ActionBy,
+			RetiredAt:         entry.Issue.RetiredAt,
+			Overdue:           deadline.Overdue,
+		}
+		report = append(report, row)
+
+		for _, deficiency := range deadline.Deficiencies {
+			violations = append(violations, Violation{
+				Check:     "governance.disposition_declared",
+				ChannelID: entry.ChannelID,
+				Source:    knownIssueSource,
+				Detail: "上游已永久不可得（UpstreamRemovedAt=" + entry.Issue.UpstreamRemovedAt + "）但" +
+					deficiency + "；" + governanceForbiddenRemedies,
+			})
+		}
+		if deadline.Overdue {
+			violations = append(violations, Violation{
+				Check:     "governance.deadline_passed",
+				ChannelID: entry.ChannelID,
+				Source:    knownIssueSource,
+				Detail: fmt.Sprintf(
+					"決議期限已過：ActionBy=%s（自 UpstreamRemovedAt=%s 起已 %.1f 天，且未宣告 RetiredAt）。"+
+						"處置只能二選一：(a) 退役 —— 依 #2134 模式寫入 status=inactive＋原因、斷掉所有探測點、保留 channel id 與 known_issues 紀錄；"+
+						"(b) 修復 —— 接上新上游／新端點，並把 DeriveChannelStatus 的判定條件一併對齊。"+
+						"合法續期＝在同一變更內更新 ActionBy 並於 PR 說明重新檢視的結果（本報告永遠印 UpstreamRemovedAt，續期不會稀釋總時長）。%s",
+					entry.Issue.ActionBy, entry.Issue.UpstreamRemovedAt, deadline.DaysSinceDeclared, governanceForbiddenRemedies),
+			})
+		}
+	}
+	return violations, report
+}
+
+// knownIssueSource is the file a governance violation points at.
+const knownIssueSource = "internal/monitoring/known_issues.go"
+
+// printGovernance prints the governance section after the violation list.
+func printGovernance(report []GovernanceReport) {
+	if len(report) == 0 {
+		return
+	}
+	fmt.Println("")
+	fmt.Println("已知問題治理（#2138；永久不可得 ⇒ 必須退役或修復）：")
+	for _, row := range report {
+		state := "OK  "
+		if row.Overdue {
+			state = "RED "
+		}
+		replacement := "無替代"
+		if row.HasReplacement {
+			replacement = "有替代"
+		}
+		retired := "未處置"
+		if row.RetiredAt != "" {
+			retired = "已處置 " + row.RetiredAt
+		}
+		fmt.Printf("  [%s] %-14s removed=%s（已 %5.1f 天） %s action_by=%s %s\n",
+			state, row.ChannelID, row.UpstreamRemovedAt, row.DaysSinceDeclared, replacement, row.ActionBy, retired)
+	}
 }
 
 // parseScheduledTasks extracts every &apigateway.ScheduledTask literal that

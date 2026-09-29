@@ -25,6 +25,10 @@
       "value": "\"atlas_channel_fetch_latency_seconds\""
     },
     {
+      "name": "MetricChannelGovernanceOverdue",
+      "value": "\"atlas_channel_governance_overdue\""
+    },
+    {
       "name": "MetricChannelHealthStatus",
       "value": "\"atlas_channel_health_status\""
     },

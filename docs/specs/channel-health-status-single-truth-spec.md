@@ -70,3 +70,71 @@ related:
   - `internal/monitoring/api/system/health_aggregate_test.go`（Tier 2 `stale` 桶）
   - `internal/monitoring/dashboard_api_test.go`（`/api/dashboard/channel-health` derived + 原因文字（走既有 `last_error`）+ known-issue 欄位保留）
   - `cmd/atlas/channel_health_metrics_task_test.go`（gauge 不得對過期 channel 輸出 0）
+
+
+## 4. 永久損壞 channel 的治理判準：必須退役或修復（issue #2138）
+
+### 4.1 為什麼要立這條
+
+`twse_oddlot` 的告警疲乏不是意外：上游**永久**被移除、替代路徑**早就存在**，但因為「已知問題」只是 UI 標籤、
+沒有任何機制強迫決策，`ChannelHealthStatusError` 就**連續 firing 60+ 天**（實測 2026-09-29：唯一 firing 的告警、
+gauge=2）。#2134 修掉了那一條，但**沒有東西阻止下一條**。本節把「已知但未處理」變成機器可以把關的東西。
+
+### 4.2 判準（三個條件必須同時成立）
+
+| # | 條件 | 機械化欄位／來源 |
+|---|---|---|
+| 1 | 上游**永久**不可得，且有**第一方證據** | `KnownIssue.UpstreamRemovedAt`（非空＝宣告為可用性事件；**空字串是一個正面宣告**：「這不是可用性事件」，例如 canonical 健康的死 alias `taifex-daily`） |
+| 2 | **替代路徑已存在** | `KnownIssue.ReplacementInput`（空＝沒有可退往之處 ⇒ 只能監控／修復，**不是**退役候選；例如 `bdi`：CNBC `.BADI` 無價且無可用替代） |
+| 3 | `degraded`／`error` 且資料齡 > **N × 該 channel 自己的契約窗** | `GovernanceWindowMultiplier` ＋ `apigateway.DataAge`（**與 rule 2b 用同一個資料齡函式**，否則同一秒可能一邊說 error、一邊說不夠嚴重） |
+
+**動作（二選一，且必須留痕）**：**退役**（依 #2134：寫 `status=inactive`＋原因、斷掉所有探測點、保留 channel id 與
+known-issues 紀錄）或**修復**（接上新上游／新端點，並把 `DeriveChannelStatus` 的判定條件一併對齊）。
+⛔ **禁止**以放寬規則／加抑制／延長契約窗口讓告警消失 —— 那是掩蓋；本判準存在的目的正是讓未處理的已知故障**持續可見**。
+
+### 4.3 為什麼 N = 2 個契約窗（成本理由）
+
+- **N=1 不能當判準**：`degraded` ＋ 資料齡 > **1** 個窗口正是 **E29-3 rule 2b 的升級點**本身（也就是「現在是 error」）。
+  用它等於「一變成 error 就要求退役」⇒ 必然誤判**暫態**（上游當日未發布、schema 短暫變動）。
+- **N=2** 只多要一個完整窗口的「沒有恢復」證據，同時把成本上界化：**每一個額外窗口都是告警持續 firing 的時間**。
+  實證對照：本案燒了 **60 天**，N=2（預設 48h 窗 ⇒ ≈96h）把它壓到 4 天內要決議（≈15×）。
+- **一律以「該 channel 自己的契約窗」為單位（不寫死天數）**：週頻通道（TDCC 8 天窗）⇒ ≈16 天、月頻自動更寬 ⇒
+  慢速上游不會被誤判。**60 天是「沒人處理」的觀測值，不是目標**。
+- 邊界是 **`>`（嚴格大於）**：恰好 N 個窗口**不算**；有測試釘住（`TestEvaluateChannelGovernance_WindowBoundary`）。
+
+### 4.4 期限（`ActionBy`）與兩個介面
+
+- `KnownIssue.ActionBy`＝**決議期限**；`RetiredAt`＝**已處置日期**（讓期限永久轉綠）。
+- **CI（靜態、決定性）**：`cmd/check-channel-consistency` 對 registry 逐條檢查 ——
+  可用性事件必須宣告處置（`RetiredAt` 或 `ActionBy`，缺一 ⇒ FAIL）；`ActionBy` 已過且無 `RetiredAt` ⇒ **FAIL**。
+  - **為什麼是 FAIL 不是 WARN**：WARN 正是讓它靜默 60 天的機制；期限已過是**真事件**（date-driven，非程式改動造成），可接受且刻意。
+  - **失敗訊息必須可行動**：指名 channel、`ActionBy`、兩個允許的動作，並明寫禁止的緩解手段。
+  - **`now` 一律注入**（`--now=RFC3339`；判斷函式不得呼叫 `time.Now()`）⇒ 測試在任何日期都得到同一判決（無 date-bomb）。
+  - **合法續期必須能變綠**：更新 `ActionBy` 並在 PR 說明重新檢視的結果即可 ⇒ 不得讓「已按程序續期」仍紅。
+  - **不得稀釋總時長**：報告對**每一個**可用性事件都印 `UpstreamRemovedAt` 與「已 N 天」，連續續期無法藏住拖了多久。
+- **執行期（動態）**：`cmd/atlas/channel_health_metrics_task.go` 對**宣告了永久移除**的 known-issue 通道輸出
+  `atlas_channel_governance_overdue{channel}`（1＝判準成立）。series 由 registry 界定 ⇒ **有界**（非 known-issue 通道
+  **不得**產生任何 series，有測試釘住）。
+  - **不加任何 alert rule**：本 gauge **不取代** `ChannelHealthStatusError`（告警壓力仍由既有的 status gauge 承擔）。
+    未來若要在它上面加規則，**必須先以真實資料校準門檻**（部署 #2134/#2136 後的實測基線為 **0 條 overdue**）。
+  - **提醒是「一次、非持續」**：只在 `0→1` 轉態時印一行 WARN（`monitoring.GovernanceNotifier`）—— 會重複的提醒
+    只是第二個 paging 通道，正是本判準要消滅的疲乏。
+
+### 4.5 與 rule 2b 的互動（明文）
+
+`DeriveChannelStatus` 的語意**未改動**：`degraded` ＋ 資料齡超過契約窗仍會升級為 `error`，`ChannelHealthStatusError`
+仍會 firing。本判準是**在其之上**多加一層「這件事必須被決議」的治理壓力；它**不**讓告警消失，**不**改變任何 verdict，
+也**不**放寬任何窗口。兩者共用同一個資料齡函式（`apigateway.DataAge`），因此不可能出現「告警說 error、治理說不夠嚴重」的矛盾。
+
+### 4.6 驗收
+
+- `internal/monitoring/channel_governance_test.go`：決策表（`degraded`／`error`／`ok`／`inactive`、`degraded` 但有界）、
+  **worked example**（`twse_oddlot` 生產形狀 ⇒ 應退役＋逾期的 22.6 天資料）、三個反向案例（暫態 ⇒ 不得退役；
+  永久但**無替代**（`bdi`）⇒ 不得退役；死 alias（`taifex-daily`）⇒ 不適用）、**邊界**（恰好 N 窗 vs 超過 1 分鐘）、
+  續期合法性（`ActionBy` 前後各一次斷言）、`DaysSinceDeclared` 反稀釋、`GovernanceNotifier`（首見發一次／連續不發／
+  恢復後再發／nil 不發／通道互相獨立）。
+- `cmd/check-channel-consistency/main_test.go`：registry 靜態契約為綠、**`now` 注入**下的日期閘門（期限前不紅、
+  已處置永遠綠、**未續期的開放期限在未來必須紅**）、`bdi` 無替代但仍須有重評估期限。
+- `cmd/atlas/channel_health_metrics_task_test.go`：gauge 對 pre-retirement 的 `twse_oddlot` 形狀為 `1`、
+  **有界性**（`finmind` 無 known issue ⇒ 不得有 series；`taifex-daily` 宣告非可用性事件 ⇒ 不得有 series）、
+  **一次性提醒**（首 tick 發、後續 3 tick 不發、nil notifier 不發）。

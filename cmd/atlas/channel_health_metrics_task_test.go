@@ -64,7 +64,7 @@ func TestExportChannelHealthMetrics_EmitsStalenessLatencyStatus(t *testing.T) {
 	}
 
 	collector := monitoring.NewMetricsCollector()
-	if err := exportChannelHealthMetrics(dir, collector, now); err != nil {
+	if err := exportChannelHealthMetrics(dir, collector, now, nil); err != nil {
 		t.Fatal(err)
 	}
 
@@ -150,7 +150,7 @@ func TestExportChannelHealthMetrics_StalenessOverageRespectsContract(t *testing.
 	}
 
 	collector := monitoring.NewMetricsCollector()
-	if err := exportChannelHealthMetrics(dir, collector, now); err != nil {
+	if err := exportChannelHealthMetrics(dir, collector, now, nil); err != nil {
 		t.Fatal(err)
 	}
 
@@ -221,7 +221,7 @@ func TestExportChannelHealthMetrics_ExpiredOkExportsStaleNotOk(t *testing.T) {
 	}
 
 	collector := monitoring.NewMetricsCollector()
-	if err := exportChannelHealthMetrics(dir, collector, now); err != nil {
+	if err := exportChannelHealthMetrics(dir, collector, now, nil); err != nil {
 		t.Fatal(err)
 	}
 	rec := httptest.NewRecorder()
@@ -244,7 +244,7 @@ func TestExportChannelHealthMetrics_ExpiredOkExportsStaleNotOk(t *testing.T) {
 
 func TestExportChannelHealthMetrics_NoCollectorIsNoOp(t *testing.T) {
 	dir := t.TempDir()
-	if err := exportChannelHealthMetrics(dir, nil, time.Now()); err != nil {
+	if err := exportChannelHealthMetrics(dir, nil, time.Now(), nil); err != nil {
 		t.Fatalf("expected nil collector to be no-op, got %v", err)
 	}
 }
@@ -302,7 +302,7 @@ func TestExportChannelHealthMetrics_DerivedIndicatorChannelsSkipped(t *testing.T
 	}
 
 	collector := monitoring.NewMetricsCollector()
-	if err := exportChannelHealthMetrics(dir, collector, now); err != nil {
+	if err := exportChannelHealthMetrics(dir, collector, now, nil); err != nil {
 		t.Fatal(err)
 	}
 	rec := httptest.NewRecorder()
@@ -396,7 +396,7 @@ func TestExportChannelHealthMetrics_TwseOddlotRetirementClosesTheAlertLoop(t *te
 		}
 
 		collector := monitoring.NewMetricsCollector()
-		if err := exportChannelHealthMetrics(dir, collector, now); err != nil {
+		if err := exportChannelHealthMetrics(dir, collector, now, nil); err != nil {
 			t.Fatal(err)
 		}
 		rec2 := httptest.NewRecorder()
@@ -445,4 +445,98 @@ func TestExportChannelHealthMetrics_TwseOddlotRetirementClosesTheAlertLoop(t *te
 			t.Fatal("healthStatusValue(inactive) must stay 3: the retirement depends on it")
 		}
 	})
+}
+
+// TestExportChannelHealthMetrics_GovernanceGauge — issue #2138. Two properties
+// are pinned here, and both are cardinality/one-shot discipline rather than
+// arithmetic:
+//  1. the governance gauge exists ONLY for channels whose registry entry declares
+//     a permanent upstream removal (bounded series set — a channel with no known
+//     issue must never produce one);
+//  2. the reminder fires ONCE per occurrence, not once per 5-minute tick.
+func TestExportChannelHealthMetrics_GovernanceGauge(t *testing.T) {
+	dir := t.TempDir()
+	stateDir := filepath.Join(dir, "data", "state")
+	if err := os.MkdirAll(stateDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	// 2026-09-29 07:00Z: the instant the production alert was firing on.
+	now := time.Date(2026, 9, 29, 7, 0, 0, 0, time.UTC)
+	wrapper := struct {
+		Channels map[string]*apigateway.ChannelHealthRecord `json:"channels"`
+	}{
+		Channels: map[string]*apigateway.ChannelHealthRecord{
+			// The pre-retirement production shape: degraded, last real data 22 days
+			// old, permanent upstream removal + replacement on record.
+			"twse_oddlot": {
+				Status:        apigateway.StatusDegraded,
+				LastFetchAt:   "2026-09-27T12:59:28Z",
+				LastSuccessAt: "2026-09-07T00:18:11Z",
+				LastError:     "twse_oddlot: 上游回傳空/停用資料（stale payload）",
+			},
+			// A healthy channel WITH a known issue that is not an availability case
+			// (dead alias): it must not produce a governance series either.
+			"taifex-daily": {
+				Status:        apigateway.StatusError,
+				LastFetchAt:   "2026-06-04T01:11:48Z",
+				LastSuccessAt: "2026-06-04T01:11:48Z",
+			},
+			// No known issue at all: the bounded-set assertion.
+			"finmind": {
+				Status:      apigateway.StatusError,
+				LastFetchAt: now.Add(-2 * time.Hour).Format(time.RFC3339),
+			},
+		},
+	}
+	data, err := json.MarshalIndent(wrapper, "", "  ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(stateDir, "channel_health.json"), data, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	collector := monitoring.NewMetricsCollector()
+	notifier := monitoring.NewGovernanceNotifier()
+	for i := range 3 { // three ticks in a row
+		if err := exportChannelHealthMetrics(dir, collector, now.Add(time.Duration(i)*5*time.Minute), notifier); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	rec := httptest.NewRecorder()
+	monitoring.PrometheusHandler(collector).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/metrics", nil))
+	body := rec.Body.String()
+
+	if !strings.Contains(body, `atlas_channel_governance_overdue{channel="twse_oddlot"} 1`) {
+		t.Fatalf("missing governance gauge for the pre-retirement twse_oddlot shape\n--- body ---\n%s", body)
+	}
+	for _, absent := range []string{
+		`atlas_channel_governance_overdue{channel="finmind"}`,      // no known issue ⇒ no series
+		`atlas_channel_governance_overdue{channel="taifex-daily"}`, // declared NOT an availability case
+	} {
+		if strings.Contains(body, absent) {
+			t.Errorf("unbounded series: %s must not exist (the gauge set is bounded by the registry's availability cases)", absent)
+		}
+	}
+
+	// One-shot: the first tick reminded, the following two must not.
+	decision := monitoring.EvaluateChannelGovernance(
+		monitoring.LookupKnownIssue("twse_oddlot"),
+		&apigateway.ChannelHealthRecord{Status: apigateway.StatusDegraded, LastSuccessAt: "2026-09-07T00:18:11Z"},
+		apigateway.ChannelContracts().Contract("twse_oddlot"), now)
+	fresh := monitoring.NewGovernanceNotifier()
+	if line, emit := governanceReminderLine(fresh, "twse_oddlot", decision, now); !emit || line == "" {
+		t.Fatalf("the first observation of an overdue channel must remind (emit=%t)", emit)
+	}
+	for i := 1; i <= 3; i++ {
+		if _, emit := governanceReminderLine(fresh, "twse_oddlot", decision, now.Add(time.Duration(i)*5*time.Minute)); emit {
+			t.Fatalf("tick %d reminded again: a repeating reminder is a second paging channel", i)
+		}
+	}
+	// A nil notifier (gauge-only caller) must not panic and must not remind.
+	if _, emit := governanceReminderLine(nil, "twse_oddlot", decision, now); emit {
+		t.Error("a nil notifier must never emit a reminder")
+	}
 }
