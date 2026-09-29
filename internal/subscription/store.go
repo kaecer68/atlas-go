@@ -2,6 +2,7 @@ package subscription
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -74,15 +75,28 @@ func (s *Store) Register(email, passwordHash string) (*User, error) {
 	return u, nil
 }
 
-// GetByEmail retrieves a user by email.
+// ErrNotFound is returned by the store lookups when the record does not exist.
+// Callers can test it with errors.Is.
+var ErrNotFound = errors.New("subscription: not found")
+
+// GetByEmail retrieves a user by email. A missing row is an error wrapping
+// ErrNotFound — **never** (nil, nil) (#2125).
+//
+// Contract (why the sentinel): returning (nil, nil) makes "not found"
+// indistinguishable from "found", so a caller that only checks `err == nil`
+// dereferences a nil *User. User.EffectiveTier() has a pointer receiver and
+// reads u.Tier, so that dereference is an immediate panic
+// (internal/recommender/handler.go did exactly this on both its token and
+// dev-mode paths). A sentinel error keeps every `err == nil` call site
+// correct without each one having to remember the nil check.
 func (s *Store) GetByEmail(email string) (*User, error) {
 	var u User
 	var trialUnix, createdUnix int64
 	err := s.db.QueryRow(
 		`SELECT id, email, tier, trial_end, created_at FROM users WHERE email = ?`, email,
 	).Scan(&u.ID, &u.Email, &u.Tier, &trialUnix, &createdUnix)
-	if err == sql.ErrNoRows {
-		return nil, nil
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, fmt.Errorf("get user by email: %w", ErrNotFound)
 	}
 	if err != nil {
 		return nil, fmt.Errorf("get user: %w", err)
