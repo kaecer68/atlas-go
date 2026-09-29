@@ -2043,7 +2043,8 @@
         "params *RuntimeParameters",
         "mu sync.RWMutex",
         "eventBus *eventbus.ChannelEventBus",
-        "maturityTracker *domain.MaturityTracker"
+        "maturityTracker *domain.MaturityTracker",
+        "missingAgentWarned map[string]struct{}"
       ],
       "kind": "struct",
       "name": "DarwinianWeightManager"
