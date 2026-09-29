@@ -145,6 +145,63 @@ quotes_missing_no_data, quotes_missing_not_covered, quotes_missing_fetch_error, 
 見 PR 說明：1,599 檔母體（第一方 `symbol_industry` 實際清單，`cmd/atlas/testdata/universe_scale_symbols.txt`）
 的真實 `quotes_*` 輸出、缺報價原因分類，以及休市日／交易日的語意說明。
 
+## 5.1 排除原因細分（issue #2019，2026-09-29）
+
+### 為什麼需要
+
+`symbols_excluded` 原本只有總數。2026-09-25 的快照出現 `symbols_excluded=130`（ranked=150）時，
+唯一能解釋它的東西是 `internal/monitoring/risk_exclusion.go:checkLiquidity` 的**程式註解**
+（「#1987 之前報價以張為單位，這個檢查嚴格了 1000 倍 ⇒ 生產排除 130/150」）——
+**註解不是證據**，而且註解無法回答下一次的數字。
+
+### 欄位
+
+`result.symbols_excluded_reasons`（`UniverseBuildResult`，寫進 `data/state/universe_snapshot.json`）：
+
+```json
+"symbols_excluded_reasons": {
+  "risk_var_contribution": 0, "risk_volatility": 0, "risk_liquidity": 2,
+  "risk_unspecified": 0, "risk_total": 2,
+  "screener_no_quote": 13, "screener_zero_volume": 0,
+  "screener_below_turnover_floor": 0, "screener_below_price_floor": 0,
+  "screener_binary_rejected": 3, "screener_no_factor_score": 0,
+  "screener_topn_truncated": 140, "screener_total": 156,
+  "concentration_cap": 0
+}
+```
+
+### 兩條恆等式（測試斷言）
+
+```
+symbols_filtered = symbols_ranked + screener_total + concentration_cap
+symbols_excluded = risk_total
+```
+
+`screener_total` 是 Step 4 從輸入到 ranked 的所有剔除（含 TopN 截斷）之總和，且**等於**各
+`screener_*` 子項之和（每檔只被歸因到第一個淘汰它的原因）。
+
+### 語意邊界（不得誤讀）
+
+| 項目 | 是否涵蓋 | 說明 |
+|---|---|---|
+| Step 4 選股（no_quote / zero_volume / below_turnover_floor / below_price_floor / binary_rejected / no_factor_score） | ✅ | 前四項原本只寫 log（`scoring_filters`），後兩項原本**完全沒有記數** |
+| Step 4 TopN 截斷 | ✅（**不是排除**） | 它是排名切口，納入只是為了讓恆等式閉合；key 名已標示 `topn_truncated` |
+| concentration cap | ✅ | 原本靜默剔除，現在有 `concentration_cap` |
+| Step 5 風控 | ✅ | 每條規則各一計數；**同一檔可同時計入多條規則** ⇒ 各規則之和可以 > `risk_total`（刻意的：回答「哪條規則在排除」而非「少幾檔」） |
+| **Step 2 industry filter** | ❌ | 它在 `symbols_filtered` 被記錄**之前**就縮小了候選母體，因此不屬於上面任一條恆等式；其自身計數由 `atlas_universe_symbols_filtered_total{result="industry_filter"}` 發布 |
+| 候選母體本身（`symbols_built`） | ❌ | 那是母體來源問題，由覆蓋率檢查負責 |
+
+**absent vs zero**：key **存在且為 0** = 「該階段有跑、沒排除任何檔」；key **不存在** = 「該階段沒跑」。
+所以 `RiskFilter` 未接線時不會出現任何 `risk_*` key，不會謊稱風控看過。
+
+### 實測基線與告警決策（2026-09-29）
+
+* 生產快照 `2026-09-29T05:59:21Z`：`symbols_built=1599, symbols_filtered=1599, symbols_ranked=150,
+  **symbols_excluded=0**`，`quotes_status=ok`（1586/1599）⇒ 票面引用的「130」已因 #1987 的單位統一而消失。
+* **本票不加告警**：基線為 0/150（0%）⇒ 任何門檻都沒有分佈可校準（憑空猜的門檻會製造假告警或假綠）。
+  正確順序是**先輸出 → 累積數輪 → 再校準門檻**；follow-up 由 root 登記（`docs/operations/FOLLOWUPS.md`）。
+  本規格只承諾「可稽核」，不聲稱「已告警」。
+
 ## 6. 未解 / 已知限制
 
 1. **TPEx 表的列被截斷時**（`TWSEClient` 會濾掉欄位不足的列）該檔會被歸為 `not_covered` 而不是 `no_data`。
