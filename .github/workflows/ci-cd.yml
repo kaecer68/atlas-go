@@ -459,6 +459,12 @@ jobs:
             - 'cmd/migrate-data/**'
             - 'cmd/run-stockpicker-backtest/**'
             - 'cmd/backfill-futures-bars/**'
+            # #2107：這四支 backfill CLI 於 2026-09-29 起具備 postgres 後端決策
+            # （宣告 ATLAS_STORE_BACKEND），並在同 PR 加上 PG integration 測試。
+            - 'cmd/backfill-period-history/**'
+            - 'cmd/backfill-period-history-range/**'
+            - 'cmd/backfill-outcome-period/**'
+            - 'cmd/backfill-event-calendar/**'
             - 'migrations/**'
             - '**/*.sql'
 

@@ -37,10 +37,21 @@
 // Usage:
 //
 //	backfill-period-history-range -workdir . -dry-run
+//	backfill-period-history-range -workdir .                    # 後端跟隨 ATLAS_STORE_BACKEND
 //	backfill-period-history-range -workdir . -db data/state/atlas.db
 //	backfill-period-history-range -workdir . -start 2020-01-02 -end 2024-12-31
 //	backfill-period-history-range -workdir . -source /path/to/other.jsonl
 //	backfill-period-history-range -workdir . -pg -pg-dsn postgres://...
+//
+// Storage backend (#2107): the backend follows the **declared**
+// ATLAS_STORE_BACKEND; an explicit -pg / -db overrides it. It is deliberately
+// NOT "sqlite by default, Postgres on request" — that shape let a host with
+// ATLAS_STORE_BACKEND=postgres silently write the job-local sqlite artifact
+// (data/state/atlas.db). With a postgres backend this command opens its own
+// pool (-pg-dsn, default $DATABASE_URL; migrations from
+// <workdir>/sql/migrations), injects it into the ledger factory, and fails
+// loudly when no DSN is available. A declared backend with no implementation
+// here (jsonl) is a hard error too.
 //
 // Semantics: upsert by date (ON CONFLICT(date) DO UPDATE), idempotent — safe
 // to re-run. Dates that already hold a live (is_synthetic=0) row are skipped
@@ -63,6 +74,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/kaecer68/atlas-go/internal/config"
 	atlasdb "github.com/kaecer68/atlas-go/internal/db"
 	"github.com/kaecer68/atlas-go/internal/ledger"
 	"github.com/kaecer68/atlas-go/internal/portfolio"
@@ -117,6 +129,9 @@ type runConfig struct {
 	end        string // YYYY-MM-DD inclusive; "" = last date in dataset
 	dryRun     bool
 	dbPath     string
+	// dbExplicit 表示 -db 由使用者顯式給定（不是預設值）；顯式 flag 覆寫
+	// ATLAS_STORE_BACKEND 的宣告（#2107）。
+	dbExplicit bool
 	usePG      bool
 	pgDSN      string
 	taiexProxy string // symbol used for TAIEXPrice
@@ -157,9 +172,9 @@ func runFromOSArgs() error {
 		start      = flag.String("start", defaultStart, "backfill start date YYYY-MM-DD inclusive (default: 2020-01-02)")
 		end        = flag.String("end", defaultEnd, "backfill end date YYYY-MM-DD inclusive (default: 2024-12-31)")
 		dryRun     = flag.Bool("dry-run", false, "print what would be written without touching the DB")
-		dbPath     = flag.String("db", "data/state/atlas.db", "SQLite DB path (default relative to -workdir)")
-		usePG      = flag.Bool("pg", false, "write to PostgreSQL instead of SQLite")
-		pgDSN      = flag.String("pg-dsn", "", "PostgreSQL DSN (default: $DATABASE_URL); requires -pg")
+		dbPath     = flag.String("db", "data/state/atlas.db", "explicit SQLite override (relative to -workdir); without it the backend follows ATLAS_STORE_BACKEND")
+		usePG      = flag.Bool("pg", false, "explicit PostgreSQL override (DSN: -pg-dsn or $DATABASE_URL)")
+		pgDSN      = flag.String("pg-dsn", "", "PostgreSQL DSN (default: $DATABASE_URL); used by the postgres backend")
 		taiexProxy = flag.String("taiex-proxy", defaultTAIEXProxy, "symbol whose close is used as TAIEX proxy")
 	)
 	flag.Parse()
@@ -171,8 +186,17 @@ func runFromOSArgs() error {
 			}
 		}
 	}
+	dbSet := false
+	flag.Visit(func(f *flag.Flag) {
+		if f.Name == "db" {
+			dbSet = true
+		}
+	})
+	if err := checkBackendFlags(dbSet, *usePG); err != nil {
+		return err
+	}
 	if *usePG && *pgDSN == "" && os.Getenv("DATABASE_URL") == "" {
-		return fmt.Errorf("-pg requires -pg-dsn or DATABASE_URL")
+		return fmt.Errorf("-pg requires -pg-dsn or DATABASE_URL (refusing to fall back to sqlite)")
 	}
 
 	_, err := run(context.Background(), runConfig{
@@ -182,6 +206,7 @@ func runFromOSArgs() error {
 		end:        *end,
 		dryRun:     *dryRun,
 		dbPath:     *dbPath,
+		dbExplicit: dbSet,
 		usePG:      *usePG,
 		pgDSN:      *pgDSN,
 		taiexProxy: *taiexProxy,
@@ -209,6 +234,14 @@ func run(ctx context.Context, cfg runConfig) (*runStats, error) {
 
 	stats := &runStats{
 		periodCount: map[string]int{},
+	}
+	// 後端決策跟隨宣告（ATLAS_STORE_BACKEND）；顯式 flag 已在 backendFor 內覆寫。
+	appCfg := config.Load()
+	backendLabel := "(injected store)"
+	if cfg.store == nil {
+		if b, bErr := backendFor(cfg, appCfg); bErr == nil {
+			backendLabel = b
+		}
 	}
 
 	srcPath := cfg.sourcePath
@@ -255,7 +288,7 @@ func run(ctx context.Context, cfg runConfig) (*runStats, error) {
 	if cfg.store != nil {
 		store = cfg.store
 	} else if !cfg.dryRun {
-		store, closeStore, err = openSink(ctx, cfg)
+		store, closeStore, err = openSink(ctx, cfg, appCfg)
 		if err != nil {
 			return stats, err
 		}
@@ -325,7 +358,7 @@ func run(ctx context.Context, cfg runConfig) (*runStats, error) {
 		stats.skippedLive += skipped
 	}
 
-	printSummary(cfg, stats)
+	printSummary(cfg, stats, backendLabel)
 	return stats, nil
 }
 
@@ -394,38 +427,102 @@ func sumRowCount(m map[string]perDay) int {
 // Sink & upsert
 // ---------------------------------------------------------------------------
 
-// openSink opens SQLite (-db, default) or PostgreSQL (-pg) and returns a
-// ready-to-use HistoricalStore plus a closer.
-func openSink(ctx context.Context, cfg runConfig) (ledger.HistoricalStore, func() error, error) {
-	if cfg.usePG {
+// initPostgresPool 是 atlasdb.Init（ping ＋ 套用 <workdir>/sql/migrations）的 seam：
+// 單元測試替換它就能在沒有 PostgreSQL 的情況下驗證「開池 → 注入 → 建 store」的順序。
+var initPostgresPool = atlasdb.Init
+
+// checkBackendFlags 拒絕互相矛盾的顯式 flag：-pg（postgres）與 -db（sqlite）
+// 不能同時給。兩個都不給時後端跟隨 ATLAS_STORE_BACKEND（#2107）。
+func checkBackendFlags(dbSet, usePG bool) error {
+	if dbSet && usePG {
+		return fmt.Errorf("-pg and -db are mutually exclusive (pick one backend explicitly, or drop both and let ATLAS_STORE_BACKEND decide)")
+	}
+	return nil
+}
+
+// backendFor 回傳本次執行實際使用的儲存後端（單一決策路徑，#2107）。
+//
+// 顯式 flag 優先（-pg／-db），否則**跟隨宣告**的 ATLAS_STORE_BACKEND。
+// 刻意不再「預設 sqlite、postgres 需 -pg」—— 那個形狀讓生產（宣告 postgres）
+// 靜默寫到本機 sqlite artifact（data/state/atlas.db），正是 #2107 的事故。
+func backendFor(cfg runConfig, appCfg config.Config) (string, error) {
+	switch {
+	case cfg.usePG:
+		return ledger.ResolveStoreBackend("postgres")
+	case cfg.dbExplicit:
+		return ledger.ResolveStoreBackend("sqlite")
+	default:
+		return ledger.ResolveStoreBackend(appCfg.StoreBackend)
+	}
+}
+
+// openSink 依 flag／環境開啟 store；**不降級**。
+//
+// postgres 後端的三個必要步驟（缺一就會在生產以「requires pool」失敗）：
+//  1. 取 DSN（-pg-dsn 優先，其次 $DATABASE_URL）—— 沒有就**明確**報錯，絕不退回 sqlite
+//  2. initPostgresPool 建立連線池（ping ＋ 套用 migrations）
+//  3. 注入 store factory（ledger.SetPostgresPool）**再**建 store
+//
+// 宣告的後端若在本指令沒有實作（jsonl：period_history 是關聯表）也是明確錯誤。
+// 回傳的 closer 負責關閉本函式自己開的資源。
+func openSink(ctx context.Context, cfg runConfig, appCfg config.Config) (ledger.HistoricalStore, func() error, error) {
+	backend, err := backendFor(cfg, appCfg)
+	if err != nil {
+		return nil, nil, fmt.Errorf("period history store: %w", err)
+	}
+
+	switch backend {
+	case "sqlite":
+		dbPath := cfg.dbPath
+		if dbPath == "" {
+			dbPath = filepath.Join("data", "state", "atlas.db")
+		}
+		if !filepath.IsAbs(dbPath) {
+			dbPath = filepath.Join(cfg.workDir, dbPath)
+		}
+		if err := os.MkdirAll(filepath.Dir(dbPath), 0o755); err != nil {
+			return nil, nil, fmt.Errorf("mkdir db dir: %w", err)
+		}
+		sqlDB, err := ledger.OpenSQLiteDB(dbPath)
+		if err != nil {
+			return nil, nil, fmt.Errorf("open sqlite %s: %w", dbPath, err)
+		}
+		if err := ledger.InitSchema(sqlDB); err != nil {
+			_ = sqlDB.Close()
+			return nil, nil, fmt.Errorf("init schema: %w", err)
+		}
+		return ledger.NewSQLiteHistoricalStore(sqlDB), sqlDB.Close, nil
+
+	case "postgres":
 		dsn := cfg.pgDSN
 		if dsn == "" {
-			dsn = os.Getenv("DATABASE_URL")
+			dsn = appCfg.DatabaseURL
 		}
-		migrationsPath := filepath.Join(cfg.workDir, "sql", "migrations")
-		pool, err := atlasdb.Init(ctx, dsn, migrationsPath)
+		if dsn == "" {
+			// 明確可診斷：說清楚是哪個後端、要補哪個 flag／環境變數。
+			return nil, nil, fmt.Errorf(
+				"period history store: backend %q requires a PostgreSQL DSN: pass -pg-dsn or set DATABASE_URL (refusing to fall back to sqlite)",
+				backend)
+		}
+		pool, err := initPostgresPool(ctx, dsn, filepath.Join(cfg.workDir, "sql", "migrations"))
 		if err != nil {
 			return nil, nil, fmt.Errorf("connect postgres: %w", err)
 		}
-		return ledger.NewPostgresHistoricalStore(pool), func() error { pool.Close(); return nil }, nil
-	}
+		ledger.SetPostgresPool(pool)
+		pgCfg := appCfg
+		pgCfg.StoreBackend = backend
+		store, err := ledger.NewHistoricalStore(pgCfg)
+		if err != nil {
+			pool.Close()
+			return nil, nil, err
+		}
+		return store, func() error { pool.Close(); return nil }, nil
 
-	dbPath := cfg.dbPath
-	if !filepath.IsAbs(dbPath) {
-		dbPath = filepath.Join(cfg.workDir, dbPath)
+	default:
+		return nil, nil, fmt.Errorf(
+			"period history store: backend %q has no history implementation (use -db <path>, -pg, or ATLAS_STORE_BACKEND=sqlite|postgres)",
+			backend)
 	}
-	if err := os.MkdirAll(filepath.Dir(dbPath), 0o755); err != nil {
-		return nil, nil, fmt.Errorf("mkdir db dir: %w", err)
-	}
-	sqlDB, err := ledger.OpenSQLiteDB(dbPath)
-	if err != nil {
-		return nil, nil, fmt.Errorf("open sqlite %s: %w", dbPath, err)
-	}
-	if err := ledger.InitSchema(sqlDB); err != nil {
-		_ = sqlDB.Close()
-		return nil, nil, fmt.Errorf("init schema: %w", err)
-	}
-	return ledger.NewSQLiteHistoricalStore(sqlDB), sqlDB.Close, nil
 }
 
 // upsertDay writes one period_history row for the day. A date that already
@@ -462,9 +559,10 @@ func printDryRunLine(date string, taiex float64, assessment portfolio.PeriodAsse
 		taiex)
 }
 
-func printSummary(cfg runConfig, stats *runStats) {
+func printSummary(cfg runConfig, stats *runStats, backend string) {
 	var sb strings.Builder
 	sb.WriteString("\n== backfill-period-history-range summary ==\n")
+	fmt.Fprintf(&sb, "storage backend       %s\n", backend)
 	fmt.Fprintf(&sb, "source                %s\n", cfg.sourcePath)
 	fmt.Fprintf(&sb, "workdir               %s\n", cfg.workDir)
 	fmt.Fprintf(&sb, "taiex proxy           %s\n", cfg.taiexProxy)
