@@ -117,8 +117,14 @@ known-issues 紀錄）或**修復**（接上新上游／新端點，並把 `Deri
   **不得**產生任何 series，有測試釘住）。
   - **不加任何 alert rule**：本 gauge **不取代** `ChannelHealthStatusError`（告警壓力仍由既有的 status gauge 承擔）。
     未來若要在它上面加規則，**必須先以真實資料校準門檻**（部署 #2134/#2136 後的實測基線為 **0 條 overdue**）。
-  - **提醒是「一次、非持續」**：只在 `0→1` 轉態時印一行 WARN（`monitoring.GovernanceNotifier`）—— 會重複的提醒
-    只是第二個 paging 通道，正是本判準要消滅的疲乏。
+  - **提醒是「一次、非持續」**：只在 `0→1` 轉態時，經 `monitoring.GovernanceNotifier` 印**一行警告 log**
+    （實作是 `log.Printf`，格式 `[Gateway] channel_governance_overdue …`；本節刻意不寫成「WARN 級」，
+    因為它不是 `slog` 級別而是非結構化警告行）—— 會重複的提醒只是第二個 paging 通道，正是本判準要消滅的疲乏。
+    這一行**由出貨路徑直接印出**（`exportChannelHealthMetrics` → `governanceReminderLine` → `log.Print`）：
+    同一份實作、同一份訊息、同一份測試，避免「測試綠、生產走另一條路」。
+  - **行程重啟＝重新開始觀測**：`GovernanceNotifier` 的狀態是**純記憶體**（刻意如此），所以容器重啟後若該通道
+    仍然 overdue，會**再印一次**——最多一次，不會變成每 tick 一行。重啟造成的一次重複是**可接受且刻意**的
+    （寧可多一次，也不要為了去重而把狀態寫進磁碟、讓它與 record 的真實性脫鉤）。
 
 ### 4.5 與 rule 2b 的互動（明文）
 

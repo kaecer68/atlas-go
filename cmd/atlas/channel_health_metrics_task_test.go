@@ -1,7 +1,9 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
+	"log"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -521,21 +523,85 @@ func TestExportChannelHealthMetrics_GovernanceGauge(t *testing.T) {
 		}
 	}
 
-	// One-shot: the first tick reminded, the following two must not.
+}
+
+// TestExportChannelHealthMetrics_GovernanceReminderIsOneShot asserts the
+// SHIPPED behavior, not a helper's return value: three export ticks of an
+// overdue channel must put exactly ONE reminder line through the process log,
+// and that line must carry the operational guidance an operator needs
+// (deadline passed / should retire, and the explicit statement that widening a
+// window or suppressing the alert is concealment, not a fix).
+//
+// Why it captures the log: the third-party review of 2026-09-30 found this
+// exact trap in the first version — the production path had its own inline
+// log.Printf while the tested helper was never called, so "3 ticks, 1 line" was
+// pinned on a function production did not use. Asserting the observable output
+// of the real path is the only form that cannot drift like that.
+func TestExportChannelHealthMetrics_GovernanceReminderIsOneShot(t *testing.T) {
+	dir := t.TempDir()
+	stateDir := filepath.Join(dir, "data", "state")
+	if err := os.MkdirAll(stateDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	now := time.Date(2026, 9, 29, 7, 0, 0, 0, time.UTC)
+	wrapper := struct {
+		Channels map[string]*apigateway.ChannelHealthRecord `json:"channels"`
+	}{
+		Channels: map[string]*apigateway.ChannelHealthRecord{
+			// The pre-retirement production shape: permanent removal + replacement
+			// on record, degraded, data 22 days old.
+			"twse_oddlot": {
+				Status:        apigateway.StatusDegraded,
+				LastFetchAt:   "2026-09-27T12:59:28Z",
+				LastSuccessAt: "2026-09-07T00:18:11Z",
+			},
+		},
+	}
+	data, err := json.MarshalIndent(wrapper, "", "  ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(stateDir, "channel_health.json"), data, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	var buf bytes.Buffer
+	prevWriter := log.Writer()
+	log.SetOutput(&buf)
+	defer log.SetOutput(prevWriter)
+
+	collector := monitoring.NewMetricsCollector()
+	notifier := monitoring.NewGovernanceNotifier()
+	for i := range 3 { // three consecutive 5-minute ticks
+		if err := exportChannelHealthMetrics(dir, collector, now.Add(time.Duration(i)*5*time.Minute), notifier); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	const marker = "channel_governance_overdue channel=twse_oddlot"
+	lines := 0
+	for _, line := range strings.Split(buf.String(), "\n") {
+		if strings.Contains(line, marker) {
+			lines++
+		}
+	}
+	if lines != 1 {
+		t.Fatalf("reminder lines through the process log = %d, want exactly 1 for three ticks\n--- log ---\n%s", lines, buf.String())
+	}
+	// The guidance must reach the operator, not just the test: a reminder that
+	// does not say what to do (and what is forbidden) is a second paging channel.
+	for _, want := range []string{"concealment, not a fix", "issue #2138"} {
+		if !strings.Contains(buf.String(), want) {
+			t.Errorf("the shipped reminder must contain %q; log was:\n%s", want, buf.String())
+		}
+	}
+
+	// A nil notifier (gauge-only caller) must not panic and must not remind.
+	buf.Reset()
 	decision := monitoring.EvaluateChannelGovernance(
 		monitoring.LookupKnownIssue("twse_oddlot"),
 		&apigateway.ChannelHealthRecord{Status: apigateway.StatusDegraded, LastSuccessAt: "2026-09-07T00:18:11Z"},
 		apigateway.ChannelContracts().Contract("twse_oddlot"), now)
-	fresh := monitoring.NewGovernanceNotifier()
-	if line, emit := governanceReminderLine(fresh, "twse_oddlot", decision, now); !emit || line == "" {
-		t.Fatalf("the first observation of an overdue channel must remind (emit=%t)", emit)
-	}
-	for i := 1; i <= 3; i++ {
-		if _, emit := governanceReminderLine(fresh, "twse_oddlot", decision, now.Add(time.Duration(i)*5*time.Minute)); emit {
-			t.Fatalf("tick %d reminded again: a repeating reminder is a second paging channel", i)
-		}
-	}
-	// A nil notifier (gauge-only caller) must not panic and must not remind.
 	if _, emit := governanceReminderLine(nil, "twse_oddlot", decision, now); emit {
 		t.Error("a nil notifier must never emit a reminder")
 	}

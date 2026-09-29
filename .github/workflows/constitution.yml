@@ -29,3 +29,20 @@ jobs:
 
       - name: Run Channel Index Synchronization Check
         run: bash scripts/ci/check_channel_index.sh
+
+      # 2026-09-30 新增（issue #2138 的日期閘門上線）：
+      # 「永久損壞 channel 必須退役或修復」的檢查是 Go CLI，這裡跑它的一致性＋治理兩半。
+      #
+      # 為什麼放**這個** job：本 workflow 每次 PR 都跑、**沒有** `changes` path filter
+      # （quality.yml 的重型 job 都被 `needs.changes.outputs.code == 'true'` 守門 ⇒ 只改 docs 的 PR
+      # 會整支跳過，而「只改文件」正是最容易忘記處理逾期治理項的情境）。channel-index 與本檢查
+      # 同族（channel 契約／註冊），放同一 job 也讓失敗語意單一。
+      #
+      # 為什麼不能只靠 pre-push：`make ci-gate` 含這支檢查，但**不跑 pre-push 的人**（或在 GitHub UI
+      # 直接合併）可以讓「逾期未處置」照樣進 main ⇒ 那條閘門只落地一半。
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version-file: go.mod
+
+      - name: Channel consistency + governance deadline gate
+        run: bash scripts/ci/check_channel_consistency.sh

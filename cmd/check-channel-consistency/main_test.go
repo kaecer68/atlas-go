@@ -3,10 +3,12 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/apigateway"
+	"github.com/kaecer68/atlas-go/internal/monitoring"
 )
 
 func writeFixture(t *testing.T, rel, content string) string {
@@ -168,6 +170,73 @@ func TestRunChecks_CurrentConfiguration(t *testing.T) {
 	// The dead alias is NOT an availability case: it must not appear at all.
 	if seen["taifex-daily"] {
 		t.Error("taifex-daily must not be reported as an availability case (it opted out by declaration)")
+	}
+	// No blind spot: the governance check must JUDGE every registry entry, and the
+	// report must list exactly the entries that declare a permanent removal. An
+	// entry that is registered but never judged would be a governance hole that no
+	// test could see.
+	entries := monitoring.KnownIssueEntries()
+	wantRows := 0
+	for _, e := range entries {
+		if e.Issue.UpstreamRemovedAt != "" {
+			wantRows++
+		}
+	}
+	if len(governance) != wantRows {
+		t.Fatalf("governance rows = %d, want %d (one per registry entry declaring an upstream removal)", len(governance), wantRows)
+	}
+	for _, e := range entries {
+		if e.Issue.UpstreamRemovedAt == "" {
+			continue
+		}
+		if !seen[e.ChannelID] {
+			t.Errorf("registry entry %q declares an upstream removal but is missing from the governance report", e.ChannelID)
+		}
+	}
+}
+
+// TestNoProductionPathInjectsNow pins guardrail 2 (determinism) at the source
+// level: `--now` exists so a test or a reproduction can judge a deadline at a
+// fixed instant. Nothing else may pass it — a production path that decided its
+// own instant would make the verdict unreproducible, which is the property the
+// guardrail exists to protect.
+func TestNoProductionPathInjectsNow(t *testing.T) {
+	root, err := filepath.Abs(filepath.Join("..", ".."))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var offenders []string
+	walkErr := filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
+		if err != nil {
+			return nil
+		}
+		if d.IsDir() {
+			switch d.Name() {
+			case ".git", "node_modules", "vendor", "dist", "docs", "data":
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
+			return nil
+		}
+		data, readErr := os.ReadFile(path)
+		if readErr != nil {
+			return nil
+		}
+		if strings.Contains(string(data), `"--now=`) || strings.Contains(string(data), "nowFlag") {
+			rel, _ := filepath.Rel(root, path)
+			if rel != filepath.Join("cmd", "check-channel-consistency", "main.go") {
+				offenders = append(offenders, rel)
+			}
+		}
+		return nil
+	})
+	if walkErr != nil {
+		t.Fatalf("walk: %v", walkErr)
+	}
+	if len(offenders) > 0 {
+		t.Fatalf("the deadline instant may only be injected by the check-channel-consistency CLI flag; found %v", offenders)
 	}
 }
 

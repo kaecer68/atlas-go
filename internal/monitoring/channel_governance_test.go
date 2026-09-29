@@ -277,16 +277,27 @@ func TestKnownIssues_RegistrySatisfiesTheStaticContract(t *testing.T) {
 			t.Fatalf("KnownIssueEntries() is not sorted: %v", ids)
 		}
 	}
-	want := map[string]bool{
-		"bdi": true, "taifex-daily": true, "twse-etf": true,
-		"twse-oddlot": true, "twse_etf": true, "twse_oddlot": true,
-	}
+	// SET EQUALITY, both directions. A registry entry that the accessor does not
+	// return is a blind spot: it would never be judged, never printed, and never
+	// gated (the "registered but unchecked" shape). An id the accessor returns
+	// without a registry entry is impossible by construction, which is exactly
+	// why the reverse direction is asserted rather than assumed.
+	want := []string{"bdi", "taifex-daily", "twse-etf", "twse-oddlot", "twse_etf", "twse_oddlot"}
+	sort.Strings(want)
 	if len(ids) != len(want) {
-		t.Fatalf("registry channel IDs = %v, want %d entries", ids, len(want))
+		t.Fatalf("KnownIssueEntries() = %v, want the whole registry %v", ids, want)
 	}
-	for _, id := range ids {
-		if !want[id] {
-			t.Errorf("unexpected registry channel ID %q", id)
+	for i := range want {
+		if ids[i] != want[i] {
+			t.Fatalf("KnownIssueEntries()[%d] = %q, want %q (set equality, not just membership)", i, ids[i], want[i])
+		}
+	}
+	// Every entry must also be reachable through the lookup the RUNTIME uses:
+	// LookupKnownIssue is what cmd/atlas consults, so an entry that the accessor
+	// knows but the lookup does not is not actually governing anything.
+	for _, id := range want {
+		if LookupKnownIssue(id) == nil {
+			t.Errorf("LookupKnownIssue(%q) = nil although the entry is registered: the accessor and the runtime lookup disagree", id)
 		}
 	}
 }

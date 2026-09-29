@@ -113,12 +113,14 @@ func exportChannelHealthMetrics(workDir string, collector *monitoring.MetricsCol
 					value = 1
 				}
 				collector.RecordGauge(MetricChannelGovernanceOverdue, value, map[string]string{"channel": channelID})
-				if gov.Note(channelID, value == 1, now) {
-					// ONE line per occurrence, never one per tick: a repeating reminder
-					// is just a second paging channel (the fatigue this criterion exists
-					// to prevent).
-					log.Printf("[Gateway] channel_governance_overdue channel=%s status=%s data_age_windows=%.1f overdue_deadline=%t reasons=%v",
-						channelID, decision.Status, decision.DataAgeWindows, decision.Overdue, decision.Reasons)
+				// The reminder goes through governanceReminderLine — the SAME
+				// function the test drives. An inline log.Printf here would make
+				// the tested function production-dead code and would let a future
+				// edit of this line change the shipped behavior with no test
+				// failing (the "green test, different production path" trap the
+				// third-party review caught on 2026-09-30).
+				if line, emit := governanceReminderLine(gov, channelID, decision, now); emit {
+					log.Print(line)
 				}
 			}
 			continue
