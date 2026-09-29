@@ -223,13 +223,13 @@
 | ID | 現況證據 | 分類 | 建議批次 |
 |---|---|---|---|
 | **I7** | `internal/marketdata/symbol_industry_mapper.go` 的 `NewSymbolIndustryMapper`／`BuildMapping` 零非測試呼叫者（生產走 `monitoring.NewTreeBasedMapper`；`git grep` 只有定義、另無測試） | 需跨 lane（`internal/marketdata/**` 由 #1986 quote-reliability lane 持有） | **本 PR 明確不動**；由該 lane 移除 |
-| **I29**（`cmd/atlas` 半邊） | **真缺口＝分母口徑（已實測定案，Batch B）**：`cmd/atlas/main.go` 的 `universe_coverage_check` 以 `TotalClassifiedSymbols(tree)` 當分母＝分類樹 12 段中 11 段的**代表股 27 檔**，分子卻是 snapshot 的 `symbols_built=1,599`（2026-09-25 artifact，`docs/operations/universe-run-truth-model.md` §5）⇒ `coveragePct ≈ 5922%`，`< 90` 對任何「回報 pipeline 母體」的 artifact **不可滿足**（要成立需 `symbols_built < 24.3`）⇒ 舊檢查**從未**因覆蓋率觸發。#2096 修的是另一半（artifact 新鮮度 finding）；本 PR 只更正「99.9% 覆蓋」這個**不存在於該路徑的讀數**（它出自測試 fixture `TotalSymbols=1600`）並以 `TestUniverseCoverageCheck_DenominatorCannotFireWithPipelineUniverse` 把分母與此算式釘住（實測 `TotalClassifiedSymbols(DefaultClassification()) == 27`）。 | 可修（**修好後會新增一個可能觸發的告警**） | 2026-09-29 06:00Z 驗收後：改分母為「pipeline 預期覆蓋的母體」＋補「舊分母恆不成立」的負向證明 |
+| **I29**（`cmd/atlas` 半邊） | **真缺口＝分母口徑（已實測定案，Batch B）**：`cmd/atlas/main.go` 的 `universe_coverage_check` 以 `TotalClassifiedSymbols(tree)` 當分母＝分類樹 12 段中 11 段的**代表股 27 檔**，分子卻是 snapshot 的 `symbols_built=1,599`（2026-09-25 artifact，`docs/operations/universe-run-truth-model.md` §5）⇒ `coveragePct ≈ 5922%`，`< 90` 對任何「回報 pipeline 母體」的 artifact **不可滿足**（要成立需 `symbols_built < 24.3`）⇒ 舊檢查**從未**因覆蓋率觸發。#2096 修的是另一半（artifact 新鮮度 finding）；本 PR 只更正「99.9% 覆蓋」這個**不存在於該路徑的讀數**（它出自測試 fixture `TotalSymbols=1600`）並以 `TestUniverseCoverageCheck_DenominatorCannotFireWithPipelineUniverse` 把分母與此算式釘住（實測 `TotalClassifiedSymbols(DefaultClassification()) == 27`）。 | 可修（**修好後會新增一個可能觸發的告警**） | 2026-09-29 06:00Z 驗收後：改分母為「pipeline 預期覆蓋的母體」＋補「舊分母恆不成立」的負向證明 （→ **Batch C：已處理，見 §Batch C**） |
 | **I30** | `.github/workflows/nightly-refresh.yml` 的 backfill 寫入仍被丟棄（runner 內寫 `configs/parameters.json` 後丟棄） | 需跨 lane（`.github/**`） | honesty-batch lane |
 | **I32** | `ledger.EventFlowPredictionRecord`／`EventFlowPredictionStore` 仍無任何 `sector` 欄位或方法（反射測試釘住） | 需設計決定（ledger schema 變更） | 與 I6 落地同批 |
 | **I36** | 生產 `darwinian_weights.json` 21 agents 中 15 個 `total_signals=0`、權重凍在 0.3 下限 | 需生產資料 | 另票（上游 signal 供給盤查） |
 | **I21** | 消費端 `stockpicker_winrate_executor.go` 的 source／window 固定（`stockpicker-foreign-3d-net-buy`／`120d`）；本批無生產存取 | 需生產資料 | 生產跑一輪後複驗（查 `stock_win_rate` 列數 ＋ `data/state/stock_flows/`） |
-| **N-P1** | `llmSectorAgentsPlugin` 仍是 pass-through | 可修（與 I19 殘留同源） | 與 I19 同批 |
-| **N-P2** | `sector_predictions` 無前端 consumer（`valid_fields.json` 僅型別鏡射） | 可修／需產品決定 | 另票（先明示未使用） |
+| **N-P1** | `llmSectorAgentsPlugin` 仍是 pass-through | 可修（與 I19 殘留同源） | 與 I19 同批 （→ **Batch C：已處理，見 §Batch C**） |
+| **N-P2** | `sector_predictions` 無前端 consumer（`valid_fields.json` 僅型別鏡射） | 可修／需產品決定 | 另票（先明示未使用） （→ **Batch C：已處理，見 §Batch C**） |
 | **I19 殘留** | production 無 LLM driver 注入點（`LLMSectorAgentDriverWired=false`）、旗標預設 false | 需設計決定 | 需產品裁決是否啟用 |
 | **N-A1 殘留（4 emitter）** | `snapshot.projection`／`legacy.read`／`fallback.count`／`rollback.drill` 仍無誠實呼叫點（baseline 已寫明理由） | 需設計決定 | 需先有誠實資料來源 |
 | **N-A5** | `SectorDriverDeltasSupplied=false`：六個 driver delta map 全空 ⇒ 投影恆等 strategic prior | 需設計決定（供給 delta 是行為變更） | 另票 |
@@ -254,3 +254,45 @@
 | 同句錯誤的另一處 | 審計快照 `docs/specs/industry-allocation-inert-audit-20260924.md:85` 仍寫「`TaiwanSemiconductorIndexMA` 無任何 producer」。該檔依慣例（Batch A 起）不在本 PR 的允許範圍內，**未動**；以本表更正敘述為準。 |
 
 ---
+
+---
+
+## Batch C（#1944，2026-09-29）— I29 分母修正 ＋ N-P1／N-P2 明示
+
+> 前提（**量測後才動手**）：票面（2026-09-24）的 6 個症狀在現行 main 上**都已關閉**，`#1944 建議 2` 的 inert 自動檢查也**已在 main 且有牙齒**（`check_inert_closure.sh` PASS；`test-inert-closure.sh` 4/4，含四類違規的負向 fixture）。⇒ 本批只處理**裁定要做的三項**，其餘延後或另票。
+
+### 分流政策（root 2026-09-29 定案，本批生效）
+
+> **會改變生產行為／值的改動 ⇒ 排到 #1971 觀察窗（2026-10-28）之後**；
+> **只讓「宣稱／量測」變誠實、且不改變行為的改動 ⇒ 現在做**。
+> 理由：#1971 正在做 20 場觀察，任何改變值語意的修法都會污染那個量測。
+
+### 本批處置
+
+| ID | 處置 | 可執行證據 |
+|---|---|---|
+| **I29** | **修好（分母＝pipeline 母體）**。`CoverageInput.TotalSymbols` → `PopulationSymbols`；新增 `monitoring.UniversePopulationSize(tree, substrate)`（與 pipeline 的 `gatherAllSymbols` **同一個**讀法：優先第一方 `symbol_industry` 母體，否則 tree+mapper）；覆蓋率分母改由 `cmd/atlas/main.go` 傳入。**門檻 `CoverageLowThreshold=90` 未動**。 | `TestUniverseCoverageCheck_PopulationDenominatorIsThePipelines`（三向：① 舊分母不再產生 5922% 而是 `population_smaller_than_built`；② 母體分母讓門檻**可達**：1400/1599=87.5% 會 firing、1599/1599 靜默；③ `UniversePopulationSize` 讀的是 substrate 母體而非代表股） |
+| **N-P1** | **明示未啟用**：新增 `orchestrator.LLMSectorAgentLoopActive = false`，並在註解寫明「**即使 driver 非 nil** 也是 pass-through」（`ProcessRecommendations` 建構 `SectorAgentLLM` 後丟棄、每個路徑都回傳輸入）⇒ 與 `LLMSectorAgentDriverWired` 是**兩個不同層次**的宣告。 | `TestLLMSectorAgentLoop_IsPassThrough`（常數 ＋ **source-level**：每個 `return` 必須是 `return recs`、函式內不得出現 `recs[`／`append(recs`／`recs = `；且 `WithLLMSectorAgents` 的生產呼叫必須被 `LLMSectorAgentsEnabled` 閘住） |
+| **N-P2** | **明示未使用**：新增 `eventdriven.SectorPredictionsFrontendConsumer = false`，註解寫明「**產生的型別鏡射不是 consumer**」。 | `TestSectorPredictions_HasNoFrontendReader`（掃 `shared_web`／`client_web`／`admin_web`，**排除**兩個產生檔 `valid_fields.json`／`field_types.ts`；一旦真的有前端讀者 ⇒ FAIL 並要求同批翻常數與本表） |
+
+### 本批**刻意不做**（依分流政策）
+
+| 項 | 理由 |
+|---|---|
+| **I22-overheat**（`PhaseOverheat` 生產不可達） | **會改變行為**（相位由不可達變可達、−0.90 曝光調整生效）⇒ 延後到 #1971 之後；且「靜默」半邊已滿足（`silicon_cycle.go:68` 明載 `SiliconTWIndexIsMADeviation=false` ＋ 本表 ＋ baseline 附理由） |
+| **I27 殘留**（symbol→sector 值語意） | 改**值** ⇒ 會改變既有命中率口徑 ⇒ 污染觀察窗 |
+| 超界 `adjustment_factor` ＋ validator 只擋 `!=0` | 需先回答「正確界為何、那 4 個值是否合法」；且會擋 production 啟動 |
+| I7／I30 | 跨 lane（`internal/marketdata/**`／`.github/**`） |
+| I32／I36／I21／N-A1 殘留／I19 殘留／I16(a)／I31 CI freshness／I23 前端 | 需設計決定／需生產資料／產品／前端 lane（由 root 登錄 FU） |
+
+### I29 的實測（root 條件 1：先量測再修）
+
+| 讀數 | 值 | 來源 |
+|---|---|---|
+| 分母（修前） | 27（分類樹代表股） | `TotalClassifiedSymbols(DefaultClassification())`，測試釘住 |
+| 分母（修後） | **1,599**（pipeline 母體） | `UniversePopulationSize` ＝ `len(gatherAllSymbols)`，與 `symbols_built` 同一個函式（`result.SymbolsBuilt = len(allSymbols)`） |
+| 分子 | 1,599（2026-09-29 生產 snapshot `symbols_built`） | `data/state/universe_snapshot.json` |
+| **新 `coveragePct`** | **100.0%** | 1,599 / 1,599 |
+| 修前「讀數」 | ≈5,922%（不可用，任何 pipeline 母體都達不到 `<90`） | 同上 |
+
+⇒ **`< 90` 現在可達但基線不觸發**（要在母體不變的情況下 build < 1,439 檔，或母體於兩輪之間成長 >11%）⇒ 依 root 條件 2：**未新增 paging 來源**，故無需重新校準門檻，也無需宣告非 paging。分母**小於**分子時改報 `population_smaller_than_built`（不再產生荒謬百分比）——即 root 條件 3 的反向案例。

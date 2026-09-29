@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -382,5 +384,72 @@ func TestSectorPredictionStatusJSONContract(t *testing.T) {
 	}
 	if decoded.SectorPredictions == nil {
 		t.Error("sector_predictions must serialize as [] rather than null")
+	}
+}
+
+// TestSectorPredictions_HasNoFrontendReader is the evidence for
+// SectorPredictionsFrontendConsumer (issue #1944 item N-P2): the field is
+// mirrored into the generated frontend field lists, so "nobody reads it" cannot
+// be concluded by grepping — the mirror IS a hit. The check therefore ignores
+// the two generated files and fails on any other frontend mention, which is what
+// a real reader would look like.
+//
+// The failure message is the point: adding a consumer is allowed, but it must
+// flip the declaration in the same change (and update
+// docs/reference/inert-registry.md), so the registry can never disagree with the
+// bundle.
+func TestSectorPredictions_HasNoFrontendReader(t *testing.T) {
+	if SectorPredictionsFrontendConsumer {
+		t.Fatal("SectorPredictionsFrontendConsumer must be false while no frontend page reads the field")
+	}
+
+	root, err := filepath.Abs(filepath.Join("..", ".."))
+	if err != nil {
+		t.Fatalf("abs root: %v", err)
+	}
+	// Generated type mirrors: they list every field of the scanned Go types and
+	// are not consumers.
+	generated := map[string]bool{
+		filepath.Join("static", "js", "shared", "valid_fields.json"): true,
+		filepath.Join("static", "js", "shared", "field_types.ts"):    true,
+	}
+	frontendRoots := []string{"shared_web", "client_web", "admin_web"}
+
+	var readers []string
+	for _, rel := range frontendRoots {
+		base := filepath.Join(root, rel)
+		walkErr := filepath.WalkDir(base, func(path string, d os.DirEntry, err error) error {
+			if err != nil {
+				return nil
+			}
+			if d.IsDir() {
+				switch d.Name() {
+				case "node_modules", "dist", ".git":
+					return filepath.SkipDir
+				}
+				return nil
+			}
+			relPath, relErr := filepath.Rel(base, path)
+			if relErr != nil {
+				return nil
+			}
+			if generated[relPath] {
+				return nil
+			}
+			data, readErr := os.ReadFile(path)
+			if readErr != nil {
+				return nil
+			}
+			if strings.Contains(string(data), "sector_predictions") || strings.Contains(string(data), "sectorPredictions") {
+				readers = append(readers, filepath.Join(rel, relPath))
+			}
+			return nil
+		})
+		if walkErr != nil {
+			t.Fatalf("walk %s: %v", rel, walkErr)
+		}
+	}
+	if len(readers) > 0 {
+		t.Fatalf("sector_predictions gained a frontend reader in %v; flip SectorPredictionsFrontendConsumer and update docs/reference/inert-registry.md in the same change", readers)
 	}
 }
