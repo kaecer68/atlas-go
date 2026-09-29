@@ -6,7 +6,9 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -27,9 +29,55 @@ import (
 // marketdata.IsTaiwanTradingDay before it is used, so a table change fails
 // loudly here instead of silently weakening the assertions.
 
+// syncBuffer is the log sink captureLogs/captureLogsAt hand out: a
+// concurrency-safe bytes.Buffer.
+//
+// Why it exists (issue #2147, 2026-09-30): the captured logger is the GLOBAL
+// logger, so ANY goroutine that logs while the test reads the buffer races with
+// it. In CI the detector caught exactly that, and it is not a test-owned
+// goroutine: NewDashboardAPI() starts an asynchronous industry-service warm-up
+// (dashboard_api.go, "don't block API startup") whose 120s-timeout fetch logs
+// through internal/logging; when that goroutine outlives its own test, its next
+// log line lands in whichever sink is installed — i.e. in the buffer a LATER test
+// is reading:
+//
+//	WARNING: DATA RACE
+//	Read at ... by goroutine 3615:  bytes.(*Buffer).String()   ← the test
+//	    internal/monitoring/universe_scheduler_holiday_test.go:363
+//	Previous write at ... by goroutine 600: bytes.(*Buffer).grow() ← slog handler
+//	    marketdata.(*CompositeMacroProvider).FetchSnapshot() → logging.Warn
+//
+// Two fixes are possible: stop that goroutine (a lifecycle change in the
+// production constructor) or make the capture safe against ANY writer. This is
+// the second one, deliberately: it removes the race for every current and future
+// writer instead of for the one leak we happen to know about, and it needs no new
+// production API surface. The residual (a finished test's warm-up may still emit
+// a line into the next test's capture) is harmless for these assertions — the
+// warm-up logs macro warnings, while the tests count scheduler skip messages —
+// and closing the leak itself is tracked separately.
+type syncBuffer struct {
+	mu  sync.Mutex
+	buf bytes.Buffer
+}
+
+// Write implements io.Writer for log/slog's handler.
+func (b *syncBuffer) Write(p []byte) (int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.Write(p)
+}
+
+// String returns the captured text so far. It locks, which is the whole point:
+// the read happens while other goroutines may still be logging.
+func (b *syncBuffer) String() string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.String()
+}
+
 // captureLogs installs a Debug-level text logger into the returned buffer for
 // the duration of the test and restores the previous logger afterwards.
-func captureLogs(t *testing.T) *bytes.Buffer {
+func captureLogs(t *testing.T) *syncBuffer {
 	t.Helper()
 	return captureLogsAt(t, slog.LevelDebug)
 }
@@ -40,9 +88,9 @@ func captureLogs(t *testing.T) *bytes.Buffer {
 // TestDailySkip_InfoLevelAndDailyVolume: a message that is emitted at Debug is
 // absent from an Info-level capture, which is exactly what production showed
 // before 2026-09-27.
-func captureLogsAt(t *testing.T, level slog.Level) *bytes.Buffer {
+func captureLogsAt(t *testing.T, level slog.Level) *syncBuffer {
 	t.Helper()
-	buf := &bytes.Buffer{}
+	buf := &syncBuffer{}
 	prev := logging.Default()
 	logging.SetLogger(slog.New(slog.NewTextHandler(buf, &slog.HandlerOptions{Level: level})))
 	t.Cleanup(func() { logging.SetLogger(prev) })
@@ -377,5 +425,54 @@ func TestDailySkip_InfoLevelAndDailyVolume(t *testing.T) {
 				t.Errorf("a snapshot was written on %s: the gate must skip", tc.date.Format("2006-01-02"))
 			}
 		})
+	}
+}
+
+// TestCaptureLogs_IsSafeUnderConcurrentWriters is the positive control for
+// syncBuffer (issue #2147). It reproduces, deterministically and inside one
+// test, the shape the race detector caught in CI: the capture logger installed
+// by captureLogs is written from goroutines the test does not own while the test
+// reads the buffer.
+//
+// Why a control is needed at all: the CI failure was intermittent (it needs a
+// leaked goroutine plus a particular interleaving), so "the suite is green" can
+// never prove the capture is safe. This test makes the concurrency explicit, so
+// removing the synchronization fails HERE, on every machine, under -race —
+// which is what makes the fix verifiable instead of hopeful.
+func TestCaptureLogs_IsSafeUnderConcurrentWriters(t *testing.T) {
+	const writers = 8
+	const linesPerWriter = 25
+
+	buf := captureLogs(t)
+
+	var wg sync.WaitGroup
+	for w := range writers {
+		wg.Add(1)
+		go func(id int) {
+			defer wg.Done()
+			for i := range linesPerWriter {
+				logging.Warn("race_control", "writer_line",
+					"writer", id, "line", i, "marker", "concurrent_writer_marker")
+			}
+		}(w)
+	}
+
+	// Read WHILE the writers are running: without the mutex this is the exact
+	// unsynchronized read/write pair the detector reports.
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		for range 50 {
+			_ = strings.Contains(buf.String(), "concurrent_writer_marker")
+			runtime.Gosched()
+		}
+	}()
+	wg.Wait()
+	<-done
+
+	// The capture must also be complete: a lost write would be a silent hole in
+	// whatever a test is counting.
+	if got, want := strings.Count(buf.String(), "concurrent_writer_marker"), writers*linesPerWriter; got != want {
+		t.Fatalf("captured %d marker lines, want %d (a synchronized buffer must not lose writes)", got, want)
 	}
 }
