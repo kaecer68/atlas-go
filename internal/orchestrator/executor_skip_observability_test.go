@@ -29,12 +29,21 @@ import (
 	"github.com/kaecer68/atlas-go/internal/logging"
 )
 
-// captureOrchestratorLogs swaps the global logger for the duration of the test.
+// captureOrchestratorLogs swaps the global logger for the duration of the test
+// at Debug level (the most permissive capture).
 func captureOrchestratorLogs(t *testing.T) *bytes.Buffer {
+	t.Helper()
+	return captureOrchestratorLogsAt(t, slog.LevelDebug)
+}
+
+// captureOrchestratorLogsAt is captureOrchestratorLogs with an explicit level, so a
+// test can assert what PRODUCTION sees (INFO) rather than what a debugging session
+// sees — the distinction the level rule depends on.
+func captureOrchestratorLogsAt(t *testing.T, level slog.Level) *bytes.Buffer {
 	t.Helper()
 	buf := &bytes.Buffer{}
 	prev := logging.Default()
-	logging.SetLogger(slog.New(slog.NewTextHandler(buf, &slog.HandlerOptions{Level: slog.LevelDebug})))
+	logging.SetLogger(slog.New(slog.NewTextHandler(buf, &slog.HandlerOptions{Level: level})))
 	t.Cleanup(func() { logging.SetLogger(prev) })
 	return buf
 }
@@ -46,13 +55,13 @@ func TestSessionSkipCounts_CountsEveryEventWithoutDeduplication(t *testing.T) {
 	// here would hide how many candidates were lost, which is the whole measurement.
 	s.record("ai-desk-01", skipReasonFactorQualityGate)
 	s.record("ai-desk-01", skipReasonFactorQualityGate)
-	s.record("ai-desk-01", skipReasonNoTradableQuote)
+	s.record("ai-desk-01", skipReasonNoQuote)
 	s.record("leo-satellite-desk-01", skipReasonExecutorDeclined)
 
 	if got := s.byReason[skipReasonFactorQualityGate]; got != 2 {
 		t.Errorf("factor_quality_gate = %d, want 2 (one per skip event)", got)
 	}
-	if got := s.byReason[skipReasonNoTradableQuote]; got != 1 {
+	if got := s.byReason[skipReasonNoQuote]; got != 1 {
 		t.Errorf("no_tradable_quote = %d, want 1", got)
 	}
 	if got := s.byReason[skipReasonExecutorDeclined]; got != 1 {
@@ -61,7 +70,7 @@ func TestSessionSkipCounts_CountsEveryEventWithoutDeduplication(t *testing.T) {
 	if got := s.total(); got != 4 {
 		t.Errorf("total = %d, want 4 (sum over reasons)", got)
 	}
-	totals := s.byAgentTotals()
+	totals := s.agentTotals()
 	if got := totals["ai-desk-01"]; got != 3 {
 		t.Errorf("byAgentTotals[ai-desk-01] = %d, want 3", got)
 	}
@@ -112,11 +121,13 @@ func TestCollectRecommendations_CountsSkipsAndLogsOncePerSession(t *testing.T) {
 		Skill:    "unwired_desk_skill_that_no_executor_claims",
 		Layer:    domain.LayerSector,
 		Enabled:  true,
-		Universe: []string{"2330.TW", "9999.TW"},
+		Universe: []string{"2330.TW", "9999.TW", "8888.TW"},
 	}}}
 	quotes := map[string]domain.Quote{
 		"2330.TW": {Symbol: "2330.TW", Open: 100, High: 105, Low: 99, Last: 104, Volume: 5_000_000, IsTradable: true},
+		// Present in the quote set but flagged non-tradable ⇒ not_tradable.
 		"9999.TW": {Symbol: "9999.TW", Open: 0, High: 0, Low: 0, Last: 0, Volume: 0, IsTradable: false},
+		// 8888.TW is deliberately ABSENT from the quote set ⇒ no_quote.
 	}
 	plugins := NewPluginRegistry()
 
@@ -133,10 +144,11 @@ func TestCollectRecommendations_CountsSkipsAndLogsOncePerSession(t *testing.T) {
 	}
 	for _, want := range []string{
 		"session_id=session-t1",
-		"no_tradable_quote=1",
+		"no_quote=1",
+		"not_tradable=1",
 		"executor_declined=1",
 		"factor_quality_gate=0",
-		"skips_total=2",
+		"skips_total=3",
 		// slog quotes a value containing '='; the assertion stays exact about the
 		// agent/reason pair so a future rename of either is caught.
 		`top_agents="unwired-desk-01:executor_declined=1`,
@@ -202,15 +214,62 @@ func TestCollectRecommendations_SkipCountsReachTheScratchpadTrace(t *testing.T) 
 		if got := data["skips_factor_quality_gate"]; got != 0 {
 			t.Errorf("trace skips_factor_quality_gate = %v, want 0", got)
 		}
-		byAgent, ok := data["skips_by_agent"].(map[string]int)
+		byAgent, ok := data["skips_by_agent"].(map[string]map[string]int)
 		if !ok {
-			t.Fatalf("trace skips_by_agent = %v (%T), want map[string]int", data["skips_by_agent"], data["skips_by_agent"])
+			t.Fatalf("trace skips_by_agent = %v (%T), want map[string]map[string]int (per agent AND reason)", data["skips_by_agent"], data["skips_by_agent"])
 		}
-		if byAgent["unwired-desk-01"] != 1 {
-			t.Errorf("trace skips_by_agent[unwired-desk-01] = %d, want 1", byAgent["unwired-desk-01"])
+		if byAgent["unwired-desk-01"][skipReasonExecutorDeclined] != 1 {
+			t.Errorf("trace skips_by_agent[unwired-desk-01][executor_declined] = %d, want 1", byAgent["unwired-desk-01"][skipReasonExecutorDeclined])
 		}
 	}
 	if !found {
 		t.Fatal("no collect_recommendations trace was recorded")
 	}
+}
+
+// TestLogRecommendationSkips_LevelFollowsSessionID pins the 2026-09-30 level rule.
+//
+// Production evidence: 4272 of 4288 recommendation_skips lines in 12h carried an
+// EMPTY session_id — those are inner/batch calls that write no reasoning trace, and
+// at INFO they are pure noise (they are not paging: no alert reads this event). The
+// rule is therefore log hygiene, not suppression: no session ID ⇒ the same summary
+// at DEBUG, so raising the level still reveals the path.
+func TestLogRecommendationSkips_LevelFollowsSessionID(t *testing.T) {
+	counts := newSessionSkipCounts()
+	counts.record("unwired-desk-01", skipReasonNoQuote)
+	counts.record("unwired-desk-01", skipReasonNotTradable)
+
+	t.Run("no session id goes out at DEBUG only", func(t *testing.T) {
+		// Capture at INFO: a DEBUG line must be filtered out, so the buffer stays
+		// empty. This is the assertion that would have caught the production noise.
+		infoBuf := captureOrchestratorLogsAt(t, slog.LevelInfo)
+		logRecommendationSkips("", 21, 3, counts)
+		if got := infoBuf.String(); strings.Contains(got, "recommendation_skips") {
+			t.Fatalf("a call without a session id must not emit an INFO line\n--- log ---\n%s", got)
+		}
+		if got := infoBuf.String(); got != "" {
+			t.Errorf("expected no INFO output at all, got %q", got)
+		}
+
+		debugBuf := captureOrchestratorLogsAt(t, slog.LevelDebug)
+		logRecommendationSkips("", 21, 3, counts)
+		if got := debugBuf.String(); !strings.Contains(got, "recommendation_skips") {
+			t.Fatalf("the summary must still be observable at DEBUG\n--- log ---\n%s", got)
+		}
+	})
+
+	t.Run("a session id emits exactly one INFO line", func(t *testing.T) {
+		buf := captureOrchestratorLogsAt(t, slog.LevelInfo)
+		logRecommendationSkips("session-20261001-daily", 21, 44, counts)
+		logRecommendationSkips("session-20261001-daily", 21, 44, nil) // nil guard: no line
+		logs := buf.String()
+		if n := strings.Count(logs, "recommendation_skips"); n != 1 {
+			t.Fatalf("expected exactly one INFO line per session, got %d\n--- log ---\n%s", n, logs)
+		}
+		for _, want := range []string{"no_quote=1", "not_tradable=1", "skips_total=2", "session_id=session-20261001-daily"} {
+			if !strings.Contains(logs, want) {
+				t.Errorf("INFO line must contain %q\n--- log ---\n%s", want, logs)
+			}
+		}
+	})
 }
