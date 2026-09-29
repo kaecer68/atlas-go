@@ -58,6 +58,54 @@ type HistoricalPriceProvider interface {
 	GetCloseSeries(symbol string) []float64
 }
 
+// SummarizeRiskExclusionReasons counts, per risk rule, how many symbols the
+// Layer 2.5 filter excluded (issue #2019). The counts feed
+// UniverseBuildResult.SymbolsExcludedReasons so the exclusion total an operator
+// reads in the snapshot is attributable without re-running the pipeline.
+//
+// Contract:
+//   - a nil slice means "the stage did not run" and returns nil (the caller
+//     must then leave the risk_* keys out of the snapshot, which is how a
+//     reader tells "not run" from "ran and excluded nobody");
+//   - a non-nil slice always returns the full risk vocabulary, zeros included;
+//   - each excluded symbol increments risk_total exactly once, and every rule
+//     it failed (RiskExclusionResult.FailReasons is the source of those tokens),
+//     so the named counts may sum to more than risk_total. That is deliberate:
+//     the map answers "which rule is doing the excluding", while risk_total
+//     answers "how many symbols left";
+//   - a failed symbol with no recorded reason is counted under
+//     risk_unspecified rather than dropped, so a result can never be excluded
+//     without showing up somewhere;
+//   - a rule token without a constant yet (a new check) still surfaces, as
+//     "risk_" + token. Forward-compatible by construction, and the same
+//     prefix convention keeps risk rules distinguishable from screener rules.
+func SummarizeRiskExclusionReasons(results []RiskExclusionResult) map[string]int {
+	if results == nil {
+		return nil
+	}
+	counts := map[string]int{
+		ExclusionReasonRiskVaRContribution: 0,
+		ExclusionReasonRiskVolatility:      0,
+		ExclusionReasonRiskLiquidity:       0,
+		ExclusionReasonRiskUnspecified:     0,
+		ExclusionReasonRiskTotal:           0,
+	}
+	for _, r := range results {
+		if r.Passed {
+			continue
+		}
+		counts[ExclusionReasonRiskTotal]++
+		if len(r.FailReasons) == 0 {
+			counts[ExclusionReasonRiskUnspecified]++
+			continue
+		}
+		for _, reason := range r.FailReasons {
+			counts["risk_"+reason]++
+		}
+	}
+	return counts
+}
+
 // RiskExclusionFilter performs Layer 2.5 risk checks on a symbol universe:
 // VaR contribution, volatility, drawdown flag, and liquidity re-check.
 type RiskExclusionFilter struct {
