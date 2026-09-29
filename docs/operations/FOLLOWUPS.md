@@ -2017,6 +2017,50 @@
 
 ---
 
+### FU-20260929-03 — #2134 `twse_oddlot` 通道退役後的**部署驗收**（未驗證：需容器重啟）
+
+- **狀態**：`open`
+- **記錄日期**：2026-09-29
+- **來源**：issue **#2134**（CLOSED）→ PR **#2136**（已併）＋ root 的部署窗口驗收清單
+- **現況**：`twse_oddlot` 已判定為**上游永久損壞**（TWSE 移除該端點）並在組態層退役；
+  本項是**部署後**才成立的驗收條件（容器需以含該變更的 image 重啟）。
+- **驗收（部署窗口，owner: a2a-dev）**：
+  - `atlas_channel_health_status{channel="twse_oddlot"} = 3`
+  - `ChannelHealthStatusError` 對該 channel **清空**
+  - 可接受的**額外** series：`atlas_channel_health_status{channel="twse-oddlot"} = 3`（derived alias；若 regulator 端仍以舊名查詢）
+  - （**於 #2138 落地後**）`atlas_channel_governance_overdue = 0`
+- **影響**：未驗收前，無法區分「通道已退役」與「告警疲乏只是暫時消失」。
+
+### FU-20260929-04 — 母體排除**比例告警**的門檻需先校準再上線（不得以未校準門檻 paging）
+
+- **狀態**：`open`
+- **記錄日期**：2026-09-29
+- **來源**：issue **#2019**（CLOSED）→ PR **#2139**（已併）＋ root 的裁定
+- **現況**：`symbols_excluded_reasons` 的細分已落地，但**排除比例的常態分布**尚無足夠樣本；
+  門檻若此時硬編，會再製造一顆「看似有守門、實際誤報/漏報」的告警。
+- **待辦（owner: 監控 lane）**：累積 **N 輪** `symbols_excluded_reasons` 後**校準門檻**再上線；
+  **不得**以未校準門檻上 paging 告警（可用 warning 或先只做記錄）。
+- **驗收**：部署後 baseline（首輪）排除比例為 **0** 或已在校準後門檻內，且無新增誤報。
+
+### FU-20260929-05 — predictor 價值被證明後，再評估「讓 evaluator 依賴候選參數」（並把四個名字入表）
+
+- **狀態**：`open`
+- **記錄日期**：2026-09-29
+- **來源**：issue **#2133**（CLOSED）→ PR **#2140**（已併）的結案衍生
+- **現況（量測事實）**：`predictor_calibrate` 目前是 **measurement-only**：
+  四個 `predictor_*` 名字**不在** `parameterTable`，`CalibrateParameters` 對解析不到的名字
+  `if !ok { continue }` **靜默跳過** ⇒ 不會寫入任何參數（#2123 的 reader 修好後也只讓**量測**變誠實）。
+- **待辦（owner: root）**：**若**市場方向預測器的價值被證明（樣本量、命中率、以及它對下游決策的貢獻），
+  才評估「讓 evaluator 依賴候選參數 ＋ 把四個名字加入 `parameterTable`」。
+- **硬性前置**：必須先有「**候選無改善 ⇒ 不得寫入**」的機制保證（**#2133 已完成**：`improved := improvement >= MinImprovement*100`，
+  `improved==false` 跳過整個寫入階段）。⇒ 沒有這道保證就入表，會讓平曲面上的任意候選值被寫進參數
+  （實測：`darwinian_weight_min 0.3 → 0.20571428`，−31.4%）。
+- **影響**：在噪音上調參比不調更糟；本項刻意延後，直到價值被證明。
+
+> **來源注記（2026-09-29/30 批次）**：`FU-20260929-03`～`-05` 與 `docs/operations/remediation-manifest.md`
+> 的同步，來自 **#2134**（twse_oddlot 退役，PR #2136）／**#2019**（symbols_excluded 細分，PR #2139）／
+> **#2133**（校準「無改善不得寫入」＋ predictor 誠實標示，PR #2140）／**#2139** 的結案。
+
 ## 相關文件
 
 - [universe-scoring-ranked-zero-20260925.md](universe-scoring-ranked-zero-20260925.md)

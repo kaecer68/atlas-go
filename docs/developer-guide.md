@@ -106,6 +106,13 @@ git mv AGENTS.md _agents_temp.md && git mv _agents_temp.md agents.md
 - Types: `feat`, `fix`, `refactor`, `test`, `chore`, `docs`, `ci`
 - CI runs `go build`, `go test`, `go vet`, `gofmt -l`
 
+### Test scripts (`tests/scripts/*`)
+- 在 fixture 內呼叫 `git` 前必須先清掉繼承來的環境變數：
+  `unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_OBJECT_DIRECTORY GIT_COMMON_DIR GIT_ALTERNATE_OBJECT_DIRECTORIES GIT_CEILING_DIRECTORIES`
+  （呼叫者若在 hook/CI 內以 `GIT_DIR` 指到別棵樹，fixture 的 `git init`／`git commit` 會作用在**呼叫者**身上）。
+- 並以 `GIT_DIR=<caller>/.git` 做**自我重入測試**，證明「不得動到呼叫者」：
+  樣板見 `tests/scripts/test-check-markdown-links.sh` case ⑧；背景見 issue **#1927**。
+
 ## Project Structure (Key Paths)
 
 ```
