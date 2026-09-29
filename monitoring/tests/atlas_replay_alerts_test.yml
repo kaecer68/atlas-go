@@ -16,7 +16,8 @@
 #      （重現 2026-08-29~09-25 的 352 列週末幻影;寫入端已由 #2057 根治）
 #   C* 最新資料日晚於當前時刻（345600 = 1970-01-05,週一）—— 第 1 條 firing
 #      （future arm;與 B 不同 arm,所以兩個都要有）
-#   D* JSONL 落後 CSV 3 天（數值 arm）—— 第 2 條 firing
+#   D* JSONL 落後 CSV 3 個交易日（數值 arm: atlas_replay_jsonl_behind_trading_days=3）—— 第 2 條 firing
+#      （#2145：數值 arm 由「日曆差」改讀交易日差指標；穩態 = 1、門檻 = 3）
 #   E* JSONL 序列缺席（轉檔從未成功）—— 第 2 條 firing（`unless` arm;
 #      缺席**不得**被當成 0,這是 #1995 的缺陷形狀）
 #   F* CSV 20 天沒有新資料日（星期五,刻意避開週末以免混淆 arm）—— 第 3 條 firing
@@ -28,6 +29,8 @@
 #      （gauge 值域:0=ok 1=warn/stale 2=error 3=inactive **4=degraded**;既有規則只比對 ==2,
 #       所以這個值在 2026-09-27 之前完全不觸發任何規則）
 #   K  sync 非 ok 只持續 30 分鐘 —— 五條全部沉默（第 5 條 for: 1h 的負向對照）
+#   N1 長連假且已跟上（behind=1；#2145 的誤報形狀）—— 五條全部沉默
+#   N2 單一輪沒跑（behind=2）—— 第 2 條必須沉默（門檻 3 的負向對照）
 #   L  JSONL 落後 1.5 天 —— 五條全部沉默（第 2 條 2 天門檻的負向對照）
 #
 # 測試時鐘:promtool 的 `time()` 從 epoch(1970-01-01T00:00:00Z) 起算,所以資料日
@@ -153,13 +156,15 @@ tests:
         alertname: AtlasReplaySyncNotLanding
         exp_alerts: []
 
-  - name: "D JSONL 落後 CSV 3 天（數值 arm）—— 只有第 2 條 firing"
+  - name: "D JSONL 落後 CSV 3 個交易日（數值 arm: atlas_replay_jsonl_behind_trading_days=3）—— 只有第 2 條 firing"
     interval: 1m
     input_series:
       - series: 'atlas_replay_csv_latest_date_timestamp_seconds'
         values: '0x700'
       - series: 'atlas_replay_jsonl_latest_date_timestamp_seconds'
         values: '-259200x700'
+      - series: 'atlas_replay_jsonl_behind_trading_days'
+        values: '3x700'
       - series: 'atlas_replay_freshness_checked_timestamp_seconds'
         values: '0+60x700'
       - series: 'atlas_channel_health_status{channel="twse_replay_sync"}'
@@ -178,7 +183,7 @@ tests:
             severity: "warning"
             wave: "9.2"
           exp_annotations:
-            description: "JSONL（FactorEngine 的正式輸入）落後 CSV 超過 2 天,或 JSONL 序列不存在。\n（兩個 arm 的 alert 值分別是:落後的 JSONL 資料日 / 缺席時以 CSV 資料日代替。）\n歷史實例:2026-08-24~09-24 轉檔停擺一個月,期間沒有任何告警。\n立即檢查（轉檔在 auto_backfill 內執行,不是獨立 cron）:\n  1. 兩個檔案的最新資料日:\n     docker exec atlas-cron-replay-sync tail -n 1 /app/data/replay/tw_extended_90days.csv | cut -d, -f1\n     docker exec atlas-cron-replay-sync tail -n 1 /app/data/replay/tw_extended_90days.jsonl\n  2. 轉檔是否被執行過（#2057 之前的已知缺陷:auto_backfill 在\n     「CSV 最大日+1 > 今天」時**提前 return**,而轉檔在 return 之後,\n     所以沒有缺口的日子結構上不會轉檔）:\n     docker logs atlas-go --since 72h 2>&1 | grep -E \"backfill gap detected|backfill CSV→JSONL conversion\"\n     沒有 backfill gap detected 是**正常的**（沒有缺口就該沒有）,但\n     「JSONL 落後」時要確認 conversion 那行是否出現過。\n  3. 補救（單次,冪等;CSV 不會被改動）:重啟 atlas-go 讓 auto_backfill\n     重新排程,或在主機上手動跑該轉檔（importer.ImportTWOpenDataCSVToJSONL\n     的入口是 auto_backfill 任務;沒有獨立 CLI,所以優先用前者）。\n"
+            description: "JSONL（FactorEngine 的正式輸入）落後 CSV **3**（數值 arm 的值＝落後的\n**交易日數**,門檻 ≥ 3;第二個 arm 缺席時,值＝CSV 資料日的 Unix 秒）。\n交易日由台灣假日曆判定（taiwanholidays.IsTradingDay）⇒ **長連假不會誤報**:\n例如 JSONL 停在 09-24（中秋節前最後資料日）、CSV 已到 09-29（中間 09-25／09-28 休市）\n只算落後 1 個交易日,不會 firing。\n歷史實例:2026-08-24~09-24 轉檔停擺一個月,期間沒有任何告警。\n立即檢查（轉檔在 auto_backfill 內執行,不是獨立 cron）:\n  1. 兩個檔案的最新資料日:\n     docker exec atlas-cron-replay-sync tail -n 1 /app/data/replay/tw_extended_90days.csv | cut -d, -f1\n     docker exec atlas-cron-replay-sync tail -n 1 /app/data/replay/tw_extended_90days.jsonl\n  2. 轉檔是否被執行過（#2057 之前的已知缺陷:auto_backfill 在\n     「CSV 最大日+1 > 今天」時**提前 return**,而轉檔在 return 之後,\n     所以沒有缺口的日子結構上不會轉檔）:\n     docker logs atlas-go --since 72h 2>&1 | grep -E \"backfill gap detected|backfill CSV→JSONL conversion\"\n     沒有 backfill gap detected 是**正常的**（沒有缺口就該沒有）,但\n     「JSONL 落後」時要確認 conversion 那行是否出現過。\n  3. 補救（單次,冪等;CSV 不會被改動）:重啟 atlas-go 讓 auto_backfill\n     重新排程,或在主機上手動跑該轉檔（importer.ImportTWOpenDataCSVToJSONL\n     的入口是 auto_backfill 任務;沒有獨立 CLI,所以優先用前者）。\n"
             runbook_url: "https://github.com/kaecer68/atlas-go/blob/main/docs/operations/local-deploy.md"
             summary: "replay JSONL 落後 CSV（CSV→JSONL 轉檔停擺或從未成功）"
       - eval_time: 1h
@@ -217,7 +222,7 @@ tests:
             severity: "warning"
             wave: "9.2"
           exp_annotations:
-            description: "JSONL（FactorEngine 的正式輸入）落後 CSV 超過 2 天,或 JSONL 序列不存在。\n（兩個 arm 的 alert 值分別是:落後的 JSONL 資料日 / 缺席時以 CSV 資料日代替。）\n歷史實例:2026-08-24~09-24 轉檔停擺一個月,期間沒有任何告警。\n立即檢查（轉檔在 auto_backfill 內執行,不是獨立 cron）:\n  1. 兩個檔案的最新資料日:\n     docker exec atlas-cron-replay-sync tail -n 1 /app/data/replay/tw_extended_90days.csv | cut -d, -f1\n     docker exec atlas-cron-replay-sync tail -n 1 /app/data/replay/tw_extended_90days.jsonl\n  2. 轉檔是否被執行過（#2057 之前的已知缺陷:auto_backfill 在\n     「CSV 最大日+1 > 今天」時**提前 return**,而轉檔在 return 之後,\n     所以沒有缺口的日子結構上不會轉檔）:\n     docker logs atlas-go --since 72h 2>&1 | grep -E \"backfill gap detected|backfill CSV→JSONL conversion\"\n     沒有 backfill gap detected 是**正常的**（沒有缺口就該沒有）,但\n     「JSONL 落後」時要確認 conversion 那行是否出現過。\n  3. 補救（單次,冪等;CSV 不會被改動）:重啟 atlas-go 讓 auto_backfill\n     重新排程,或在主機上手動跑該轉檔（importer.ImportTWOpenDataCSVToJSONL\n     的入口是 auto_backfill 任務;沒有獨立 CLI,所以優先用前者）。\n"
+            description: "JSONL（FactorEngine 的正式輸入）落後 CSV **0**（數值 arm 的值＝落後的\n**交易日數**,門檻 ≥ 3;第二個 arm 缺席時,值＝CSV 資料日的 Unix 秒）。\n交易日由台灣假日曆判定（taiwanholidays.IsTradingDay）⇒ **長連假不會誤報**:\n例如 JSONL 停在 09-24（中秋節前最後資料日）、CSV 已到 09-29（中間 09-25／09-28 休市）\n只算落後 1 個交易日,不會 firing。\n歷史實例:2026-08-24~09-24 轉檔停擺一個月,期間沒有任何告警。\n立即檢查（轉檔在 auto_backfill 內執行,不是獨立 cron）:\n  1. 兩個檔案的最新資料日:\n     docker exec atlas-cron-replay-sync tail -n 1 /app/data/replay/tw_extended_90days.csv | cut -d, -f1\n     docker exec atlas-cron-replay-sync tail -n 1 /app/data/replay/tw_extended_90days.jsonl\n  2. 轉檔是否被執行過（#2057 之前的已知缺陷:auto_backfill 在\n     「CSV 最大日+1 > 今天」時**提前 return**,而轉檔在 return 之後,\n     所以沒有缺口的日子結構上不會轉檔）:\n     docker logs atlas-go --since 72h 2>&1 | grep -E \"backfill gap detected|backfill CSV→JSONL conversion\"\n     沒有 backfill gap detected 是**正常的**（沒有缺口就該沒有）,但\n     「JSONL 落後」時要確認 conversion 那行是否出現過。\n  3. 補救（單次,冪等;CSV 不會被改動）:重啟 atlas-go 讓 auto_backfill\n     重新排程,或在主機上手動跑該轉檔（importer.ImportTWOpenDataCSVToJSONL\n     的入口是 auto_backfill 任務;沒有獨立 CLI,所以優先用前者）。\n"
             runbook_url: "https://github.com/kaecer68/atlas-go/blob/main/docs/operations/local-deploy.md"
             summary: "replay JSONL 落後 CSV（CSV→JSONL 轉檔停擺或從未成功）"
       - eval_time: 1h
@@ -446,6 +451,70 @@ tests:
         values: '0x700'
       - series: 'atlas_replay_jsonl_latest_date_timestamp_seconds'
         values: '-129600x700'
+      - series: 'atlas_replay_freshness_checked_timestamp_seconds'
+        values: '0+60x700'
+      - series: 'atlas_channel_health_status{channel="twse_replay_sync"}'
+        values: '0x700'
+      - series: 'up{job="atlas-go"}'
+        values: '1x700'
+    alert_rule_test:
+      - eval_time: 1h
+        alertname: AtlasReplaySessionDateInvalid
+        exp_alerts: []
+      - eval_time: 1h
+        alertname: AtlasReplayJsonlBehindCsv
+        exp_alerts: []
+      - eval_time: 1h
+        alertname: AtlasReplayCsvStale
+        exp_alerts: []
+      - eval_time: 1h
+        alertname: AtlasReplayFreshnessExporterDown
+        exp_alerts: []
+      - eval_time: 1h
+        alertname: AtlasReplaySyncNotLanding
+        exp_alerts: []
+
+  - name: "N1 長連假且已跟上（behind=1）—— 五條全部沉默（#2145 要消除的誤報形狀）"
+    interval: 1m
+    input_series:
+      - series: 'atlas_replay_csv_latest_date_timestamp_seconds'
+        values: '0x700'
+      - series: 'atlas_replay_jsonl_latest_date_timestamp_seconds'
+        values: '-259200x700'
+      - series: 'atlas_replay_jsonl_behind_trading_days'
+        values: '1x700'
+      - series: 'atlas_replay_freshness_checked_timestamp_seconds'
+        values: '0+60x700'
+      - series: 'atlas_channel_health_status{channel="twse_replay_sync"}'
+        values: '0x700'
+      - series: 'up{job="atlas-go"}'
+        values: '1x700'
+    alert_rule_test:
+      - eval_time: 1h
+        alertname: AtlasReplaySessionDateInvalid
+        exp_alerts: []
+      - eval_time: 1h
+        alertname: AtlasReplayJsonlBehindCsv
+        exp_alerts: []
+      - eval_time: 1h
+        alertname: AtlasReplayCsvStale
+        exp_alerts: []
+      - eval_time: 1h
+        alertname: AtlasReplayFreshnessExporterDown
+        exp_alerts: []
+      - eval_time: 1h
+        alertname: AtlasReplaySyncNotLanding
+        exp_alerts: []
+
+  - name: "N2 單一輪沒跑（behind=2）—— 第 2 條必須沉默（門檻 3 的負向對照）"
+    interval: 1m
+    input_series:
+      - series: 'atlas_replay_csv_latest_date_timestamp_seconds'
+        values: '0x700'
+      - series: 'atlas_replay_jsonl_latest_date_timestamp_seconds'
+        values: '-259200x700'
+      - series: 'atlas_replay_jsonl_behind_trading_days'
+        values: '2x700'
       - series: 'atlas_replay_freshness_checked_timestamp_seconds'
         values: '0+60x700'
       - series: 'atlas_channel_health_status{channel="twse_replay_sync"}'

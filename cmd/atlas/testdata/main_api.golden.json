@@ -45,6 +45,10 @@
       "value": "\"atlas_replay_freshness_checked_timestamp_seconds\""
     },
     {
+      "name": "MetricReplayJSONLBehindTradingDays",
+      "value": "\"atlas_replay_jsonl_behind_trading_days\""
+    },
+    {
       "name": "MetricReplayJSONLLatestDate",
       "value": "\"atlas_replay_jsonl_latest_date_timestamp_seconds\""
     }

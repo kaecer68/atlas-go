@@ -136,3 +136,68 @@ func TestHealthStatusValue_DegradedIsNotOk(t *testing.T) {
 		t.Fatalf("ok 必須是 0; got %v", got)
 	}
 }
+
+// ---------------------------------------------------------------------------
+// #2145：落後「交易日」數（atlas_replay_jsonl_behind_trading_days）
+// ---------------------------------------------------------------------------
+
+// TestExportReplayFreshnessMetrics_TradingDaysBehind 釘住三件事：
+//  1. 穩態（CSV=最新交易日、JSONL=上一個資料日）＝ **1，不是 0**
+//  2. 長連假（CSV 與 JSONL 相隔數個**日曆日**但 0／1 個交易日）也讀成 1 ⇒ 這是本票要消除的誤報形狀
+//  3. 真落後（兩個交易日）＝ 2
+func TestExportReplayFreshnessMetrics_TradingDaysBehind(t *testing.T) {
+	cases := []struct {
+		name               string
+		csvDate, jsonlDate string
+		want               string
+		why                string
+	}{
+		{"穩態（09-24 已轉、CSV 前進到 09-29）", "2026-09-29", "2026-09-24", " 1", "(09-24, 09-29] 只有 09-29（09-25 中秋節、09-28 調整放假）"},
+		{"落後兩個交易日", "2026-09-25", "2026-09-22", " 2", "(09-22, 09-25] = 09-23、09-24"},
+		{"剛好同一天（不該發生）", "2026-09-29", "2026-09-29", " 0", "(from, to] 為空"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			dir := t.TempDir()
+			csvPath := filepath.Join(dir, "tw_extended_90days.csv")
+			writeReplayCSV(t, csvPath, c.csvDate)
+			writeReplayJSONL(t, replayJSONLPath(csvPath), c.jsonlDate)
+
+			collector := monitoring.NewMetricsCollector()
+			exportReplayFreshnessMetrics(csvPath, collector, time.Date(2026, 9, 30, 1, 0, 0, 0, time.UTC))
+			body := replayMetricsBody(t, collector)
+
+			want := "atlas_replay_jsonl_behind_trading_days" + c.want
+			if !strings.Contains(body, want) {
+				t.Fatalf("missing %q（%s）\n--- body ---\n%s", want, c.why, body)
+			}
+		})
+	}
+}
+
+// TestExportReplayFreshnessMetrics_TradingDaysBehindAbsentWhenInputMissing —
+// 任一日期讀不到時**不得**輸出落後序列（缺席 ≠ 0；#1995 的缺陷形狀）。
+func TestExportReplayFreshnessMetrics_TradingDaysBehindAbsentWhenInputMissing(t *testing.T) {
+	t.Run("JSONL 缺席", func(t *testing.T) {
+		dir := t.TempDir()
+		csvPath := filepath.Join(dir, "tw_extended_90days.csv")
+		writeReplayCSV(t, csvPath, "2026-09-29") // 刻意不寫 JSONL
+
+		collector := monitoring.NewMetricsCollector()
+		exportReplayFreshnessMetrics(csvPath, collector, time.Date(2026, 9, 30, 1, 0, 0, 0, time.UTC))
+		if body := replayMetricsBody(t, collector); strings.Contains(body, "atlas_replay_jsonl_behind_trading_days") {
+			t.Fatalf("behind-series must NOT be emitted when the JSONL is unreadable\n--- body ---\n%s", body)
+		}
+	})
+	t.Run("CSV 缺席", func(t *testing.T) {
+		dir := t.TempDir()
+		csvPath := filepath.Join(dir, "tw_extended_90days.csv")
+		writeReplayJSONL(t, replayJSONLPath(csvPath), "2026-09-24") // CSV 不存在
+
+		collector := monitoring.NewMetricsCollector()
+		exportReplayFreshnessMetrics(csvPath, collector, time.Date(2026, 9, 30, 1, 0, 0, 0, time.UTC))
+		if body := replayMetricsBody(t, collector); strings.Contains(body, "atlas_replay_jsonl_behind_trading_days") {
+			t.Fatalf("behind-series must NOT be emitted when the CSV is unreadable\n--- body ---\n%s", body)
+		}
+	})
+}

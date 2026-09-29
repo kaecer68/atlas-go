@@ -130,18 +130,33 @@ groups:
       # 為什麼需要:2026-08-24~09-24 轉檔停擺一個月,JSONL（FactorEngine 的正式輸入）
       #   停在 08-24 而 CSV 持續成長 —— 這是實際發生過、影響最大、且**零觀測**的形狀。
       # 判準（兩個 arm）:
-      #   · JSONL 最新資料日落後 CSV 超過 2 天。
+      #   · JSONL 落後 CSV **≥ 3 個交易日**（#2145：原本是「> 2 個**日曆日**」）。
       #   · CSV 序列存在但 JSONL 序列**不存在**（轉檔從未成功 / JSONL 被刪）。
       #     ⚠️ 這是刻意的:讀不到的 JSONL 不輸出序列（不寫 0 —— 0 會被讀成 1970 年,
       #     就是 #1995 的缺陷形狀）,所以「缺席」本身就是訊號,靠 `unless` 表達。
-      # 門檻 2d 依據:轉檔週期 = auto_backfill 的 24h ⇒ 單一輪沒跑不 page（正常情況
-      #   CSV 15:30 UTC 才前進,下一次 auto_backfill 可能已在 24h 後）,連續兩輪沒跑才 page。
-      # for: 1h 依據:落後 2 天以上是**持續數日**的狀態（實際事故是一個月）,
+      #
+      # 為什麼從「日曆日」改成「交易日」（#2145）:
+      #   日曆日比較在**長連假**會結構性誤報 —— 例：JSONL 停在 09-24（中秋節前最後資料日）、
+      #   CSV 已到 09-29,中間 09-25 中秋節／09-28 調整放假 ⇒ 日曆差 5 天（誤報）,
+      #   但交易日只差 **1**（＝正常穩態）。10-09 國慶補假、10-26 光復節補假會各再誤報一次。
+      #   PromQL 沒有假日曆（只有 day_of_week()）⇒ 交易日差必須由 exporter 算好,
+      #   `atlas_replay_jsonl_behind_trading_days` 用**唯一權威** taiwanholidays.IsTradingDay。
+      #
+      # 門檻 3 依據（**沿用舊註解的意圖,只是換單位**）:
+      #   舊制「2 日曆日」的意圖＝轉檔週期 24h ⇒「**單一輪沒跑不 page、連續兩輪沒跑才 page**」。
+      #   新 metric 的端點約定是 (JSONL 最新日, CSV 最新日]（**含** CSV 端點,因為那是下一輪
+      #   才會轉的那一天）⇒ 穩態（CSV=今日 D、JSONL=前一個資料日）＝ **1**（不是 0）;
+      #   本輪還沒轉＝1、**單一輪沒跑**＝2、**連續兩輪沒跑**＝3 ⇒ 門檻取 3 即完整重現舊意圖。
+      #   ⚠️ 不要把穩態的 1「修」成 0（metric doc comment 有寫明同一件事）。
+      #
+      # ⚠️ 部署順序:新指標只在**第一 arm** ⇒ **規則與 binary 必須同批上**（只上規則＝第一 arm
+      #   靜默,直到 exporter 也上）；缺席 arm（第二 arm）不受影響。
+      #
+      # for: 1h 依據:落後多個交易日是**持續數日**的狀態（實際事故是一個月）,
       #   1h 遠大於匯出週期（5m）與評估週期（30s）,不影響偵測、只濾掉單輪重啟。
       - alert: AtlasReplayJsonlBehindCsv
         expr: |
-          atlas_replay_jsonl_latest_date_timestamp_seconds
-            < atlas_replay_csv_latest_date_timestamp_seconds - 2 * 86400
+          atlas_replay_jsonl_behind_trading_days >= 3
           or
           atlas_replay_csv_latest_date_timestamp_seconds
             unless atlas_replay_jsonl_latest_date_timestamp_seconds
@@ -155,8 +170,11 @@ groups:
         annotations:
           summary: "replay JSONL 落後 CSV（CSV→JSONL 轉檔停擺或從未成功）"
           description: |
-            JSONL（FactorEngine 的正式輸入）落後 CSV 超過 2 天,或 JSONL 序列不存在。
-            （兩個 arm 的 alert 值分別是:落後的 JSONL 資料日 / 缺席時以 CSV 資料日代替。）
+            JSONL（FactorEngine 的正式輸入）落後 CSV **{{ $value }}**（數值 arm 的值＝落後的
+            **交易日數**,門檻 ≥ 3;第二個 arm 缺席時,值＝CSV 資料日的 Unix 秒）。
+            交易日由台灣假日曆判定（taiwanholidays.IsTradingDay）⇒ **長連假不會誤報**:
+            例如 JSONL 停在 09-24（中秋節前最後資料日）、CSV 已到 09-29（中間 09-25／09-28 休市）
+            只算落後 1 個交易日,不會 firing。
             歷史實例:2026-08-24~09-24 轉檔停擺一個月,期間沒有任何告警。
             立即檢查（轉檔在 auto_backfill 內執行,不是獨立 cron）:
               1. 兩個檔案的最新資料日:
