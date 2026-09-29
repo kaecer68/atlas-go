@@ -134,17 +134,29 @@ type DarwinianWeightManager struct {
 	mu              sync.RWMutex
 	eventBus        *eventbus.ChannelEventBus
 	maturityTracker *domain.MaturityTracker
+
+	// missingAgentWarned records the agent IDs already reported as "an outcome
+	// arrived for an agent the weights map does not know ⇒ the outcome is
+	// dropped", so the warning fires once per (manager, agent ID) instead of once
+	// per outcome (issue #1944 G3 / FU-20260929-08).
+	//
+	// A map — not a time window — because the property being pinned is
+	// determinism: the same sequence of outcomes produces the same number of
+	// lines, on any machine, at any speed. Bounded by the number of distinct
+	// unknown IDs, and mutated only under m.mu.
+	missingAgentWarned map[string]struct{}
 }
 
 // NewDarwinianWeightManager creates a new Darwinian weight manager
 func NewDarwinianWeightManager(configPath string) *DarwinianWeightManager {
 	params := DefaultRuntimeParameters()
 	return &DarwinianWeightManager{
-		weights:      make(map[string]*DarwinianAgentWeight),
-		configPath:   configPath,
-		historyPath:  "",
-		lookbackDays: params.Darwinian.LookbackDays,
-		params:       params,
+		weights:            make(map[string]*DarwinianAgentWeight),
+		configPath:         configPath,
+		historyPath:        "",
+		lookbackDays:       params.Darwinian.LookbackDays,
+		params:             params,
+		missingAgentWarned: make(map[string]struct{}),
 	}
 }
 
@@ -319,6 +331,16 @@ func (m *DarwinianWeightManager) recordOutcome(agentID string, forwardReturn flo
 
 	w, exists := m.weights[agentID]
 	if !exists {
+		// G3 (issue #1944 / FU-20260929-08): this used to be a completely silent
+		// drop. An outcome whose agent ID is not in the weights map disappears
+		// without a trace, which is indistinguishable from "no outcome arrived"
+		// when an audit looks for where a signal went.
+		//
+		// Zero behavior change: the outcome is still dropped, no entry is
+		// created, and nothing about the weights changes. Only the observation is
+		// added, once per (manager, agent ID) so it cannot become per-outcome log
+		// noise (the lesson from recommendation_skips, 2026-09-30).
+		m.warnUnregisteredAgentOutcome(agentID)
 		return
 	}
 
@@ -365,6 +387,27 @@ func (m *DarwinianWeightManager) recordOutcome(agentID string, forwardReturn flo
 // effectiveMinUniqueReturns returns the configured minimum unique returns
 // guard for Sharpe validity. Defaults to the package const unless the runtime
 // parameters override it.
+// warnUnregisteredAgentOutcome reports, once per agent ID, that an outcome was
+// dropped because the weights map has no entry for that agent.
+//
+// Callers must hold m.mu (recordOutcome does): the map is mutated here and the
+// manager's lock is the only synchronization around it.
+func (m *DarwinianWeightManager) warnUnregisteredAgentOutcome(agentID string) {
+	if m.missingAgentWarned == nil {
+		// Defensive: a manager built as a zero value (tests) must not panic.
+		m.missingAgentWarned = make(map[string]struct{})
+	}
+	if _, warned := m.missingAgentWarned[agentID]; warned {
+		return
+	}
+	m.missingAgentWarned[agentID] = struct{}{}
+	logging.Warn("darwinian_weights", "outcome_for_unregistered_agent",
+		logging.AgentID(agentID),
+		logging.FStr("reason", "weights map 未含此 id ⇒ outcome 被靜默丟棄（每 agent 只警告一次）"),
+		logging.FStr("gap", "G3 / FU-20260929-08"),
+	)
+}
+
 func (m *DarwinianWeightManager) effectiveMinUniqueReturns() int {
 	if m.params != nil && m.params.Darwinian.MinUniqueReturnsForSharpe > 0 {
 		return m.params.Darwinian.MinUniqueReturnsForSharpe
