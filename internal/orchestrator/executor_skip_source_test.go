@@ -70,36 +70,79 @@ func srcAttrRegistry(universe []string) domain.AgentRegistry {
 //	  executor_declined = 2330（own）, 2222（injected） = 2
 //	  ⇒ skips_total = 4；且 injected_executor_declined = 1（只有 2222 是注入）
 func TestCollectRecommendations_SplitsOwnVersusInjectedSkips(t *testing.T) {
-	buf := captureOrchestratorLogs(t)
-	useReplayCSVFixture(t, "1111.TW", "2222.TW", "3333.TW")
+	// FU-20260929-14 (b) 之後，未報價的注入符號**不再進入掃描清單** ⇒ 舊的 2/2 基線
+	// 只有在閘門關閉（gate off）時才重現。兩個方向都必須被釘住：
+	//   gate ON ：注入只保留有報價者（2222）⇒ no_quote=0／injected_no_quote=0
+	//   gate OFF：修前行為 ⇒ no_quote=2／injected_no_quote=2（1111、3333 都是注入且無報價）
+	// 來源拆帳（本檔主旨）在兩側都仍要成立：injected_executor_declined=1（2222）。
+	t.Run("gate on: only quoted injected symbols are scanned", func(t *testing.T) {
+		useInjectedQuoteGate(t, true)
+		buf := captureOrchestratorLogs(t)
+		useReplayCSVFixture(t, "1111.TW", "2222.TW", "3333.TW")
 
-	quotes := map[string]domain.Quote{
-		"2330.TW": {Symbol: "2330.TW", Open: 100, High: 105, Low: 99, Last: 104, Volume: 5_000_000, IsTradable: true},
-		"2222.TW": {Symbol: "2222.TW", Open: 50, High: 55, Low: 49, Last: 54, Volume: 3_000_000, IsTradable: true},
-	}
-	recs, _ := collectRecommendations(context.Background(), srcAttrRegistry([]string{"2330.TW"}), quotes,
-		NewPluginRegistry(), nil, domain.RegimeNeutral, nil, "session-srcattr", nil)
-	if len(recs) != 0 {
-		t.Fatalf("fixture premise: the unwired skill must produce no recommendations, got %d", len(recs))
-	}
-
-	logs := buf.String()
-	for _, want := range []string{
-		"session_id=session-srcattr",
-		"no_quote=2",
-		"injected_no_quote=2",
-		"not_tradable=0",
-		"injected_not_tradable=0",
-		"executor_declined=2",
-		"injected_executor_declined=1",
-		"factor_quality_gate=0",
-		"injected_factor_quality_gate=0",
-		"skips_total=4",
-	} {
-		if !strings.Contains(logs, want) {
-			t.Errorf("skip line must contain %q\n--- log ---\n%s", want, logs)
+		quotes := map[string]domain.Quote{
+			"2330.TW": {Symbol: "2330.TW", Open: 100, High: 105, Low: 99, Last: 104, Volume: 5_000_000, IsTradable: true},
+			"2222.TW": {Symbol: "2222.TW", Open: 50, High: 55, Low: 49, Last: 54, Volume: 3_000_000, IsTradable: true},
 		}
-	}
+		recs, _ := collectRecommendations(context.Background(), srcAttrRegistry([]string{"2330.TW"}), quotes,
+			NewPluginRegistry(), nil, domain.RegimeNeutral, nil, "session-srcattr", nil)
+		if len(recs) != 0 {
+			t.Fatalf("fixture premise: the unwired skill must produce no recommendations, got %d", len(recs))
+		}
+
+		logs := buf.String()
+		for _, want := range []string{
+			"session_id=session-srcattr",
+			"no_quote=0",          // 1111/3333 不再被掃
+			"injected_no_quote=0", // ← gate on 時的不變量
+			"not_tradable=0",
+			"injected_not_tradable=0",
+			"executor_declined=2", // 2330(own) + 2222(injected，有報價)
+			"injected_executor_declined=1",
+			"factor_quality_gate=0",
+			"injected_factor_quality_gate=0",
+			"skips_total=2",
+		} {
+			if !strings.Contains(logs, want) {
+				t.Errorf("skip line must contain %q\n--- log ---\n%s", want, logs)
+			}
+		}
+		// 靜默變顯式：兩個未報價的注入符號必須被**申報**，不是被吞掉
+		for _, want := range []string{"injected_symbols_unquoted", "dropped=2"} {
+			if !strings.Contains(logs, want) {
+				t.Errorf("gate on must report the dropped injected symbols (%q)\n--- log ---\n%s", want, logs)
+			}
+		}
+	})
+
+	t.Run("gate off: pre-fix baseline is preserved", func(t *testing.T) {
+		useInjectedQuoteGate(t, false)
+		buf := captureOrchestratorLogs(t)
+		useReplayCSVFixture(t, "1111.TW", "2222.TW", "3333.TW")
+
+		quotes := map[string]domain.Quote{
+			"2330.TW": {Symbol: "2330.TW", Open: 100, High: 105, Low: 99, Last: 104, Volume: 5_000_000, IsTradable: true},
+			"2222.TW": {Symbol: "2222.TW", Open: 50, High: 55, Low: 49, Last: 54, Volume: 3_000_000, IsTradable: true},
+		}
+		_, _ = collectRecommendations(context.Background(), srcAttrRegistry([]string{"2330.TW"}), quotes,
+			NewPluginRegistry(), nil, domain.RegimeNeutral, nil, "session-srcattr", nil)
+
+		logs := buf.String()
+		for _, want := range []string{
+			"no_quote=2",          // 1111、3333（注入、無報價）
+			"injected_no_quote=2", // 修前基線
+			"executor_declined=2",
+			"injected_executor_declined=1",
+			"skips_total=4",
+		} {
+			if !strings.Contains(logs, want) {
+				t.Errorf("gate off must reproduce the pre-fix numbers (%q)\n--- log ---\n%s", want, logs)
+			}
+		}
+		if strings.Contains(logs, "injected_symbols_unquoted") {
+			t.Errorf("gate off injects everything, so nothing is dropped and no report may appear\n--- log ---\n%s", logs)
+		}
+	})
 }
 
 // TestCollectRecommendations_NoInjectionLeavesExistingKeysUnchanged（②）：
@@ -153,6 +196,9 @@ func TestCollectRecommendations_DefaultSymbolsAgentIsNeverInjected(t *testing.T)
 // TestCollectRecommendations_InjectedKeysReachTheTrace 把新增的四個 trace 鍵釘住
 // （只加不減：既有鍵仍必須是同一組數值）。
 func TestCollectRecommendations_InjectedKeysReachTheTrace(t *testing.T) {
+	// gate on（生產值）：只有有報價的注入符號會被掃 ⇒ trace 的 skips_injected_no_quote
+	// 必為 0（不變量），而 skips_injected_executor_declined 仍為 1（2222 有報價、走到 executor 才被退）。
+	useInjectedQuoteGate(t, true)
 	useReplayCSVFixture(t, "1111.TW", "2222.TW", "3333.TW")
 	quotes := map[string]domain.Quote{
 		"2222.TW": {Symbol: "2222.TW", Open: 50, High: 55, Low: 49, Last: 54, Volume: 3_000_000, IsTradable: true},
@@ -170,15 +216,16 @@ func TestCollectRecommendations_InjectedKeysReachTheTrace(t *testing.T) {
 			t.Fatalf("trace.Data = %T, want map[string]any", tr.Data)
 		}
 		// 由 fixture 手算（不是抄輸出）：quote set = {2222.TW}；own = {2330.TW}；
-		// injected = {1111.TW, 2222.TW, 3333.TW} ⇒
-		//   no_quote         = 2330(own) + 1111, 3333(injected) = 3
+		// CSV 注入 = {1111.TW, 2222.TW, 3333.TW}，其中只有 2222 有報價 ⇒ 掃描清單 = own ∪ {2222} ⇒
+		//   no_quote         = 0（1111/3333 不再進掃描；2330 未被報價但也沒被跳過？見下）
 		//   executor_declined = 2222(injected，有報價 ⇒ 進到 executor 才被退) = 1
-		//   injected_no_quote = 1111, 3333 = 2
-		if got := data["skips_no_quote"]; got != 3 {
-			t.Errorf("skips_no_quote = %v, want 3 (2330 own + 1111, 3333 injected)", got)
+		//   injected_no_quote = 0（gate on 的不變量）
+		// 註：2330.TW 不在 quote set ⇒ 它是 own＋無報價 ⇒ 仍會記 no_quote（以下用 1 表達）。
+		if got := data["skips_no_quote"]; got != 1 {
+			t.Errorf("skips_no_quote = %v, want 1 (2330 own, unquoted)", got)
 		}
-		if got := data["skips_injected_no_quote"]; got != 2 {
-			t.Errorf("skips_injected_no_quote = %v, want 2 (1111, 3333)", got)
+		if got := data["skips_injected_no_quote"]; got != 0 {
+			t.Errorf("skips_injected_no_quote = %v, want 0 — an injected symbol always has a quote with the gate on", got)
 		}
 		if got := data["skips_injected_not_tradable"]; got != 0 {
 			t.Errorf("skips_injected_not_tradable = %v, want 0", got)
@@ -186,8 +233,8 @@ func TestCollectRecommendations_InjectedKeysReachTheTrace(t *testing.T) {
 		if got := data["skips_injected_executor_declined"]; got != 1 {
 			t.Errorf("skips_injected_executor_declined = %v, want 1 (2222 is injected and reached the executor)", got)
 		}
-		if got := data["skips_total"]; got != 4 {
-			t.Errorf("skips_total = %v, want 4", got)
+		if got := data["skips_total"]; got != 2 {
+			t.Errorf("skips_total = %v, want 2 (2330 no_quote + 2222 executor_declined)", got)
 		}
 		return
 	}

@@ -86,6 +86,12 @@ func collectRecommendations(ctx context.Context, registry domain.AgentRegistry, 
 	// label keeps meaning "we had factor evidence and it was too weak".
 	skips := newSessionSkipCounts()
 
+	// Injection observability (FU-20260929-14 (b)): how many replay-CSV symbols
+	// were dropped because this session has no quote for them, and how many agents
+	// were affected. Emitted once per session, never per agent.
+	injectedUnquoted := 0
+	agentsWithUnquotedInjection := 0
+
 	for _, agent := range registry.Agents {
 		if !agent.Enabled {
 			continue
@@ -112,12 +118,29 @@ func collectRecommendations(ctx context.Context, registry domain.AgentRegistry, 
 				for _, s := range symbols {
 					seen[s] = true
 				}
+				unquotedHere := 0
 				for _, s := range expanded {
-					if !seen[s] {
-						symbols = append(symbols, s)
-						seen[s] = true
-						injected[s] = true
+					if seen[s] {
+						continue
 					}
+					if injectOnlyQuotedSymbols {
+						// Only scan what this session can price. A symbol without a
+						// quote is dropped at the quote check below and can never
+						// become a candidate, so excluding it here cannot change the
+						// screening input — it only stops it from inflating the
+						// injected no_quote baseline.
+						if _, quoted := quotes[s]; !quoted {
+							unquotedHere++
+							continue
+						}
+					}
+					symbols = append(symbols, s)
+					seen[s] = true
+					injected[s] = true
+				}
+				if unquotedHere > 0 {
+					injectedUnquoted += unquotedHere
+					agentsWithUnquotedInjection++
 				}
 			}
 		}
@@ -512,6 +535,7 @@ func collectRecommendations(ctx context.Context, registry domain.AgentRegistry, 
 	// same session still writes its collect_recommendations trace. Never one line
 	// per skip — that would be a second paging channel (issue #1944 T1).
 	logRecommendationSkips(sessionID, len(registry.Agents), len(quotes), skips)
+	logInjectedSymbolsUnquoted(sessionID, injectedUnquoted, agentsWithUnquotedInjection)
 
 	return recs, rejects
 }
@@ -553,6 +577,29 @@ const (
 // at a fixture; the production value is the constant itself and must not be
 // rewritten at runtime (any other value changes which candidates are produced).
 var replayUniverseCSVPath = constants.ReplayCSVPath
+
+// injectOnlyQuotedSymbols gates the replay-CSV expansion to symbols this session
+// can actually price (FU-20260929-14 (b) side).
+//
+// Why (measured, 2026-09-30): ExpandUniverse returns the CSV's Code column
+// verbatim — bare codes such as "0050" — while every quote is keyed with the
+// .TW suffix ("0050.TW"). The two therefore never intersect, so the injection
+// added ~44 unpriceable symbols per agent (881 skip events per session) that were
+// dropped at the quote check and could never become candidates. The 44 CSV codes
+// are all ETFs.
+//
+// Behavior: with this gate ON, candidate sets are unchanged — bit for bit — and
+// only the accounting moves (the injected no_quote baseline disappears). The
+// intent of the expansion is preserved (ExpandUniverse is still called) and the
+// fact that it currently yields nothing is reported once per session by
+// logInjectedSymbolsUnquoted instead of being silently absorbed.
+//
+// A variable, not a constant, so one test can run both sides and prove the
+// screening input is identical either way. Flipping it to false restores the
+// pre-fix behavior exactly (the rollback path). The product question — should
+// the bare codes be normalized to .TW, which WOULD change 18 agents' candidate
+// sets — is deliberately NOT decided here (registered follow-up).
+var injectOnlyQuotedSymbols = true
 
 // sessionSkipCounts counts, per agent and reason, how many candidates the
 // recommendation collector dropped without leaving any other trace.
@@ -611,6 +658,14 @@ func (s *sessionSkipCounts) recordSource(agentID, reason, source string) {
 
 // injected returns how many skips for `reason` came from the replay-CSV expansion
 // (0 when the source split is unknown, e.g. counts built by record()).
+//
+// INVARIANT (FU-20260929-14 (b), 2026-09-30): with injectOnlyQuotedSymbols ON,
+// injected(skipReasonNoQuote) is structurally 0 — an injected symbol now always has
+// a quote, so it can never be dropped at the quote check. It is therefore no longer
+// a measurement but an invariant; the observability that used to come from its
+// value is carried by the `injected_symbols_unquoted` line instead. A non-zero value
+// means the gate is off (or was bypassed), not that "injection is producing its old
+// baseline again".
 func (s *sessionSkipCounts) injected(reason string) int {
 	if s.byReasonSource[reason] == nil {
 		return 0
@@ -693,6 +748,33 @@ func (s *sessionSkipCounts) topAgentSkipSummary(limit int) string {
 	return strings.Join(parts, ",")
 }
 
+// logInjectedSymbolsUnquoted reports, at most once per session, that the replay-CSV
+// expansion produced symbols this session has no quote for (FU-20260929-14 (b)).
+//
+// This exists so the injection's current futility is VISIBLE rather than silent: the
+// measured cause is that ExpandUniverse returns bare codes ("0050") while quotes are
+// keyed with the suffix ("0050.TW"). If the suffix is ever normalized, the injected
+// ETFs WILL start entering candidate sets, and this line is how that change becomes
+// apparent instead of arriving unnoticed.
+//
+// One line per session (not per agent): the same bounded-output rule as
+// logRecommendationSkips. Nothing is emitted when nothing was dropped.
+func logInjectedSymbolsUnquoted(sessionID string, dropped, agents int) {
+	if dropped == 0 {
+		return
+	}
+	emit := logging.Warn
+	if sessionID == "" {
+		emit = logging.Debug
+	}
+	emit("recommendation_collector", "injected_symbols_unquoted",
+		logging.FStr("session_id", sessionID),
+		logging.FInt("dropped", dropped),
+		logging.FInt("agents", agents),
+		logging.FStr("likely_cause", "ExpandUniverse returns bare codes (no .TW normalization) while quotes are keyed with .TW, so injected symbols could never be priced; normalizing the suffix would make them enter candidate sets"),
+	)
+}
+
 // logRecommendationSkips emits the per-session skip summary (at most one line).
 //
 // Level rule (2026-09-30): a call WITHOUT a session ID is a batch/inner call that
@@ -720,6 +802,10 @@ func logRecommendationSkips(sessionID string, agents, quotes int, s *sessionSkip
 		// Source split (FU-20260929-14): four additive fields, so an operator can
 		// see which gate the INJECTION hit rather than reading the aggregate as the
 		// agent's own performance.
+		// INVARIANT: 0 while injectOnlyQuotedSymbols is on (an injected symbol always
+		// has a quote). Kept as a field because it is the gate's own witness, and
+		// because with the gate off it carries the pre-fix baseline again. See
+		// sessionSkipCounts.injected.
 		logging.FInt("injected_no_quote", s.injected(skipReasonNoQuote)),
 		logging.FInt("injected_not_tradable", s.injected(skipReasonNotTradable)),
 		logging.FInt("injected_factor_quality_gate", s.injected(skipReasonFactorQualityGate)),
