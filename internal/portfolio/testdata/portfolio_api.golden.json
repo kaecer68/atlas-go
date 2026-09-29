@@ -919,6 +919,12 @@
       "results": "(error)"
     },
     {
+      "name": "CloseSeries",
+      "params": "(symbol string)",
+      "receiver": "HistoricalPrices",
+      "results": "([]marketdata.DatedClose)"
+    },
+    {
       "name": "GetCloseSeries",
       "params": "(symbol string)",
       "receiver": "HistoricalPrices",

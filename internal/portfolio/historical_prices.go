@@ -32,6 +32,7 @@ import (
 
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/domain/shared"
+	"github.com/kaecer68/atlas-go/internal/marketdata"
 )
 
 // HistoricalPrices stores closing prices by symbol and date.
@@ -99,6 +100,24 @@ func (hp *HistoricalPrices) GetCloseSeries(symbol string) []float64 {
 	out := make([]float64, len(pts))
 	for i, p := range pts {
 		out[i] = p.Close
+	}
+	return out
+}
+
+// CloseSeries returns the full sorted (date, close) series for a symbol.
+//
+// Unlike GetCloseSeries it preserves the dates, which the composition needs when
+// it compares the stored (raw) replay series against an official adjusted
+// series. It reuses marketdata.DatedClose so that no extra portfolio type is
+// exported.
+func (hp *HistoricalPrices) CloseSeries(symbol string) []marketdata.DatedClose {
+	pts, ok := hp.prices[symbol]
+	if !ok {
+		return nil
+	}
+	out := make([]marketdata.DatedClose, len(pts))
+	for i, p := range pts {
+		out[i] = marketdata.DatedClose{Date: p.Date, Close: p.Close}
 	}
 	return out
 }
@@ -174,8 +193,9 @@ func (hp *HistoricalPrices) AdjustForCorporateActions(actions []domain.Corporate
 			return fmt.Errorf("adjust corporate actions: symbol %s computed adjustment factor %f is non-positive",
 				action.Symbol, factor)
 		}
-		if math.Abs(pts[splitIdx-1].Close-postEventPrice*factor) < 1e-9 {
-			continue
+		adjustType := adjustTypeFromAction(action)
+		if hp.hasAppliedEffect(action.Symbol, action.ExDate, adjustType, factor) {
+			continue // idempotent: this exact action was already applied
 		}
 		for i := 0; i < splitIdx; i++ {
 			hp.prices[action.Symbol][i].Close *= factor
@@ -201,7 +221,23 @@ func computeBackwardAdjustmentFactor(action domain.CorporateAction, postEventRaw
 		factor *= subFactor
 	}
 	if action.StockDividend > 0 {
-		subFactor := (10.0 - action.StockDividend) / 10.0
+		// Stock dividend units: shares per 10 shares held (FinMind
+		// StockEarningsDistribution), equivalently S/10 shares per share, so a
+		// holder ends up with 1+S/10 shares per pre-event share. Pre-event
+		// prices are therefore rewritten by 10/(10+S), i.e. 1/(1+S/10) when S is
+		// expressed per share.
+		//
+		// The earlier implementation used (10.0-S)/10.0, which is the
+		// cash-dividend shape; it agrees with 10/(10+S) only for small S and goes
+		// non-positive for S >= 10. Real case: 6669.TW's 2026-09-02 stock
+		// dividend carries S = 19.827946, for which the old shape yields -0.9828
+		// and AdjustForCorporateActions rejects the action as a non-positive
+		// factor.
+		//
+		// Fingerprint (official TaiwanStockPriceAdj / raw replay close for
+		// 6669.TW on 2026-09-01): 2614.997/7800 = 0.33526, while
+		// 10/(10+19.827946) = 0.33528.
+		subFactor := 10.0 / (10.0 + action.StockDividend)
 		factor *= subFactor
 	}
 	if action.CapitalReductionRatio > 0 {
@@ -222,6 +258,24 @@ func adjustTypeFromAction(action domain.CorporateAction) shared.AdjustType {
 		return shared.AdjustCapitalReduction
 	}
 	return shared.AdjustCashDividend
+}
+
+// hasAppliedEffect reports whether the identical action — same ex-date, same
+// adjustment type and same factor — was already applied to the symbol.
+//
+// This is what makes AdjustForCorporateActions idempotent in practice: without
+// it, re-applying the same actions shrank pre-event prices again (the previous
+// heuristic compared the bar before the event against postEventPrice*factor,
+// which is unrelated to the already-adjusted value). A genuinely different
+// factor for the same ex-date and type still applies, so a corrected upstream
+// action is not masked.
+func (hp *HistoricalPrices) hasAppliedEffect(symbol string, exDate time.Time, adjustType shared.AdjustType, factor float64) bool {
+	for _, eff := range hp.effects[symbol] {
+		if eff.ExDate.Equal(exDate) && eff.Type == adjustType && math.Abs(eff.Adjustment-factor) <= 1e-9 {
+			return true
+		}
+	}
+	return false
 }
 
 func (hp *HistoricalPrices) recordEffect(action domain.CorporateAction, factor float64) {

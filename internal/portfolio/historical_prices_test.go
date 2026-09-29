@@ -61,7 +61,12 @@ func TestAdjustForCorporateActions_WithReferencePrice(t *testing.T) {
 }
 
 // TestAdjustForCorporateActions_StockDividend verifies stock dividend adjustment.
-// Stock dividend 3 TWD/share: factor = (10-3)/10 = 0.70.
+// Stock dividend 3 TWD face value per 10 TWD face value (i.e. 3 shares per 10
+// shares held): the share count grows by 1 + 3/10, so pre-event prices are
+// rewritten by 10/(10+3) = 0.769230....
+// (The factor used to be computed as (10-3)/10 = 0.70, which is the cash-dividend
+// shape and is only correct for a vanishing stock dividend; see the fingerprint
+// in historical_prices.go and ticket #2151.)
 func TestAdjustForCorporateActions_StockDividend(t *testing.T) {
 	baseDate := time.Date(2026, 1, 5, 0, 0, 0, 0, time.UTC)
 	hp := NewHistoricalPrices()
@@ -86,8 +91,8 @@ func TestAdjustForCorporateActions_StockDividend(t *testing.T) {
 	pts := hp.prices["2330"]
 	for i, p := range pts {
 		if i < 5 {
-			if math.Abs(p.Close-70.0) > 1e-9 {
-				t.Errorf("pre-event price[%d] = %f, want 70.0", i, p.Close)
+			if math.Abs(p.Close-100.0*(10.0/13.0)) > 1e-9 {
+				t.Errorf("pre-event price[%d] = %f, want %f", i, p.Close, 100.0*(10.0/13.0))
 			}
 		} else {
 			if math.Abs(p.Close-100.0) > 1e-9 {
@@ -353,7 +358,7 @@ func TestAdjustForCorporateActions_SameDayMultipleAdjustments(t *testing.T) {
 			ReferencePrice: 0,
 		},
 	}
-	// factor = (100-4)/100 * (10-1)/10 = 0.96 * 0.90 = 0.864
+	// factor = (100-4)/100 * 10/(10+1) = 0.96 * 0.909090... = 0.872727...
 	err := hp.AdjustForCorporateActions(actions)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -361,8 +366,8 @@ func TestAdjustForCorporateActions_SameDayMultipleAdjustments(t *testing.T) {
 	pts := hp.prices["2330"]
 	for i, p := range pts {
 		if i < 5 {
-			if math.Abs(p.Close-86.4) > 1e-9 {
-				t.Errorf("pre-event price[%d] = %f, want 86.4", i, p.Close)
+			if math.Abs(p.Close-100.0*0.96*(10.0/11.0)) > 1e-9 {
+				t.Errorf("pre-event price[%d] = %f, want %f", i, p.Close, 100.0*0.96*(10.0/11.0))
 			}
 		} else {
 			if math.Abs(p.Close-100.0) > 1e-9 {
