@@ -235,6 +235,9 @@ internal/sim/testdata/*.actual.json
 # (root is whitelist-only per docs/documentation-standard.md).
 /backfill-macro-history
 /chips-ic-study
+# 新增 CLI 的 root-level 建置產物（agent 在 repo 根 `go build ./cmd/<x>/` 就會落下；同上面兩個的處理）
+/backfill-quotes-range/
+/backfill-quotes-range
 
 # Binary freshness protocol (2026-07-21): host-built binaries for sandbox rebuilds
 .build-atlas/
@@ -242,6 +245,12 @@ internal/sim/testdata/*.actual.json
 
 # FinMind daily quota runtime state (written by daily_quota.go during tests/integration)
 /cmd/cron-quote-backfill/data/
+# 一般化（2026-09-29，#2129）：上面那條是**路徑特定**的，只涵蓋 cron-quote-backfill。
+# 任何在 cwd 執行、又沒指定 state dir 的 CLI／測試都會落下 <provider>_daily_quota.json
+# （實測：新 CLI 的整合測試把 finmind_daily_quota.json 寫進套件目錄並誤入版控）。
+# 狀態檔的**權威**位置是 <workdir>/data/state；這裡只是防止 runtime state 進版控。
+**/*_daily_quota.json
+**/*_daily_quota.json.lock
 
 # iMac production deploy-only compose files (方案二: 部署配置不進 git, 由 iMac 本機維護)
 /docker-compose.prod.yml

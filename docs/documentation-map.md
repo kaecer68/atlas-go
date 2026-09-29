@@ -145,6 +145,7 @@
 | `docs/specs/futures-bars-firstparty-spec.md` | 期貨日行情（first-party）資料層規格：上游端點契約（OpenAPI＋官網 CSV、表頭哨兵、≤31 天分段）、獨立領域型別、backend-aware 儲存、連續契約 back-adjust、backfill CLI；#2111 | ✅ |
 | `docs/specs/futures-crossmarket-signal-spec.md` | 期貨跨市場訊號規格（階段 1：影子評估，不接線）：特徵定義（跨月價差／OI 變化／法人／PCR）、T+1 同契約標籤、零隱藏係數紀律、獨立影子儲存、突變釘子；#2111 | ✅ |
 | `docs/specs/store-backend-decision-spec.md` | 儲存後端決策 SSOT：一律跟隨 `ATLAS_STORE_BACKEND`（顯式 flag 可覆寫）、postgres 自行開池注入、無 DSN／無實作 ⇒ 明確錯誤不降級、唯讀 sqlite 用 `mode=ro`；含四支 backfill CLI 決策表＋釘子測試＋C 類稽核處置；#2107 | ✅ |
+| `docs/specs/quotes-range-backfill-spec.md` | quotes 日線 range 回補：`GetStockPriceRange` 一次呼叫覆蓋整段、兩層日期界、UTC 午夜日期語意、`cmd/backfill-quotes-range` 的後端決策／資料紀律／執行 playbook 與驗收查詢；#2126 | ✅ |
 | `docs/jev/JEV-USAGE-CONTRACT.md` | Jev（TypeSafe System One）在本生態的使用契約（傳輸層 / 判斷設計 / 門檻校準 / 評估紀律 / fail-open） | ✅ |
 | `docs/jev/JEV-EVAL-FRAMEWORK.md` | Jev 預測力評估框架契約（task spec 介面、PIT 分離、指標定義、門檻與分級紀律、洩漏探針、擴充介面；#1968） | ✅ |
 | `docs/jev/JEV-EVAL-STAGE1-INDUSTRY-L1.md` | Stage 1 E0 實測：canonical L1 產業層（GT 口徑、窗口與排除理由、分級結論、成本、Stage 2/3 需求；#1968） | ✅ |
