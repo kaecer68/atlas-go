@@ -32,11 +32,24 @@ type Store interface {
 	Upsert(ctx context.Context, provider string, rec SecretRecord) error
 }
 
-// NewStore returns the backend-appropriate Store. backend "postgres" with a
-// non-nil pool uses Postgres (production SSoT); anything else falls back to
+// NewStore returns the backend-appropriate Store. backend "postgres" requires
+// a non-nil pool and uses Postgres (production SSoT); every other backend uses
 // the job-local SQLite artifact (dev/CLI).
+//
+// #2107: with backend="postgres" and a nil pool this used to fall through to
+// the job-local SQLite artifact and create it on a host whose declared backend
+// is postgres. That silent downgrade is now a hard error, matching the other
+// ledger store factories (ledger.NewHistoricalStore, symbolindustry.NewStore,
+// futures_shadow_store): a nil pool means the wiring is broken (DATABASE_URL
+// missing, db.Init failed, or the ordering is wrong) and writing to a local
+// sqlite file would hide it. Callers treat this as non-fatal
+// (cmd/atlas initChannelKeyManager logs and returns nil ⇒ admin endpoints 503
+// and keys stay env-sourced), so failing loudly does not take the server down.
 func NewStore(ctx context.Context, backend string, pool *pgxpool.Pool, workDir string) (Store, error) {
-	if backend == "postgres" && pool != nil {
+	if backend == "postgres" {
+		if pool == nil {
+			return nil, errors.New("channelsecrets: backend postgres requires a non-nil pool (refusing to silently fall back to the job-local sqlite artifact)")
+		}
 		return &postgresStore{pool: pool}, nil
 	}
 	if workDir == "" {

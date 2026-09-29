@@ -54,6 +54,29 @@ func Connect(t *testing.T, dsn string) *pgxpool.Pool {
 	return pool
 }
 
+// UnconnectedPool returns a real *pgxpool.Pool that never dials: ParseConfig
+// only parses the DSN and MinConns=0 keeps NewWithConfig from opening a
+// connection. Unit tests use it to verify pool wiring (open this var's seam →
+// inject into the ledger factory → build the store) without a PostgreSQL
+// server, so the pin "declared postgres must not fall back to sqlite" can be
+// checked in `go test` (no build tag). It is the same trick as
+// cmd/backfill-futures-bars' newUnconnectedPool, shared here instead of being
+// copy-pasted per command package.
+func UnconnectedPool(t *testing.T, dsn string) *pgxpool.Pool {
+	t.Helper()
+	cfg, err := pgxpool.ParseConfig(dsn)
+	if err != nil {
+		t.Fatalf("parse fake dsn %q: %v", dsn, err)
+	}
+	cfg.MinConns = 0
+	pool, err := pgxpool.NewWithConfig(context.Background(), cfg)
+	if err != nil {
+		t.Fatalf("new unconnected pool: %v", err)
+	}
+	t.Cleanup(pool.Close)
+	return pool
+}
+
 // Pool connects to PostgreSQL, applies migrations, and returns the pool. It
 // reads DATABASE_URL only (no hardcoded DSN). The pool is closed via
 // t.Cleanup.

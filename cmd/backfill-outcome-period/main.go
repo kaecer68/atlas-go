@@ -24,9 +24,19 @@
 // Usage:
 //
 //	backfill-outcome-period -workdir . -dry-run
+//	backfill-outcome-period -workdir .                     # 後端跟隨 ATLAS_STORE_BACKEND
 //	backfill-outcome-period -workdir . -db data/state/atlas.db
 //	backfill-outcome-period -workdir . -pg -pg-dsn postgres://...
 //	backfill-outcome-period -workdir . -jsonl data/state
+//
+// Backend decision (#2107): the mode follows the **declared**
+// ATLAS_STORE_BACKEND unless an explicit -pg / -jsonl / -db overrides it. It
+// is deliberately NOT "sqlite by default" — that shape let a host with
+// ATLAS_STORE_BACKEND=postgres silently open the job-local sqlite artifact
+// (data/state/atlas.db). A declared backend with no implementation here
+// (jsonl: period_history is a relational table) is a hard error, never a
+// silent downgrade; `-jsonl <dir>` remains the explicit way to rewrite the
+// JSONL outcome files.
 //
 // All modes are idempotent (rows that already carry market_period are
 // skipped) and safe to re-run.
@@ -47,6 +57,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/kaecer68/atlas-go/internal/config"
 	atlasdb "github.com/kaecer68/atlas-go/internal/db"
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/ledger"
@@ -67,11 +78,18 @@ func (r backfillResult) String() string {
 type runConfig struct {
 	workDir string
 	dbPath  string
-	usePG   bool
-	pgDSN   string
-	jsonl   string
-	dryRun  bool
+	// dbExplicit 表示 -db 由使用者顯式給定（不是預設值）；顯式 flag 覆寫
+	// ATLAS_STORE_BACKEND 的宣告（#2107）。
+	dbExplicit bool
+	usePG      bool
+	pgDSN      string
+	jsonl      string
+	dryRun     bool
 }
+
+// initPostgresPool 是 atlasdb.Init（ping ＋ 套用 <workdir>/sql/migrations）的 seam：
+// 單元測試替換它就能在沒有 PostgreSQL 的情況下驗證 postgres 路徑的決策與 wiring。
+var initPostgresPool = atlasdb.Init
 
 func main() {
 	if err := run(os.Args[1:], os.Stdout); err != nil {
@@ -99,15 +117,82 @@ func run(args []string, stdout io.Writer) error {
 	if cfg.workDir == "" {
 		return fmt.Errorf("-workdir is required")
 	}
+	dbSet := false
+	fs.Visit(func(f *flag.Flag) {
+		if f.Name == "db" {
+			dbSet = true
+		}
+	})
+	cfg.dbExplicit = dbSet
+	if err := checkModeFlags(dbSet, cfg.usePG, cfg.jsonl); err != nil {
+		return err
+	}
+
+	appCfg := config.Load()
+	mode, err := resolveMode(cfg, appCfg)
+	if err != nil {
+		return err
+	}
 
 	ctx := context.Background()
+	switch mode {
+	case modePostgres:
+		return runPostgres(ctx, cfg, appCfg, stdout)
+	case modeSQLite:
+		return runSQLite(ctx, cfg, stdout)
+	case modeJSONL:
+		return runJSONL(ctx, cfg, appCfg, stdout)
+	default:
+		return fmt.Errorf("unexpected store mode %q", mode)
+	}
+}
+
+// checkModeFlags 拒絕互相矛盾的顯式 flag：-db（sqlite）不能與 -pg／-jsonl 同時給。
+// 全部都不給時模式跟隨 ATLAS_STORE_BACKEND（#2107）。
+func checkModeFlags(dbSet, usePG bool, jsonlDir string) error {
+	if dbSet && (usePG || jsonlDir != "") {
+		return fmt.Errorf("-db is mutually exclusive with -pg / -jsonl (pick one mode explicitly, or drop all and let ATLAS_STORE_BACKEND decide)")
+	}
+	return nil
+}
+
+// storeMode 是本指令的輸出目標模式（單一決策路徑，#2107）。
+type storeMode string
+
+const (
+	modePostgres storeMode = "postgres"
+	modeSQLite   storeMode = "sqlite"
+	modeJSONL    storeMode = "jsonl"
+)
+
+// resolveMode 決定本次執行的輸出目標。
+//
+// 顯式 flag 優先（-pg ＞ -jsonl ＞ -db），否則**跟隨宣告**的 ATLAS_STORE_BACKEND。
+// 宣告 jsonl 是明確錯誤：本指令填的是關聯式欄位（period_history join
+// recommendation_outcomes），HistoricalStore 沒有 jsonl 實作；要改寫 jsonl 檔
+// 請顯式給 -jsonl <dir>。刻意不「沒有 flag 就寫 sqlite」—— 那正是 #2107。
+func resolveMode(cfg runConfig, appCfg config.Config) (storeMode, error) {
 	switch {
 	case cfg.usePG:
-		return runPostgres(ctx, cfg, stdout)
+		return modePostgres, nil
 	case cfg.jsonl != "":
-		return runJSONL(ctx, cfg, stdout)
+		return modeJSONL, nil
+	case cfg.dbExplicit:
+		return modeSQLite, nil
+	}
+	backend, err := ledger.ResolveStoreBackend(appCfg.StoreBackend)
+	if err != nil {
+		return "", err
+	}
+	switch backend {
+	case "postgres":
+		return modePostgres, nil
+	case "sqlite":
+		return modeSQLite, nil
 	default:
-		return runSQLite(ctx, cfg, stdout)
+		return "", fmt.Errorf(
+			"store backend %q has no relational implementation (period_history and recommendation_outcomes are relational tables): pass -db <path>, -pg, or -jsonl <dir> explicitly",
+			backend)
 	}
 }
 
@@ -132,6 +217,40 @@ func openSQLite(cfg runConfig) (*sql.DB, error) {
 		return nil, fmt.Errorf("init schema: %w", err)
 	}
 	return db, nil
+}
+
+// periodHistoryStore 開啟 period_history 的讀取來源。
+//
+// 宣告的後端（或顯式 -pg）是 postgres ⇒ 自行開池（-pg-dsn，預設 $DATABASE_URL；
+// migrations 取 <workdir>/sql/migrations）並用 PostgresHistoricalStore；其餘 ⇒
+// sqlite（-db 或預設 <workdir>/data/state/atlas.db）。沒有 DSN 時明確失敗，
+// 絕不退回 sqlite（#2107）。
+func periodHistoryStore(ctx context.Context, cfg runConfig, appCfg config.Config) (ledger.HistoricalStore, func() error, error) {
+	backend, err := ledger.ResolveStoreBackend(appCfg.StoreBackend)
+	if err != nil {
+		return nil, nil, err
+	}
+	if cfg.usePG || backend == "postgres" {
+		dsn := cfg.pgDSN
+		if dsn == "" {
+			dsn = appCfg.DatabaseURL
+		}
+		if dsn == "" {
+			return nil, nil, fmt.Errorf(
+				"period_history source: backend %q requires a PostgreSQL DSN: pass -pg-dsn or set DATABASE_URL (refusing to fall back to sqlite)",
+				backend)
+		}
+		pool, err := initPostgresPool(ctx, dsn, filepath.Join(cfg.workDir, "sql", "migrations"))
+		if err != nil {
+			return nil, nil, fmt.Errorf("connect postgres: %w", err)
+		}
+		return ledger.NewPostgresHistoricalStore(pool), func() error { pool.Close(); return nil }, nil
+	}
+	db, err := openSQLite(cfg)
+	if err != nil {
+		return nil, nil, err
+	}
+	return ledger.NewSQLiteHistoricalStore(db), db.Close, nil
 }
 
 func runSQLite(ctx context.Context, cfg runConfig, stdout io.Writer) error {
@@ -178,15 +297,19 @@ func backfillSQLiteDB(ctx context.Context, db *sql.DB, dryRun bool) (backfillRes
 	return res, nil
 }
 
-func runJSONL(ctx context.Context, cfg runConfig, stdout io.Writer) error {
-	db, err := openSQLite(cfg)
+func runJSONL(ctx context.Context, cfg runConfig, appCfg config.Config, stdout io.Writer) error {
+	// period_history 的讀取來源跟隨宣告的後端：宣告 postgres（生產）時讀 PG，
+	// 其餘讀 sqlite。刻意不「-jsonl 就開一份 job-local sqlite」—— 那正是 #2107。
+	hist, closeHist, err := periodHistoryStore(ctx, cfg, appCfg)
 	if err != nil {
 		return err
 	}
-	defer func() { _ = db.Close() }()
-	hist := ledger.NewSQLiteHistoricalStore(db)
+	defer func() { _ = closeHist() }()
 
 	dir := cfg.jsonl
+	if dir == "" {
+		dir = filepath.Join("data", "state")
+	}
 	if !filepath.IsAbs(dir) {
 		dir = filepath.Join(cfg.workDir, dir)
 	}
@@ -336,16 +459,16 @@ func tradingDateOf(o domain.RecommendationOutcome) string {
 	return ""
 }
 
-func runPostgres(ctx context.Context, cfg runConfig, stdout io.Writer) error {
+func runPostgres(ctx context.Context, cfg runConfig, appCfg config.Config, stdout io.Writer) error {
 	dsn := cfg.pgDSN
 	if dsn == "" {
-		dsn = os.Getenv("DATABASE_URL")
+		dsn = appCfg.DatabaseURL
 	}
 	if dsn == "" {
-		return fmt.Errorf("-pg requires -pg-dsn or $DATABASE_URL")
+		// 明確可診斷：說清楚是哪個模式、要補哪個 flag／環境變數。
+		return fmt.Errorf("postgres mode requires a PostgreSQL DSN: pass -pg-dsn or set DATABASE_URL (refusing to fall back to sqlite)")
 	}
-	migrationsPath := filepath.Join(cfg.workDir, "sql", "migrations")
-	pool, err := atlasdb.Init(ctx, dsn, migrationsPath)
+	pool, err := initPostgresPool(ctx, dsn, filepath.Join(cfg.workDir, "sql", "migrations"))
 	if err != nil {
 		return fmt.Errorf("connect postgres: %w", err)
 	}

@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"os"
+	"path/filepath"
 	"sync"
 	"testing"
 )
@@ -239,6 +240,33 @@ func TestMaskKey(t *testing.T) {
 		if got := MaskKey(in); got != want {
 			t.Errorf("MaskKey(%q) = %q, want %q", in, got, want)
 		}
+	}
+}
+
+// TestNewStore_PostgresWithoutPoolFailsLoudly 是 #2107 形狀的釘子：宣告
+// postgres 卻拿到 nil pool（DATABASE_URL 缺失／db.Init 失敗／順序錯）時，
+// 不得靜默改用 job-local sqlite 並把它建出來。
+//
+// 反假陽性對照：同一環境下 sqlite 後端仍必須可用（見下方 sqlite 斷言），
+// 證明前一條不是因為別的錯誤而紅。
+func TestNewStore_PostgresWithoutPoolFailsLoudly(t *testing.T) {
+	dir := t.TempDir()
+	ctx := context.Background()
+
+	if _, err := NewStore(ctx, "postgres", nil, dir); err == nil {
+		t.Fatal("backend postgres with a nil pool must fail loudly, not fall back to sqlite")
+	}
+	if _, statErr := os.Stat(filepath.Join(dir, "data", "state", "atlas.db")); statErr == nil {
+		t.Fatalf("nil-pool postgres must not create the sqlite artifact under %s", dir)
+	}
+
+	// 反假陽性：同一個目錄、同一個 context，sqlite 後端必須真的可用。
+	store, err := NewStore(ctx, "sqlite", nil, dir)
+	if err != nil {
+		t.Fatalf("sqlite backend must still work (anti-false-positive control): %v", err)
+	}
+	if err := store.Upsert(ctx, "finmind", SecretRecord{EncryptedKey: []byte("blob"), UpdatedBy: "ops"}); err != nil {
+		t.Fatalf("sqlite upsert: %v", err)
 	}
 }
 
