@@ -104,6 +104,19 @@ const (
 	// written anywhere durable. false: the ledger schema has no sector column
 	// (I6), so predictions vanish on the next request.
 	SectorPredictionPersisted = false
+
+	// SectorPredictionsFrontendConsumer reports whether any frontend READS
+	// `sector_predictions` (issue #1944 item N-P2).
+	//
+	// None does. The array is produced (it is the sector forecast) and read by the
+	// experimental C07 observability tools over the API, and it is mirrored into
+	// the generated frontend field lists (shared_web/static/js/shared/
+	// {valid_fields.json,field_types.ts}) — but a generated type mirror is not a
+	// consumer: no page in shared_web/client_web/admin_web reads the value. The
+	// declaration exists so that "it must be used, it is in the bundle" has a
+	// machine-readable answer, and so that adding a real reader FAILS
+	// TestSectorPredictions_HasNoFrontendReader until this constant is revisited.
+	SectorPredictionsFrontendConsumer = false
 	// SectorPredictionPersistenceReason explains the false above.
 	SectorPredictionPersistenceReason = "ledger_event_flow_prediction_record_has_no_sector_column"
 

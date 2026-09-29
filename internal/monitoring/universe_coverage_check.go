@@ -24,15 +24,42 @@ import (
 //
 //  1. The percentage was not a coverage ratio, so the coverage half could not
 //     fire either. The numerator is the snapshot's `symbols_built` — 1,599, the
-//     pipeline's universe — while TotalSymbols is TotalClassifiedSymbols(tree):
+//     pipeline's universe — while the denominator WAS TotalClassifiedSymbols(tree):
 //     the classification tree's REPRESENTATIVE stocks, 27 against the shipped
 //     tree (measured 2026-09-27: 11 of the 12 L1 segments carry representatives,
-//     Σ len(seg.RepresentativeStocks) = 27). 1599/27 ≈ 5922%, and `coveragePct < 90`
-//     would need `symbols_built < 24.3` — a state in which the number means
-//     nothing. The "99.9% coverage" this change used to be described with is a
-//     FIXTURE reading (the test below supplies TotalSymbols=1600); the task never
-//     supplies that denominator. The denominator itself is issue #1944 item I29
-//     and is deliberately NOT changed here.
+//     Σ len(seg.RepresentativeStocks) = 27). 1599/27 ≈ 5922%, so `coveragePct < 90`
+//     would have needed `symbols_built < 24.3` — a state in which the number means
+//     nothing, i.e. the coverage half could never fire.
+//
+//     FIXED (issue #1944 item I29, 2026-09-29). The denominator is now the
+//     PIPELINE POPULATION — how many symbols the pipeline is expected to cover,
+//     i.e. len(gatherAllSymbols(tree, mapper, substrate)) via
+//     UniversePopulationSize, the same precedence the pipeline itself uses
+//     (first-party symbol_industry population when available, tree+mapper
+//     otherwise). The ratio therefore answers the question the alert claims to
+//     ask — "of the symbols this pipeline can see, how many did the last run
+//     actually build?" — and it is satisfiable: a run that builds materially
+//     fewer symbols than the population now reports low coverage.
+//
+//     Consequence of the fix (measured, not assumed): on the production shape of
+//     2026-09-29 the population and the build agree (1,599 gathered / 1,599
+//     built ⇒ **100.0%**), so the new condition does NOT introduce a new paging
+//     source at the baseline. What it can fire on, and what it therefore means,
+//     is worth stating plainly rather than implying a market-coverage claim:
+//
+//       - the numerator is the LAST run's build and the denominator is the
+//         population the checker can see NOW, so the ratio tracks POPULATION
+//         DRIFT between runs: a run that is materially behind a grown population
+//         (>11% growth before the next run) reports low coverage;
+//       - a population source that is degraded at check time (substrate not
+//         loaded ⇒ tree+mapper fallback, a mapper that lost symbols) makes the
+//         denominator SMALLER than the numerator. That shape is no longer
+//         rendered as an absurd percentage (pre-I29: 1,599/27 ≈ 5922%); it is
+//         reported as CoverageFindingPopulationUnusable, because the population
+//         reading itself is what is broken.
+//
+//     Both are real, actionable shapes. Neither is reachable at the measured
+//     baseline, which is why the fix adds no paging source by itself.
 //  2. Nothing in the condition mentioned WHEN the artifact was written, so even a
 //     correct percentage could not have flagged the stale file.
 //
@@ -64,10 +91,20 @@ const (
 	// artifact is older than the last run the calendar says should have written
 	// it, so whatever coverage it reports describes an older market.
 	CoverageFindingStaleArtifact = "artifact_stale"
+	// CoverageFindingPopulationUnusable is the "the denominator is not a
+	// population" shape: the artifact claims to have built MORE symbols than the
+	// population the pipeline can see. Reporting that as a percentage produces a
+	// meaningless >100% reading (the pre-I29 behavior, 1,599/27 ≈ 5922%), so this
+	// kind reports the contradiction itself and no ratio. It is not a coverage
+	// verdict: it says the population source is incomplete (a substrate that did
+	// not load, a mapper that lost symbols), which is why it must be visible.
+	CoverageFindingPopulationUnusable = "population_smaller_than_built"
 )
 
-// CoverageLowThreshold is the coverage percentage below which the check alerts.
-// It is the threshold the task has always used; it lives here so the finding's
+// CoverageLowThreshold is the coverage percentage below which the check alerts:
+// built symbols / pipeline population. It is the threshold the task has always
+// used, and it is unchanged by the I29 fix — what changed is that the ratio can
+// now actually reach it (see the file header). It lives here so the finding's
 // message and the task's wiring cannot drift apart.
 const CoverageLowThreshold = 90.0
 
@@ -97,8 +134,14 @@ type CoverageInput struct {
 	// SnapshotSymbols is snapshot.result.symbols_built: the numerator, read from
 	// the canonical artifact. Zero when the artifact is missing or unreadable.
 	SnapshotSymbols int
-	// TotalSymbols is TotalClassifiedSymbols(tree): the denominator.
-	TotalSymbols int
+	// PopulationSymbols is the denominator: the number of symbols the pipeline is
+	// expected to cover, as reported by UniversePopulationSize(tree, substrate)
+	// — the first-party symbol_industry population when the substrate provides
+	// one, the tree+mapper fallback otherwise. It is NOT
+	// TotalClassifiedSymbols(tree) (that is the classification tree's
+	// representative stocks, 27 against the shipped tree, and using it made the
+	// ratio meaningless — issue #1944 item I29).
+	PopulationSymbols int
 	// SnapshotMTime is the modification time of the canonical snapshot artifact.
 	// The zero time means "unknown" (missing file) and disables the age check.
 	SnapshotMTime time.Time
@@ -164,20 +207,40 @@ func ArtifactStaleForCoverage(mtime, lastExpectedRun, now time.Time) bool {
 func AssessUniverseCoverage(in CoverageInput) []CoverageFinding {
 	var findings []CoverageFinding
 
-	if in.TotalSymbols > 0 && in.SnapshotSymbols > 0 {
-		pct := float64(in.SnapshotSymbols) / float64(in.TotalSymbols) * 100
+	switch {
+	case in.PopulationSymbols > 0 && in.SnapshotSymbols > in.PopulationSymbols:
+		// The denominator is not a population at all: the artifact claims more
+		// symbols than the pipeline can see. Rendering that as a percentage is the
+		// pre-I29 bug (1,599/27 ≈ 5922%), so the contradiction is reported as
+		// itself and no ratio is attached.
+		findings = append(findings, CoverageFinding{
+			Kind: CoverageFindingPopulationUnusable,
+			Message: fmt.Sprintf(
+				"Universe coverage not measurable: the snapshot reports %d built symbols but the pipeline population "+
+					"is only %d — the population reading is incomplete (no coverage ratio is reported, because one "+
+					"would exceed 100%%)",
+				in.SnapshotSymbols, in.PopulationSymbols),
+			Details: map[string]any{
+				"kind":               CoverageFindingPopulationUnusable,
+				"snapshot_symbols":   in.SnapshotSymbols,
+				"population_symbols": in.PopulationSymbols,
+			},
+		})
+	case in.PopulationSymbols > 0 && in.SnapshotSymbols > 0:
+		pct := float64(in.SnapshotSymbols) / float64(in.PopulationSymbols) * 100
 		if pct < CoverageLowThreshold {
 			findings = append(findings, CoverageFinding{
 				Kind: CoverageFindingLowCoverage,
 				Message: fmt.Sprintf(
-					"Universe coverage %.1f%% (%d/%d symbols) — snapshot may be stale",
-					pct, in.SnapshotSymbols, in.TotalSymbols),
+					"Universe coverage %.1f%% (%d built of %d expected symbols) — the pipeline built materially "+
+						"fewer symbols than its population",
+					pct, in.SnapshotSymbols, in.PopulationSymbols),
 				Details: map[string]any{
-					"kind":             CoverageFindingLowCoverage,
-					"snapshot_symbols": in.SnapshotSymbols,
-					"total_symbols":    in.TotalSymbols,
-					"coverage_pct":     pct,
-					"threshold_pct":    CoverageLowThreshold,
+					"kind":               CoverageFindingLowCoverage,
+					"snapshot_symbols":   in.SnapshotSymbols,
+					"population_symbols": in.PopulationSymbols,
+					"coverage_pct":       pct,
+					"threshold_pct":      CoverageLowThreshold,
 				},
 			})
 		}
@@ -193,14 +256,14 @@ func AssessUniverseCoverage(in CoverageInput) []CoverageFinding {
 				age.Hours(),
 				in.SnapshotMTime.UTC().Format(time.RFC3339),
 				in.LastExpectedRun.UTC().Format(time.RFC3339),
-				in.SnapshotSymbols, in.TotalSymbols),
+				in.SnapshotSymbols, in.PopulationSymbols),
 			Details: map[string]any{
 				"kind":                   CoverageFindingStaleArtifact,
 				"artifact_age_hours":     math.Round(age.Hours()*10) / 10,
 				"artifact_mtime":         in.SnapshotMTime.UTC().Format(time.RFC3339),
 				"last_expected_run":      in.LastExpectedRun.UTC().Format(time.RFC3339),
 				"snapshot_symbols":       in.SnapshotSymbols,
-				"total_symbols":          in.TotalSymbols,
+				"population_symbols":     in.PopulationSymbols,
 				"stale_grace_seconds":    int(CoverageStaleGrace.Seconds()),
 				"stale_tolerance_secs":   int(CoverageStaleTolerance.Seconds()),
 				"last_expected_run_unix": in.LastExpectedRun.Unix(),

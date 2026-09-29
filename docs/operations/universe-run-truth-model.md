@@ -155,7 +155,7 @@ trustworthy == 1, ranked > 0, 兩個產物都落地    ⇒ 健康（除非記帳
 |------|--------|------|
 | `data/state/universe.json`（agents.json 相容的 registry） | 次要 | 與 snapshot 同一步寫入；**2026-09-27 起有告警**（第 11 條 `AtlasUniverseRegistryNotPersisted`，與第 10 條互斥）。mtime 比 snapshot 舊 ⇒ 工具的 `L5` 仍會附帶 `⚠️ 次要矛盾`（作為第二個見證） |
 | `data/state/universe_watchlist.json`（D6） | 次要 | 有 in-process 告警（`monitor.Alert`，`len > 20`），不是 Prometheus 規則 |
-| `universe_coverage_check`（`cmd/atlas/main.go`） | 次要 | 讀 snapshot 的 `symbols_built`；2026-09-27 起有**兩個** finding：覆蓋率 `< 90%`（原有）與**產物過期**（`monitoring.AssessUniverseCoverage`，與最後一次應執行時刻比、含寬限與容差；訊息含 artifact 幾小時舊與該次應執行時刻）。仍**答不出**「artifact 不存在」（那是第 10 條與工具 L5 的轄區） |
+| `universe_coverage_check`（`cmd/atlas/main.go`） | 次要 | 讀 snapshot 的 `symbols_built`；2026-09-27 起有**兩個** finding：覆蓋率 `< 90%`（原有；**分母已於 2026-09-29 由 #1944 I29 修正為 pipeline 母體** `monitoring.UniversePopulationSize`，實測 1,599/1,599 = 100%；母體小於分子時改報 `population_smaller_than_built`，不再產生 ≈5922% 的荒謬讀數）與**產物過期**（`monitoring.AssessUniverseCoverage`，與最後一次應執行時刻比、含寬限與容差；訊息含 artifact 幾小時舊與該次應執行時刻）。仍**答不出**「artifact 不存在」（那是第 10 條與工具 L5 的轄區） |
 | 台灣交易日曆 `internal/taiwanholidays` | 前提 | 排程判定式的另一半。工具**解析 Go 原始碼**的字面值（不硬編第二份表）；解析不到 ⇒ `UNKNOWN` |
 
 ---
@@ -209,7 +209,7 @@ trustworthy == 1, ranked > 0, 兩個產物都落地    ⇒ 健康（除非記帳
 | 項 | 缺口（症狀） | 落地 |
 |----|-------------|------|
 | **B** | registry（`universe.json`）寫入失敗只有一行 WARN ⇒ 「registry 舊、snapshot 新」兩種消費者看不同母體，**零偵測** | 新訊號 `atlas_universe_last_run_registry_persisted{stage}` ＋ 第 11 條（與第 10 條互斥：它要求 `snapshot_persisted == 1`）；promtool `W`（fire）/ `A`（兩者都落地 ⇒ 沉默）/ `T`（兩者都失敗 ⇒ 只有第 10 條） |
-| **C** | `universe_coverage_check` **覆蓋率半邊恆不成立、且完全不看年齡** ⇒ 39.7h 舊的 artifact 零告警（09-27 實況）。真因是**分母口徑**：分子 `symbols_built=1599` vs 分母 `TotalClassifiedSymbols()=27`（分類樹 12 段中 11 段的代表股）⇒ ≈5922%，`< 90` 不可滿足（**分母修正屬 #1944 I29，未在本批改**；舊敘述「99.9% 覆蓋」是測試 fixture 的 `TotalSymbols=1600`，非生產讀數） | `monitoring.AssessUniverseCoverage` ＋ `PreviousUniverseRun`（以交易日曆算最後一次應執行時刻，**不是**固定視窗）⇒ 過期時告警，訊息含 artifact 幾小時舊與該次應執行時刻 |
+| **C** | `universe_coverage_check` **覆蓋率半邊恆不成立、且完全不看年齡** ⇒ 39.7h 舊的 artifact 零告警（09-27 實況）。真因是**分母口徑**：分子 `symbols_built=1599` vs 分母 `TotalClassifiedSymbols()=27`（分類樹 12 段中 11 段的代表股）⇒ ≈5922%，`< 90` 不可滿足（**分母修正屬 #1944 I29，已於 2026-09-29 修好**：`CoverageInput.PopulationSymbols` ＋ `monitoring.UniversePopulationSize`；舊敘述「99.9% 覆蓋」是測試 fixture 的 `TotalSymbols=1600`，非生產讀數） | `monitoring.AssessUniverseCoverage` ＋ `PreviousUniverseRun`（以交易日曆算最後一次應執行時刻，**不是**固定視窗）⇒ 過期時告警，訊息含 artifact 幾小時舊與該次應執行時刻 |
 | **D** | `ranked[]` 的長度與 `symbols_ranked` 無人比對 | 寫入端 `RankedCountConflict` 守門（WARN、**不致命、不修改資料**）＋ Go 測試（含 mutation 自證） |
 | **F** | `daily_skip_non_trading` / `daily_skip_monday` 是 `Debug` ⇒ INFO 的生產**看不到休市證據** | 升成 `Info`；同時把兩個 daily 閘門移到 `alignToTarget` **之後**（與 weekly 一致）⇒ 上限由「每分鐘一行」降為 ≤3 行/日（**實測**：舊順序 + Info = 1440 行/日，見 `TestDailySkip_InfoLevelAndDailyVolume`） |
 | **G** | 檔頭要求「部署後把規則從 `NEW_RULES` 搬進 `CORE_RULES`」= 人工步驟，漏掉會誤導（搬了反而在部署前變 RED 假警報） | 工具**逐條比對** `/api/v1/rules` 的載入集合（`NEW_RULES` 也比）：已載入 ⇒ 靜默；未載入 ⇒ WARN 且保留「這條是新增的」語意；補上「部分載入」fixture 與兩個方向的 mutation |
