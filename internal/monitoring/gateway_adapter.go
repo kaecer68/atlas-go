@@ -700,30 +700,39 @@ func NewTaifexFetcher(fetcher DataFetcher) apisystem.TaifexFetcher {
 	}
 }
 
-// NewOddLotFetcher creates a fetcher for TWSE odd-lot trading data.
+// NewOddLotFetcher creates a fetcher for the odd-lot retail imbalance input
+// consumed by the a6_odd_lot sub-indicator.
 //
-// The twse_oddlot upstream was removed (BFI84U now serves the 停券預告表
-// report, MI_INDEX type=ODDLOT returns empty — see known_issues
-// twse_oddlot_upstream_60d). As a short-term redirect, when the odd-lot
-// channel yields no usable imbalance we derive a retail contrarian proxy from
-// twse_capital_flow's total institutional net instead of surfacing 0.
+// The twse_oddlot channel is RETIRED (issue #2134). TWSE removed the upstream
+// in 2026-08 (BFI84U now serves the 停券預告表 report, MI_INDEX type=ODDLOT
+// returns an empty data set — see known_issues.go twse_oddlot_upstream_60d)
+// and the adapter is no longer registered in register_adapters.go, so there is
+// no native odd-lot value left to read. The retail imbalance input therefore
+// comes exclusively from the twse_capital_flow proxy below.
+//
+// The legacy first-priority probe of the twse_oddlot gateway channel was
+// removed for the same reason the twse_etf probe was removed (2026-08-18,
+// investigation-twse-timeout-2026-08-18 §3.3): a Fetch on an unregistered
+// channel is counted as a circuit-breaker failure, which would push the
+// record out of its intentional "inactive" verdict into a permanent error and
+// re-open the alert-fatigue loop this retirement closes.
+//
+// Contract: this fetcher never reports 0 as if it were data. When the proxy
+// input is unusable (capital-flow fetch failure, unparseable payload, or a
+// total net of exactly zero) it returns an error, and the a6_odd_lot
+// sub-indicator falls back to its neutral parameter instead of a fabricated
+// zero imbalance.
 func NewOddLotFetcher(fetcher DataFetcher) apisystem.OddLotFetcher {
+	// fetcher is kept as the parameter (not inlined into the closure) so the
+	// wiring in dashboard_api.go — and any test double — is unchanged.
 	return func(ctx context.Context) (*marketdata.OddLotStats, error) {
-		data, _, err := fetcher(ctx, "twse_oddlot")
-		if err == nil && len(data) > 0 {
-			var result marketdata.OddLotStats
-			if err := json.Unmarshal(data, &result); err == nil {
-				return &result, nil
-			}
-		}
-		// twse_oddlot returned no usable bytes (upstream removed) — redirect to
-		// the healthy twse_capital_flow channel for a retail imbalance proxy.
 		return oddLotFromCapitalFlow(ctx, fetcher)
 	}
 }
 
 // oddLotFromCapitalFlow derives a bounded retail imbalance proxy from the
-// twse_capital_flow channel when twse_oddlot is unavailable.
+// twse_capital_flow channel, the sole remaining source of the odd-lot retail
+// imbalance input after the twse_oddlot retirement (issue #2134).
 func oddLotFromCapitalFlow(ctx context.Context, fetcher DataFetcher) (*marketdata.OddLotStats, error) {
 	data, _, err := fetcher(ctx, "twse_capital_flow")
 	if err != nil {
@@ -736,7 +745,11 @@ func oddLotFromCapitalFlow(ctx context.Context, fetcher DataFetcher) (*marketdat
 
 	totalNet := snap.ForeignInvestorNet.Value + snap.DomesticFundNet.Value + snap.DealerNet.Value
 	if totalNet == 0 {
-		return nil, fmt.Errorf("capital flow total net is zero")
+		// A zero total net is indistinguishable from "the upstream returned an
+		// empty snapshot". Reporting a 0 imbalance would look like real data
+		// ("no retail skew") and would suppress the a6_odd_lot fallback, so the
+		// proxy refuses instead (issue #2134 acceptance: never surface 0).
+		return nil, fmt.Errorf("capital flow total net is zero: proxy unavailable, refusing to report a zero imbalance")
 	}
 
 	// Contrarian proxy: odd-lot (零股) buyers are retail investors who tend to

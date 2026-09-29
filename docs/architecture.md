@@ -48,7 +48,7 @@
 | `twse_sector_index` | 台灣半導體指數（TAISEMI proxy） | `TWSESectorIndexProvider` | 5s/2b | `macro_cache_twse_sector_index` (15m) |
 | `day_trading` | 當沖交易統計 | `DayTradingChannelAdapter` | 5s/1b | — |
 | `market_volume` | 集中市場成交金額（億） | `MarketVolumeChannelAdapter` | 5s/1b | — |
-| `twse_oddlot` | 零股交易 | `TWSEOddLotChannelAdapter` | 5s/2b | — |
+| `twse_oddlot` | 零股交易（⛔ **已退役 2026-09-29**：上游 BFI84U 由 TWSE 移除；零售失衡輸入改由 `twse_capital_flow` 代理，見 `internal/monitoring/known_issues.go`） | ~~`TWSEOddLotChannelAdapter`~~（不再註冊） | 5s/2b | — |
 | `twse_etf` | ETF 申購贖回淨額（⚠️ 資料源已移除，見 `internal/monitoring/known_issues.go`） | `TWSEETFChannelAdapter` | 1s/1b | — |
 | `twse_insider` | 內部人持股轉讓 | `TWSEInsiderChannelAdapter` | 5s/1b | `auto_twse_insider` (1h) |
 | `twse_sbl` | 借券賣出餘額（第一方 TWSE TWT93U + TPEx margin/sbl，G02 live） | `TWSESBLChannelAdapter` | 2s/1b | `auto_twse_sbl` (1h) |
@@ -464,7 +464,7 @@ const SHELL_LOADERS = {
 |-----------|------------|
 | `day_trading` | 無 BTM 任務，可能依賴 `macro_ingest` 內部批次 |
 | `market_volume` | 同 `day_trading` |
-| `twse_oddlot` | 無 BTM 任務 |
+| `twse_oddlot` | 無 BTM 任務（⛔ 已退役 2026-09-29：抓取路徑移除，record 為 `inactive`） |
 | `twse_etf` | 無 BTM 任務（⚠️ 資料源已移除，2026-08-10 實測 TWT44U → 404） |
 | `tdcc_equity_dispersion` | STUB，無排程 |
 | `sector_data` | `macro_cache_sector_data` (15m) |
