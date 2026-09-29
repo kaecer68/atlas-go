@@ -93,7 +93,11 @@ func TestHandleRecommendations_UnknownJWTEmailDoesNotPanic(t *testing.T) {
 	if !ok {
 		t.Fatalf("data type = %T, want TierRecommendation", data)
 	}
-	if rec.Tier != string(subscription.TierFree) {
-		t.Errorf("tier = %q, want %q (no local row ⇒ free tier)", rec.Tier, subscription.TierFree)
+	// #2128 起存取層級取自 claims（C-02），本地缺列不再是「降回 free」的理由：
+	// 這裡的 token 是 legacy HS256，claims 帶 premium ⇒ 回應 tier 必須是 premium。
+	// (#2125 只釘「不得 panic」；tier 的來源由 tier_source_test.go 另外釘。)
+	if rec.Tier != string(subscription.TierPremium) {
+		t.Errorf("tier = %q, want %q (claims are the C-02 authority; the missing local row must not downgrade it)",
+			rec.Tier, subscription.TierPremium)
 	}
 }

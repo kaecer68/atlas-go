@@ -38,8 +38,12 @@ func DefaultValidationConfig() ValidationConfig {
 // RankedReport 為附帶排名與分層資訊的策略報告。
 type RankedReport struct {
 	StrategyReport
-	Rank  int     `json:"rank"`  // 綜合排名（1 為最佳）
-	Tier  string  `json:"tier"`  // 分層標籤：free, registered, premium
+	Rank int `json:"rank"` // 綜合排名（1 為最佳）
+	// Tier 是「報告內容深度」標籤（依排名由 AssignTiers 指派），**不是**呼叫者
+	// 的存取層級；呼叫者層級見 internal/subscription 的 C-02 access tier
+	// （free/basic/pro）。兩者不同軸，不可互相取代。
+	Tier string `json:"tier"` // 深度標籤：free, registered, premium
+
 	Score float64 `json:"score"` // 綜合評分（0~100）
 }
 
