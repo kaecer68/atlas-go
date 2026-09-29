@@ -44,6 +44,14 @@ MacBook (kaecer) = 唯一開發機           Mac Mini (kaecer@kmacmini) = 唯一
 
 ### 情境 A：本機 dev 驗證（MacBook）
 
+> **`make rebuild-all` 建什麼（#2117）**：`bin/atlas`（`build-backend`）＋ `bin/atlas-mcp`
+> （`rebuild-host-bin`）＋ atlas image ＋ 6 個 cron image，最後跑 `check-binaries` 驗兩顆 host binary
+> 的新鮮度。2026-09-29 之前它**只**建 `bin/atlas-mcp`，於是主機上已存在舊 `bin/atlas` 時，
+> 這條 canonical 流程必定以 `✗ STALE bin/atlas` 收尾（rc≠0）；當時的 workaround 是補跑
+> `make build-backend`。現已納入前置步驟，兩個 target 仍可獨立使用。
+> **註**：本文件描述的是 host binary；docker image 的新鮮度由 `check-binaries` 的 image 分支檢查
+> （需 docker，因此 pre-push 用 `--host-only`）。
+
 ```bash
 # 1. 確認 main HEAD 已是目標版本
 git fetch origin main && git log --oneline origin/main -1
@@ -202,7 +210,9 @@ git fetch origin main && git checkout main && git merge --ff-only origin/main
 # 2) repo 目錄 .env（gitignored）——Mac Mini 的對外埠契約
 printf 'GRAFANA_PORT=3001\nATLAS_POSTGRES_PORT=55432\n' > .env && chmod 600 .env
 
-# 3) 重建（host bin + atlas image + cron image + 全部容器）
+# 3) 重建（host binaries + atlas image + cron image + 全部容器）
+#    host binaries = bin/atlas（build-backend）＋ bin/atlas-mcp（rebuild-host-bin）
+#    ⇒ 兩者都被 check-binaries 檢查，故 rebuild-all 必須兩個都建（#2117）
 make rebuild-all                                                   # 見坑③④
 
 # 4) 驗收

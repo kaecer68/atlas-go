@@ -62,7 +62,7 @@ make rebuild-host-bin
 make check-binaries
 ```
 
-需要一鍵收斂時可跑 `make build-frontend && make rebuild-all`；`rebuild-all` 的內部順序是 host binary → atlas image → cron image，最後自動呼叫 `make check-binaries`。`rebuild-atlas`／`rebuild-cron` 使用 `Dockerfile.atlas.local`／`Dockerfile.cron.local`，只封裝 host-built binaries，不會把兩套 frontend `dist` 放進 image；若目標是 embedded frontend 的完整 image，必須在前端完成後使用正式 `Dockerfile`／`Dockerfile.cron` 另行確認 image 內容。不要用手工 `go build` 取代 Make targets，否則容易漏掉 `internal/buildinfo` 的 commit ldflags。若環境無法連線 `proxy.golang.org`，可設定 `GOPROXY=https://goproxy.cn,direct` 後再執行同一套 local rebuild targets。
+需要一鍵收斂時可跑 `make build-frontend && make rebuild-all`；`rebuild-all` 的內部順序是 host binaries（`bin/atlas` via `build-backend` → `bin/atlas-mcp` via `rebuild-host-bin`）→ atlas image → cron image，最後自動呼叫 `make check-binaries`（兩顆 host binary 都要新鮮，否則 rc≠0；#2117）。`rebuild-atlas`／`rebuild-cron` 使用 `Dockerfile.atlas.local`／`Dockerfile.cron.local`，只封裝 host-built binaries，不會把兩套 frontend `dist` 放進 image；若目標是 embedded frontend 的完整 image，必須在前端完成後使用正式 `Dockerfile`／`Dockerfile.cron` 另行確認 image 內容。不要用手工 `go build` 取代 Make targets，否則容易漏掉 `internal/buildinfo` 的 commit ldflags。若環境無法連線 `proxy.golang.org`，可設定 `GOPROXY=https://goproxy.cn,direct` 後再執行同一套 local rebuild targets。
 
 ### 常見失敗與排除
 

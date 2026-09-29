@@ -854,8 +854,21 @@ rebuild-cron: rebuild-cron-bins
 	@$(MAKE) retag-cron-images
 	@ATLAS_GIT_COMMIT=$(GIT_COMMIT) docker compose up -d --force-recreate --no-build cron-macro-ingest cron-quote-backfill cron-replay-sync atlas-cron-c07-evaluate cron-geo-ingest atlas-cron-c07-collect 
 
-# Full rebuild: host bin + atlas image + cron images.
-rebuild-all: rebuild-host-bin rebuild-atlas rebuild-cron
+# Full rebuild: host binaries + atlas image + cron images.
+#
+# Prerequisites are deliberately composed from the narrow, independently usable
+# targets (build-backend / rebuild-host-bin / rebuild-atlas / rebuild-cron) so
+# callers that run those targets directly keep their exact semantics.
+#
+# Why build-backend is here (#2117): the final check-binaries judges BOTH host
+# binaries (scripts/check-binary-freshness.sh → HOST_BINARIES=bin/atlas
+# bin/atlas-mcp). rebuild-host-bin only produces bin/atlas-mcp, so on a host
+# where bin/atlas exists from an earlier build (production: Mac Mini) the
+# canonical flow `git pull && make rebuild-all` ended with
+# `✗ STALE bin/atlas` ⇒ build-backend rc≠0 for a perfectly updated tree.
+# Measured 2026-09-29 on a stale bin/atlas: check --host-only rc=1, after
+# rebuild-host-bin rc=1 (unchanged), after build-backend rc=0.
+rebuild-all: build-backend rebuild-host-bin rebuild-atlas rebuild-cron
 	@echo "✓ rebuilt all binaries"
 	@$(MAKE) check-binaries
 
