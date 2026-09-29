@@ -117,8 +117,12 @@ func collectRecommendations(ctx context.Context, registry domain.AgentRegistry, 
 
 		for _, symbol := range symbols {
 			quote, ok := quotes[symbol]
-			if !ok || !quote.IsTradable {
-				skips.record(agent.ID, skipReasonNoTradableQuote)
+			if !ok {
+				skips.record(agent.ID, skipReasonNoQuote)
+				continue
+			}
+			if !quote.IsTradable {
+				skips.record(agent.ID, skipReasonNotTradable)
 				continue
 			}
 			screenRes, err := plugins.ScreenDetailed(ctx, agent, symbol, quotes)
@@ -445,11 +449,15 @@ func collectRecommendations(ctx context.Context, registry domain.AgentRegistry, 
 				"rejects":              rejSummary,
 				// Skip accounting (issue #1944 T1) — one per session, see
 				// newSessionSkipCounts for the label mapping.
-				"skips_no_tradable_quote":   skips.byReason[skipReasonNoTradableQuote],
+				"skips_no_quote":            skips.byReason[skipReasonNoQuote],
+				"skips_not_tradable":        skips.byReason[skipReasonNotTradable],
 				"skips_factor_quality_gate": skips.byReason[skipReasonFactorQualityGate],
 				"skips_executor_declined":   skips.byReason[skipReasonExecutorDeclined],
 				"skips_total":               skips.total(),
-				"skips_by_agent":            skips.byAgentTotals(),
+				// Per-agent breakdown, now per (agent, reason): the flat totals this
+				// field carried in #2153 could not attribute a specific agent's
+				// skips to a cause, which is what T2 needed (bounded: 21×4).
+				"skips_by_agent": skips.byAgentReason(),
 			},
 			Confidence: avgConvictionScore(recs),
 		})
@@ -494,7 +502,13 @@ func collectRecommendations(ctx context.Context, registry domain.AgentRegistry, 
 // Skip reason identifiers. They are stable strings because they travel in the
 // trace payload and in the log line.
 const (
-	skipReasonNoTradableQuote   = "no_tradable_quote"
+	// skipReasonNoQuote: the session's quote set has no entry for the symbol at
+	// all. Distinguished from not_tradable since 2026-09-30 because production
+	// evidence showed the two causes live on DIFFERENT paths (the untraced batch
+	// path skipped with only 3 quotes in the set, the traced session skipped with
+	// 44) — one label could not tell them apart.
+	skipReasonNoQuote           = "no_quote"
+	skipReasonNotTradable       = "not_tradable"
 	skipReasonFactorQualityGate = "factor_quality_gate"
 	skipReasonExecutorDeclined  = "executor_declined"
 )
@@ -538,9 +552,28 @@ func (s *sessionSkipCounts) total() int {
 	return total
 }
 
-// byAgentTotals returns agentID → total skips across reasons, for agents that
-// skipped at least one candidate (empty when nothing was skipped).
-func (s *sessionSkipCounts) byAgentTotals() map[string]int {
+// byAgentReason returns agentID → (reason → count) for agents that skipped at
+// least one candidate (empty when nothing was skipped).
+//
+// Shape note: #2153 emitted agentID → TOTAL here, which was enough to see that
+// an agent was losing candidates but not why (T2 could not attribute the four
+// A-group agents to a gate). The nested shape is bounded the same way — 21
+// agents × 4 reasons — and totals remain derivable by summing.
+func (s *sessionSkipCounts) byAgentReason() map[string]map[string]int {
+	out := make(map[string]map[string]int, len(s.byAgent))
+	for agentID, reasons := range s.byAgent {
+		cp := make(map[string]int, len(reasons))
+		for reason, n := range reasons {
+			cp[reason] = n
+		}
+		out[agentID] = cp
+	}
+	return out
+}
+
+// agentTotals returns agentID → total skips across reasons (used for the log's
+// top-agent ranking and by tests).
+func (s *sessionSkipCounts) agentTotals() map[string]int {
 	out := make(map[string]int, len(s.byAgent))
 	for agentID, reasons := range s.byAgent {
 		total := 0
@@ -587,13 +620,26 @@ func (s *sessionSkipCounts) topAgentSkipSummary(limit int) string {
 }
 
 // logRecommendationSkips emits the per-session skip summary (at most one line).
+//
+// Level rule (2026-09-30): a call WITHOUT a session ID is a batch/inner call that
+// writes no reasoning trace, and in production those calls produce ~99.6% of the
+// lines (4272 of 4288 in 12h) — as INFO that is pure log noise. They are NOT
+// paging (no alert reads this event), so the fix is log hygiene rather than
+// suppression: with no session ID the same summary goes out at DEBUG, which keeps
+// the path observable when someone raises the level, while the one-line-per-session
+// contract holds at INFO.
 func logRecommendationSkips(sessionID string, agents, quotes int, s *sessionSkipCounts) {
 	if s == nil || s.total() == 0 {
 		return
 	}
-	logging.Info("recommendation_collector", "recommendation_skips",
+	emit := logging.Info
+	if sessionID == "" {
+		emit = logging.Debug
+	}
+	emit("recommendation_collector", "recommendation_skips",
 		logging.FStr("session_id", sessionID),
-		logging.FInt("no_tradable_quote", s.byReason[skipReasonNoTradableQuote]),
+		logging.FInt("no_quote", s.byReason[skipReasonNoQuote]),
+		logging.FInt("not_tradable", s.byReason[skipReasonNotTradable]),
 		logging.FInt("factor_quality_gate", s.byReason[skipReasonFactorQualityGate]),
 		logging.FInt("executor_declined", s.byReason[skipReasonExecutorDeclined]),
 		logging.FInt("skips_total", s.total()),
