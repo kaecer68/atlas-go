@@ -362,13 +362,18 @@ func ValidateCalibration(path string, maxAge time.Duration) (*CalibrationValidat
 const DefaultCalibrationMaxAge = 48 * time.Hour
 
 // ValidateCalibrationWithOptions is ValidateCalibration plus a validation policy
-// (issue #1944 Batch 4, item I31).
+// and an injectable clock (issue #1944 Batch 4, item I31).
 //
 // The policy decides two things: whether freshness is part of this run's scope,
 // and which known findings are accepted. Everything not accepted still fails the
 // run, so the gate keeps its teeth while a checkout that structurally cannot be
 // fresh no longer produces a verdict nobody can act on. Accepted findings stay in
 // Findings with severity "observation" — accepted is visible, never silent.
+//
+// opts.Now (when set) is the clock every freshness comparison is made against.
+// Leaving it zero means time.Now(), which is what every production caller does —
+// the seam changes nothing about the production verdict, it only removes the
+// implicit `time.Now()` from the middle of the check.
 func ValidateCalibrationWithOptions(path string, opts CalibrationValidationOptions) (*CalibrationValidationResult, error) {
 	maxAge := opts.MaxAge
 	if maxAge <= 0 {
@@ -379,7 +384,7 @@ func ValidateCalibrationWithOptions(path string, opts CalibrationValidationOptio
 			return nil, fmt.Errorf("calibration validation policy: %w", err)
 		}
 	}
-	res := collectCalibrationFindings(path, maxAge)
+	res := collectCalibrationFindings(path, maxAge, opts.now())
 	res.finalizeFindings(opts.Policy)
 	return res, nil
 }
@@ -387,7 +392,14 @@ func ValidateCalibrationWithOptions(path string, opts CalibrationValidationOptio
 // collectCalibrationFindings runs every check and records raw findings. It does
 // not decide severities or OK — that is finalizeFindings' job — so the same
 // checks serve both the fail-closed and the policy-scoped entry points.
-func collectCalibrationFindings(path string, maxAge time.Duration) *CalibrationValidationResult {
+//
+// now is the caller's clock. It is a parameter, not `time.Now()`, because the
+// freshness verdict is otherwise a function of the wall clock: a caller that
+// evaluates an artifact at a deliberately chosen instant (a monitoring probe
+// that passes its own `now`, a test with a fixed fixture) would silently get the
+// real clock's verdict instead. That mismatch is a date bomb — the verdict flips
+// on its own the day the wall clock walks past fixture_updated_at + maxAge.
+func collectCalibrationFindings(path string, maxAge time.Duration, now time.Time) *CalibrationValidationResult {
 	res := &CalibrationValidationResult{OK: true}
 
 	info, err := os.Stat(path)
@@ -396,7 +408,7 @@ func collectCalibrationFindings(path string, maxAge time.Duration) *CalibrationV
 		return res
 	}
 	res.FileMTime = info.ModTime()
-	res.StaleBy = time.Since(res.FileMTime) - maxAge
+	res.StaleBy = now.Sub(res.FileMTime) - maxAge
 	if res.StaleBy > 0 {
 		res.addFinding(CalibrationFindingMTimeStale, "", "params.json mtime %s is stale by %s (threshold %s)",
 			res.FileMTime.Format(time.RFC3339), res.StaleBy.Truncate(time.Minute), maxAge)
@@ -417,9 +429,9 @@ func collectCalibrationFindings(path string, maxAge time.Duration) *CalibrationV
 	res.UpdatedAt = cfg.UpdatedAt
 	if res.UpdatedAt.IsZero() {
 		res.addFinding(CalibrationFindingUpdatedAtZero, "", "params.json has zero updated_at — calibration never recorded")
-	} else if time.Since(res.UpdatedAt) > maxAge {
+	} else if age := now.Sub(res.UpdatedAt); age > maxAge {
 		res.addFinding(CalibrationFindingUpdatedAtStale, "", "params.json updated_at %s is stale by %s (threshold %s)",
-			res.UpdatedAt.Format(time.RFC3339), time.Since(res.UpdatedAt).Truncate(time.Minute), maxAge)
+			res.UpdatedAt.Format(time.RFC3339), age.Truncate(time.Minute), maxAge)
 	}
 
 	segments := cfg.Industry.ClassificationTree.Value.Segments
