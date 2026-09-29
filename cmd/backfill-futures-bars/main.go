@@ -4,7 +4,7 @@
 // 因此無法回答「某日某契約的 OHLC ＋ 未平倉」。本 CLI 用期交所 first-party 的
 // 官網 CSV 端點（可指定日期區間）做歷史回補，資料直接進 backend-aware 的
 // futures_bars 表，並把連續契約的 splice 事件寫進 futures_rollovers。
-// 詳見 docs/specs/futures-bars-firstparty-spec.md。
+// 詳見 docs/specs/futures-bars-firstparty-spec.md（PROBE: integration path gate 觀測用註解，PR 將立即關閉）。
 //
 // 儲存後端**一律**由 -backend 或 ATLAS_STORE_BACKEND 決定（經 ledger.ResolveStoreBackend）。
 // 刻意不提供「預設 sqlite、Postgres 需明示 flag」的形狀 —— 那正是 #2107 的事故形狀：
