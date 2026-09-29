@@ -209,7 +209,7 @@ Go struct (with json tags) → JSON Schema
 | **P1** | darwinian_history | `data/state/darwinian_history.jsonl` | 權重演進歷史 |
 | **P2** | metrics | `data/state/metrics.jsonl` | 監控指標 |
 | **P2** | clamping_events | `data/state/clamping_events.jsonl` | 權重夾制事件 |
-| **P2** | screened_symbols | `data/state/sessions/*/screened_symbols.jsonl` | 篩選器記錄 |
+| **P2** | screened_symbols | `data/state/sessions/*/screened_symbols.jsonl` | **篩選失敗記錄（rejects-only）**：通過 screening 的符號不落列；檔名為歷史包袱 |
 | **P3** | swarm_training | `data/state/swarm_training/` | Swarm 訓練過程 |
 | **P3** | traces | `data/state/traces/` | 執行追蹤 |
 

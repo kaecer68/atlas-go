@@ -16,10 +16,19 @@
 // Per-session layout (under sessions/<sessionID>/):
 //
 //	recommendation_outcomes.jsonl
-//	screened_symbols.jsonl
+//	screened_symbols.jsonl        ← REJECTS ONLY (see below)
 //	trades.jsonl
 //	summary.json
 //	experiments.jsonl
+//
+// The `screened_symbols.jsonl` NAME IS HISTORICAL AND MISLEADING: the file holds
+// screening REJECTS only — it is written from []domain.ScreeningReject and a
+// symbol that PASSED screening is never listed. "Not in the file" therefore means
+// "not rejected", NOT "not screened". Renaming it was considered and rejected:
+// historical session directories (100+ locally, more in production) already carry
+// the old name, so a rename would need a compatibility reader, and until then it
+// would silently make past audits unreadable. The semantics are pinned by
+// TestScreenedSymbolsArtifact_IsRejectsOnly.
 //
 // Plus global files at baseDir: recommendation_outcomes.jsonl,
 // experiments.jsonl, human_interventions.jsonl.
