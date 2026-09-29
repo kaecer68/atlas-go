@@ -590,6 +590,10 @@ func warnOutOfRangeAdjustmentFactors(patterns []SeasonalPattern) {
 		logging.FStr("bound_high", fmt.Sprintf("%.2f", DarwinianMaxAdjustment)),
 		logging.FStr("patterns", strings.Join(offenders, ",")),
 		logging.FStr("action", "clamped_at_consumption"),
+		// 這句話是給值班的人看的（issue #1944「零行為誠實化」）：本行**不是錯誤**，
+		// 超界值仍然照原樣載入並在消費端被 ClampAdjustmentFactor 夾住；它只是把
+		// 「設定檔有壞值」變成可觀測，不改任何載入或驗證結果。
+		logging.FStr("note", "value_is_still_loaded; this line is an observability marker only, not a load or validation failure"),
 	)
 }
 
