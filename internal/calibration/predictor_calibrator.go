@@ -21,6 +21,13 @@ type PredictorCalibrator struct {
 
 // NewPredictorCalibrator creates a calibrator backed by prediction_backtest
 // data in the given SQLite database.
+//
+// Measurement-only (#2133): the predictor parameter names are NOT registered in
+// config's parameterTable, so CalibrateParameters skips them and this path
+// reports the measured hit rate without writing anything. Keeping it that way is
+// deliberate — tuning a market-direction predictor on ~30 samples would be
+// tuning on noise. See registerPredictorCalibrate for the wiring and the
+// follow-up condition.
 func NewPredictorCalibrator(dbPath string) *PredictorCalibrator {
 	return &PredictorCalibrator{dbPath: dbPath}
 }

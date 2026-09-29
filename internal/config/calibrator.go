@@ -161,37 +161,65 @@ func CalibrateParameters(ctx context.Context, calibrator ParameterCalibrator, ev
 	appliedCount := 0
 	failedCount := 0
 
-	for _, name := range paramNames {
-		current, ok := ie.GetParameter(name)
-		if !ok {
-			continue
-		}
-		best, hasKey := result.ParamValues[name]
-		if !hasKey {
-			best = current
-		}
+	// Gate the write phase on an actual improvement (#2133).
+	//
+	// Before this guard the improvement was only used to pick the verdict, while
+	// the write loop below ran unconditionally: a run whose search found nothing
+	// (degenerate/flat score surface — e.g. an evaluator that ignores the
+	// candidate parameters) still applied whatever tie-broken candidate the
+	// optimizer happened to return. Measured on 2026-09-29 with a **constant**
+	// evaluator over a resolvable parameter (darwinian_weight_min):
+	//
+	//	Before:0.3 After:0.20571428571428568 DeltaPct:-31.428571418095245
+	//
+	// i.e. a calibration that measured no improvement silently rewrote a
+	// parameter by -31%. "No improvement" must mean "no write"; every branch of
+	// calibratorVerdict below already assumes exactly that (it says
+	// "below threshold" when nothing was applied).
+	//
+	// The threshold is the same 2% the per-parameter filter uses (MinImprovement
+	// is a fraction, improvementPct is a percentage).
+	improved := improvement >= cfg.MinImprovement*100
+	if !improved {
+		logging.Info("calibrator", "write_phase_skipped",
+			logging.FFloat64("baseline", baseline), logging.FFloat64("optimized", optScore),
+			logging.FFloat64("improvement_pct", improvement),
+			logging.FFloat64("min_improvement_pct", cfg.MinImprovement*100))
+	}
 
-		deltaPct := (best - current) / math.Abs(current+1e-10) * 100
-		if math.Abs(deltaPct) < cfg.MinImprovement*100 {
-			continue
-		}
+	if improved {
+		for _, name := range paramNames {
+			current, ok := ie.GetParameter(name)
+			if !ok {
+				continue
+			}
+			best, hasKey := result.ParamValues[name]
+			if !hasKey {
+				best = current
+			}
 
-		conf := calibrationConfidence(deltaPct, result.Observations)
-		// Apply first, report second (issue #1944 Batch 2, E-item): the change
-		// used to be appended and counted even when SetParameter failed, so the
-		// report claimed `applied N/M parameter changes` and Verdict=calibrated
-		// for parameters that were never written.
-		if err := ie.SetParameter(name, best); err != nil {
-			logging.Error("calibrator", "set_parameter_failed",
-				logging.FStr("param", name), logging.Err(err))
-			failedCount++
-			continue
+			deltaPct := (best - current) / math.Abs(current+1e-10) * 100
+			if math.Abs(deltaPct) < cfg.MinImprovement*100 {
+				continue
+			}
+
+			conf := calibrationConfidence(deltaPct, result.Observations)
+			// Apply first, report second (issue #1944 Batch 2, E-item): the change
+			// used to be appended and counted even when SetParameter failed, so the
+			// report claimed `applied N/M parameter changes` and Verdict=calibrated
+			// for parameters that were never written.
+			if err := ie.SetParameter(name, best); err != nil {
+				logging.Error("calibrator", "set_parameter_failed",
+					logging.FStr("param", name), logging.Err(err))
+				failedCount++
+				continue
+			}
+			changes = append(changes, CalibratorChange{
+				ParamName: name, Before: current, After: best,
+				DeltaPct: deltaPct, Confidence: conf,
+			})
+			appliedCount++
 		}
-		changes = append(changes, CalibratorChange{
-			ParamName: name, Before: current, After: best,
-			DeltaPct: deltaPct, Confidence: conf,
-		})
-		appliedCount++
 	}
 
 	if appliedCount > 0 {

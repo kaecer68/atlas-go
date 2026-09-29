@@ -522,6 +522,24 @@ func (d calibrationDeps) registerNarrativeCalibrate() {
 	log.Printf("[Gateway] registered narrative_calibrate background task (24h interval)")
 }
 
+// registerPredictorCalibrate wires the 24h predictor task.
+//
+// Semantics (honest labeling, #2133): this task is **measurement-only**. It
+// computes the direction hit rate from prediction_backtest (backend-aware
+// HistoricalStore since #2123) and reports it with the standard verdict/summary
+// logging. It does **not** write parameters, because the evaluator's score does
+// not depend on the candidate parameters and — more fundamentally — the four
+// `predictor_*` names are not registered in config's parameterTable, so
+// CalibrateParameters skips them (see internal/calibration.CalibratePredictorWithStore).
+// The optimizer now also refuses to write anything when the search found no
+// improvement (#2133), so a flat surface cannot rewrite parameters either.
+//
+// Task name is intentionally unchanged (`predictor_calibrate`): it is referenced
+// by metrics/logs/alerts, so a rename would cost more than it explains.
+// Follow-up (tracked by root in docs/operations/FOLLOWUPS.md): if the market
+// direction predictor's value is ever demonstrated, revisit making the evaluator
+// parameter-dependent (and registering the names) — that is a modeling change,
+// not a wiring one.
 func (d calibrationDeps) registerPredictorCalibrate() {
 	_ = d.TaskMgr.Register(&apigateway.ScheduledTask{
 		Name:     "predictor_calibrate",
@@ -543,6 +561,8 @@ func (d calibrationDeps) registerPredictorCalibrate() {
 				return err
 			}
 			logging.Info("predictor_calibrate", "completed",
+				"mode", "measurement_only",
+				"writes_parameters", len(result.Changes) > 0,
 				"verdict", result.Verdict,
 				"changes", len(result.Changes),
 				"summary", result.Summary)
