@@ -96,11 +96,17 @@ func collectRecommendations(ctx context.Context, registry domain.AgentRegistry, 
 
 		prompt := plugins.ResolvePrompt(agent, overrides)
 		symbols := agent.Universe
+		// injected marks the symbols this agent did NOT declare itself: they arrive
+		// from the replay-CSV expansion below. It exists purely for skip-source
+		// accounting (FU-20260929-14) and never changes which symbols are scanned.
+		// A symbol present in both lists stays OUT of this map — own wins (see
+		// sessionSkipCounts.recordSource for why that is well defined).
+		injected := map[string]bool{}
 		if len(symbols) == 0 {
 			symbols = slices.Collect(symbolIterator(DefaultSymbols()))
 		} else {
 			// Auto-expand agent universe from CSV data
-			expanded := ExpandUniverse(constants.ReplayCSVPath, nil)
+			expanded := ExpandUniverse(replayUniverseCSVPath, nil)
 			if len(expanded) > 0 {
 				seen := make(map[string]bool)
 				for _, s := range symbols {
@@ -110,19 +116,24 @@ func collectRecommendations(ctx context.Context, registry domain.AgentRegistry, 
 					if !seen[s] {
 						symbols = append(symbols, s)
 						seen[s] = true
+						injected[s] = true
 					}
 				}
 			}
 		}
 
 		for _, symbol := range symbols {
+			source := skipSourceOwn
+			if injected[symbol] {
+				source = skipSourceInjected
+			}
 			quote, ok := quotes[symbol]
 			if !ok {
-				skips.record(agent.ID, skipReasonNoQuote)
+				skips.recordSource(agent.ID, skipReasonNoQuote, source)
 				continue
 			}
 			if !quote.IsTradable {
-				skips.record(agent.ID, skipReasonNotTradable)
+				skips.recordSource(agent.ID, skipReasonNotTradable, source)
 				continue
 			}
 			screenRes, err := plugins.ScreenDetailed(ctx, agent, symbol, quotes)
@@ -170,13 +181,13 @@ func collectRecommendations(ctx context.Context, registry domain.AgentRegistry, 
 				// Factor scores are clamped to [-1, 1] (see portfolio/factor_engine.go);
 				// skip symbols whose average factor score is below the 0.40 quality bar.
 				if preCount > 0 && preTotal/float64(preCount) < 0.40 {
-					skips.record(agent.ID, skipReasonFactorQualityGate)
+					skips.recordSource(agent.ID, skipReasonFactorQualityGate, source)
 					continue
 				}
 			}
 			rec, ok := plugins.Recommendation(agent, quote, prompt, regime, factorSnapshot)
 			if !ok {
-				skips.record(agent.ID, skipReasonExecutorDeclined)
+				skips.recordSource(agent.ID, skipReasonExecutorDeclined, source)
 				continue
 			}
 
@@ -454,6 +465,14 @@ func collectRecommendations(ctx context.Context, registry domain.AgentRegistry, 
 				"skips_factor_quality_gate": skips.byReason[skipReasonFactorQualityGate],
 				"skips_executor_declined":   skips.byReason[skipReasonExecutorDeclined],
 				"skips_total":               skips.total(),
+				// Same events split by SOURCE (FU-20260929-14): how much of each
+				// reason is the replay-CSV injection's baseline rather than the
+				// agent's own stocks. Purely additive keys — the four totals above
+				// keep their exact meaning.
+				"skips_injected_no_quote":            skips.injected(skipReasonNoQuote),
+				"skips_injected_not_tradable":        skips.injected(skipReasonNotTradable),
+				"skips_injected_factor_quality_gate": skips.injected(skipReasonFactorQualityGate),
+				"skips_injected_executor_declined":   skips.injected(skipReasonExecutorDeclined),
 				// Per-agent breakdown, now per (agent, reason): the flat totals this
 				// field carried in #2153 could not attribute a specific agent's
 				// skips to a cause, which is what T2 needed (bounded: 21×4).
@@ -513,6 +532,28 @@ const (
 	skipReasonExecutorDeclined  = "executor_declined"
 )
 
+// Skip SOURCE identifiers: which symbol list a skipped candidate came from.
+//
+// #1944 T2 / FU-20260929-14: an agent with its own universe has the ENTIRE replay
+// CSV symbol set merged into it (see the ExpandUniverse call in
+// collectRecommendations), so most `no_quote` skips are the injection's baseline,
+// not the agent's own stocks — in production every injected agent reported exactly
+// 44 of them while the one non-injected agent reported 0. Counting the two sources
+// apart is what makes "how many candidates did this AGENT lose" answerable.
+const (
+	// skipSourceOwn: the symbol came from the agent's own universe (or from
+	// DefaultSymbols for agents without one).
+	skipSourceOwn = "own"
+	// skipSourceInjected: the symbol was added by the replay-CSV expansion.
+	skipSourceInjected = "injected"
+)
+
+// replayUniverseCSVPath is the CSV ExpandUniverse reads when merging the replay
+// symbol set into an agent's universe. It is a variable ONLY so tests can point it
+// at a fixture; the production value is the constant itself and must not be
+// rewritten at runtime (any other value changes which candidates are produced).
+var replayUniverseCSVPath = constants.ReplayCSVPath
+
 // sessionSkipCounts counts, per agent and reason, how many candidates the
 // recommendation collector dropped without leaving any other trace.
 //
@@ -524,24 +565,57 @@ type sessionSkipCounts struct {
 	byReason  map[string]int
 	byAgent   map[string]map[string]int // agentID → reason → count
 	agentsHit map[string]bool
+	// byReasonSource splits the same events by SOURCE (skipSourceOwn vs
+	// skipSourceInjected), reason → source → count. Bounded: 4 reasons × 2 sources.
+	byReasonSource map[string]map[string]int
 }
 
 func newSessionSkipCounts() *sessionSkipCounts {
 	return &sessionSkipCounts{
-		byReason:  map[string]int{},
-		byAgent:   map[string]map[string]int{},
-		agentsHit: map[string]bool{},
+		byReason:       map[string]int{},
+		byAgent:        map[string]map[string]int{},
+		agentsHit:      map[string]bool{},
+		byReasonSource: map[string]map[string]int{},
 	}
 }
 
-// record counts one skip event for an agent under a reason.
+// record counts one skip event for an agent under a reason, attributed to the
+// agent's OWN symbol list. Kept as the default entry point so existing callers and
+// tests are unchanged; it forwards to recordSource.
 func (s *sessionSkipCounts) record(agentID, reason string) {
+	s.recordSource(agentID, reason, skipSourceOwn)
+}
+
+// recordSource counts one skip event, attributing it to `source` (skipSourceOwn or
+// skipSourceInjected).
+//
+// Attribution rule (FU-20260929-14; deliberate, do not "simplify" it away): a
+// symbol that appears BOTH in the agent's own universe and in the expanded replay
+// set counts as OWN. The merge below keeps the agent's own symbols and only
+// appends expanded symbols that were not already present, so this rule is
+// consistent with the existing de-duplication order and therefore well defined —
+// each skipped symbol belongs to exactly one source. Skips that are not tied to a
+// symbol (there are none today) also count as own.
+func (s *sessionSkipCounts) recordSource(agentID, reason, source string) {
 	s.byReason[reason]++
 	if s.byAgent[agentID] == nil {
 		s.byAgent[agentID] = map[string]int{}
 	}
 	s.byAgent[agentID][reason]++
 	s.agentsHit[agentID] = true
+	if s.byReasonSource[reason] == nil {
+		s.byReasonSource[reason] = map[string]int{}
+	}
+	s.byReasonSource[reason][source]++
+}
+
+// injected returns how many skips for `reason` came from the replay-CSV expansion
+// (0 when the source split is unknown, e.g. counts built by record()).
+func (s *sessionSkipCounts) injected(reason string) int {
+	if s.byReasonSource[reason] == nil {
+		return 0
+	}
+	return s.byReasonSource[reason][skipSourceInjected]
 }
 
 func (s *sessionSkipCounts) total() int {
@@ -643,6 +717,13 @@ func logRecommendationSkips(sessionID string, agents, quotes int, s *sessionSkip
 		logging.FInt("factor_quality_gate", s.byReason[skipReasonFactorQualityGate]),
 		logging.FInt("executor_declined", s.byReason[skipReasonExecutorDeclined]),
 		logging.FInt("skips_total", s.total()),
+		// Source split (FU-20260929-14): four additive fields, so an operator can
+		// see which gate the INJECTION hit rather than reading the aggregate as the
+		// agent's own performance.
+		logging.FInt("injected_no_quote", s.injected(skipReasonNoQuote)),
+		logging.FInt("injected_not_tradable", s.injected(skipReasonNotTradable)),
+		logging.FInt("injected_factor_quality_gate", s.injected(skipReasonFactorQualityGate)),
+		logging.FInt("injected_executor_declined", s.injected(skipReasonExecutorDeclined)),
 		logging.FInt("agents_iterated", agents),
 		logging.FInt("quote_count", quotes),
 		logging.FStr("top_agents", s.topAgentSkipSummary(5)),
