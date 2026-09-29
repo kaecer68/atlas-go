@@ -141,12 +141,32 @@ func isMockQuoteProvider(p QuoteProvider) bool {
 // QuotesStatus / RankedFallbackReason / RankedTrustworthy disambiguate it, so
 // symbols_ranked=0 can never again be misread as a market verdict.
 type UniverseBuildResult struct {
-	SymbolsBuilt    int       `json:"symbols_built"`
-	SymbolsFiltered int       `json:"symbols_filtered"`
-	SymbolsRanked   int       `json:"symbols_ranked"`
-	SymbolsExcluded int       `json:"symbols_excluded"`
-	FullRebuild     bool      `json:"full_rebuild"`
-	Timestamp       time.Time `json:"timestamp"`
+	SymbolsBuilt    int `json:"symbols_built"`
+	SymbolsFiltered int `json:"symbols_filtered"`
+	SymbolsRanked   int `json:"symbols_ranked"`
+	SymbolsExcluded int `json:"symbols_excluded"`
+	// SymbolsExcludedReasons breaks the exclusions down by the rule that caused
+	// them (issue #2019). It is the single field an operator reads to answer
+	// "why is this number what it is" without re-running the pipeline:
+	//
+	//	symbols_filtered = symbols_ranked + screener_total + concentration_cap
+	//	symbols_excluded = risk_total
+	//
+	// Key vocabulary and the full boundary (what is NOT covered, and why a
+	// per-rule sum may exceed risk_total) live in
+	// universe_exclusion_reasons.go; a key that is present with 0 means the
+	// stage ran and excluded nobody, while an absent key means the stage did
+	// not run at all. The Step 2 industry filter is deliberately NOT part of
+	// either identity — it shrinks the candidate set before symbols_filtered is
+	// recorded; its own count is published by the
+	// atlas_universe_symbols_filtered_total{result="industry_filter"} counter.
+	//
+	// omitempty: an older writer (or a run that never reached Step 4) produces
+	// no field at all, and readers must treat that as "not recorded", never as
+	// "nothing was excluded".
+	SymbolsExcludedReasons map[string]int `json:"symbols_excluded_reasons,omitempty"`
+	FullRebuild            bool           `json:"full_rebuild"`
+	Timestamp              time.Time      `json:"timestamp"`
 
 	// QuotesStatus is what happened at the Step 3 quote fetch. One of the
 	// QuotesStatus* constants.
@@ -982,11 +1002,19 @@ func BuildUniverse(ctx context.Context, deps UniverseBuilderDeps, fullRebuild bo
 		ss.FactorScoreMaxAge = time.Duration(cfg.FactorScoreMaxAgeDays.Value) * 24 * time.Hour
 	}
 
-	ranked := ss.Rank(filtered, quoteMap)
+	ranked, rankStats := ss.RankWithStats(filtered, quoteMap)
 	result.SymbolsRanked = len(ranked)
+	// Step 4's exclusive accounting is recorded here; Step 5 merges its own
+	// risk-exclusion counts into the same map (issue #2019).
+	result.SymbolsExcludedReasons = mergeExclusionReasons(result.SymbolsExcludedReasons, rankStats.ExclusionReasons())
 	logging.Info("universe_scheduler", "scoring_ok",
 		"input", len(filtered),
-		"ranked", len(ranked))
+		"ranked", len(ranked),
+		"survivors", rankStats.Survivors,
+		"binary_rejected", rankStats.BinaryRejected,
+		"no_factor_score", rankStats.NoFactorScore,
+		"concentration_cap", rankStats.ConcentrationCap,
+		"topn_truncated", rankStats.TopNTruncated)
 	if um != nil {
 		um.SymbolsScreened.WithLabelValues(stage, "passed").Add(int64(len(ranked)))
 		if len(filtered) > len(ranked) {
@@ -1022,9 +1050,15 @@ func BuildUniverse(ctx context.Context, deps UniverseBuilderDeps, fullRebuild bo
 					result.SymbolsExcluded++
 				}
 			}
+			// Per-rule breakdown of the same exclusions (issue #2019): the
+			// aggregate alone cannot answer "which rule removed them", and the
+			// answer is already computed per symbol by the filter.
+			result.SymbolsExcludedReasons = mergeExclusionReasons(result.SymbolsExcludedReasons,
+				SummarizeRiskExclusionReasons(riskResults))
 			logging.Info("universe_scheduler", "risk_filter_ok",
 				"checked", len(riskResults),
-				"excluded", result.SymbolsExcluded)
+				"excluded", result.SymbolsExcluded,
+				"reasons", result.SymbolsExcludedReasons)
 			if um != nil {
 				um.RiskChecked.WithLabelValues(stage, "passed").Add(int64(riskPassed))
 				um.RiskChecked.WithLabelValues(stage, "excluded").Add(int64(riskExcluded))
