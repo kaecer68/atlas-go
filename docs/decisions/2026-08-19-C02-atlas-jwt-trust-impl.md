@@ -101,3 +101,28 @@ go-member Phase 2（data-permission-matrix SSOT + iMac 部署穩定）完成後�
 - **go-member 穩定（前置）**：DB migration 0014/0015 套用（mcp_plan/platinum/platform）、launchd `com.goluck.go-member` 常駐 + 啟動自動 migrate、持久 PKCS#8 RSA 私鑰（`JWT_PRIVATE_KEY_PATH`）→ JWKS key/kid 重啟穩定。
 - **部署驗收**：atlas log「login/register proxied to go-member」+「JWT JWKS (RS256) verify mode」+ guest=true；E2E POST `/api/auth/login`（假帳號）→ 401 invalid credentials（go-member 透傳）；go-member 簽 RS256 premium token → atlas `/api/user/profile` → `tier:pro` + guest:false。
 - **待辦（後續）**：`GUEST_MODE` 切 false 時機 = go-member 正式上線 + 有真實付費會員（業主決定）。
+
+---
+
+## 附：tier 語彙的兩代並存與收斂（#2128，2026-09-29）
+
+| 語彙世代 | 值 | 來源 | 地位 |
+|---|---|---|---|
+| access tier（C-02 權威） | `free` / `basic` / `pro` | go-member `tier` claim，經 `internal/subscription/auth.go` `mapMemberTier`（registered→basic、premium→pro、platinum→pro、其他→free）；SSO 後重簽的 session token 由 `GenerateSession` 承接**映射後**的值 | **呼叫者存取層級的唯一權威** |
+| legacy（atlas 自簽 HS256） | `free` / `registered` / `premium` | `JWTManager.Generate` 把 `User.EffectiveTier()` 寫進 claims；只在 `GO_MEMBER_JWKS_URL` 未設（legacy 模式）時使用 | 保留中；不得回歸 |
+
+**映射方向**：legacy `registered` ≡ access `basic`；legacy `premium` ≡ access `pro`。
+同一個存取等級必須給同一份內容（實作：`internal/recommender/tier_source.go` 的 `accessClass`，
+以及 `handler.go` 的 `switch tier` 兩代語彙並列）。
+
+**保留期限／收斂條件**：legacy 自簽路徑可退役的條件 = go-member 正式上線、`GO_MEMBER_JWKS_URL` 恆設、
+且不再簽發 HS256 會員 token（本文件「C-02 atlas 側實作清單」第 6 點）。退役時必須同時移除
+`TierRegistered`／`TierPremium` 常數、`mapMemberTier` 的 legacy 別名、與相關測試；
+在該時點之前，兩代語彙都必須有測試釘住（`internal/recommender/tier_source_test.go`）。
+
+**本地 users 列**：C-02 之後不再作為會員來源。`internal/recommender` 仍會讀它，但**只做稽核**
+（存取等級 class 不一致 ⇒ `logging.Warn`），**不改變 claims 的權威性**。
+
+**不同軸（勿混淆）**：`internal/strategy_ranker.RankedReport.Tier` 是「報告內容深度」標籤
+（依排名由 `AssignTiers` 指派：前 2 名 premium／3–4 registered／其餘 free），
+代表「這份報告屬哪一層」，**不是**呼叫者的 access tier。

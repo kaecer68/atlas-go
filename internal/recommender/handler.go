@@ -128,20 +128,27 @@ func (h *Handler) HandleRecommendations(r *http.Request) (int, any) {
 	if h.jwtMgr != nil {
 		if token := subscription.ExtractToken(r); token != "" {
 			if claims, err := h.jwtMgr.Verify(token); err == nil {
-				// user != nil 是 #2125 的防禦：GetByEmail 現在查無資料一律回
-				// ErrNotFound（不再 (nil, nil)），但這個站點曾在 err == nil
-				// 時對 nil 取 EffectiveTier() ⇒ panic。兩層都留著，
-				// 未來若有人改回 (nil, nil) 也不會變成 crash。
-				if user, err := h.subStore.GetByEmail(claims.Email); err == nil && user != nil {
-					tier = user.EffectiveTier()
-					authenticated = true
-				}
+				// C-02（#2128）：存取層級的**唯一權威**是已驗證的 JWT claims。
+				// go-member 的 tier claim 已在 JWTManager 內映射成 access tier
+				// （auth.go verifyRS256 → mapMemberTier：registered→basic、
+				// premium→pro、其他→free）；legacy 自簽 HS256 token 則帶 legacy
+				// 語彙（registered／premium）。兩代語彙都由 resolveTierClass 收斂。
+				//
+				// 本地 users 列**不是** tier 來源：它只做稽核（class 不一致時
+				// logging.Warn）。#2125 的教訓在這裡一併保留 —— 無論來源是什麼，
+				// 一律不得對 nil 取 EffectiveTier()。
+				tier = subscription.Tier(claims.Tier)
+				authenticated = true
+				h.auditLocalTierDrift(claims.Email, tier)
 			}
 		}
 	}
 
 	if !authenticated && devModeEnabled(h) {
 		if email := r.Header.Get("X-User-Email"); email != "" {
+			// dev-only fallback：這條路徑沒有任何 token ⇒ 也就沒有 claims，
+			// 本地列是唯一可得來源。這不是 C-02 的例外，而是 C-02 不涵蓋的
+			// 情境（dev 模式用 X-User-Email 假裝登入；生產 devMode=false）。
 			// 同 #2125：未知 email 不得 panic，也不得猜 tier（維持 TierFree）。
 			if user, err := h.subStore.GetByEmail(email); err == nil && user != nil {
 				tier = user.EffectiveTier()
@@ -195,12 +202,15 @@ func (h *Handler) HandleRecommendations(r *http.Request) (int, any) {
 
 	h.detectRegimeChange(rec.Market.Regime)
 
+	// 兩代語彙並存（#2128）：C-02 access tier 是 basic／pro（go-member claims
+	// 映射後的值），legacy 自簽 HS256 是 registered／premium。同一個存取層級
+	// 必須給同一份內容，否則「tier=pro 但沒有 strategies」就是少給。
 	switch tier {
 	case subscription.TierFree:
 		applyWarning(&rec, &warnings)
 		return http.StatusOK, rec
 
-	case subscription.TierRegistered:
+	case subscription.TierRegistered, subscription.TierBasic:
 		rec.Strategies = &StrategyRecommendation{
 			Active:    "all_weather",
 			Available: []string{"all_weather", "defensive"},
@@ -208,7 +218,7 @@ func (h *Handler) HandleRecommendations(r *http.Request) (int, any) {
 		applyWarning(&rec, &warnings)
 		return http.StatusOK, rec
 
-	case subscription.TierPremium:
+	case subscription.TierPremium, subscription.TierPro:
 		rec.Strategies = buildPremiumStrategy(h.strategyComp, rec.Market.Regime, h.methodologyAdvisor, &warnings)
 		applyWarning(&rec, &warnings)
 		return http.StatusOK, rec
