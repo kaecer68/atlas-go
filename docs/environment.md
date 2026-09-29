@@ -283,8 +283,8 @@ config. The first comment in `.env` says:
 | Env Var | 用途 | 預設 |
 |---------|------|------|
 | `ATLAS_JWT_SECRET` | JWT 簽章 secret（HS256，必須 ≥ 32 字元） | dev fallback: `"atlas-dev-secret-do-not-use-in-prod-32chars"` |
-| `ATLAS_SUBSCRIPTION_DB_PATH` | SQLite store 路徑（users + subscription_events） | `${ATLAS_WORK_DIR}/data/subscriptions.db` |
-| `ATLAS_PREMIUM_TRIAL_DAYS` | 新用戶免費試用天數 | `7` |
+| `ATLAS_SUBSCRIPTION_DB_PATH` | **未實作**（程式碼不讀此 env；曾記載但從未接線）。實際路徑固定為 `<ATLAS_WORK_DIR>/data/state/users.db`（`internal/subscription.DefaultDataDir`，容器內只有 `<workdir>/data` 是 bind mount；#2109） | — |
+| `ATLAS_PREMIUM_TRIAL_DAYS` | **未實作**（程式碼不讀此 env；`Register` 硬編 7 天，`internal/subscription/store.go`；#2109 同表查核） | — |
 
 **dev 設定（macOS Keychain）**：
 

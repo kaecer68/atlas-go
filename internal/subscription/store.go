@@ -16,8 +16,29 @@ type Store struct {
 	db *sql.DB
 }
 
-// NewStore creates or opens a user store at the given data directory.
-func NewStore(dataDir string) (*Store, error) {
+// DefaultDataDir returns the persistent directory the subscription store lives
+// in: <workDir>/data/state.
+//
+// #2109: the deployed container bind-mounts **only** <workDir>/data (plus logs/
+// and reports/). A store opened directly under <workDir> therefore lands in the
+// container's writable layer, and `docker compose up -d` with a new image
+// silently discards every user row (users + subscription_events). data/state is
+// also the ledger convention (config.LedgerDir default).
+func DefaultDataDir(workDir string) string {
+	return filepath.Join(workDir, "data", "state")
+}
+
+// NewStore creates or opens the user store **under the persistent data
+// directory** DefaultDataDir(workDir) — i.e. <workDir>/data/state/users.db
+// (#2109). Callers pass the workdir; the layout stays here so no caller can
+// accidentally write the store into the container's writable layer.
+func NewStore(workDir string) (*Store, error) {
+	return newStoreAt(DefaultDataDir(workDir))
+}
+
+// newStoreAt opens the store in the given data directory (tests and any future
+// caller that needs an explicit location).
+func newStoreAt(dataDir string) (*Store, error) {
 	if err := os.MkdirAll(dataDir, 0o755); err != nil {
 		return nil, fmt.Errorf("store mkdir: %w", err)
 	}
