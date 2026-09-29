@@ -49,6 +49,12 @@ func (pc *PredictorCalibrator) ParamBounds() map[string][2]float64 {
 // When >=30 non-neutral days exist, returns the direction hit rate as score.
 // Otherwise returns 0.5 (neutral baseline) so Bayesian optimization can
 // explore without penalty.
+//
+// Honor the wiring (#2123): this variant opens the **job-local SQLite** file at
+// dbPath. Production must use NewPredictorEvaluatorWithStore with the
+// backend-aware ledger.HistoricalStore, because in a postgres deployment the
+// job-local artifact is empty and the evaluator silently returns the neutral
+// 0.5 forever.
 func NewPredictorEvaluator(dbPath string) func(cfg *config.ParametersConfig) (float64, error) {
 	return func(cfg *config.ParametersConfig) (float64, error) {
 		if score, ok := tryHitRateEval(dbPath); ok {
@@ -57,6 +63,63 @@ func NewPredictorEvaluator(dbPath string) func(cfg *config.ParametersConfig) (fl
 		return 0.5, nil
 	}
 }
+
+// NewPredictorEvaluatorWithStore is the backend-aware variant (#2123): the score
+// comes from a ledger.HistoricalStore that already honors ATLAS_STORE_BACKEND
+// (postgres in production, sqlite in dev) — never from a hard-coded job-local
+// path.
+func NewPredictorEvaluatorWithStore(store ledger.HistoricalStore) func(cfg *config.ParametersConfig) (float64, error) {
+	return func(cfg *config.ParametersConfig) (float64, error) {
+		if score, ok := hitRateFromStore(store); ok {
+			return score, nil
+		}
+		return 0.5, nil
+	}
+}
+
+// hitRateFromStore computes the direction hit rate from prediction_backtest rows
+// with is_synthetic=0 (LoadPredictionBacktestRange applies that filter), the
+// same rule the legacy SQLite path used.
+//
+// Returns ok=false when fewer than minHitRateRows non-neutral days exist, so the
+// caller falls back to the neutral 0.5 baseline and the optimizer cannot be
+// steered by noise.
+func hitRateFromStore(store ledger.HistoricalStore) (float64, bool) {
+	if store == nil {
+		return 0, false
+	}
+	rows, err := store.LoadPredictionBacktestRange(context.Background(), "", "", predictionBacktestWindow)
+	if err != nil || len(rows) == 0 {
+		return 0, false
+	}
+	total := 0
+	hits := 0
+	for _, r := range rows {
+		if r.PredictedDirection == "neutral" || r.ActualDirection == "neutral" {
+			continue
+		}
+		total++
+		if r.Hit {
+			hits++
+		}
+	}
+	if total < minHitRateRows {
+		return 0, false
+	}
+	return float64(hits) / float64(total), true
+}
+
+// minHitRateRows is the sample floor for a real (non-neutral) score.
+//
+// #2123 measurement: production prediction_backtest held 29 rows / 29 dates on
+// 2026-09-29, so the floor is one row away from being crossed. The floor stays
+// 30 (unchanged by this PR) — whether 30 is an adequate floor for the first live
+// calibration is a separate question (see the PR body).
+const minHitRateRows = 30
+
+// predictionBacktestWindow mirrors the row limit the legacy path passed to
+// LoadPredictionBacktestRange.
+const predictionBacktestWindow = 90
 
 // openSQLiteReadOnly 以 mode=ro 開啟**既有**的 SQLite 檔；檔案不存在時回錯。
 //
@@ -101,37 +164,37 @@ func tryHitRateEval(dbPath string) (float64, bool) {
 		return 0, false
 	}
 	defer func() { _ = db.Close() }()
-
-	store := ledger.NewSQLiteHistoricalStore(db)
-	rows, err := store.LoadPredictionBacktestRange(
-		context.Background(), "", "", 90,
-	)
-	if err != nil || len(rows) == 0 {
-		return 0, false
-	}
-
-	total := 0
-	hits := 0
-	for _, r := range rows {
-		if r.PredictedDirection == "neutral" || r.ActualDirection == "neutral" {
-			continue
-		}
-		total++
-		if r.Hit {
-			hits++
-		}
-	}
-	if total < 30 {
-		return 0, false
-	}
-	return float64(hits) / float64(total), true
+	return hitRateFromStore(ledger.NewSQLiteHistoricalStore(db))
 }
 
 // CalibratePredictor runs Bayesian optimization on predictor parameters.
 // It returns calibration results with before/after values and confidence.
+//
+// Legacy wiring: the evaluator reads the job-local SQLite file at dbPath. New
+// callers must use CalibratePredictorWithStore (#2123).
 func CalibratePredictor(ctx context.Context, dbPath string) (*config.CalibratorResult, error) {
 	pc := NewPredictorCalibrator(dbPath)
 	evaluator := NewPredictorEvaluator(dbPath)
+	return config.CalibrateParameters(ctx, pc, evaluator, config.DefaultCalibrateConfig())
+}
+
+// CalibratePredictorWithStore is the backend-aware entry point (#2123): the
+// evaluator reads prediction_backtest through the given HistoricalStore, which
+// already follows ATLAS_STORE_BACKEND (postgres in production).
+//
+// Measured effect (2026-09-29, evidence in the PR): this makes the **score**
+// truthful — the neutral 0.5 is replaced by the real hit rate once >=30
+// non-neutral days exist. It does **not** change any parameter value today, but
+// the reason matters and is easy to get wrong (I did, and an experiment caught
+// it): the four ParamNames() below are **absent from config's parameterTable**,
+// and CalibrateParameters hits `current, ok := ie.GetParameter(name); if !ok {
+// continue }` — the names are silently skipped. It is NOT because the score
+// surface is flat: a constant evaluator over a *resolvable* name does write an
+// arbitrary tie-broken value (measured: darwinian_weight_min 0.3 -> 0.2057,
+// -31%). See issue #2133 before making these names resolvable.
+func CalibratePredictorWithStore(ctx context.Context, store ledger.HistoricalStore) (*config.CalibratorResult, error) {
+	pc := NewPredictorCalibrator("")
+	evaluator := NewPredictorEvaluatorWithStore(store)
 	return config.CalibrateParameters(ctx, pc, evaluator, config.DefaultCalibrateConfig())
 }
 
