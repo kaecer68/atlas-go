@@ -128,7 +128,11 @@ func (h *Handler) HandleRecommendations(r *http.Request) (int, any) {
 	if h.jwtMgr != nil {
 		if token := subscription.ExtractToken(r); token != "" {
 			if claims, err := h.jwtMgr.Verify(token); err == nil {
-				if user, err := h.subStore.GetByEmail(claims.Email); err == nil {
+				// user != nil 是 #2125 的防禦：GetByEmail 現在查無資料一律回
+				// ErrNotFound（不再 (nil, nil)），但這個站點曾在 err == nil
+				// 時對 nil 取 EffectiveTier() ⇒ panic。兩層都留著，
+				// 未來若有人改回 (nil, nil) 也不會變成 crash。
+				if user, err := h.subStore.GetByEmail(claims.Email); err == nil && user != nil {
 					tier = user.EffectiveTier()
 					authenticated = true
 				}
@@ -138,7 +142,8 @@ func (h *Handler) HandleRecommendations(r *http.Request) (int, any) {
 
 	if !authenticated && devModeEnabled(h) {
 		if email := r.Header.Get("X-User-Email"); email != "" {
-			if user, err := h.subStore.GetByEmail(email); err == nil {
+			// 同 #2125：未知 email 不得 panic，也不得猜 tier（維持 TierFree）。
+			if user, err := h.subStore.GetByEmail(email); err == nil && user != nil {
 				tier = user.EffectiveTier()
 				authenticated = true
 			}

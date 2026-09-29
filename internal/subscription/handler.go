@@ -371,6 +371,11 @@ func (h *Handler) handleProfile(w http.ResponseWriter, r *http.Request) {
 	// carries an email that maps to a local users row; enrich the profile with
 	// it so existing demo behavior is preserved. Go-member (JWKS) members have
 	// no local row, so the profile stays purely claims-derived.
+	//
+	// The `u != nil` guard stays even though GetByEmail now returns an
+	// ErrNotFound-wrapping error for a missing row (#2125): this call site must
+	// remain correct if the contract ever regresses to (nil, nil), which is
+	// exactly the shape that panicked internal/recommender.
 	if !guest && h.store != nil {
 		if u, err := h.store.GetByEmail(claims.Email); err == nil && u != nil {
 			profile.User = u
