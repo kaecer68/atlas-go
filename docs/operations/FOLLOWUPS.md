@@ -1998,7 +1998,7 @@
 
 - **狀態**：`open`
 - **記錄日期**：2026-09-29
-- **來源**：issue **#2093**（SBL per-stock 訊號價值量測）；工具 `cmd/experimental/sbl-ic-study`（本 PR 新增）
+- **來源**：issue **#2093**（SBL per-stock 訊號價值量測）；工具 `cmd/experimental/sbl-ic-study`（**PR #2126** 新增）
 - **現況**（2026-09-29 唯讀查生產）：`quotes` 共 **67,125 列 / 853 標的 / 2026-01-02 → 2026-09-29**，但逐日檔數在 **2026-06-24 前僅 114 檔**（`source='fugle_candles'`，大型權值），**2026-06-29 起才 834+ 檔**（`source='finmind_backfill'` 自 2026-06-25 起）。
   復現：`docker exec atlas-postgres psql -U atlas -d atlas -Atc "select date,count(*) from quotes where date < '2026-07-01' group by 1 order by 1 desc limit 5"`
 - **影響**：事前註冊的樣本「SBL 2026-03-02 → 2026-09-24 **全市場**（~144 交易日）」實際不可得。可用的**寬基**（≥500 檔有標籤）日期數：T+1 **63**、T+5 **59**、T+20 **44**、同窗同步 **57**；其餘日期只有 ~114 檔大型股 ⇒ (a) T+20 的 `n_dates >= 60` 判準**結構上無法達成**（與訊號好壞無關）；(b) 2026-06-25 前的「小型/中型」分位只是大型股裡較小者。
