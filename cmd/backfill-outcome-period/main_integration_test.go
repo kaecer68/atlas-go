@@ -178,3 +178,110 @@ func TestRun_PostgresDeclaredBackfillsMarketPeriodFromPeriodHistory(t *testing.T
 		t.Fatalf("seeded rows: filled=%d null=%d, want 2/1", filled, nulls)
 	}
 }
+
+// ---------------------------------------------------------------------------
+// #2124：日期窗口
+// ---------------------------------------------------------------------------
+
+// 本測試專用的假日期（與同檔其他測試、以及 -range/-period-history 的 integration
+// 測試互斥，避免 `go test ./cmd/...` 平行時互相清掉種子列）。
+const (
+	itWinSessionID = "it-backfill-outcome-period-window"
+	itWinSymbol    = "PGWIN1995"
+	itWinAgentID   = "it-agent-window"
+)
+
+var (
+	itWinInDay  = time.Date(1995, 3, 1, 0, 0, 0, 0, time.UTC) // 窗口內
+	itWinOutDay = time.Date(1995, 4, 1, 0, 0, 0, 0, time.UTC) // 窗口外（但當天有 period_history ⇒ 無界時會被填）
+)
+
+func itWinCleanup(t *testing.T, pool *pgxpool.Pool) {
+	t.Helper()
+	del := func() {
+		ctx := context.Background()
+		_, _ = pool.Exec(ctx, `DELETE FROM recommendation_outcomes WHERE session_id = $1`, itWinSessionID)
+		for _, day := range []time.Time{itWinInDay, itWinOutDay} {
+			_, _ = pool.Exec(ctx, `DELETE FROM period_history WHERE date = $1`, day.Format("2006-01-02"))
+		}
+	}
+	del()
+	t.Cleanup(del)
+}
+
+func itWinRead(t *testing.T, pool *pgxpool.Pool, at time.Time) string {
+	t.Helper()
+	var p *string
+	if err := pool.QueryRow(context.Background(), `
+		SELECT market_period FROM recommendation_outcomes
+		WHERE session_id = $1 AND symbol = $2 AND time = $3`,
+		itWinSessionID, itWinSymbol, at).Scan(&p); err != nil {
+		t.Fatalf("select outcome %s: %v", at.Format(time.RFC3339), err)
+	}
+	if p == nil {
+		return ""
+	}
+	return *p
+}
+
+// TestRun_PostgresWindowLeavesOutOfRangeOutcomesUntouched 是 #2124 的 PG 端到端釘子：
+// 帶窗口的回填**不得**更動窗口外的列 —— 即使那些列當天也有 period_history
+// （#2124 的事故形狀就是「無界 UPDATE 把它們一起填了」）。
+func TestRun_PostgresWindowLeavesOutOfRangeOutcomesUntouched(t *testing.T) {
+	dsn := testdb.URL(t)
+	testdb.Pool(t, filepath.Join("..", "..", "sql", "migrations"))
+
+	raw := testdb.Connect(t, dsn)
+	itWinCleanup(t, raw)
+
+	ctx := context.Background()
+	for _, day := range []time.Time{itWinInDay, itWinOutDay} {
+		if _, err := raw.Exec(ctx, `
+			INSERT INTO period_history (date, period, recorded_at, captured_at, is_synthetic, source, detector_version)
+			VALUES ($1, 'bull', now(), now(), 0, 'it_backfill_window_seed', 'v1')
+			ON CONFLICT(date) DO UPDATE SET period = excluded.period, source = excluded.source`,
+			day.Format("2006-01-02")); err != nil {
+			t.Fatalf("seed period_history %s: %v", day, err)
+		}
+		if _, err := raw.Exec(ctx, `
+			INSERT INTO recommendation_outcomes
+				(time, session_id, symbol, agent_id, agent_layer, conviction, passed_guards, guard_reason, price, market_period, market_period_source)
+			VALUES ($1, $2, $3, $4, 'sector', 80, true, 'it-window-seed', 100, NULL, NULL)`,
+			day, itWinSessionID, itWinSymbol, itWinAgentID); err != nil {
+			t.Fatalf("seed recommendation_outcomes %s: %v", day, err)
+		}
+	}
+
+	t.Setenv("ATLAS_STORE_BACKEND", "postgres")
+	t.Setenv("DATABASE_URL", dsn)
+
+	// 窗口 = 只有 in-day（**不帶** -force；matched=1 遠低於上限）。
+	var out bytes.Buffer
+	if err := run([]string{
+		"-workdir", filepath.Join("..", ".."),
+		"-start", itWinInDay.Format("2006-01-02"),
+		"-end", itWinInDay.Format("2006-01-02"),
+	}, &out); err != nil {
+		t.Fatalf("run(windowed): %v\nstdout:\n%s", err, out.String())
+	}
+	if !strings.Contains(out.String(), "window=1995-03-01..1995-03-01") {
+		t.Errorf("stdout must report the window, got:\n%s", out.String())
+	}
+
+	if got := itWinRead(t, raw, itWinInDay); got != "bull" {
+		t.Errorf("in-window day = %q, want bull", got)
+	}
+	if got := itWinRead(t, raw, itWinOutDay); got != "" {
+		t.Fatalf("#2124: out-of-window day = %q, want still NULL (the window must bound the UPDATE)", got)
+	}
+
+	// 對照（反假陽性）：不設窗口再跑一次 ⇒ 窗口外那列**可以**被填（證明它只是被窗口擋住，
+	// 不是因為資料本身不可達）。此處 matched=1 < 上限，故不需要 -force。
+	var out2 bytes.Buffer
+	if err := run([]string{"-workdir", filepath.Join("..", "..")}, &out2); err != nil {
+		t.Fatalf("run(unwindowed control): %v\nstdout:\n%s", err, out2.String())
+	}
+	if got := itWinRead(t, raw, itWinOutDay); got != "bull" {
+		t.Errorf("control: out-of-window day = %q, want bull once the window is dropped (anti-false-positive)", got)
+	}
+}
