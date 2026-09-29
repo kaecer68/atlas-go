@@ -76,7 +76,7 @@ func TestBackfillSQLiteDB(t *testing.T) {
 	seedOutcomePeriodFixture(t, db)
 
 	// Dry-run reports candidates without writing.
-	res, err := backfillSQLiteDB(ctx, db, true)
+	res, err := backfillSQLiteDB(ctx, db, runConfig{dryRun: true})
 	if err != nil {
 		t.Fatalf("dry run: %v", err)
 	}
@@ -86,7 +86,7 @@ func TestBackfillSQLiteDB(t *testing.T) {
 	assertPeriod(t, db, "2026-04-01T00:00:00Z", "", "")
 
 	// Real run fills matching rows, leaves unmatched untouched, skips set rows.
-	res, err = backfillSQLiteDB(ctx, db, false)
+	res, err = backfillSQLiteDB(ctx, db, runConfig{})
 	if err != nil {
 		t.Fatalf("backfill: %v", err)
 	}
@@ -100,7 +100,7 @@ func TestBackfillSQLiteDB(t *testing.T) {
 
 	// Second run only sees the permanently-unmatched row (idempotent: the
 	// two matched rows are now set, nothing new to fill).
-	res, err = backfillSQLiteDB(ctx, db, false)
+	res, err = backfillSQLiteDB(ctx, db, runConfig{})
 	if err != nil {
 		t.Fatalf("second run: %v", err)
 	}

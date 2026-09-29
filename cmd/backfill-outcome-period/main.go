@@ -28,6 +28,15 @@
 //	backfill-outcome-period -workdir . -db data/state/atlas.db
 //	backfill-outcome-period -workdir . -pg -pg-dsn postgres://...
 //	backfill-outcome-period -workdir . -jsonl data/state
+//	backfill-outcome-period -workdir . -start 2026-04-01 -end 2026-06-30   # 只動這個交易日窗口
+//
+// Trading-day window and blast-radius guard (#2124): -start/-end bound the
+// trading day (Asia/Taipei, inclusive) in **every** mode — candidates, the SQL
+// UPDATE, and the JSONL rewrite — so a run cannot silently touch rows outside
+// the window the operator asked for. When the SQL modes would update more than
+// maxUnattendedRows rows in one run, the command reports the count and refuses
+// to write unless -force is passed. The report line always prints the window
+// (window=(whole table) when no bound is set, which is the legacy behavior).
 //
 // Backend decision (#2107): the mode follows the **declared**
 // ATLAS_STORE_BACKEND unless an explicit -pg / -jsonl / -db overrides it. It
@@ -84,8 +93,25 @@ type runConfig struct {
 	usePG      bool
 	pgDSN      string
 	jsonl      string
-	dryRun     bool
+	// start / end 是**交易日**窗口（Asia/Taipei 的 YYYY-MM-DD，含端點）。
+	// 空字串 = 不設界（沿用舊行為），但此時影響列數上限（maxUnattendedRows）就是
+	// 唯一的護欄 —— 那正是 #2124 要修的形狀：一次 UPDATE 改寫整張表。
+	start string
+	end   string
+	// force 明示允許超過 maxUnattendedRows 的自動更新（#2124）。
+	force  bool
+	dryRun bool
 }
+
+// maxUnattendedRows 是「沒有明示 -force 時可自動更新的列數上限」。
+//
+// 這條 CLI 的意外形狀不是「多改一列」，而是「整張表被改寫」：market_period IS NULL
+// 的歷史列只要當天有 period_history 就會被填。上限不是精準的權限控制，而是讓
+// 「影響範圍明顯大於預期」時停下來要人明示（-force 或縮小 -start/-end）。
+//
+// 是 var（非 const）以便測試用低門檻驗證「超門檻 ⇒ 中止且不寫入」，
+// 與本檔的 initPostgresPool seam 同一手法。
+var maxUnattendedRows = 1000
 
 // initPostgresPool 是 atlasdb.Init（ping ＋ 套用 <workdir>/sql/migrations）的 seam：
 // 單元測試替換它就能在沒有 PostgreSQL 的情況下驗證 postgres 路徑的決策與 wiring。
@@ -107,6 +133,10 @@ func run(args []string, stdout io.Writer) error {
 	fs.BoolVar(&cfg.usePG, "pg", false, "backfill PostgreSQL (SSoT production backend)")
 	fs.StringVar(&cfg.pgDSN, "pg-dsn", "", "PostgreSQL DSN (default: $DATABASE_URL)")
 	fs.StringVar(&cfg.jsonl, "jsonl", "", "rewrite JSONL outcome files under this dir (default: <workdir>/data/state)")
+	fs.StringVar(&cfg.start, "start", "", "trading-day window start YYYY-MM-DD (Asia/Taipei, inclusive; default: no bound)")
+	fs.StringVar(&cfg.end, "end", "", "trading-day window end YYYY-MM-DD (Asia/Taipei, inclusive; default: no bound)")
+	fs.BoolVar(&cfg.force, "force", false,
+		fmt.Sprintf("allow updating more than %d rows in one run (the SQL modes report the affected count before writing)", maxUnattendedRows))
 	fs.BoolVar(&cfg.dryRun, "dry-run", false, "report what would change without writing")
 	if err := fs.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
@@ -116,6 +146,9 @@ func run(args []string, stdout io.Writer) error {
 	}
 	if cfg.workDir == "" {
 		return fmt.Errorf("-workdir is required")
+	}
+	if err := validateWindow(cfg.start, cfg.end); err != nil {
+		return err
 	}
 	dbSet := false
 	fs.Visit(func(f *flag.Flag) {
@@ -259,30 +292,45 @@ func runSQLite(ctx context.Context, cfg runConfig, stdout io.Writer) error {
 		return err
 	}
 	defer func() { _ = db.Close() }()
-	res, err := backfillSQLiteDB(ctx, db, cfg.dryRun)
+	res, err := backfillSQLiteDB(ctx, db, cfg)
 	if err != nil {
 		return err
 	}
-	_, _ = fmt.Fprintf(stdout, "sqlite backfill %s (%s)\n", res.String(), dryRunLabel(cfg.dryRun))
+	_, _ = fmt.Fprintf(stdout, "sqlite backfill %s window=%s (%s)\n",
+		res.String(), windowLabel(cfg.start, cfg.end), dryRunLabel(cfg.dryRun))
 	return nil
 }
 
 // backfillSQLiteDB backfills market_period on the SQLite outcomes table.
 // Rows already carrying a value are never touched (idempotent). Rows whose
 // day has no period_history row stay NULL (unknown, not guessed).
-func backfillSQLiteDB(ctx context.Context, db *sql.DB, dryRun bool) (backfillResult, error) {
+//
+// #2124: the trading day is bounded by -start/-end in **both** the candidate
+// count and the UPDATE, so a run can no longer rewrite rows outside the window
+// the operator asked for. The same guard (maxUnattendedRows / -force) applies.
+func backfillSQLiteDB(ctx context.Context, db *sql.DB, cfg runConfig) (backfillResult, error) {
 	var res backfillResult
 	countQuery := `
 		SELECT
-			(SELECT COUNT(*) FROM outcomes WHERE market_period IS NULL),
 			(SELECT COUNT(*) FROM outcomes WHERE market_period IS NULL
+			   AND (? = '' OR substr(outcomes.timestamp, 1, 10) >= ?)
+			   AND (? = '' OR substr(outcomes.timestamp, 1, 10) <= ?)),
+			(SELECT COUNT(*) FROM outcomes WHERE market_period IS NULL
+			   AND (? = '' OR substr(outcomes.timestamp, 1, 10) >= ?)
+			   AND (? = '' OR substr(outcomes.timestamp, 1, 10) <= ?)
 			   AND EXISTS (SELECT 1 FROM period_history WHERE date = substr(outcomes.timestamp, 1, 10)))`
-	if err := db.QueryRowContext(ctx, countQuery).Scan(&res.Total, &res.Matched); err != nil {
+	windowArgs := []any{cfg.start, cfg.start, cfg.end, cfg.end}
+	if err := db.QueryRowContext(ctx, countQuery, append(append([]any{}, windowArgs...), windowArgs...)...).
+		Scan(&res.Total, &res.Matched); err != nil {
 		return res, fmt.Errorf("count candidates: %w", err)
 	}
 	res.Unmatched = res.Total - res.Matched
-	if dryRun || res.Matched == 0 {
+	if cfg.dryRun || res.Matched == 0 {
 		return res, nil
+	}
+	// 護欄必須在 UPDATE 之前（#2124）。
+	if err := guardLargeUpdate(res, cfg.force); err != nil {
+		return res, err
 	}
 	updateQuery := `
 		UPDATE outcomes SET
@@ -290,8 +338,10 @@ func backfillSQLiteDB(ctx context.Context, db *sql.DB, dryRun bool) (backfillRes
 			market_period_source = (SELECT CASE WHEN is_synthetic = 1 THEN 'synthetic' ELSE 'live' END
 			                          FROM period_history WHERE date = substr(outcomes.timestamp, 1, 10))
 		WHERE market_period IS NULL
-		  AND EXISTS (SELECT 1 FROM period_history WHERE date = substr(outcomes.timestamp, 1, 10))`
-	if _, err := db.ExecContext(ctx, updateQuery); err != nil {
+		  AND EXISTS (SELECT 1 FROM period_history WHERE date = substr(outcomes.timestamp, 1, 10))
+		  AND (? = '' OR substr(outcomes.timestamp, 1, 10) >= ?)
+		  AND (? = '' OR substr(outcomes.timestamp, 1, 10) <= ?)`
+	if _, err := db.ExecContext(ctx, updateQuery, windowArgs...); err != nil {
 		return res, fmt.Errorf("update outcomes: %w", err)
 	}
 	return res, nil
@@ -327,8 +377,16 @@ func runJSONL(ctx context.Context, cfg runConfig, appCfg config.Config, stdout i
 
 	files := discoverJSONL(dir)
 	var total, matched int
+	// #2124：同一組 -start/-end 也套在 jsonl 模式（逐列以交易日過濾），
+	// 否則「同一個 flag 在某個模式被靜默忽略」就是另一種坑。
+	periodForWindowed := func(date string) (string, string, bool) {
+		if !inWindow(cfg.start, cfg.end, date) {
+			return "", "", false
+		}
+		return periodFor(date)
+	}
 	for _, path := range files {
-		n, m, err := backfillJSONLFile(path, periodFor, cfg.dryRun)
+		n, m, err := backfillJSONLFile(path, periodForWindowed, cfg.dryRun)
 		if err != nil {
 			return fmt.Errorf("%s: %w", path, err)
 		}
@@ -337,7 +395,8 @@ func runJSONL(ctx context.Context, cfg runConfig, appCfg config.Config, stdout i
 		_, _ = fmt.Fprintf(stdout, "  %s: examined=%d filled=%d\n", path, n, m)
 	}
 	res := backfillResult{Total: total, Matched: matched, Unmatched: total - matched}
-	_, _ = fmt.Fprintf(stdout, "jsonl backfill %s (%s)\n", res.String(), dryRunLabel(cfg.dryRun))
+	_, _ = fmt.Fprintf(stdout, "jsonl backfill %s window=%s (%s)\n",
+		res.String(), windowLabel(cfg.start, cfg.end), dryRunLabel(cfg.dryRun))
 	return nil
 }
 
@@ -474,32 +533,50 @@ func runPostgres(ctx context.Context, cfg runConfig, appCfg config.Config, stdou
 	}
 	defer pool.Close()
 
-	res, err := backfillPostgres(ctx, pool, cfg.dryRun)
+	res, err := backfillPostgres(ctx, pool, cfg)
 	if err != nil {
 		return err
 	}
-	_, _ = fmt.Fprintf(stdout, "postgres backfill %s (%s)\n", res.String(), dryRunLabel(cfg.dryRun))
+	_, _ = fmt.Fprintf(stdout, "postgres backfill %s window=%s (%s)\n",
+		res.String(), windowLabel(cfg.start, cfg.end), dryRunLabel(cfg.dryRun))
 	return nil
 }
 
 // backfillPostgres backfills market_period on recommendation_outcomes via a
 // period_history join. Trading day = the outcome instant in Asia/Taipei
 // (outcomes are session-dated in Taipei time; pgx stores the instant UTC).
-func backfillPostgres(ctx context.Context, pool *pgxpool.Pool, dryRun bool) (backfillResult, error) {
+// backfillPostgres backfills market_period on recommendation_outcomes via a
+// period_history join. Trading day = the outcome instant in Asia/Taipei
+// (outcomes are session-dated in Taipei time; pgx stores the instant UTC).
+//
+// #2124: the trading day is bounded by -start/-end in both the candidate count
+// and the UPDATE. Before this change the UPDATE had no window at all, so a
+// manual run could rewrite the whole table (every row whose day has a
+// period_history row) while the operator believed they scoped it.
+func backfillPostgres(ctx context.Context, pool *pgxpool.Pool, cfg runConfig) (backfillResult, error) {
 	var res backfillResult
 	countQuery := `
 		SELECT
-			(SELECT COUNT(*) FROM recommendation_outcomes WHERE market_period IS NULL),
 			(SELECT COUNT(*) FROM recommendation_outcomes o
 			   WHERE o.market_period IS NULL
+			     AND ($1 = '' OR to_char(o.time AT TIME ZONE 'Asia/Taipei', 'YYYY-MM-DD') >= $1)
+			     AND ($2 = '' OR to_char(o.time AT TIME ZONE 'Asia/Taipei', 'YYYY-MM-DD') <= $2)),
+			(SELECT COUNT(*) FROM recommendation_outcomes o
+			   WHERE o.market_period IS NULL
+			     AND ($1 = '' OR to_char(o.time AT TIME ZONE 'Asia/Taipei', 'YYYY-MM-DD') >= $1)
+			     AND ($2 = '' OR to_char(o.time AT TIME ZONE 'Asia/Taipei', 'YYYY-MM-DD') <= $2)
 			     AND EXISTS (SELECT 1 FROM period_history ph
 			                 WHERE ph.date = to_char(o.time AT TIME ZONE 'Asia/Taipei', 'YYYY-MM-DD')))`
-	if err := pool.QueryRow(ctx, countQuery).Scan(&res.Total, &res.Matched); err != nil {
+	if err := pool.QueryRow(ctx, countQuery, cfg.start, cfg.end).Scan(&res.Total, &res.Matched); err != nil {
 		return res, fmt.Errorf("count candidates: %w", err)
 	}
 	res.Unmatched = res.Total - res.Matched
-	if dryRun || res.Matched == 0 {
+	if cfg.dryRun || res.Matched == 0 {
 		return res, nil
+	}
+	// 護欄必須在 UPDATE 之前（#2124）。
+	if err := guardLargeUpdate(res, cfg.force); err != nil {
+		return res, err
 	}
 	updateQuery := `
 		UPDATE recommendation_outcomes o
@@ -507,8 +584,10 @@ func backfillPostgres(ctx context.Context, pool *pgxpool.Pool, dryRun bool) (bac
 		    market_period_source = CASE WHEN ph.is_synthetic = 1 THEN 'synthetic' ELSE 'live' END
 		FROM period_history ph
 		WHERE o.market_period IS NULL
-		  AND ph.date = to_char(o.time AT TIME ZONE 'Asia/Taipei', 'YYYY-MM-DD')`
-	if _, err := pool.Exec(ctx, updateQuery); err != nil {
+		  AND ph.date = to_char(o.time AT TIME ZONE 'Asia/Taipei', 'YYYY-MM-DD')
+		  AND ($1 = '' OR ph.date >= $1)
+		  AND ($2 = '' OR ph.date <= $2)`
+	if _, err := pool.Exec(ctx, updateQuery, cfg.start, cfg.end); err != nil {
 		return res, fmt.Errorf("update recommendation_outcomes: %w", err)
 	}
 	return res, nil
