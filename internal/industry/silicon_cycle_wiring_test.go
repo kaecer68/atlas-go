@@ -150,26 +150,38 @@ func TestSiliconIndicatorProvenance(t *testing.T) {
 	if !SiliconTWIndexWriterWired {
 		t.Error("SiliconTWIndexWriterWired flipped to false: the twse_sector_index channel writes MacroDataSnapshot.TaiwanSemiIndex (gateway_adapter.applyTWSESectorIndex) — update the doc block and this test if that channel is really gone")
 	}
-	if SiliconTWIndexIsMADeviation {
-		t.Error("SiliconTWIndexIsMADeviation flipped to true: the channel stores latest.ReturnPct (a single-day return), so the field is not a deviation above its moving average — update the doc block, ExtractSiliconIndicators and this test")
+	if !SiliconTWIndexIsMADeviation {
+		t.Error("SiliconTWIndexIsMADeviation flipped back to false: TaiwanSemiconductorIndexMA is computed by SiliconIndexMA from the archived daily index levels, so the 1→2 overheat trigger is genuinely reachable. If this is an intentional rollback (I22-overheat), revert the doc block, ExtractSiliconIndicators and the SiliconIndexMA* tests together")
 	}
 	if SiliconSOXIndicatorIsYoY {
 		t.Error("SiliconSOXIndicatorIsYoY flipped to true: update the doc block and the audit spec")
 	}
 
-	// TaiwanSemiconductorIndexMA is a 1:1 passthrough of ChangePct, whose only
-	// producer stores the index's daily return — not the "deviation above MA"
-	// that the field name and IndexMAPercentThreshold assume.
+	// The upstream single-day return is STILL the wire format, but it is now only
+	// a declared fallback: with no observation time there is no as-of window, so
+	// the legacy passthrough is returned unchanged and the absence is named.
 	ind := ExtractSiliconIndicators(marketdata.MacroDataSnapshot{
 		TaiwanSemiIndex: marketdata.MacroDataPoint{ChangePct: 99.0},
 	})
 	if ind.TaiwanSemiconductorIndexMA != 0.99 {
-		t.Fatalf("TaiwanSemiconductorIndexMA = %v, want a 1:1 passthrough of ChangePct", ind.TaiwanSemiconductorIndexMA)
+		t.Fatalf("TaiwanSemiconductorIndexMA = %v, want the legacy passthrough 0.99 when no series is available", ind.TaiwanSemiconductorIndexMA)
+	}
+	if dev := LoadSiliconIndexMADeviation(time.Time{}); dev.Available || dev.Reason != SiliconIndexMAReasonNoAsOf {
+		t.Fatalf("fallback reason = %+v, want an unavailable reading with reason %q", dev, SiliconIndexMAReasonNoAsOf)
 	}
 
-	// Executable consequence: both 1→2 triggers compare a single-day change
-	// against a "deviation above MA" threshold, so PhaseOverheat cannot be
-	// entered from production data even though the writer is wired.
+	// The fix computes the statistic the threshold was written for; it does not
+	// lower the threshold to fit a one-day move. Reachability itself (a series
+	// >20% above its 60-session mean moving the phase into PhaseOverheat) is
+	// pinned by TestSiliconIndexMA_DeviatingSeriesReachesOverheat, and the
+	// negative half by TestSiliconIndexMA_FlatSeriesDoesNotReachOverheat.
+	if got, want := SiliconIndexMAWindowSessions, 60; got != want {
+		t.Fatalf("SiliconIndexMAWindowSessions = %d, want %d (季線)", got, want)
+	}
+
+	// Executable consequence, kept from the pre-fix guard: the SOX line still
+	// compares a single-day change against a "deviation/period" threshold, so the
+	// 1→2 SOX trigger remains unreachable (registered, NOT fixed here).
 	p := defaultSiliconCycleParams()
 	const dailyIndexMove, dailySOXMove = 0.09, 0.35
 	if p.IndexMAPercentThreshold <= dailyIndexMove || p.SOXExtremeThreshold <= dailySOXMove {
