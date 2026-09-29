@@ -1,7 +1,7 @@
 ---
 title: 期貨日行情（first-party）資料層規格 — 階段 0
 status: draft
-updated: 2026-09-28
+updated: 2026-09-29
 owner: marketdata / ledger
 related:
   - docs/specs/event-calendar-date-invariants-spec.md（thirdWednesday 既有實作）
@@ -459,11 +459,14 @@ marketdata.BuildContinuousSeries(bars []domain.FuturesBar, method domain.AdjustM
 | `-start` | `2001-01-01` | `YYYY-MM-DD`（Asia/Taipei） |
 | `-end` | 今天（Asia/Taipei） | `YYYY-MM-DD` |
 | `-backend` | `""` ⇒ `ATLAS_STORE_BACKEND` | 空字串代表沿用環境組態（**不得**硬編 sqlite） |
-| `-source` | `auto` | `auto`（OpenAPI 優先、CSV 補歷史）／`csv`／`openapi` |
-| `-pacing` | `1500`（ms） | 每請求最小間隔（下限強制） |
+| `-workdir` | `.` | 指向含 `sql/migrations` 的 repo 根；`postgres` 後端用它套 migrations |
+| `-pg-dsn` | `""` ⇒ `$DATABASE_URL` | 僅 `postgres` 後端使用（CLI 自行開池並注入 store factory）；未提供 ⇒ **明確錯誤**，不降級寫 sqlite |
+| `-source` | `csv` | `csv`（歷史回補）／`openapi`（僅最新交易日）；`auto` 未實作（CLI 只接受這兩個值） |
+| `-pacing` | `3000`（ms） | 每請求最小間隔（下限強制） |
 | `-max-retries` | `3` | 每段重試次數 |
 | `-dry-run` | `false` | 只印不寫 |
 | `-force` | `false` | 覆寫既有列（預設仍為 upsert，此 flag 保留給「拒絕覆寫」策略的未來擴充） |
+| `-rollovers` | `true` | 回補後推導連續契約 splice 事件並寫入 `futures_rollovers` |
 
 行為：
 
