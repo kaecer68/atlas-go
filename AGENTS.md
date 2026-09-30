@@ -105,7 +105,7 @@
 | Session 日期 | 以 `SessionID` 中的交易日為準，非 `RecordedAt` |
 | LLM 路由繞過 | 不可直接呼叫 `clients/*Provider`，須透過 `DefaultRouter` |
 | Live 旗標 | 本地測試切勿啟用 `-allow-live-broker` |
-| db migration / Storage backend | migration 用 `file://` + 絕對路徑；production = Postgres-first（`ATLAS_STORE_BACKEND=postgres`），`data/state/atlas.db` 僅本機 dev artifact（prod 空殼），CLI/job 讀資料須走 `store_factory` backend-aware，禁硬編碼 SQLite 路徑；後端決策**一律跟隨 `ATLAS_STORE_BACKEND`**（顯式 flag 可覆寫），無 DSN 或該後端無實作 ⇒ 明確錯誤不得降級寫 sqlite（#2107，見 `docs/specs/store-backend-decision-spec.md`） |
+| db migration / Storage backend | migration 用 `file://` + 絕對路徑；production = Postgres-first（`ATLAS_STORE_BACKEND=postgres`），CLI/job 讀資料須走 `store_factory` backend-aware，禁硬編碼 SQLite 路徑；後端決策**一律跟隨 `ATLAS_STORE_BACKEND`**（顯式 flag 可覆寫），無 DSN 或該後端無實作 ⇒ 明確錯誤不得降級寫 sqlite（#2107，見 `docs/specs/store-backend-decision-spec.md`）。⚠️ **既有例外**：少數 store 仍以 `data/state/atlas.db`（SQLite）＋ JSON 快照落地（如 **stockpicker 訊號結果鏈** `internal/stockpicker/signal_outcome_store.go`／`aggregate.go`）⇒ 生產該檔**非空殼**（實測 73,401＋3,051 列），其 **PG 同名表為空屬預期**；查資料前先確認該 store 的後端 |
 | PR merge 後留分支 | 每次 merge 後必讀 `docs/multi-cli-protocol.md` §Post-merge cleanup，自動刪除遠端與本地 branch |
 | Agent 危險操作 | 執行任何改狀態/讀密碼/觸及 production 的指令前，必須先跑 `./agent-guard --check '<command>'` |
 
