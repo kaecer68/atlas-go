@@ -645,7 +645,16 @@
 
 ### FU-20260926-07 — 生產**實際生效**的 `/app/configs/parameters.json` 與版控那份**不同**（差 61 個葉節點、16 個值）；**寫入者已定位＝應用自身 calibration 任務**（runtime 自適應、不回流版控、重建即失）
 
-- **狀態**：`in-progress`（**寫入者已定位（2026-09-26）；守門 ＋ 持久化 ＋ 可見性 + 全部 runtime 寫入端遷移已實作，待合併與部署後才 `done`**）
+- **狀態**：`done`
+- **完成於**：2026-09-26 ~ 2026-09-30（本條自述的判準「守門＋持久化＋可見性＋runtime 寫入端遷移全部合併並部署後才 done」已滿足）
+  - 合併：`f90258e7`（PR [#2013](https://github.com/kaecer68/atlas-go/pull/2013) 逐參數 sanity floor ＋ 校準值持久化／可見性）、
+    `af7a45af`（PR [#2017](https://github.com/kaecer68/atlas-go/pull/2017) 所有 runtime 校準寫入端改走 calibrated overlay）、
+    `b1fc524d`（PR [#2039](https://github.com/kaecer68/atlas-go/pull/2039) CLI／容器校準寫入端改走 overlay，收尾之二）；
+    另有 `17a3eede`（#2076：校準新鮮度改標的 overlay ＋ image-vs-effective drift 偵測）
+  - 部署：2026-09-26 之後生產已多次重建／重啟（含 2026-09-30 08:08 本輪窗口）
+  - 現況讀數（2026-09-30，生產唯讀）：`atlas_calibration_freshness_ok{artifact="parameters_overlay"}=1`（新鮮）、
+    而 `{artifact="parameters"}`＝0（年齡約 86 天，屬 repo 檔案的設計狀態，非 overlay 路徑失效）
+  - 條目正文的「PR：`fix/calibration-drift-floor-and-overlay`；尚未合併／部署」為**當時敘述**，已由上述三筆合併取代
 - **記錄日期**：2026-09-26
 - **事實（生產唯讀實測，2026-09-26）**：
   - **image 內的是對的**：以 `docker create atlas-atlas`（**不啟動**）+ `docker cp` 取出
@@ -2220,6 +2229,12 @@ PY
 - **部署驗收（窗口）**：log 必須出現 `official price adjustments applied` 且 `symbols_adjusted > 0`（若見 `official adjusted prices unavailable…` ⇒ 未命中推導路徑 ⇒ 等於沒修）
 - **同機制的第二表現（本次量測發現）**：收集器端 `screened_items` 對 `6669.TW` 的 `factor_scores` 為退化值（`momentum=-1, quality=-1, liquidity=0`）⇒ `ai-desk-01`／`growth-momentum-01` 因此被 `momentum_20d.min=-0.5` 與 `factor_quality_gate` 擋下。
   ⇒ **部署後複驗**：`6669.TW` 的 `momentum ≠ −1`（且 quality／liquidity 不再同時退化）；若拒絕仍在，**必須報出殘留的 `criterion`／`threshold`／`actual_value`**，不得直接判「#2151 未生效」（該符號仍可能過不了其他閘）
+- **部署後複驗結果（2026-09-30，lane B 唯讀；場次 `session-20260930-daily`，`ts 00:16:49Z` ≥ 分界 00:08:50Z）**：
+  ✅ **PASS** — ①部署後**無任何** `momentum_20d_min` 拒絕（部署前 ai＋growth 共 20 row 全為該符號）②skip 桶位移對帳：`ai-desk-01` `{fq2,no_quote45}`→`{fq3,no_quote1}`、`growth-momentum-01` `{fq5,no_quote44}`→`{fq6}` ⇒ 兩者各恰好 **+1 進品質閘**＝該符號 ✓ ③輸入端自行重算（官方序列）**20 根動能 = −0.13** vs raw **−0.7083**（raw 巨幅跳點 2026-09-01 `7800→2610` ✓）
+  ⚠️ 限制（申報）：引擎端**不印出**該符號的 `factor_scores.momentum`（既非 rejected 亦非 recommended）⇒ 結論來自「準則通過＋桶位移＋輸入重算」三層，非直讀 ✓
+  ★ **可見行為變更（本條的預期效果）**：`etf-rotation-01` 的建議集合 **1 進（`00929.TW`）／2 出（`00881.TW`、`00891.TW`）**；
+  對照組 `session-20260927→0928→0929` 變動 = **0**（排除日常市場差異 ✓）；該 3 檔 raw vs 官方序列在 **517／517／539（共 546）根**上比值 ≠1 ⇒ 屬本條調整的 **replay 44 檔** ✓
+  ⇒ 已另記於 `#1971` 的部署分界附錄 ✓
 - **現況**：replay/extended 的價格序列未做公司行為（分割／減資）調整 ⇒ **索引式** `ret20`／`volatility`
   對分割符號產生**假跌**（實證：3/44 檔）。
 - **影響**：任何以「索引」抓取該序列的因子在分割日附近會看到不存在的崩跌 ⇒ 汙染特徵與回測結論。
@@ -2363,6 +2378,31 @@ PY
 - **量測註記（防後人誤讀）**：`GET /api/dashboard/recommendation-pipeline` 的 `screened_items` 對同一
   `(agent, symbol)` **每場約記 10 次**（收集器 ~10 pass）⇒ 任何「按 row 數」的結論都會 **×10**
   ⇒ 一律使用 **distinct symbol** ✓
+
+---
+
+### FU-20260930-06 — 排程任務 `auto_calibrate` 在容器內**必然失敗**（`exec: "go": executable file not found in $PATH`）
+
+- **狀態**：`open`
+- **記錄日期**：2026-09-30
+- **來源**：`#2161`/#2151 部署窗口驗收時，逐條讀 `atlas-go` 容器 log 發現（root 唯讀實查）
+- **現況（原文）**：
+  ```
+  time=2026-09-30T00:10:47.695Z level=INFO msg=task_started name=auto_calibrate component=background_task
+  time=2026-09-30T00:10:47.695Z level=WARN msg=failed err="exec: \"go\": executable file not found in $PATH" output="" component=auto_calibrate
+  ```
+  同一支 log 內，**兄弟任務** `seasonal_calibration` 則正常：`msg=exec_ok binary=/app/calibrate-seasonal output_len=20599`
+  ⇒ 即：容器內**沒有 Go 工具鏈**，而 `auto_calibrate` 是以 `go`（run/exec）為入口 ⇒ 該任務在生產**結構上不可能成功**
+- **影響**：自動校準路徑在生產**從未執行**（只留下的痕跡是一行 WARN）⇒ 與 `#1944` inert 家族同型
+  （規則／任務存在，但不在生效路徑上）。⚠️ **未確認**：校準是否另有等價路徑（例如其他 cron 容器或 overlay 寫入端）在實際補上；
+  在有定論前**不得**宣稱「校準完全沒跑」（本條只陳述觀察到的事實）。
+- **觀測量**：近 6h `task_started name=auto_calibrate` 3 筆、`executable file not found` 1 筆（同進程可能只記一次）
+- **最小修法建議（照兄弟任務的模式）**：改為呼叫**隨映像出貨的 binary**（如 `/app/calibrate-seasonal` 之於 `seasonal_calibration`），
+  或在容器內明示為 no-op ＋ 具名 `reason`（而非一行 WARN 假裝嘗試過）⇒ **不改變數值語意** ⇒ 可即辦
+- **查法（可重現）**：
+  ```
+  ssh kmacmini '/usr/local/bin/docker logs atlas-go --since 6h 2>&1 | grep -i "auto_calibrate\|executable file not found"'
+  ```
 
 ---
 

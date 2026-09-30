@@ -81,7 +81,7 @@
 
 ## §5 明示不排（既有 backlog，不自動派工）
 
-`#1944` inert 殘項（**bounded 清單見 `docs/reference/inert-registry.md`；剩餘 15 項見 `FU-20260929-06`**）、`#1756`、`#1659`
+`#1944` inert 殘項（**bounded 清單見 `docs/reference/inert-registry.md`；剩餘 15 項見 `FU-20260929-06`**）；`#1756`、`#1659` **已於 2026-09-30 以實測關閉（not planned）** —— 關閉理由與逐欄資料三分見兩票的結案留言（`#1659` comment-5901520731／`#1756` comment-5901520989）：33 欄中 C 類（公股一次一天等）結構性不可行、B 類（VIX/DXY/US10Y/SOX/TSM ADR）需另一條抓取線
 
 ---
 
