@@ -2406,6 +2406,36 @@ PY
 
 ---
 
+### FU-20260930-07 — pre-push **Gate 1b（ci-full）** 被 4 個「**本機資料相依**」既有測試擋下 ⇒ 所有 lane 都無法正常 push
+
+- **狀態**：`open`
+- **記錄日期**：2026-09-30
+- **來源**：`FU-20260930-06`（讓 `auto_calibrate` 真的跑）的 PR 被 pre-push 擋下時定位；由 B lane 實查
+- **現象（原文）**：`make ci-full` 在**本 PR 未觸及**的 2 個 package 紅：
+  ```
+  --- FAIL: TestRegisterRoutes_UsesDefaultStaticCF            internal/eventdriven  handler_inject_test.go:83
+           default staticCF summary missing "關鍵事件"
+  --- FAIL: TestRegisterRoutesWithCapitalFlow_BullishTilt      internal/eventdriven  handler_inject_test.go:139
+  --- FAIL: TestRegisterRoutesWithCapitalFlow_NilProviderFallsBack  internal/eventdriven  handler_inject_test.go:167
+  --- FAIL: TestHandleConditionWinRate_HappyPath               internal/stocktools   win_rate_test.go:352
+           observations=2 symbols=2, want 4/2／hits=0 win_rate=0, want 2/0.5／date range 2026-08-20~2026-08-20
+  ```
+- **★ 分類舉證（在**未改動的 main** 上可重現）**：
+  ```
+  $ go test ./internal/eventdriven/ ./internal/stocktools/ -count=1
+    main clone @ d431f695（未改動）→ 同樣 4 個測試全紅
+    lane worktree @ 6a5cf464      → 同樣 4 個測試全紅
+  ```
+  ⇒ 屬 **既有／本機資料相依紅**（非 `misspell`／`staticcheck SA4000`／`gofmt` 等真失敗 ✓）
+- **交叉證據（為何判斷為「本機」而非「CI」）**：近期合併的 PR（#2161／#2163／#2165 等）**CI 全綠** ⇒ 這 4 個測試在 CI 環境會過
+- **影響（真實且立即）**：`.githooks/pre-push` 的 **Gate 1b＝有程式碼變更時跑 `ci-full`** ⇒ 這 4 個無關紅會**拒絕所有 lane 的 push** ✗
+  （正規出口只有 `.githooks/pre-push:16` **記載**的 `PRE_PUSH_FULL=never`；`--no-verify` 為**禁止**用法 ✗）
+- **歸類**：issue **#1927**（`tests/scripts fixtures are not hermetic`）的**具體實例**
+- **最小修法建議**：讓期望值**不依賴本機 `data/state/**`**（注入固定 fixture ✓），或在 fixture 缺席時**明確 `skip` ＋ 具名 reason** ✓（**不得**靜默調整期望值 ✓）
+- **查法（可重現）**：`go test ./internal/eventdriven/ ./internal/stocktools/ -count=1`（在任何未改動 main 的 clone 上 ✓）
+
+---
+
 > **來源注記（2026-09-30 第五批）**：`FU-20260930-01`／`-02` 來自 `#2160`（I22-overheat）實作與審查；
 > `-03`／`-04` 來自 `#2151`（公司行為調整）與 `#2095`（注入符號）兩線的交叉調查；
 > `-05` 來自 `FU-20260929-10`（criteria 校準）的量測結論（同一批的 `stockpicker` ETF 母體與 `leo` 半邊結案）。
