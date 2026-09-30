@@ -1010,6 +1010,10 @@ ci-gate: embed-dirs
 	@bash scripts/ci/check_fullwidth_var_expansion.sh
 	@bash tests/scripts/test-fullwidth-var-expansion.sh
 	@echo "    ✅"
+	@echo "  → 建 throwaway repo 的 GIT_* 隔離結構斷言（(a)7 變數 unset ／(b) 顯式定址）＋契約測試（C 正向／B 負向／A mutation 自證）"
+	@bash scripts/ci/check_git_env_hermeticity.sh
+	@bash tests/scripts/test-git-env-hermeticity.sh
+	@echo "    ✅"
 	@echo "  → 母體執行真值盤查工具的契約測試（hermetic fixtures；判層 + mutation 自證；2026-09-27）"
 	@bash tests/scripts/test-verify-universe-run.sh
 	@echo "    ✅"
