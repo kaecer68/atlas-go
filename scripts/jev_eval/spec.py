@@ -126,7 +126,26 @@ class TaskSpec:
     #: human description of the target and the baseline set
     description: str = ""
 
-    def build(self, args: Mapping[str, Any]) -> SpecBuild:  # pragma: no cover - interface
+    def build(
+        self,
+        args: Mapping[str, Any],
+        *,
+        user_args: Optional[Mapping[str, Any]] = None,
+    ) -> SpecBuild:  # pragma: no cover - interface
+        """Build the run for one configuration.
+
+        `args` is the merged configuration (user values + `self.defaults`).
+        `user_args` carries ONLY the keys the caller explicitly supplied, BEFORE defaults
+        merging, and exists for specs that must distinguish "the user asked for this" from
+        "defaults filled it in" (e.g. stage presets that must rank below explicit flags but
+        above `self.defaults`).
+
+        Why this parameter is part of the interface: the CLI merges first and then calls
+        `build(merged)` (cli.py:119-120), so a spec that tries to detect user-supplied keys by
+        inspecting `args` alone silently loses that information — and a selfcheck that calls
+        `build(raw_args)` directly will not catch it (measured 2026-09-30: `stage=screen`
+        produced the `confirm` shape through the CLI while the direct-call test passed).
+        """
         raise NotImplementedError
 
     # ---- helpers shared by specs -------------------------------------------

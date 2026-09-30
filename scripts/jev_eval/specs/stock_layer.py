@@ -8,7 +8,10 @@
 - symbols：依 `industry_id` **分層**，每層取 `symbols_per_industry` 檔（預設 2），
   以 `sha256(symbol|seed)` 排序取前 K（**決定性且不偏向低代號**），總數上限 `max_symbols`。
 - dates：panel 日期範圍內**等距**取 `max_dates` 個（stride 決定性）。
-- 成本模型：**1 request = 1 個日期**（同日各檔 fan-out）⇒ requests = len(dates)。
+- 成本模型：**1 request = 1 個日期**（同日各檔 fan-out）⇒ requests = len(dates)；
+  **計價以 tokens 為準** —— 實測 2026-09-30：39 檔／request ⇒ **16,326 tokens/request**（$0.042/Mtok
+  ⇒ $0.000686/request，為 Stage 1 request-based 基準的 2.7×）⇒ 本 spec 以
+  408 tokens/檔 × 檔數 × requests 估價並**以 USD 判上限**（request-based 的 cap 守不住）。
   成本上限常數 `COST_CAP_USD`（預設 0.02）：估算超過即 **raise**（寧可少跑，不可超支）。
 
 【兩階段（先篩再確認）】
@@ -31,14 +34,22 @@ from __future__ import annotations
 import hashlib
 import json
 import os
-from typing import Any, Dict, List, Mapping, Sequence
+from typing import Any, Dict, List, Mapping, Optional, Sequence
 
 from ..spec import Case, Request, SpecBuild, TaskSpec
 
-#: 成本上限（USD）：以 Stage 1 實測換算（180 requests ＝ $0.0456 ⇒ $0.000253/request）為基準，
-#: 取 ~80 requests 為硬上限 ⇒ 0.02 USD。超過即拒絕建構（避免無界花費）。
-COST_CAP_USD = 0.02
-USD_PER_REQUEST = 0.0456 / 180.0
+#: 成本上限（USD，**token-aware**）。修前版本以「request 數」估算 ⇒ 根本守不住：
+#: Stage 2 每個 request 要把該日**所有取樣個股的 pit ＋ baseline** 一起送出，實測
+#: （2026-09-30 真跑，run manifest）為 **16,326 tokens/request**（39 檔／request）
+#: ⇒ 實價 $0.000686/request，是 Stage 1 換算值（$0.000253）的 **2.7×**。
+#: 因此上限改以「估算 tokens × 實價」判定，並在 meta 印出預估 tokens／USD。
+#: 上限重新校準（2026-09-30 實測後）：screen（20 檔／20 requests）≈$0.0069–$0.0137、
+#: confirm（39–60 檔／40 requests）≈$0.0267–$0.0411 ⇒ 舊值 $0.02 **低於 confirm 的真實成本** ✗
+#: ⇒ 改為 $0.05（留 headroom），並在 meta 印出預估 tokens／USD 供事前核可。
+COST_CAP_USD = 0.05
+TOKEN_PRICE_PER_MTOK = 0.042          # 實測（run manifest 的 price_per_mtok）
+TOKENS_PER_SYMBOL_REQUEST = 408       # 實測：16,326 tokens / 39 檔 ≈ 419；保守取 408（含少量固定開銷）
+USD_PER_REQUEST = 0.0456 / 180.0      # 保留僅供對照（Stage 1 的 request-based 舊基準）
 
 STAGE_DEFAULTS = {
     "screen": {"max_symbols": "20", "max_dates": "20"},
@@ -172,8 +183,10 @@ class StockLayerSpec(TaskSpec):
         "hold_days": "5",
     }
 
-    def build(self, args: Mapping[str, Any]) -> SpecBuild:
+    def build(self, args: Mapping[str, Any], *, user_args: Optional[Mapping[str, Any]] = None) -> SpecBuild:
         cfg = self.merged_args(args, self.defaults)
+        # 使用者真正給的鍵（CLI 會先把 merged 結果餵進來 ⇒ 必須靠 user_args 才分辨得出來）
+        supplied = user_args if user_args is not None else args
         panel_path = str(cfg.get("panel") or "")
         if not panel_path:
             raise ValueError("stock_layer spec requires --spec-arg panel=<sympanel.jsonl>")
@@ -191,7 +204,7 @@ class StockLayerSpec(TaskSpec):
         stage_defaults = STAGE_DEFAULTS.get(stage)
         if stage_defaults:
             for k, v in stage_defaults.items():
-                user_gave = k in args and args[k] is not None
+                user_gave = k in supplied and supplied[k] is not None
                 if not user_gave:
                     cfg[k] = v
 
@@ -269,11 +282,14 @@ class StockLayerSpec(TaskSpec):
             )
             cases.extend(day_cases)
 
-        est_cost = round(len(requests) * USD_PER_REQUEST, 6)
+        # token-aware 估算：requests × 每 request 檔數 × 每檔 tokens
+        per_request_symbols = (len(cases) / len(requests)) if requests else 0.0
+        est_tokens = int(round(len(requests) * per_request_symbols * TOKENS_PER_SYMBOL_REQUEST))
+        est_cost = round(est_tokens / 1_000_000 * TOKEN_PRICE_PER_MTOK, 6)
         if est_cost > COST_CAP_USD:
             raise ValueError(
-                f"estimated cost ${est_cost} exceeds COST_CAP_USD=${COST_CAP_USD} "
-                f"({len(requests)} requests) — narrow the sampling (stage=screen or lower max_dates/max_symbols)"
+                f"estimated cost ${est_cost} (≈{est_tokens} tokens) exceeds COST_CAP_USD=${COST_CAP_USD} — "
+                f"narrow the sampling (stage=screen, lower max_dates/max_symbols) or accept a higher cap explicitly"
             )
 
         meta = {
@@ -288,8 +304,12 @@ class StockLayerSpec(TaskSpec):
             "requests": len(requests),
             "cases": len(cases),
             "estimated_cost_usd": est_cost,
+            "estimated_tokens": est_tokens,
             "cost_cap_usd": COST_CAP_USD,
-            "usd_per_request": round(USD_PER_REQUEST, 8),
+            "token_price_per_mtok": TOKEN_PRICE_PER_MTOK,
+            "tokens_per_symbol_request": TOKENS_PER_SYMBOL_REQUEST,
+            # 舊基準僅供對照（request-based；Stage 2 低估 2.7× ⇒ 不作為判準）
+            "usd_per_request_stage1_baseline": round(USD_PER_REQUEST, 8),
             "seed": seed,
             "probe_step": probe_step if mode == "leakage" else None,
             "baselines": baselines,

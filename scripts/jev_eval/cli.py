@@ -116,8 +116,10 @@ def _metrics_path(run_dir: str) -> str:
 
 def _build_and_metrics(args, *, log=print) -> Dict[str, Any]:
     spec = _load_spec(args.spec)
-    cfg = spec.merged_args(parse_spec_args(args.spec_arg), spec.defaults)
-    build = spec.build(cfg)
+    user_args = parse_spec_args(args.spec_arg)
+    cfg = spec.merged_args(user_args, spec.defaults)
+    # 把「使用者真正給了什麼」一併傳進 build：CLI 會先 merge，spec 無法從 cfg 分辨
+    build = spec.build(cfg, user_args=user_args)
     judgments, manifest = runner.load_judgments(args.out_dir)
     obs = _observations(build, judgments, repeat_aggregate=getattr(args, "repeat_aggregate", "first"))
     baseline_names = [b for b in str(cfg.get("baselines") or "").split(",") if b.strip()]
@@ -170,6 +172,7 @@ def _build_and_metrics(args, *, log=print) -> Dict[str, Any]:
         "spec": spec,
         "cfg": cfg,
         "scores": scores,
+        "user_args": user_args,
     }
 
 
@@ -185,7 +188,7 @@ def _paired_margin(args, data: Mapping[str, Any], spec: Any) -> Optional[Mapping
         return None
     try:
         judge_pairs = _judge_pairs(data["build"], data.get("scores") or {})
-        probe_pairs = _leakage_pairs(path, spec, data.get("cfg") or {})
+        probe_pairs = _leakage_pairs(path, spec, data.get("cfg") or {}, data.get("user_args"))
         return metrics_mod.paired_auc_margin(
             judge_pairs, probe_pairs, iterations=getattr(args, "bootstrap", 1000), seed=args.seed
         )
@@ -193,10 +196,12 @@ def _paired_margin(args, data: Mapping[str, Any], spec: Any) -> Optional[Mapping
         return None
 
 
-def _leakage_pairs(path: str, spec: Any, cfg: Mapping[str, Any]) -> List[Tuple[str, float, bool]]:
+def _leakage_pairs(path: str, spec: Any, cfg: Mapping[str, Any], user_args: Optional[Mapping[str, Any]] = None) -> List[Tuple[str, float, bool]]:
     """(case_id, score, gt) triples of a leakage-probe run, for the paired AUC margin."""
     try:
-        probe_build = spec.build(dict(cfg, mode="leakage"))
+        probe_user = dict(user_args or {})
+        probe_user["mode"] = "leakage"
+        probe_build = spec.build(dict(cfg, mode="leakage"), user_args=probe_user)
         judgments, _ = runner.load_judgments(path)
         scores = runner.score_cases(probe_build, judgments)
     except Exception:
@@ -294,8 +299,9 @@ def cmd_specs(args) -> int:
 
 def cmd_collect(args) -> int:
     spec = _load_spec(args.spec)
-    cfg = spec.merged_args(parse_spec_args(args.spec_arg), spec.defaults)
-    build = spec.build(cfg)
+    user_args = parse_spec_args(args.spec_arg)
+    cfg = spec.merged_args(user_args, spec.defaults)
+    build = spec.build(cfg, user_args=user_args)
     stats = runner.collect(
         spec=spec,
         build=build,
