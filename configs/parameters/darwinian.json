@@ -174,7 +174,7 @@
     }
   },
   "risk_volatility_threshold": {
-    "value": 1.3551911193487005,
+    "value": 0.08,
     "rationale": "8% daily volatility is extreme; extra penalty warranted",
     "source": "empirical",
     "last_calibrated": "2026-06-13T00:30:48.122543+08:00",
@@ -182,7 +182,7 @@
     "calibration_method": "percentile_based",
     "citation": {
       "source_type": "empirical",
-      "source_reference": "Agent weight system calibration",
+      "source_reference": "Agent weight system calibration; value realigned to the documented daily-scale default 0.08 on 2026-09-30 (issue #2169: the previous 1.3551911193487005 was an annualized-scale write)",
       "evidence_quality": "high",
       "update_policy": "auto",
       "validation_method": "TWSE historical data validation",
