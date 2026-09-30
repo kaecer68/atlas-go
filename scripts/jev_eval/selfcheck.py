@@ -33,6 +33,7 @@ from scripts.jev_eval import metrics as metrics_mod
 from scripts.jev_eval import runner
 from scripts.jev_eval.spec import Case, Request, SpecBuild
 from scripts.jev_eval.specs.event_calendar import EventCalendarSpec
+from scripts.jev_eval.specs import stock_layer
 from scripts.jev_eval.specs.industry_l1 import IndustryL1Spec
 
 
@@ -67,6 +68,10 @@ def _panel_row(date, iid, ret5, ret20, fwd_hit, back_hit, name="半導體"):
             "forward_span_calendar_days": 7,
         },
     }
+
+
+def _stock_spec():
+    return stock_layer.StockLayerSpec()
 
 
 class PanelFixture(unittest.TestCase):
@@ -275,6 +280,69 @@ class MetricMath(unittest.TestCase):
         )
         self.assertEqual(verdict["verdict"], "未驗證")
         self.assertIn("increment gate", verdict["detail"])
+
+class StockLayerChecks(unittest.TestCase):
+    def _write_jsonl(self, rows):
+        fd, path = tempfile.mkstemp(suffix=".jsonl")
+        with os.fdopen(fd, "w", encoding="utf-8") as fh:
+            for row in rows:
+                fh.write(json.dumps(row) + "\n")
+        self.addCleanup(lambda: os.path.exists(path) and os.remove(path))
+        return path
+
+    def test_stock_layer_sampling_is_seeded_and_stratified(self):
+        """固定 seed ⇒ 同一組 symbols/dates；且每個 L1 至少 1 檔（分層成立）。"""
+        rows = []
+        for iid in ("semiconductor", "shipping", "financials"):
+            for k in range(4):
+                for d in ("2026-07-01", "2026-07-08", "2026-07-15", "2026-07-22"):
+                    rows.append({
+                        "date": d, "symbol": f"{iid[:3].upper()}{k}.TW", "industry_id": iid,
+                        "forward": {"ret": 0.01, "hit": k % 2 == 0},
+                        "backward": {"backward_hit": k % 2 == 0, "backward_date": "2026-06-24"},
+                        "baselines": {"momentum_20d": 0.1},
+                    })
+        path = self._write_jsonl(rows)
+        spec = _stock_spec()
+        b1 = spec.build({"panel": path, "max_symbols": "12", "max_dates": "4", "seed": "s1"})
+        b2 = spec.build({"panel": path, "max_symbols": "12", "max_dates": "4", "seed": "s1"})
+        self.assertEqual([c.case_id for c in b1.cases], [c.case_id for c in b2.cases])
+        self.assertEqual([r.request_id for r in b1.requests], [r.request_id for r in b2.requests])
+        per_industry = {}
+        for case in b1.cases:
+            per_industry.setdefault(case.meta["industry_id"], set()).add(case.meta["symbol"])
+        self.assertEqual(len(per_industry), 3)
+        for iid, syms in per_industry.items():
+            # 分層守門：預設 symbols_per_industry=2 ⇒ 每層應取到 2 檔（上限足夠時）
+            self.assertGreaterEqual(len(syms), 2, f"industry {iid} lost its stratified quota")
+
+    def test_stock_layer_cost_cap_rejects_oversized_run(self):
+        """估算成本超過 COST_CAP_USD ⇒ 建構即 raise（寧可少跑，不可超支）。"""
+        # 100 個日期 ⇒ 100 requests ⇒ 0.0253 USD > COST_CAP_USD(0.02) ⇒ 必須 raise
+        rows = [{
+            "date": f"2026-{1 + (d // 28):02d}-{1 + (d % 28):02d}", "symbol": f"S{i}.TW", "industry_id": "x",
+            "forward": {"ret": 0.01, "hit": True}, "backward": {"backward_hit": True},
+        } for d in range(100) for i in range(40)]
+        path = self._write_jsonl(rows)
+        with self.assertRaises(ValueError) as ctx:
+            _stock_spec().build({"panel": path, "max_symbols": "40", "max_dates": "100", "stage": "confirm"})
+        self.assertIn("COST_CAP_USD", str(ctx.exception))
+        # 預設上限下 20 requests 仍可通過
+        ok = _stock_spec().build({"panel": path, "max_symbols": "40", "max_dates": "20"})
+        self.assertLessEqual(ok.meta["estimated_cost_usd"], stock_layer.COST_CAP_USD)
+        self.assertEqual(ok.meta["requests"], 20)
+
+    def test_stock_layer_two_stage_sizes(self):
+        """stage=screen ⇒ ≤400 cases；stage=confirm ⇒ 預設 60×40（但受成本上限保護）。"""
+        rows = [{
+            "date": f"2026-0{9}-{d:02d}", "symbol": f"S{i}.TW", "industry_id": f"ind{i % 3}",
+            "forward": {"ret": 0.01, "hit": i % 2 == 0}, "backward": {"backward_hit": True},
+        } for d in range(1, 21) for i in range(60)]
+        path = self._write_jsonl(rows)
+        screen = _stock_spec().build({"panel": path, "stage": "screen"})
+        self.assertLessEqual(len(screen.cases), 400)
+        self.assertEqual(screen.meta["stage"], "screen")
+
 
 class MetricMathExtra(unittest.TestCase):
     pass
