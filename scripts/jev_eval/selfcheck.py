@@ -31,7 +31,7 @@ if _REPO_ROOT not in sys.path:
 
 from scripts.jev_eval import metrics as metrics_mod
 from scripts.jev_eval import runner
-from scripts.jev_eval.spec import Case, Request, SpecBuild
+from scripts.jev_eval.spec import Case, Request, SpecBuild, parse_spec_args
 from scripts.jev_eval.specs.event_calendar import EventCalendarSpec
 from scripts.jev_eval.specs import stock_layer
 from scripts.jev_eval.specs.industry_l1 import IndustryL1Spec
@@ -318,16 +318,19 @@ class StockLayerChecks(unittest.TestCase):
 
     def test_stock_layer_cost_cap_rejects_oversized_run(self):
         """估算成本超過 COST_CAP_USD ⇒ 建構即 raise（寧可少跑，不可超支）。"""
-        # 100 個日期 ⇒ 100 requests ⇒ 0.0253 USD > COST_CAP_USD(0.02) ⇒ 必須 raise
+        # 100 dates × 40 檔（20 個產業 × 2）⇒ 100×40×408 tokens ≈ $0.0686 > cap($0.05) ⇒ 必須 raise
         rows = [{
-            "date": f"2026-{1 + (d // 28):02d}-{1 + (d % 28):02d}", "symbol": f"S{i}.TW", "industry_id": "x",
+            "date": f"2026-{1 + (d // 28):02d}-{1 + (d % 28):02d}", "symbol": f"S{i}.TW",
+            "industry_id": f"ind{i % 20}",
             "forward": {"ret": 0.01, "hit": True}, "backward": {"backward_hit": True},
         } for d in range(100) for i in range(40)]
         path = self._write_jsonl(rows)
+        # 100 requests × 40 檔 × 408 tokens ≈ $0.0686 > cap($0.05) ⇒ 必須 raise（token-aware）
         with self.assertRaises(ValueError) as ctx:
             _stock_spec().build({"panel": path, "max_symbols": "40", "max_dates": "100", "stage": "confirm"})
-        self.assertIn("COST_CAP_USD", str(ctx.exception))
-        # 預設上限下 20 requests 仍可通過
+        msg = str(ctx.exception)
+        self.assertIn("COST_CAP_USD", msg)
+        self.assertIn("tokens", msg)   # 訊息必須揭露 token 估算（修前只看 requests）
         ok = _stock_spec().build({"panel": path, "max_symbols": "40", "max_dates": "20"})
         self.assertLessEqual(ok.meta["estimated_cost_usd"], stock_layer.COST_CAP_USD)
         self.assertEqual(ok.meta["requests"], 20)
@@ -370,6 +373,40 @@ class StockLayerChecks(unittest.TestCase):
         self.assertEqual(b.meta["symbols_sampled"], 60)
         self.assertEqual(len(b.cases), 2400)
         self.assertEqual(len(b.requests), 40)
+        # 上限已於 2026-09-30 重新校準（token-aware）：confirm 的真實估價必須落在上限內
+        self.assertLessEqual(b.meta["estimated_cost_usd"], stock_layer.COST_CAP_USD)
+
+
+    def test_stock_layer_stage_screen_via_cli_path(self):
+        """★ 走**CLI 的真實呼叫形狀**（cli.py:119-122）：先 merged_args ⇒ 再 build(user_args=…)。
+
+        這是 2026-09-30 真跑時咬到的破口：`build(raw_args)` 的直呼測試會過 ✗，
+        但 CLI 先把 merged 結果餵進來 ⇒ 「使用者是否真的給了」在 args 裡已消失 ⇒
+        `stage=screen` 靜默變成 confirm 形狀（40 requests ✗）。修法＝CLI 傳 user_args。
+        """
+        path = self._stage_fixture(industries=12, per_industry=4, dates=25)
+        raw = parse_spec_args(["panel=" + path, "stage=screen"])
+        spec = _stock_spec()
+        merged = spec.merged_args(raw, spec.defaults)
+        build = spec.build(merged, user_args=raw)          # ← CLI 的呼叫形狀
+        self.assertEqual(build.meta["dates"], 20)
+        self.assertEqual(build.meta["symbols_sampled"], 20)
+        self.assertEqual(len(build.requests), 20)
+        # 對照：不傳 user_args（舊行為）會落到 confirm 形狀 ⇒ 證明這個參數是必要的
+        legacy = spec.build(merged)
+        self.assertGreater(len(legacy.requests), 20)
+
+    def test_stock_layer_cost_estimate_is_token_aware(self):
+        """成本上限改以 tokens 判定（request-based 低估 2.7× ⇒ 守不住）。"""
+        path = self._stage_fixture(industries=12, per_industry=4, dates=25)
+        b = _stock_spec().build({"panel": path, "stage": "screen"})
+        m = b.meta
+        self.assertIn("estimated_tokens", m)
+        self.assertGreater(m["estimated_tokens"], 0)
+        self.assertEqual(m["cost_cap_usd"], stock_layer.COST_CAP_USD)
+        # 實測錨點：39 檔／request ⇒ 16,326 tokens ⇒ token 模型要落在同量級
+        self.assertGreater(stock_layer.TOKENS_PER_SYMBOL_REQUEST, 300)
+        self.assertLess(stock_layer.TOKENS_PER_SYMBOL_REQUEST, 600)
 
     def test_stock_layer_explicit_arg_beats_stage_default(self):
         """優先序：顯式 CLI 參數 > stage 預設 > self.defaults。"""
