@@ -114,6 +114,14 @@ add_go_commit() {
   GO_COMMIT=$(git -C "$FIX_REPO" rev-parse HEAD)
 }
 
+add_config_commit() {
+  mkdir -p "$FIX_REPO/configs"
+  printf '{"k":1}\n' >>"$FIX_REPO/configs/parameters.json"
+  fake_git "$FIX_REPO" add configs/parameters.json
+  fake_git "$FIX_REPO" commit -q -m "config: parameters value change"
+  CONFIG_COMMIT=$(git -C "$FIX_REPO" rev-parse HEAD)
+}
+
 add_docs_commit() {
   mkdir -p "$FIX_REPO/docs"
   printf 'note\n' >>"$FIX_REPO/docs/note.md"
@@ -525,6 +533,48 @@ run_empty_stdin_is_content_push_test() {
 # ── static contract: the wiring itself ─────────────────────────────────────
 line_of() { grep -Fn -- "$2" "$1" | head -n 1 | cut -d: -f1; }
 
+
+# ── configs/** 變更屬「值變更」⇒ 必須跑 ci-full（不得歸為 docs-only）────────
+# 缺陷（2026-09-30 實證）：分類 grep 未含 configs/ ⇒ 只改 configs/parameters.json
+# 的 push 被當成 docs-only 而跳過 ci-full。
+run_config_only_requires_ci_full_test() {
+  local dir repo out
+  dir=$(mktemp -d)
+  trap 'rm -rf "$dir"' RETURN
+  build_fixture "$dir"
+  seed_main
+  add_config_commit
+  repo=$FIX_REPO
+  fake_host_binary bin/atlas "$SEED_ROOT"
+  fake_host_binary bin/atlas-mcp "$SEED_ROOT"
+
+  run_hook "$dir" "$repo"
+  out=$HOOK_OUT
+  test "$HOOK_RC" -eq 0 || fail "pre-push blocked a config-only push: $out"
+  assert_contains "$dir/make.log" "ci-gate"
+  assert_contains "$dir/make.log" "ci-full"
+}
+
+# ── 混合變更（configs ＋ docs）：OR 語意 ⇒ 任一命中即 code ⇒ 跑 ci-full ──────
+run_mixed_config_docs_requires_ci_full_test() {
+  local dir repo out
+  dir=$(mktemp -d)
+  trap 'rm -rf "$dir"' RETURN
+  build_fixture "$dir"
+  seed_main
+  add_config_commit
+  add_docs_commit
+  repo=$FIX_REPO
+  fake_host_binary bin/atlas "$SEED_ROOT"
+  fake_host_binary bin/atlas-mcp "$SEED_ROOT"
+
+  run_hook "$dir" "$repo"
+  out=$HOOK_OUT
+  test "$HOOK_RC" -eq 0 || fail "pre-push blocked a mixed config+docs push: $out"
+  assert_contains "$dir/make.log" "ci-gate"
+  assert_contains "$dir/make.log" "ci-full"
+}
+
 run_static_contract_tests() {
   assert_contains "$HOOK" '--host-only --diff-base origin/main'
   assert_contains "$HOOK" 'PRE_PUSH_FULL=never — ci-full 明示跳過'
@@ -561,6 +611,8 @@ run_fetch_failure_test
 run_stale_host_binary_test
 run_fresh_host_binary_test
 run_docs_only_test
+run_config_only_requires_ci_full_test
+run_mixed_config_docs_requires_ci_full_test
 run_no_host_binaries_test
 run_override_test
 run_delete_only_refspec_test
