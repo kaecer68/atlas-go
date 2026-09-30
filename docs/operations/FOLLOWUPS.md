@@ -2532,6 +2532,29 @@ PY
 
 ---
 
+### FU-20260930-11 — 後端決策只完成 **1/7**：`internal/monitoring` 6 處 handler 仍硬讀 JSONL／stockpicker 鏈仍寫 SQLite ⇒ 雙儲存並存的**維護與誤判**風險
+
+- **狀態**：`open`
+- **記錄日期**：2026-09-30
+- **來源**：業主追問「PG 與 SQLite 並存是否造成維護／管理／遷移麻煩」⇒ root 實查；本條把**既有 spec 的 prose 記載**升為**可追蹤工作** ✓
+- **事實（皆已實查）**：
+  1. **既有 spec 自述**（`docs/specs/dashboard-metrics-ssot-spec.md`）：**「PG 是已裁決的 SSOT，但只有 `RegisterPerformanceRoutes` 走 backend-aware factory（`NewReportOutcomeStore`）；其餘 **6 處 handler** 直接 `os.ReadDir(ledgerDir/sessions)` 或 `ledger.NewStore(ledgerDir)` **硬讀 JSONL**」**＋違規點清單（全在 `internal/monitoring/`）
+  2. **stockpicker 訊號結果鏈**以 **SQLite ＋ JSON 快照**落地（`internal/stockpicker/signal_outcome_store.go:49`「thin SQLite-backed wrapper」／`aggregate.go:5`）⇒ 生產 `data/state/atlas.db` **非空殼**（`stock_signal_outcomes` **73,401 列**／`stock_win_rate` **3,051 列**，2026-09-30 實測），而其 **PG 同名表為 0**
+  3. ★ **誤判風險已實際發生一次**：同日本 session 依 PG 的 0 列一度判「結算鏈沒在寫」 ✗ ⇒ 實為**讀錯 store**
+  4. ★ **備份未涵蓋**：`scripts/ops/*` 與 `docs/operations/local-deploy.md` **未見** `atlas.db` 的備份處理（該檔是該鏈的**唯一事實來源**）⇒ 資料遺失風險
+  5. 遷移工具**已存在**：`cmd/migrate-data`（SQLite→PG；含 `SQLiteOutcomeStore.RecordOutcomes` 的鏡射註解）＋ `cmd/migrate-jsonl-to-sqlite`
+- **最小處置建議（三件分開評估）**：
+  ① **可追蹤化**：把 spec 的 6 處違規清單轉為 issue／本條子項（目前只存在於 prose ✗）
+  ② **備份**：把 `data/state/atlas.db` 納入既有備份，或明確記錄「不需備份」的理由
+  ③ **遷移**：讓 stockpicker 鏈改走 backend-aware，或**明確記為永久例外**並補文件
+- **查法（可重現）**：
+  ```
+  ssh kmacmini "sqlite3 ~/workspace/atlas/data/state/atlas.db 'select count(*) from stock_signal_outcomes'"
+  /usr/local/bin/docker exec atlas-postgres psql -U atlas -d atlas -Atc "select count(*) from stock_signal_outcomes"
+  ```
+
+---
+
 > **來源注記（2026-09-30 第五批）**：`FU-20260930-01`／`-02` 來自 `#2160`（I22-overheat）實作與審查；
 > `-03`／`-04` 來自 `#2151`（公司行為調整）與 `#2095`（注入符號）兩線的交叉調查；
 > `-05` 來自 `FU-20260929-10`（criteria 校準）的量測結論（同一批的 `stockpicker` ETF 母體與 `leo` 半邊結案）。
