@@ -87,10 +87,13 @@ func RecordOutcomes(ctx context.Context, db *sql.DB, outcomes []SignalOutcome) e
 	// P0-4: use `ON CONFLICT DO NOTHING` instead of SQLite-only `INSERT OR IGNORE`
 	// so the same statement is valid against production PostgreSQL
 	// (sql/migrations/000018) and SQLite (ledger InitSchema).
+	// Placeholders use `$n`, which both dialects accept (SQLite natively
+	// supports $-parameters), so this store runs unchanged against either
+	// backend via database/sql (SSOT→PG dual-write, 2026-09-30).
 	stmt, err := tx.PrepareContext(ctx, `
 		INSERT INTO stock_signal_outcomes
 			(symbol, trigger_date, source, forward_return, net_forward_return, hit, cost_rate, regime, created_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 		ON CONFLICT DO NOTHING`)
 	if err != nil {
 		return fmt.Errorf("stockpicker: prepare signal outcome insert: %w", err)
@@ -164,9 +167,9 @@ func loadOutcomes(ctx context.Context, db *sql.DB, symbol, source, window string
 	// empty strings or a date well in the past.
 	const query = `SELECT symbol, trigger_date, source, forward_return, net_forward_return, hit, cost_rate, regime, created_at
 		FROM stock_signal_outcomes
-		WHERE (symbol = ? OR ? = '')
-		  AND (source = ? OR ? = '')
-		  AND (trigger_date >= ? OR ? = '')
+		WHERE (symbol = $1 OR $2 = '')
+		  AND (source = $3 OR $4 = '')
+		  AND (trigger_date >= $5 OR $6 = '')
 		ORDER BY trigger_date ASC, source ASC`
 
 	rows, err := db.QueryContext(ctx, query, symbol, symbol, source, source, cutoff, cutoff)

@@ -7,9 +7,11 @@
 // aggregate per (symbol, source) into stock_win_rate and
 // data/state/stock_win_rate.json.
 //
-// Outcomes always land in the job-local SQLite artifact
-// (data/state/atlas.db), never in the postgres target; quotes are
-// backend-aware (sqlite | postgres) via the shared ledger resolver (WP4).
+// Outcomes land in the job-local SQLite artifact (data/state/atlas.db) and,
+// since SSOT→PG batch B (2026-09-30), are mirrored into PostgreSQL when
+// DualWrite is set on the postgres backend (or an explicit PGOutcomesDB is
+// injected); either side failing fails the run, never a silent skip. Quotes
+// are backend-aware (sqlite | postgres) via the shared ledger resolver (WP4).
 // The postgres path requires ExpectDB (M12 target guard) and fails loudly
 // otherwise (B1).
 package stockpicker
@@ -24,6 +26,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/jackc/pgx/v5/stdlib"
 
 	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/db"
@@ -76,6 +79,18 @@ type RunDailyOptions struct {
 	Start       time.Time   // first trigger date (zero → AsOf-120d)
 	End         time.Time   // last trigger date (zero → AsOf)
 	Panel       PanelSource // nil → real panel built from WorkDir
+	// DualWrite mirrors the outcome + win-rate rows into PostgreSQL
+	// (SSOT→PG batch B, 2026-09-30: PG is the adjudicated SSOT). Effective
+	// only when Backend resolves to postgres; the destination handle is
+	// derived from the shared pool opened for the quote store
+	// (stdlib.OpenDBFromPool). Kill switch: set false to roll back to
+	// SQLite-only writes. Ignored when PGOutcomesDB is injected.
+	DualWrite bool
+	// PGOutcomesDB is an explicit dual-write destination — a *sql.DB over
+	// PostgreSQL (e.g. stdlib.OpenDBFromPool(pool)). When non-nil it wins
+	// over DualWrite/Backend resolution (explicit caller intent; used by
+	// tests and out-of-process wiring).
+	PGOutcomesDB *sql.DB
 	// Regimes maps trigger date → market regime for outcome tagging
 	// (issue #1863). nil → RunDailyUpdate falls back to the job-local
 	// SQLite regime_history table (dev/CLI); production wires the
@@ -173,47 +188,98 @@ func RunDailyUpdate(ctx context.Context, opts RunDailyOptions) (RunDailyResult, 
 	outStore := NewSignalOutcomeStore(outcomeDB)
 	winStore := NewWinRateStore(outcomeDB)
 
-	// Idempotency: skip when this run's contribution is already recorded.
+	// Resolve the dual-write destination BEFORE the idempotency gate: the
+	// gate below must reflect every enabled destination (P1 fix, see the
+	// idempotency block).
+	pgOutcomesDB, pgPool, err := resolvePGDest(ctx, opts, backend, opts.Panel != nil)
+	if err != nil {
+		return res, err
+	}
+	if pgOutcomesDB != nil && opts.PGOutcomesDB == nil {
+		// Derived handle (stdlib wrapper over the opened pool): close at the
+		// end of the run. Injected handles are owned by the caller.
+		defer func() { _ = pgOutcomesDB.Close() }()
+	}
+
+	// Idempotency: skip when this run's contribution is already recorded in
+	// EVERY enabled destination. With dual-write, the SQLite count alone
+	// would skip the rerun that should heal a PG-side gap, leaving that day
+	// permanently missing from PG (independent-review P1, 2026-09-30).
 	if opts.Idempotency != IdempotencyNone && !opts.DryRun {
-		var n int
+		var newest time.Time
+		var sqliteN int
 		switch opts.Idempotency {
 		case IdempotencyDay:
-			newest := newestTriggerDate(opts.AsOf, DefaultForwardDays)
-			n, err = countOutcomesForTriggerDate(ctx, outcomeDB, newest)
-			if err != nil {
-				return res, fmt.Errorf("idempotency check: %w", err)
+			newest = newestTriggerDate(opts.AsOf, DefaultForwardDays)
+			sqliteN, err = countOutcomesForTriggerDate(ctx, outcomeDB, newest)
+		default: // IdempotencyRange
+			sqliteN, err = countExistingOutcomes(ctx, outcomeDB, opts.Start, opts.End)
+		}
+		if err != nil {
+			return res, fmt.Errorf("idempotency check: %w", err)
+		}
+		recorded := sqliteN > 0
+		if recorded && pgOutcomesDB != nil {
+			// The gate counts the PG side too: a day/range missing there is
+			// "not yet recorded" and must rerun to heal it. A PG COUNT
+			// failure is a hard error naming the postgres side — never
+			// silently read as "0 rows" (that would misjudge a failed count
+			// as "not yet run" and fire a doomed rerun).
+			var pgN int
+			switch opts.Idempotency {
+			case IdempotencyDay:
+				pgN, err = countOutcomesForTriggerDate(ctx, pgOutcomesDB, newest)
+			default:
+				pgN, err = countExistingOutcomes(ctx, pgOutcomesDB, opts.Start, opts.End)
 			}
-			if n > 0 {
+			if err != nil {
+				return res, fmt.Errorf("idempotency check (postgres): %w", err)
+			}
+			recorded = pgN > 0
+		}
+		if recorded {
+			if opts.Idempotency == IdempotencyDay {
 				logging.Info("stockpicker_daily_update", "skip_day_done",
 					"asof", opts.AsOf.Format("2006-01-02"),
 					"newest_trigger", newest.Format("2006-01-02"),
-					"existing", n)
-				res.Existing = n
-				res.Skipped = true
-				return res, nil
+					"existing", sqliteN)
 			}
-		default: // IdempotencyRange
-			n, err = countExistingOutcomes(ctx, outcomeDB, opts.Start, opts.End)
-			if err != nil {
-				return res, fmt.Errorf("idempotency check: %w", err)
-			}
-			res.Existing = n
-			if n > 0 {
-				res.Skipped = true
-				return res, nil
-			}
+			res.Existing = sqliteN
+			res.Skipped = true
+			return res, nil
+		}
+		if opts.Idempotency == IdempotencyRange {
+			res.Existing = sqliteN
 		}
 	}
 
 	panel := opts.Panel
 	if panel == nil {
-		quoteStore, err := openQuoteStore(ctx, backend, opts.WorkDir)
-		if err != nil {
-			return res, err
-		}
-		panel, err = NewRealPanel(ctx, quoteStore, opts.WorkDir)
-		if err != nil {
-			return res, fmt.Errorf("build panel: %w", err)
+		if backend == "postgres" {
+			// Reuse the pool resolvePGDest opened for the derived dual-write
+			// handle; open one only when dual-write did not (kill switch off,
+			// or a dry-run that still needs quotes).
+			pool := pgPool
+			if pool == nil {
+				opened, err := openPostgres(ctx)
+				if err != nil {
+					return res, err
+				}
+				pool = opened
+			}
+			panel, err = NewRealPanel(ctx, ledger.NewPostgresQuoteStore(pool), opts.WorkDir)
+			if err != nil {
+				return res, fmt.Errorf("build panel: %w", err)
+			}
+		} else {
+			quoteStore, err := openSQLiteQuoteStore(opts.WorkDir)
+			if err != nil {
+				return res, err
+			}
+			panel, err = NewRealPanel(ctx, quoteStore, opts.WorkDir)
+			if err != nil {
+				return res, fmt.Errorf("build panel: %w", err)
+			}
 		}
 	}
 	symbols := PanelSymbols(panel, opts.Universe)
@@ -256,10 +322,30 @@ func RunDailyUpdate(ctx context.Context, opts RunDailyOptions) (RunDailyResult, 
 	if err := outStore.RecordOutcomes(ctx, outcomes); err != nil {
 		return res, fmt.Errorf("record outcomes: %w", err)
 	}
+	// Dual-write (SSOT→PG batch B): mirror the just-committed SQLite batch
+	// into PG. A PG failure fails the whole run — the scheduler records the
+	// failure, and the NEXT tick's idempotency gate re-runs the day because
+	// it counts every enabled destination (a PG-side gap reads as "not yet
+	// recorded"); ON CONFLICT DO NOTHING / upsert then make the healing
+	// rewrite idempotent. The already-committed SQLite rows are never rolled
+	// back (compensating deletes on the hot path are riskier than an
+	// idempotent rewrite).
+	if pgOutcomesDB != nil {
+		if err := RecordOutcomes(ctx, pgOutcomesDB, outcomes); err != nil {
+			return res, fmt.Errorf("record outcomes (postgres): %w", err)
+		}
+	}
 
 	summaries, err := AggregateFromStore(ctx, outStore, winStore, aggregationWindow, costRate, minSamples, confidenceLevel, opts.AsOf)
 	if err != nil {
 		return res, fmt.Errorf("aggregate: %w", err)
+	}
+	if pgOutcomesDB != nil {
+		for _, summary := range summaries {
+			if err := SaveWinRate(ctx, pgOutcomesDB, summary); err != nil {
+				return res, fmt.Errorf("save win rate (postgres) %s/%s: %w", summary.Symbol, summary.Source, err)
+			}
+		}
 	}
 	statePath := filepath.Join(opts.WorkDir, "data", "state", "stock_win_rate.json")
 	if err := WriteStateJSON(statePath, summaries, opts.AsOf); err != nil {
@@ -336,8 +422,8 @@ func conditionIDs(conds []Condition) []string {
 
 // openOutcomeDB opens the job-local SQLite ledger holding backtest outcomes
 // and win-rate rows. Outcomes are a job-local SQLite artifact
-// (data/state/atlas.db), never written to the postgres target: quotes are
-// backend-aware, outcomes stay local (M4③).
+// (data/state/atlas.db); since batch B they are additionally mirrored into PG
+// when dual-write is active (see RunDailyOptions.DualWrite).
 func openOutcomeDB(workDir string) (*sql.DB, error) {
 	dbPath := filepath.Join(workDir, "data", "state", "atlas.db")
 	if err := os.MkdirAll(filepath.Dir(dbPath), 0o755); err != nil {
@@ -356,18 +442,51 @@ func openOutcomeDB(workDir string) (*sql.DB, error) {
 	return db, nil
 }
 
-// openQuoteStore builds a QuoteStore for the requested backend.
-func openQuoteStore(ctx context.Context, backend, workDir string) (ledger.QuoteStore, error) {
-	switch backend {
-	case "postgres":
-		return openPostgresQuoteStore(ctx)
-	case "sqlite":
-		return openSQLiteQuoteStore(workDir)
-	default:
-		// jsonl resolves through the shared resolver but is not a backend the
-		// daily update can serve — fail loudly instead of silently switching.
-		return nil, fmt.Errorf("unknown backend %q (quotes support sqlite | postgres)", backend)
+// resolvePGDest picks the dual-write destination for this run.
+//
+// Resolution order: an injected PGOutcomesDB wins (explicit caller intent —
+// the test seam); otherwise the postgres backend derives a handle from the
+// migration-target pool opened for the quote store, but ONLY when the
+// DualWrite kill switch is ON and the run is not a dry-run. Every other
+// combination yields nil = SQLite-only, the pre-batch-B behavior (no PG
+// connection is ever attempted on non-postgres backends).
+//
+// The returned pool is non-nil only when this helper opened it (derived
+// path); the panel build reuses it instead of opening a second connection.
+// A derived pgDB is stdlib.OpenDBFromPool(pool) — the caller closes it
+// (injected handles stay caller-owned).
+func resolvePGDest(ctx context.Context, opts RunDailyOptions, backend string, panelInjected bool) (pgDB *sql.DB, pool *pgxpool.Pool, err error) {
+	if opts.PGOutcomesDB != nil {
+		return opts.PGOutcomesDB, nil, nil
 	}
+	if backend != "postgres" || !opts.DualWrite || opts.DryRun {
+		return nil, nil, nil
+	}
+	if panelInjected {
+		return nil, nil, fmt.Errorf("dual-write requested (backend=postgres) but panel was injected without PGOutcomesDB; pass PGOutcomesDB explicitly")
+	}
+	pool, err = openPostgres(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+	return stdlib.OpenDBFromPool(pool), pool, nil
+}
+
+// openPostgres connects to the migration target, applies pending migrations,
+// and injects the pool into the ledger factory (WP4 quote-store convention).
+// Callers derive whatever handles they need from the returned pool (quote
+// store, and — batch B — stdlib.OpenDBFromPool for outcome dual-write).
+func openPostgres(ctx context.Context) (*pgxpool.Pool, error) {
+	dsn := os.Getenv("DATABASE_URL")
+	if dsn == "" {
+		return nil, fmt.Errorf("postgres backend requires DATABASE_URL")
+	}
+	pool, err := db.Init(ctx, dsn, defaultPostgresMigrations)
+	if err != nil {
+		return nil, fmt.Errorf("open postgres: %w", err)
+	}
+	ledger.SetPostgresPool(pool)
+	return pool, nil
 }
 
 func openSQLiteQuoteStore(workDir string) (ledger.QuoteStore, error) {
@@ -384,19 +503,6 @@ func openSQLiteQuoteStore(workDir string) (ledger.QuoteStore, error) {
 		return nil, fmt.Errorf("init schema: %w", err)
 	}
 	return ledger.NewSQLiteQuoteStore(db), nil
-}
-
-func openPostgresQuoteStore(ctx context.Context) (ledger.QuoteStore, error) {
-	dsn := os.Getenv("DATABASE_URL")
-	if dsn == "" {
-		return nil, fmt.Errorf("postgres backend requires DATABASE_URL")
-	}
-	pool, err := db.Init(ctx, dsn, defaultPostgresMigrations)
-	if err != nil {
-		return nil, fmt.Errorf("open postgres: %w", err)
-	}
-	ledger.SetPostgresPool(pool)
-	return ledger.NewPostgresQuoteStore(pool), nil
 }
 
 // guardDatabaseTarget reports the postgres connection target (M12) and, when
@@ -461,7 +567,7 @@ func countExistingOutcomes(ctx context.Context, db *sql.DB, start, end time.Time
 	err := db.QueryRowContext(ctx, `
 		SELECT COUNT(*) FROM stock_signal_outcomes
 		WHERE source LIKE 'stockpicker-%'
-		  AND trigger_date >= ? AND trigger_date <= ?`,
+		  AND trigger_date >= $1 AND trigger_date <= $2`,
 		start.Format("2006-01-02"), end.Format("2006-01-02"),
 	).Scan(&n)
 	if err != nil {
@@ -477,7 +583,7 @@ func countOutcomesForTriggerDate(ctx context.Context, db *sql.DB, triggerDate ti
 	err := db.QueryRowContext(ctx, `
 		SELECT COUNT(*) FROM stock_signal_outcomes
 		WHERE source LIKE 'stockpicker-%'
-		  AND trigger_date = ?`,
+		  AND trigger_date = $1`,
 		triggerDate.Format("2006-01-02"),
 	).Scan(&n)
 	if err != nil {

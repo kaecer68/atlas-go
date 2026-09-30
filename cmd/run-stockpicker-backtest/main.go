@@ -67,6 +67,7 @@ func runWithPanel(args []string, panel stockpicker.PanelSource) error {
 	universe := fs.String("universe", "", "comma-separated symbols to scan (default: all symbols present in quotes)")
 	backendFlag := fs.String("backend", "", "quote backend: sqlite | postgres (default: ATLAS_STORE_BACKEND env, then job-local sqlite)")
 	expectDB := fs.String("expect-db", "", "assert the postgres database name before migrations (e.g. atlas); aborts with the actual current_database on mismatch")
+	dualWrite := fs.Bool("dual-write", true, "mirror outcome/win-rate rows into PostgreSQL when -backend=postgres (SSOT→PG batch B; set false to roll back to SQLite-only writes)")
 	conditionsFlag := fs.String("conditions", "", "comma-separated condition IDs to run (default: foreign-3d-net-buy,momentum-20d-positive)")
 	listConditions := fs.Bool("list-conditions", false, "print the registered conditions and exit")
 	if err := fs.Parse(args); err != nil {
@@ -113,6 +114,7 @@ func runWithPanel(args []string, panel stockpicker.PanelSource) error {
 		WorkDir:     *workDir,
 		Backend:     *backendFlag,
 		ExpectDB:    *expectDB,
+		DualWrite:   *dualWrite,
 		Idempotency: idem,
 		DryRun:      *dryRun,
 		Universe:    *universe,
