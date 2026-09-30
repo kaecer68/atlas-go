@@ -2383,8 +2383,15 @@ PY
 
 ### FU-20260930-06 — 排程任務 `auto_calibrate` 在容器內**必然失敗**（`exec: "go": executable file not found in $PATH`）
 
-- **狀態**：`open`
+- **狀態**：`done`
 - **記錄日期**：2026-09-30
+- **完成於**：2026-09-30 `c8f88639`（PR [#2166](https://github.com/kaecer68/atlas-go/pull/2166) squash）
+  — 照 `seasonal_calibration` 的模式：①映像**出貨** `calibrate-parameters`（`Dockerfile`／`Dockerfile.atlas.local`／`ci-cd.yml`／`Makefile` 的 `rebuild-atlas-bins` 清單 ＋ binary-freshness 契約測試 ✓）
+  ②註冊改 **binary-guarded**（`os.Executable()` 同層 binary 存在才註冊；否則**一行具名 skip** ✓；`cmd.Dir` 保留 ✓）
+  ⇒ **部署實證（2026-09-30T01:27:25Z 分界）**：`/app/calibrate-parameters` 在映像（9,765,024 bytes ✓）；
+  `registered auto_calibrate background task (7-day interval, binary /app/calibrate-parameters, args [--module=darwinian --writeback=overlay])` ✓；
+  `01:29:22 task_started` → `01:29:23 completed … overlay_written source=calibrate_parameters` ✓（重啟後 ~2 分 ⇒ start 立即觸發 ✓）
+  ★ **首跑即發現一個真實新缺陷**（該任務此前從未執行 ⇒ 永遠不會被發現）⇒ 另立 **#2169**（`risk_volatility_threshold` 校準值與 SSOT 差 19× ✓），並已外科式回滾該鍵 ✓
 - **來源**：`#2161`/#2151 部署窗口驗收時，逐條讀 `atlas-go` 容器 log 發現（root 唯讀實查）
 - **現況（原文）**：
   ```
@@ -2408,8 +2415,13 @@ PY
 
 ### FU-20260930-07 — pre-push **Gate 1b（ci-full）** 被 4 個「**本機資料相依**」既有測試擋下 ⇒ 所有 lane 都無法正常 push
 
-- **狀態**：`open`
+- **狀態**：`done`
 - **記錄日期**：2026-09-30
+- **完成於**：2026-09-30 `f4eb133b`（PR [#2168](https://github.com/kaecer68/atlas-go/pull/2168) squash；**2 檔、無生產程式變更**）
+  — 修法（保留測試意圖、不弱化斷言 ✓）：`internal/eventdriven` ⇒ `RegisterRoutesWithDetectors` ＋ `h.SetNowFn(...)` **固定時鐘** ＋ `RefreshEvents` 固定基準 `2025-10-01`（該年曆年有 2 個窗 ✓）；
+  `internal/stocktools` ⇒ `winRateFixtureDates()` 將 trigger date 改為**相對 now**（-60d／-30d ✓）
+  ⇒ **效果**：CI 的 `build`／`coverage`／`release-check`／`docs-only-gate` 四項級聯**全部轉綠** ✓（#2166 因此解鎖並合併 ✓）；pre-push Gate 1b 不再誤擋 ✓
+  ⇒ 診斷更正與否證證據見本條「★ 診斷更正」節 ✓（原記「本機資料相依」不成立 ✗ ⇒ 真因＝**日期相依** ✓）
 - **來源**：`FU-20260930-06`（讓 `auto_calibrate` 真的跑）的 PR 被 pre-push 擋下時定位；由 B lane 實查
 - **現象（原文）**：`make ci-full` 在**本 PR 未觸及**的 2 個 package 紅：
   ```
