@@ -189,6 +189,13 @@ make imac-watchdog-install   # 備份主機現有版本 → scp 正本 → bash 
 2. **start-if-down**：容器不是 `running` 才 `docker start`（不 create，避免與 compose 打架），
    啟動後 5 秒再確認；crash loop 會記 WARN 而不無限重啟。
 3. 所有動作寫入 `~/Library/Logs/atlas-watchdog.log`。
+4. **計畫性部署 vs 異常重啟的分類**（2026-09-30 起；[`FU-20260930-10`](FOLLOWUPS.md)）：此前**每次部署**都會發一則 `RESTART-DETECT` warning（計畫性與異常長得一樣）。現以**兩條獨立證據**分類，**任一成立即視為計畫性**：
+   ① **映像變更**：本輪 `docker inspect {{.Image}}` 的短 ID ≠ ledger 上一筆同容器行的 `image=`；
+   ② **部署窗口標記**：`/tmp/atlas-deploy-window`（可用 `A2A_DEPLOY_MARKER` 覆寫）存在 ⇒ 窗內重啟＝計畫性。
+   - 結果：計畫性 ⇒ **`RESTART-EXPECTED`**（INFO；**仍寫 ledger** ✓；通知橋**預設不**通知它）；**同映像且窗口外** ⇒ **`RESTART-DETECT`**（warning ✓ ⇒ 崩潰迴圈不靜音）。
+   - ⚠️ **部署方義務（強制）**：窗口開始 `touch /tmp/atlas-deploy-window`、**結束（含失敗路徑）`rm -f`**。
+     **殘留的 MARKER 會讓窗內所有重啟（含崩潰迴圈）都被歸為 planned ✗** ⇒ 必清除。（本腳本對 MARKER **只讀**，不建立、不刪除 ✓）
+   - ⚠️ **換版後第一筆事件可能仍是 warning**（ledger 舊行沒有 `image=` ⇒ 映像視為**未知** ⇒ 未知**不**算變更 ⇒ 維持 warning）⇒ 屬**刻意設計**，不是漏改。
 
 **注意**：本腳本**只**啟動已存在的容器，不負責部署。**現行部署入口 = `make rebuild-all`**（Mac Mini，見下方 §Mac Mini production 部署；2026-09-23 由 issue #1898 修好並實走驗證）。
 歷史：`make rebuild-all` 曾在 **iMac** 被 dev-compose guard 擋下（guard 只在本機 hostname=KiMac 時觸發；iMac 已於 2026-09-22 退役），當時需手打 docker 指令。詳見 `docs/operations/pr-lifecycle.md` §5。
