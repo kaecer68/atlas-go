@@ -188,6 +188,8 @@ if [ "$HOST_ONLY" -eq 0 ]; then
         "atlas-atlas image → /app/atlas-mcp" "$FRESHNESS_TMPDIR/.atlas-mcp-freshness-check-$$"
     check_image_binary "atlas-atlas:latest" /app/daily-replay-sync \
         "atlas-atlas image → /app/daily-replay-sync" "$FRESHNESS_TMPDIR/.daily-replay-sync-freshness-check-$$"
+    check_image_binary "atlas-atlas:latest" /app/calibrate-parameters \
+        "atlas-atlas image → /app/calibrate-parameters" "$FRESHNESS_TMPDIR/.calibrate-parameters-freshness-check-$$"
     check_image_binary "atlas-atlas:latest" /app/calibrate-seasonal \
         "atlas-atlas image → /app/calibrate-seasonal" "$FRESHNESS_TMPDIR/.calibrate-seasonal-freshness-check-$$"
     check_image_binary "atlas-prism-worker:latest" /app/atlas-go \

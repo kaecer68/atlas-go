@@ -766,14 +766,15 @@ rebuild-host-bin:
 	@echo "  building host bin/atlas-mcp (commit=$(GIT_COMMIT))"
 	@$(HOST_GO) build -mod=mod -ldflags="$(LDFLAGS_BF)" -o bin/atlas-mcp ./cmd/atlas-mcp
 
-# Rebuild the 4 atlas-atlas binaries on host (for sandbox use with Dockerfile.atlas.local).
-# .build-atlas/ is gitignored. atlas-go/atlas-mcp/daily-replay-sync/calibrate-seasonal.
+# Rebuild the 5 atlas-atlas binaries on host (for sandbox use with Dockerfile.atlas.local).
+# .build-atlas/ is gitignored. atlas-go/atlas-mcp/daily-replay-sync/calibrate-parameters/calibrate-seasonal.
 .build-atlas: ; @mkdir -p $@
 rebuild-atlas-bins: | .build-atlas
-	@echo "  building 4 atlas-atlas binaries on host"
+	@echo "  building 5 atlas-atlas binaries on host"
 	@$(GOENV_LINUX) $(HOST_GO) build -mod=mod -ldflags="$(LDFLAGS_BF)" -o .build-atlas/atlas-go ./cmd/atlas
 	@$(GOENV_LINUX) $(HOST_GO) build -mod=mod -ldflags="$(LDFLAGS_BF)" -o .build-atlas/atlas-mcp ./cmd/atlas-mcp
 	@$(GOENV_LINUX) $(HOST_GO) build -mod=mod -ldflags="$(LDFLAGS_BF)" -o .build-atlas/daily-replay-sync ./cmd/daily-replay-sync
+	@$(GOENV_LINUX) $(HOST_GO) build -mod=mod -ldflags="$(LDFLAGS_BF)" -o .build-atlas/calibrate-parameters ./cmd/calibrate-parameters
 	@$(GOENV_LINUX) $(HOST_GO) build -mod=mod -ldflags="$(LDFLAGS_BF)" -o .build-atlas/calibrate-seasonal ./cmd/calibrate-seasonal
 
 # Rebuild atlas-atlas image from host-built binaries + restart container.

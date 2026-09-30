@@ -12,6 +12,7 @@ WORKDIR /app
 COPY .build-atlas/atlas-go /app/
 COPY .build-atlas/daily-replay-sync /app/
 COPY .build-atlas/atlas-mcp /app/
+COPY .build-atlas/calibrate-parameters /app/
 COPY .build-atlas/calibrate-seasonal /app/
 
 COPY configs /app/configs
