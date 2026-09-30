@@ -2209,9 +2209,17 @@ PY
 
 ### FU-20260929-13 — `#2151`：replay／extended 價格序列未做**公司行為調整**（**值語意 ⇒ 窗後**）
 
-- **狀態**：`open`
+- **狀態**：`done`
 - **記錄日期**：2026-09-29
-- **來源**：issue **`#2151`**（OPEN）
+- **完成於**：2026-09-30 `401138df`（PR [#2161](https://github.com/kaecer68/atlas-go/pull/2161) squash；來源 issue **#2151 已 CLOSED（COMPLETED）**）
+  — 修法（**業主 2026-09-30 授權提前變更**，以 #2161 上線日為分界）：
+  ①新增 `internal/marketdata/official_series_actions.go`：由**官方還原序列**（FinMind `TaiwanStockPriceAdj`）推導 `domain.CorporateAction`
+  ②`internal/orchestrator/composition.go` 的 `loadHistoricalPrices(replayCSVPath, jsonlPath)` seam 固定「確保 JSONL（CSV→JSONL）⇒ 載入 ⇒ 套用調整」
+  ③`internal/portfolio/historical_prices.go` 修正**股票股利係數公式**（`(10−S)/10` 為負 ⇒ 改 `10/(10+S)`，以官方指紋釘住：`6669` 官方/原始 `2614.997/7800=0.33526` vs `10/(10+19.827946)=0.33528`）
+  ⇒ 驗收：3 檔（`6669`／`0050`／`0052`）假斷崖消除（max 單日 ≤10%）、`ret20` 與官方一致、無事件符號**逐位元不變**、mutation 紅；**回滾兩條**（移除資料目錄＝no-op＋一行 log／`git revert`）
+- **部署驗收（窗口）**：log 必須出現 `official price adjustments applied` 且 `symbols_adjusted > 0`（若見 `official adjusted prices unavailable…` ⇒ 未命中推導路徑 ⇒ 等於沒修）
+- **同機制的第二表現（本次量測發現）**：收集器端 `screened_items` 對 `6669.TW` 的 `factor_scores` 為退化值（`momentum=-1, quality=-1, liquidity=0`）⇒ `ai-desk-01`／`growth-momentum-01` 因此被 `momentum_20d.min=-0.5` 與 `factor_quality_gate` 擋下。
+  ⇒ **部署後複驗**：`6669.TW` 的 `momentum ≠ −1`（且 quality／liquidity 不再同時退化）；若拒絕仍在，**必須報出殘留的 `criterion`／`threshold`／`actual_value`**，不得直接判「#2151 未生效」（該符號仍可能過不了其他閘）
 - **現況**：replay/extended 的價格序列未做公司行為（分割／減資）調整 ⇒ **索引式** `ret20`／`volatility`
   對分割符號產生**假跌**（實證：3/44 檔）。
 - **影響**：任何以「索引」抓取該序列的因子在分割日附近會看到不存在的崩跌 ⇒ 汙染特徵與回測結論。
@@ -2223,7 +2231,12 @@ PY
 
 ### FU-20260929-14 — `ExpandUniverse(constants.ReplayCSVPath, nil)` 把整組 CSV 符號注入**每個自帶 universe 的 agent** ⇒ 產生與 agent 判斷無關的 `no_quote` 基線（**計數可即辦／值語意 ⇒ 窗後**）
 
-- **狀態**：`open`
+- **狀態**：`done`（**計數半邊**；值語意半邊改由 `FU-20260930-05` 承接）
+- **完成於（計數半邊）**：2026-09-30 `76ad565c`（PR [#2163](https://github.com/kaecer68/atlas-go/pull/2163) squash，「零行為變更」）
+  — 根因：`ExpandUniverse` 回傳的是 `loadSymbolsFromCSV` 的**裸 code**，而報價 map 的鍵是 `<code>.TW` ⇒ **注入的 44 檔 ETF 永遠對不上報價** ⇒ 每 agent 恰好 44 的 `no_quote` 基線（第三證據：唯一未被注入的 `stockpicker-winrate-01` `no_quote=0`）。
+  — 修法：注入仍保留（意圖不變 ✓），但只把**有報價者**加入掃描清單；靜默 no-op 改成**每場一行** `injected_symbols_unquoted` WARN（具名 `likely_cause`）。
+  — 實測：`skips_total` 1027 → 預期 ~**146**（1027 ＝ 881 注入 ＋ 137 `factor_quality_gate` ＋ 9 `executor_declined`）；`injected_no_quote` 成為**不變量（gate on 時結構上必 0）**。
+  — 證明方式：包住 `PluginRegistry.screener` 記錄 `ScreenDetailed` 呼叫序列，**gate on／off 逐位元相同**（＋反空洞斷言）；gate off 案例保留**修前 2/2** 作 before 對照。
 - **記錄日期**：2026-09-29
 - **來源**：T2 讀數的**獨立複核**（lane A）＋ B lane 的 trace 產物（`t2-reading-20260929T205104Z.txt`）
 - **機制（file:line）**：
@@ -2328,8 +2341,34 @@ PY
 
 ---
 
+### FU-20260930-05 — `stockpicker-winrate-01` 的 `volume_intraday` 門檻按**股票**校準、母體是 **ETF**（4 檔被擋；**預期交付效果為 0** ⇒ 產品決定）
+
+- **狀態**：`open`（**產品決定**，非缺陷修復）
+- **記錄日期**：2026-09-30
+- **來源**：`FU-20260929-10`（criteria 校準）的量測結論；量測由 B lane 以生產 API ＋ trace 對照完成
+- **現況**：`configs/agents.json` 的 `stockpicker-winrate-01`：`volume_intraday.min = 1,000,000`，
+  而它的 universe 為空 ⇒ 走 `DefaultSymbols()`（**ETF 母體**）。實測被 screening 擋下的 **4 檔 ETF**：
+  `0051.TW`／`0053.TW`／`006208.TW`／`00692.TW`（36 rows ÷ 每場 10 pass ⇒ distinct 4 檔），
+  實際量能 **45,452–978,191（中位 164,985 ⇒ 門檻的 0.045–0.98×）**。
+- **★ 為何不改（量化理由）**：用**收集器同一個品質閘判準**（`momentum/value/quality/liquidity` 平均 ≥ 0.40）
+  對這 36 rows 的 `factor_scores` 重算 ⇒ **0/36 過得了**（min 0.127／中位 0.146／max 0.188）
+  ⇒ 把 `volume_intraday` 降到 ETF 可及，只會**換一個閘被擋**（screening → `factor_quality_gate`）
+  ⇒ **有值變更、零交付效果** ⇒ 依「預期交付效果為 0 的值變更不得做」**不做** ✓
+- **三條候選路（皆為值變更 ⇒ 需業主決定）**：
+  ① 改判**成交金額**（不受股數／ETF 面額影響）② 對 ETF **豁免**股數門檻 ③ 降到 ETF 可及值（依賴 ETF 規模分布，脆弱）
+- **為何不在此動 `configs/agents.json`**：JSON 無法寫註解 ⇒ 為了一句說明而動設定會變成「設定即文件」
+  ⇒ 以本 FU 記載取代 ✓（若日後選 ①／③，才連同 `configs/agents.json` 一起改）
+- **一併結案（同批量測）**：`leo-satellite-desk-01` 在該場 **0 個 screening 拒絕** ⇒ 該半邊
+  **非準則問題**（其 5 檔是被 `factor_quality_gate` 擋，屬輸入值語意 ⇒ `FU-20260929-13` 家族）✓
+- **量測註記（防後人誤讀）**：`GET /api/dashboard/recommendation-pipeline` 的 `screened_items` 對同一
+  `(agent, symbol)` **每場約記 10 次**（收集器 ~10 pass）⇒ 任何「按 row 數」的結論都會 **×10**
+  ⇒ 一律使用 **distinct symbol** ✓
+
+---
+
 > **來源注記（2026-09-30 第五批）**：`FU-20260930-01`／`-02` 來自 `#2160`（I22-overheat）實作與審查；
-> `-03`／`-04` 來自 `#2151`（公司行為調整）與 `#2095`（注入符號）兩線的交叉調查。
+> `-03`／`-04` 來自 `#2151`（公司行為調整）與 `#2095`（注入符號）兩線的交叉調查；
+> `-05` 來自 `FU-20260929-10`（criteria 校準）的量測結論（同一批的 `stockpicker` ETF 母體與 `leo` 半邊結案）。
 > 數字皆由**原始欄位重算**（`quotes` 列數、`macro` 檔數與最早日期），機制皆附 `file:line`。
 
 > **來源注記（2026-09-30 第四批／T2 更正）**：`FU-20260929-14` 與 `-11`／`-12` 的更正，來自
