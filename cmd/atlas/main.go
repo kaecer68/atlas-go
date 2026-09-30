@@ -1688,15 +1688,18 @@ func run(args []string, deps appDeps) error {
 			scheduler.RegisterStockpickerUpdateSchedule(taskMgr, scheduler.StockpickerUpdateDeps{
 				// Backend stays on env/config resolution (prod →
 				// ATLAS_STORE_BACKEND=postgres): quotes read from the
-				// postgres SSoT; outcomes are always written to the
-				// job-local SQLite artifact (openOutcomeDB ignores Backend).
+				// postgres SSoT; outcomes land in the job-local SQLite
+				// artifact AND are mirrored into PG when DualWrite is set
+				// (SSOT→PG batch B, default on; ATLAS_STOCKPICKER_DUAL_WRITE
+				// is the kill switch).
 				// ExpectDB satisfies the M12 migration-target guard on the
 				// postgres path — set ATLAS_STOCKPICKER_EXPECT_DB=atlas in
 				// prod (container env) so the daily tick does not fail
 				// loudly on every run (prod task_failed observed
 				// 2026-08-28 after Phase 4 deploy).
-				ExpectDB: cfg.StockpickerExpectDB,
-				WorkDir:  cfg.WorkDir,
+				ExpectDB:  cfg.StockpickerExpectDB,
+				DualWrite: cfg.StockpickerDualWrite,
+				WorkDir:   cfg.WorkDir,
 				// Regime tagging (issue #1863): regime_history lives in the
 				// backend-aware historical store (Postgres on prod), NOT the
 				// job-local SQLite — wire it explicitly. Latest captured_at

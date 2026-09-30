@@ -7,9 +7,11 @@
 // aggregate per (symbol, source) into stock_win_rate and
 // data/state/stock_win_rate.json.
 //
-// Outcomes always land in the job-local SQLite artifact
-// (data/state/atlas.db), never in the postgres target; quotes are
-// backend-aware (sqlite | postgres) via the shared ledger resolver (WP4).
+// Outcomes land in the job-local SQLite artifact (data/state/atlas.db) and,
+// since SSOT→PG batch B (2026-09-30), are mirrored into PostgreSQL when
+// DualWrite is set on the postgres backend (or an explicit PGOutcomesDB is
+// injected); either side failing fails the run, never a silent skip. Quotes
+// are backend-aware (sqlite | postgres) via the shared ledger resolver (WP4).
 // The postgres path requires ExpectDB (M12 target guard) and fails loudly
 // otherwise (B1).
 package stockpicker
@@ -24,6 +26,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/jackc/pgx/v5/stdlib"
 
 	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/db"
@@ -76,6 +79,18 @@ type RunDailyOptions struct {
 	Start       time.Time   // first trigger date (zero → AsOf-120d)
 	End         time.Time   // last trigger date (zero → AsOf)
 	Panel       PanelSource // nil → real panel built from WorkDir
+	// DualWrite mirrors the outcome + win-rate rows into PostgreSQL
+	// (SSOT→PG batch B, 2026-09-30: PG is the adjudicated SSOT). Effective
+	// only when Backend resolves to postgres; the destination handle is
+	// derived from the shared pool opened for the quote store
+	// (stdlib.OpenDBFromPool). Kill switch: set false to roll back to
+	// SQLite-only writes. Ignored when PGOutcomesDB is injected.
+	DualWrite bool
+	// PGOutcomesDB is an explicit dual-write destination — a *sql.DB over
+	// PostgreSQL (e.g. stdlib.OpenDBFromPool(pool)). When non-nil it wins
+	// over DualWrite/Backend resolution (explicit caller intent; used by
+	// tests and out-of-process wiring).
+	PGOutcomesDB *sql.DB
 	// Regimes maps trigger date → market regime for outcome tagging
 	// (issue #1863). nil → RunDailyUpdate falls back to the job-local
 	// SQLite regime_history table (dev/CLI); production wires the
@@ -206,14 +221,44 @@ func RunDailyUpdate(ctx context.Context, opts RunDailyOptions) (RunDailyResult, 
 	}
 
 	panel := opts.Panel
-	if panel == nil {
-		quoteStore, err := openQuoteStore(ctx, backend, opts.WorkDir)
-		if err != nil {
-			return res, err
+	// pgOutcomesDB is the dual-write destination (nil = SQLite-only, the
+	// pre-batch-B behavior). Resolution order: injected handle wins; else,
+	// when the postgres backend runs a real panel build, derive the handle
+	// from the same pool as the quote store.
+	var pgOutcomesDB *sql.DB
+	switch {
+	case opts.PGOutcomesDB != nil:
+		pgOutcomesDB = opts.PGOutcomesDB
+	case backend == "postgres" && opts.DualWrite && !opts.DryRun:
+		// Panel must be built here to share the pool; an injected panel
+		// without an injected handle cannot dual-write.
+		if panel != nil {
+			return res, fmt.Errorf("dual-write requested (backend=postgres) but panel was injected without PGOutcomesDB; pass PGOutcomesDB explicitly")
 		}
-		panel, err = NewRealPanel(ctx, quoteStore, opts.WorkDir)
-		if err != nil {
-			return res, fmt.Errorf("build panel: %w", err)
+	}
+	if panel == nil {
+		if backend == "postgres" {
+			pool, err := openPostgres(ctx)
+			if err != nil {
+				return res, err
+			}
+			if opts.DualWrite && !opts.DryRun {
+				pgOutcomesDB = stdlib.OpenDBFromPool(pool)
+				defer func() { _ = pgOutcomesDB.Close() }()
+			}
+			panel, err = NewRealPanel(ctx, ledger.NewPostgresQuoteStore(pool), opts.WorkDir)
+			if err != nil {
+				return res, fmt.Errorf("build panel: %w", err)
+			}
+		} else {
+			quoteStore, err := openSQLiteQuoteStore(opts.WorkDir)
+			if err != nil {
+				return res, err
+			}
+			panel, err = NewRealPanel(ctx, quoteStore, opts.WorkDir)
+			if err != nil {
+				return res, fmt.Errorf("build panel: %w", err)
+			}
 		}
 	}
 	symbols := PanelSymbols(panel, opts.Universe)
@@ -256,10 +301,26 @@ func RunDailyUpdate(ctx context.Context, opts RunDailyOptions) (RunDailyResult, 
 	if err := outStore.RecordOutcomes(ctx, outcomes); err != nil {
 		return res, fmt.Errorf("record outcomes: %w", err)
 	}
+	// Dual-write (SSOT→PG batch B): mirror the just-committed SQLite batch
+	// into PG. A PG failure fails the whole run — the scheduler records the
+	// failure and retries on the next tick; ON CONFLICT DO NOTHING makes the
+	// retry idempotent, and the SQLite artifact is never silently skipped.
+	if pgOutcomesDB != nil {
+		if err := RecordOutcomes(ctx, pgOutcomesDB, outcomes); err != nil {
+			return res, fmt.Errorf("record outcomes (postgres): %w", err)
+		}
+	}
 
 	summaries, err := AggregateFromStore(ctx, outStore, winStore, aggregationWindow, costRate, minSamples, confidenceLevel, opts.AsOf)
 	if err != nil {
 		return res, fmt.Errorf("aggregate: %w", err)
+	}
+	if pgOutcomesDB != nil {
+		for _, summary := range summaries {
+			if err := SaveWinRate(ctx, pgOutcomesDB, summary); err != nil {
+				return res, fmt.Errorf("save win rate (postgres) %s/%s: %w", summary.Symbol, summary.Source, err)
+			}
+		}
 	}
 	statePath := filepath.Join(opts.WorkDir, "data", "state", "stock_win_rate.json")
 	if err := WriteStateJSON(statePath, summaries, opts.AsOf); err != nil {
@@ -336,8 +397,8 @@ func conditionIDs(conds []Condition) []string {
 
 // openOutcomeDB opens the job-local SQLite ledger holding backtest outcomes
 // and win-rate rows. Outcomes are a job-local SQLite artifact
-// (data/state/atlas.db), never written to the postgres target: quotes are
-// backend-aware, outcomes stay local (M4③).
+// (data/state/atlas.db); since batch B they are additionally mirrored into PG
+// when dual-write is active (see RunDailyOptions.DualWrite).
 func openOutcomeDB(workDir string) (*sql.DB, error) {
 	dbPath := filepath.Join(workDir, "data", "state", "atlas.db")
 	if err := os.MkdirAll(filepath.Dir(dbPath), 0o755); err != nil {
@@ -356,18 +417,21 @@ func openOutcomeDB(workDir string) (*sql.DB, error) {
 	return db, nil
 }
 
-// openQuoteStore builds a QuoteStore for the requested backend.
-func openQuoteStore(ctx context.Context, backend, workDir string) (ledger.QuoteStore, error) {
-	switch backend {
-	case "postgres":
-		return openPostgresQuoteStore(ctx)
-	case "sqlite":
-		return openSQLiteQuoteStore(workDir)
-	default:
-		// jsonl resolves through the shared resolver but is not a backend the
-		// daily update can serve — fail loudly instead of silently switching.
-		return nil, fmt.Errorf("unknown backend %q (quotes support sqlite | postgres)", backend)
+// openPostgres connects to the migration target, applies pending migrations,
+// and injects the pool into the ledger factory (WP4 quote-store convention).
+// Callers derive whatever handles they need from the returned pool (quote
+// store, and — batch B — stdlib.OpenDBFromPool for outcome dual-write).
+func openPostgres(ctx context.Context) (*pgxpool.Pool, error) {
+	dsn := os.Getenv("DATABASE_URL")
+	if dsn == "" {
+		return nil, fmt.Errorf("postgres backend requires DATABASE_URL")
 	}
+	pool, err := db.Init(ctx, dsn, defaultPostgresMigrations)
+	if err != nil {
+		return nil, fmt.Errorf("open postgres: %w", err)
+	}
+	ledger.SetPostgresPool(pool)
+	return pool, nil
 }
 
 func openSQLiteQuoteStore(workDir string) (ledger.QuoteStore, error) {
@@ -384,19 +448,6 @@ func openSQLiteQuoteStore(workDir string) (ledger.QuoteStore, error) {
 		return nil, fmt.Errorf("init schema: %w", err)
 	}
 	return ledger.NewSQLiteQuoteStore(db), nil
-}
-
-func openPostgresQuoteStore(ctx context.Context) (ledger.QuoteStore, error) {
-	dsn := os.Getenv("DATABASE_URL")
-	if dsn == "" {
-		return nil, fmt.Errorf("postgres backend requires DATABASE_URL")
-	}
-	pool, err := db.Init(ctx, dsn, defaultPostgresMigrations)
-	if err != nil {
-		return nil, fmt.Errorf("open postgres: %w", err)
-	}
-	ledger.SetPostgresPool(pool)
-	return ledger.NewPostgresQuoteStore(pool), nil
 }
 
 // guardDatabaseTarget reports the postgres connection target (M12) and, when

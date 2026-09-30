@@ -30,6 +30,7 @@ type Config struct {
 	LedgerDir                  string
 	StoreBackend               string // "jsonl" (default), "sqlite", or "postgres" — ATLAS_STORE_BACKEND
 	StockpickerExpectDB        string // postgres migration-target guard for the daily-update scheduler (M12) — ATLAS_STOCKPICKER_EXPECT_DB
+	StockpickerDualWrite       bool   // mirror stockpicker outcomes/win-rates into PG on the postgres backend (SSOT→PG batch B; kill switch) — ATLAS_STOCKPICKER_DUAL_WRITE, default true
 	SQLitePath                 string // path to SQLite database file — ATLAS_SQLITE_PATH
 	ReplayDataPath             string
 	ReplaySessionDate          string
@@ -113,6 +114,7 @@ func Load() Config {
 		LedgerDir:                  envOr("ATLAS_LEDGER_DIR", "data/state"),
 		StoreBackend:               envOr("ATLAS_STORE_BACKEND", "jsonl"),
 		StockpickerExpectDB:        envOr("ATLAS_STOCKPICKER_EXPECT_DB", ""),
+		StockpickerDualWrite:       envBoolDefaultTrue("ATLAS_STOCKPICKER_DUAL_WRITE"),
 		SQLitePath:                 envOr("ATLAS_SQLITE_PATH", "data/state/atlas.db"),
 		ReplayDataPath:             envOr("ATLAS_REPLAY_DATA_PATH", "samples/replay/twse_stock_day_all_sample.csv"),
 		ReplaySessionDate:          envOr("ATLAS_REPLAY_SESSION_DATE", ""),
@@ -269,6 +271,14 @@ func envOrBool(key string, fallback bool) bool {
 	default:
 		return fallback
 	}
+}
+
+// envBoolDefaultTrue parses an opt-out boolean knob: unset defaults to true
+// (the feature ships ON), explicit false/0/no/off disables it. Unparseable
+// values default to true — a typo must not silently disable a data
+// safeguard; operators see the resolved value in config dumps.
+func envBoolDefaultTrue(key string) bool {
+	return envOrBool(key, true)
 }
 
 func envOrIntCSV(key string, fallback []int) []int {

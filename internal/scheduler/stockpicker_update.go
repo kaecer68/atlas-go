@@ -52,6 +52,7 @@ type StockpickerUpdateDeps struct {
 	TimeZone   *time.Location                                                                                  // nil → Asia/Taipei (fallback UTC+8)
 	Backend    string                                                                                          // "" → ATLAS_STORE_BACKEND env → job-local sqlite
 	ExpectDB   string                                                                                          // postgres migration-target guard (M12); "" default
+	DualWrite  bool                                                                                            // mirror outcomes/win-rates into PG on the postgres backend (SSOT→PG batch B kill switch); false default
 	Universe   string                                                                                          // comma-separated symbols (default: all quote symbols)
 	Conditions string                                                                                          // comma-separated condition IDs (default: parameters.json defaults)
 	DryRun     bool                                                                                            // compute coverage without persisting (observability/debug)
@@ -129,6 +130,7 @@ func StockpickerUpdateTaskFunc(deps StockpickerUpdateDeps) func(context.Context)
 			WorkDir:     deps.WorkDir,
 			Backend:     deps.Backend,
 			ExpectDB:    deps.ExpectDB,
+			DualWrite:   deps.DualWrite,
 			Idempotency: stockpicker.IdempotencyDay,
 			DryRun:      deps.DryRun,
 			Universe:    deps.Universe,
