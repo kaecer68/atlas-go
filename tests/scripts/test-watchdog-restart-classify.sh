@@ -221,17 +221,17 @@ CASE_LINE=""
 expect_kind() {  # expect_kind <label> <line> <期望 kind>
   local got
   got="$(kind_of "$2")"
-  if [ "$got" = "$3" ]; then ok; else fail "$1: kind=$got（期望 $3）；行：$2"; fi
+  if [ "$got" = "$3" ]; then ok; else fail "$1: kind=$got （期望 $3）；行：$2"; fi
 }
 expect_field() {  # expect_field <label> <line> <key> <期望值>
   local got
   got="$(field_of "$2" "$3")"
-  if [ "$got" = "$4" ]; then ok; else fail "$1: $3=$got（期望 $4）；行：$2"; fi
+  if [ "$got" = "$4" ]; then ok; else fail "$1: $3=$got （期望 $4）；行：$2"; fi
 }
-expect_no_line() {  # expect_no_line <label> <ledger> <container>
+expect_lines() {  # expect_lines <label> <ledger> <container> <期望行數>
   local n
   n="$(lines_of "$2" "$3")"
-  if [ "$n" = "0" ]; then ok; else fail "$1: 不該有 $3 的行，卻有 $n 行"; fi
+  if [ "$n" = "$4" ]; then ok; else fail "$1: $3 的行數=$n （期望 $4）"; fi
 }
 show_event() { echo "      產生的 ledger 行： $1"; }
 
@@ -305,6 +305,7 @@ case_7_no_event() {  # state 與現值相同 ⇒ 一行都不寫（即使 ledger
   base_containers "$d" "$(hex64 "$IMG_NEW" b)" "$INFO_A_NEW"
   set_state "$d" "$NAME_GO" "$INFO_A_NEW"
   ledger_prev_line RESTART-DETECT "$NAME_GO" "$IMG_OLD" >> "$(ledger "$d")"
+  # fixture 先種了 1 筆舊行 ⇒ 正確行為是「行數不變（仍是 1）」
   run_watchdog "$d"
 }
 
@@ -322,7 +323,8 @@ consumer_scan() {  # consumer_scan <file> <kind-ERE> → 每行印 "kind<TAB>nam
 }
 
 case_8_consumer_parse() {
-  local d="$TMP/consumer-parse" led="$d/ledger" planned_line warn_line
+  local d="$TMP/consumer-parse"
+  local led="$d/ledger" planned_line warn_line
   local WLN_RESTART_PATTERN_DEFAULT='RESTART-DETECT'    # 通知橋的預設值（照抄）
   local WLN_PATTERNS_DEFAULT='WATCH|OK|ERROR|WARN'      # 通知橋對**主** ledger 的預設值
   mkdir -p "$d"
@@ -385,8 +387,8 @@ MUT_IMAGE_NEW='        elif [ "$cur_image" = "$prev_image" ]; then'
 MUT_MARKER_OLD='        if [ "$marker" = 1 ]; then'
 MUT_MARKER_NEW='        if [ 1 = 0 ]; then'
 
-check_mutation() {  # check_mutation <label> <case 函式名> <舊行> <新行> <baseline kind> <mutated kind>
-  local label="$1" fn="$2" old="$3" new="$4" want_base="$5" want_mut="$6"
+check_mutation() {  # check_mutation <label> <case 函式名> <baseline case 目錄名> <舊行> <新行> <baseline kind> <mutated kind>
+  local label="$1" fn="$2" base_case="$3" old="$4" new="$5" want_base="$6" want_mut="$7"
   local mdir="$TMP/mut-$label" mcopy="$TMP/mut-$label-script"
   cp "$SRC" "$mcopy"
   if ! mutate_line "$mcopy" "$old" "$new"; then
@@ -395,14 +397,14 @@ check_mutation() {  # check_mutation <label> <case 函式名> <舊行> <新行> 
   fi
   # ① baseline（用已跑過的 case 的輸出；呼叫端保證該 case 先跑過）
   local base_line
-  base_line="$(last_line_of "$(ledger "$TMP/$fn")" "$NAME_GO")"
+  base_line="$(last_line_of "$(ledger "$TMP/$base_case")" "$NAME_GO")"
   if [ "$(kind_of "$base_line")" != "$want_base" ]; then
-    fail "mutation/$label: baseline kind=$(kind_of "$base_line")（期望 $want_base）⇒ fixture 沒隔離這一層"
+    fail "mutation/$label: baseline kind=$(kind_of "$base_line") （期望 $want_base ）⇒ fixture 沒隔離這一層"
     return
   fi
   # ② 用受變異的副本重跑同一個 case
   SCRIPT_UNDER_TEST="$mcopy"
-  "case_$fn" "$mdir" || { SCRIPT_UNDER_TEST="$SRC"; return; }
+  "$fn" "$mdir" || { SCRIPT_UNDER_TEST="$SRC"; return; }
   SCRIPT_UNDER_TEST="$SRC"
   local mut_line
   mut_line="$(last_line_of "$(ledger "$mdir")" "$NAME_GO")"
@@ -410,7 +412,7 @@ check_mutation() {  # check_mutation <label> <case 函式名> <舊行> <新行> 
     echo "      mutation/${label}: $(kind_of "$base_line") -> $(kind_of "$mut_line")（咬住了）"
     ok
   else
-    fail "mutation/$label: 改壞判定式後 kind=$(kind_of "$mut_line")（期望 $want_mut）⇒ mutation 沒被咬住"
+    fail "mutation/$label: 改壞判定式後 kind=$(kind_of "$mut_line") （期望 $want_mut ）⇒ mutation 沒被咬住"
   fi
 }
 
@@ -421,15 +423,14 @@ containers_line="$(grep -m1 '^CONTAINERS=' "$SRC")"
 if [ "$containers_line" = "CONTAINERS=\"$CONTAINERS\"" ]; then
   ok
 else
-  fail "受測腳本的 CONTAINERS= 與本測試的 fixture 不一致（$containers_line）"
+  fail "受測腳本的 CONTAINERS= 與本測試的 fixture 不一致 （$containers_line ）"
 fi
 
 # 1. 換映像 ⇒ INFO ＋ 仍寫 ledger
 echo "  case 1 image-change（換映像 ⇒ RESTART-EXPECTED）"
 case_1_image_change "$TMP/image-change"
-C1_BEFORE=1     # fixture 先寫了 1 筆舊行
+C1_BEFORE=1     # fixture 先寫了 1 筆舊行（下面的「仍寫 ledger」斷言以它為基數）
 C1_LINE="$(last_line_of "$(ledger "$TMP/image-change")" "$NAME_GO")"
-check_event_kind() { :; }   # （保留給未來擴充；本檔用下面的顯式斷言）
 expect_kind  "case1" "$C1_LINE" RESTART-EXPECTED
 expect_field "case1" "$C1_LINE" why image-change
 expect_field "case1" "$C1_LINE" image "$IMG_NEW"
@@ -497,16 +498,16 @@ show_event "$C6_LINE"
 # 7. 無狀態變化 ⇒ 一行都不寫
 echo "  case 7 no-event（state 與現值相同 ⇒ 不寫任何行）"
 case_7_no_event "$TMP/no-event"
-expect_no_line "case7" "$(ledger "$TMP/no-event")" "$NAME_GO"
+expect_lines "case7" "$(ledger "$TMP/no-event")" "$NAME_GO" 1
 
 # 8. 既有消費者的解析契約
 echo "  case 8 consumer-parse（通知橋的解析規則）"
 case_8_consumer_parse
 
 echo "  mutation 自證（改壞判定式 ⇒ 對應 case 必紅）"
-check_mutation image-compare-inverted image-change \
+check_mutation image-compare-inverted case_1_image_change image-change \
   "$MUT_IMAGE_OLD" "$MUT_IMAGE_NEW" RESTART-EXPECTED RESTART-DETECT
-check_mutation marker-ignored same-image-marker \
+check_mutation marker-ignored case_3_same_image_marker same-image-marker \
   "$MUT_MARKER_OLD" "$MUT_MARKER_NEW" RESTART-EXPECTED RESTART-DETECT
 
 # ── 唯讀斷言：受測腳本必須一字未改 ───────────────────────────────────────────
@@ -514,7 +515,7 @@ SRC_SHA_AFTER="$(sha256_of "$SRC")"
 if [ "$SRC_SHA_AFTER" = "$SRC_SHA_BEFORE" ]; then
   ok
 else
-  fail "受測腳本被本測試改動了（$SRC_SHA_BEFORE -> $SRC_SHA_AFTER）"
+  fail "受測腳本被本測試改動了 （$SRC_SHA_BEFORE -> $SRC_SHA_AFTER ）"
 fi
 
 echo ""
