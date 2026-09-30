@@ -2505,6 +2505,23 @@ PY
 
 ---
 
+### FU-20260930-10 — `atlas-watchdog` 的 `restart-detect` 對**計畫性部署**也發 warning ⇒ 每次部署都給業主一則 Telegram 警告
+
+- **狀態**：`open`
+- **記錄日期**：2026-09-30
+- **來源**：hermes QC 的每日檢查轉發（`[FIRING] watchdog.restart-detect`，13:34:04）；root 唯讀實查
+- **實測（kmacmini，2026-09-30）**：watchdog log 當日 **3 筆** RESTART-DETECT（`08:09:20`／`09:27:43`／`13:34:04`），
+  分別對應三次**授權部署**的容器重啟（`new=00:08:50Z`／`01:27:25Z`／**`05:33:46Z`** ✓）；每次 `n=1 since-notified=1`（**不重複騷擾** ✓）
+- **現況**：Prometheus `alerts total = 0` ✓（皆自行清除 ✓）；`atlas-go` **healthy** ✓、`RestartCount = 0` ✓、`/health` 200 ✓
+- **判讀**：**偵測正確** ✓（每次重啟都真實發生），但「**計畫性部署**」與「**異常重啟**」**無法區分** ⇒ 每次部署一則 warning ⇒ 對業主是**可預期噪音** ✗
+- **最小修法（三選一；皆不改偵測能力）**：
+  ① 部署腳本在窗口內建立 **maintenance 標記**（例 `/tmp/atlas-deploy-window`）⇒ watchdog 對窗內重啟標 `expected`／INFO（**仍記錄** ✓）
+  ② 或以**新 image ID／重啟原因**判定（映像變更＝計畫性 ✓；同映像重啟＝異常 ✓）
+  ③ 或至少把訊息降為 info 並註明「依部署窗口判定為預期」✓
+- **查法（可重現）**：`ssh kmacmini "tail -5 ~/Library/Logs/atlas-watchdog.log"` ＋ `curl -s localhost:9090/api/v1/alerts`
+
+---
+
 > **來源注記（2026-09-30 第五批）**：`FU-20260930-01`／`-02` 來自 `#2160`（I22-overheat）實作與審查；
 > `-03`／`-04` 來自 `#2151`（公司行為調整）與 `#2095`（注入符號）兩線的交叉調查；
 > `-05` 來自 `FU-20260929-10`（criteria 校準）的量測結論（同一批的 `stockpicker` ETF 母體與 `leo` 半邊結案）。
