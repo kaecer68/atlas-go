@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/kaecer68/atlas-go/internal/ledger"
 	"github.com/kaecer68/atlas-go/internal/stockpicker"
@@ -44,12 +45,26 @@ func seedWinRate(t *testing.T, db *sql.DB, summary stockpicker.StockWinRateSumma
 	if err := stockpicker.SaveWinRate(ctx, db, summary); err != nil {
 		t.Fatalf("seed SaveWinRate: %v", err)
 	}
+	early, late := winRateFixtureDates()
 	if err := stockpicker.RecordOutcomes(ctx, db, []stockpicker.SignalOutcome{
-		{Symbol: summary.Symbol, TriggerDate: "2026-06-01", Source: summary.Source, ForwardReturn: 0.01, Hit: true},
-		{Symbol: summary.Symbol, TriggerDate: "2026-08-20", Source: summary.Source, ForwardReturn: -0.02, Hit: false},
+		{Symbol: summary.Symbol, TriggerDate: early, Source: summary.Source, ForwardReturn: 0.01, Hit: true},
+		{Symbol: summary.Symbol, TriggerDate: late, Source: summary.Source, ForwardReturn: -0.02, Hit: false},
 	}); err != nil {
 		t.Fatalf("seed RecordOutcomes: %v", err)
 	}
+}
+
+// winRateFixtureDates returns the two trigger dates the seeded outcomes use,
+// expressed relative to the run date.
+//
+// Why relative: the aggregate only counts outcomes inside the request window,
+// so the previous hard-coded 2026-06-01 / 2026-08-20 dates silently aged out of
+// it (the test passed until 2026-09-29 and then reported observations=2,
+// hits=0). Anchoring the fixture to "now" keeps the same intent — two outcomes
+// per symbol, one hit and one miss — on every run date.
+func winRateFixtureDates() (string, string) {
+	now := time.Now()
+	return now.AddDate(0, 0, -60).Format("2006-01-02"), now.AddDate(0, 0, -30).Format("2006-01-02")
 }
 
 func sampleWinRateSummary(symbol, source, window string) stockpicker.StockWinRateSummary {
@@ -125,8 +140,9 @@ func TestHandleWinRate_HappyPath(t *testing.T) {
 	if cond.UpdatedAt != "2026-08-27T12:00:00Z" {
 		t.Errorf("updated_at = %q", cond.UpdatedAt)
 	}
-	if cond.DataStart != "2026-06-01" || cond.DataEnd != "2026-08-20" {
-		t.Errorf("data range = %s..%s, want 2026-06-01..2026-08-20", cond.DataStart, cond.DataEnd)
+	early, late := winRateFixtureDates()
+	if cond.DataStart != early || cond.DataEnd != late {
+		t.Errorf("data range = %s..%s, want %s..%s (seeded outcome range)", cond.DataStart, cond.DataEnd, early, late)
 	}
 }
 
@@ -362,8 +378,9 @@ func TestHandleConditionWinRate_HappyPath(t *testing.T) {
 	if out.ConditionID != "momentum-20d-positive" || out.Window != "120d" {
 		t.Errorf("identity fields: %+v", out)
 	}
-	if out.DataStart != "2026-06-01" || out.DataEnd != "2026-08-20" {
-		t.Errorf("date range %s~%s", out.DataStart, out.DataEnd)
+	early, late := winRateFixtureDates()
+	if out.DataStart != early || out.DataEnd != late {
+		t.Errorf("date range %s~%s, want %s~%s (seeded outcome range)", out.DataStart, out.DataEnd, early, late)
 	}
 }
 
