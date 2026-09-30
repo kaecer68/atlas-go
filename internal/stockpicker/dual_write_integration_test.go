@@ -365,3 +365,61 @@ func TestRunDailyUpdate_DualWrite_PGCountFailureIsDistinct(t *testing.T) {
 		t.Fatalf("error must name the postgres idempotency count, got: %v", err)
 	}
 }
+
+// TestRunDailyUpdate_KillSwitchOff_ZeroPGWrites is the pipeline-level P2
+// case: with the kill switch OFF on a declared postgres backend, a full run
+// must succeed SQLite-only and leave PG untouched (the T5 rollback
+// guarantee). The M12 guard runs for real (read-only) against the test
+// database; resolvePGDest takes the kill-switch branch and never opens a PG
+// pool, because the panel is injected and DualWrite is false.
+func TestRunDailyUpdate_KillSwitchOff_ZeroPGWrites(t *testing.T) {
+	pool := stockpickerPGTestDB(t)
+	cleanupDualWriteRows(t, pool)
+	ctx := context.Background()
+
+	var dbName string
+	if err := pool.QueryRow(ctx, "SELECT current_database()").Scan(&dbName); err != nil {
+		t.Fatalf("read current_database: %v", err)
+	}
+
+	workdir, res, err := runUpdate(t, RunDailyOptions{
+		Backend:     "postgres", // declared postgres backend...
+		ExpectDB:    dbName,     // ...with the real M12 guard (read-only)
+		DualWrite:   false,      // ...but the kill switch is OFF
+		Idempotency: IdempotencyNone,
+		Conditions:  dwCondition,
+		// Panel injected by runUpdate ⇒ no pool is ever opened.
+	})
+	if err != nil {
+		t.Fatalf("kill-switch-off run must succeed SQLite-only: %v", err)
+	}
+	if res.Outcomes == 0 {
+		t.Fatal("expected outcomes to be produced")
+	}
+
+	// SQLite side: the artifact received the rows (writes did happen).
+	sqliteDB := openTestOutcomeDB(t, workdir)
+	var sqliteN int
+	if err := sqliteDB.QueryRow(
+		"SELECT COUNT(*) FROM stock_signal_outcomes WHERE trigger_date >= ? AND trigger_date <= ?",
+		dwStart, dwEnd).Scan(&sqliteN); err != nil {
+		t.Fatalf("count sqlite outcomes: %v", err)
+	}
+	if sqliteN == 0 {
+		t.Fatal("sqlite artifact must hold the rows")
+	}
+
+	// PG side: zero rows — the kill switch is a rollback guarantee.
+	if n := pgOutcomeCount(t, pool); n != 0 {
+		t.Fatalf("kill switch off wrote %d pg outcome rows, want 0", n)
+	}
+	var pgWR int
+	if err := pool.QueryRow(ctx,
+		"SELECT COUNT(*) FROM stock_win_rate WHERE source = $1 AND symbol = '2330'", dwSource).Scan(&pgWR); err != nil {
+		t.Fatalf("count pg win_rate: %v", err)
+	}
+	if pgWR != 0 {
+		t.Fatalf("kill switch off wrote %d pg win_rate rows, want 0", pgWR)
+	}
+	_ = workdir
+}
