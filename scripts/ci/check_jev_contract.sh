@@ -3,7 +3,8 @@
 # check_jev_contract.sh — Jev 用量契約靜態檢查（CI 閘門）
 #
 # 規範：docs/jev/JEV-USAGE-CONTRACT.md
-# 實作：scripts/jev-contract-check.py（AST 靜態分析，不連網）
+# 實作：scripts/jev-contract-check.py（AST 靜態分析，**預設不連網** ✓；
+#       live 自測為 opt-in：`--with-selftest` 或 `JEV_CONTRACT_SELFTEST=1` ⇒ 才連外，且失敗即 blocking ✓）
 #
 # 本 repo 目前沒有任何 Jev（TypeSafe System One）用法 → 本檢查應 PASS（0 違規）。
 # 目的是「守門」：未來任何人新增呼叫 Jev 的程式碼，違反 C1–C5 就會在這裡被擋下。
