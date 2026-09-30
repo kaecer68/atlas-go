@@ -181,14 +181,19 @@ class StockLayerSpec(TaskSpec):
         if mode not in ("judge", "leakage"):
             raise ValueError(f"unknown mode {mode!r} (expected judge|leakage)")
         stage = str(cfg.get("stage") or "confirm").lower()
+        # 優先序必須是：**顯式 CLI 參數 > stage 預設 > self.defaults**。
+        #
+        # 修前 bug：先 `merged_args(args, defaults)` 會用 self.defaults 把 max_symbols/max_dates
+        # 填好，之後的 `cfg.setdefault(stage_defaults)` 因此**永不生效** ⇒ `stage=screen` 靜默
+        # 變成 confirm 形狀（實測 dates=40/symbols=39，意圖是 20×20 ✗）。
+        # 修法：以「呼叫者是否真的給了」為判準（key 存在且值非 None ⇒ 使用者給的），
+        # 沒給才讓 stage 預設**覆寫** self.defaults 帶進來的值。
         stage_defaults = STAGE_DEFAULTS.get(stage)
         if stage_defaults:
             for k, v in stage_defaults.items():
-                cfg.setdefault(k, v)
-        if str(cfg.get("max_symbols") or "") in ("", "0") and stage_defaults:
-            cfg["max_symbols"] = stage_defaults["max_symbols"]
-        if str(cfg.get("max_dates") or "") in ("", "0") and stage_defaults:
-            cfg["max_dates"] = stage_defaults["max_dates"]
+                user_gave = k in args and args[k] is not None
+                if not user_gave:
+                    cfg[k] = v
 
         rows = _read_jsonl(panel_path)
         if not rows:
