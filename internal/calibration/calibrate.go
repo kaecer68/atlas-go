@@ -9,6 +9,7 @@ import (
 
 	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/ledger"
+	"github.com/kaecer68/atlas-go/internal/logging"
 )
 
 // CalibrateModule dispatches to the requested calibrator(s).
@@ -429,7 +430,48 @@ func CalibrateDarwinian(ie *config.InferenceEngine, n int, cfg *config.Parameter
 
 		dailyRiskVol := agentVols[int(float64(len(agentVols))*0.75)] / math.Sqrt(252)
 		beforeRiskVol := cfg.Darwinian.RiskVolatilityThreshold.Value
-		if math.Abs(dailyRiskVol-beforeRiskVol) > 0.001 {
+
+		// Sane band for a DAILY volatility threshold (issue #2169).
+		//
+		// The consumer compares this against DarwinianAgentWeight.RollingVolatility,
+		// which is a daily standard deviation (portfolio/darwinian_weights.go), and
+		// the shipped default is 0.08 with the rationale "8% daily volatility is
+		// extreme" (config/defaults_portfolio.go). Every sibling value in this
+		// function is clamped (top/bottom quartile multipliers, volatility penalty
+		// multiplier, performance bonus); this one was not, so a scale error in the
+		// input series or a degenerate sample could write an arbitrary number —
+		// measured on 2026-06-13 the same method wrote an annualized-scale 1.355
+		// (18.6x the daily-scale value) and on 2026-09-30 it wrote 0.0729.
+		//
+		// The band is derived from the documented intent, not from the observed
+		// outlier: 0.25/day is >3x the documented "extreme" 0.08/day, and it is far
+		// below the annualized scale (annualized = daily*sqrt(252)), so an
+		// annualized or otherwise mis-scaled input is rejected. The lower bound
+		// (0.05%/day) rejects a degenerate near-flat series.
+		const (
+			minDailyRiskVolatility = 0.0005
+			maxDailyRiskVolatility = 0.25
+		)
+		outOfBand := dailyRiskVol < minDailyRiskVolatility || dailyRiskVol > maxDailyRiskVolatility
+		writeRiskVol := !outOfBand && math.Abs(dailyRiskVol-beforeRiskVol) > 0.001
+
+		if outOfBand {
+			// Do NOT write. Nothing is lost by recording the value here: the
+			// overlay persists only CHANGED leaves, so Before == After keeps the
+			// SSOT and the overlay untouched while the reason stays visible in the
+			// calibration report and in the log.
+			logging.Warn("calibration", "darwinian_risk_volatility_out_of_band",
+				logging.FStr("computed_daily_volatility", fmt.Sprintf("%.6f", dailyRiskVol)),
+				logging.FStr("band", fmt.Sprintf("[%.4f, %.2f] per day", minDailyRiskVolatility, maxDailyRiskVolatility)),
+				logging.FInt("agents", len(agentVols)),
+				logging.FStr("action", "value NOT written; check input series scale (annualized vs daily) or sample size"))
+			res.Parameters = append(res.Parameters, CalibratedParameter{
+				Path: "darwinian.risk_volatility_threshold", Before: beforeRiskVol, After: beforeRiskVol,
+				Method: "skipped_out_of_band", Confidence: 0, SampleSize: len(agentVols),
+				CalibrationNotes: fmt.Sprintf("computed daily volatility %.6f outside sane band [%.4f, %.2f]; not written",
+					dailyRiskVol, minDailyRiskVolatility, maxDailyRiskVolatility),
+			})
+		} else if writeRiskVol {
 			_ = ie.SetParameter("darwinian_risk_volatility_threshold", dailyRiskVol)
 			res.Parameters = append(res.Parameters, CalibratedParameter{
 				Path: "darwinian.risk_volatility_threshold", Before: beforeRiskVol, After: dailyRiskVol,
