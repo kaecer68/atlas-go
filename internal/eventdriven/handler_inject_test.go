@@ -29,6 +29,17 @@ func (s *stubCF) LatestAssessment(context.Context) (capitalflow.CapitalFlowAsses
 	return capitalflow.CapitalFlowAssessment{CalibrationStatus: status}, nil
 }
 
+// injectTestNow pins both the calendar year and the handler clock for the three
+// /api/events/prediction summary tests below.
+//
+// Why: those tests assert that the summary lists the driving events
+// ("關鍵事件"). The calendar builds events from annual rules, so on a date that
+// falls outside every window the clause legitimately disappears and the
+// assertion fails — a wall-clock date bomb (same class as the 2026-08-01
+// time-anchor and 2026-09-16 #1585 fixes). 2025-10-01 sits inside two annual
+// windows (期貨結算日, 法說會旺季), so the assertion is stable on any run date.
+var injectTestNow = time.Date(2025, 10, 1, 12, 0, 0, 0, time.UTC)
+
 func newTestHandler() *Handler {
 	cal := industry.NewEventCalendar()
 	cal.RefreshEvents(time.Now())
@@ -60,9 +71,10 @@ func TestHandler_SetCapitalFlow_OverridesProvider(t *testing.T) {
 func TestRegisterRoutes_UsesDefaultStaticCF(t *testing.T) {
 	mux := http.NewServeMux()
 	cal := industry.NewEventCalendar()
-	cal.RefreshEvents(time.Now())
+	cal.RefreshEvents(injectTestNow)
 
-	RegisterRoutes(mux, cal)
+	h := RegisterRoutesWithDetectors(mux, cal, nil, nil, nil)
+	h.SetNowFn(func() time.Time { return injectTestNow })
 
 	req := httptest.NewRequest(http.MethodGet, "/api/events/prediction", nil)
 	rec := httptest.NewRecorder()
@@ -114,9 +126,10 @@ func TestRegisterRoutesWithCapitalFlow_BearishTilt(t *testing.T) {
 func TestRegisterRoutesWithCapitalFlow_BullishTilt(t *testing.T) {
 	mux := http.NewServeMux()
 	cal := industry.NewEventCalendar()
-	cal.RefreshEvents(time.Now())
+	cal.RefreshEvents(injectTestNow)
 
-	RegisterRoutesWithCapitalFlow(mux, cal, &stubCF{score: 0.9, label: "bullish"})
+	h := RegisterRoutesWithDetectors(mux, cal, &stubCF{score: 0.9, label: "bullish"}, nil, nil)
+	h.SetNowFn(func() time.Time { return injectTestNow })
 
 	req := httptest.NewRequest(http.MethodGet, "/api/events/prediction", nil)
 	rec := httptest.NewRecorder()
@@ -147,9 +160,10 @@ func TestRegisterRoutesWithCapitalFlow_BullishTilt(t *testing.T) {
 func TestRegisterRoutesWithCapitalFlow_NilProviderFallsBack(t *testing.T) {
 	mux := http.NewServeMux()
 	cal := industry.NewEventCalendar()
-	cal.RefreshEvents(time.Now())
+	cal.RefreshEvents(injectTestNow)
 
-	RegisterRoutesWithCapitalFlow(mux, cal, nil)
+	h := RegisterRoutesWithDetectors(mux, cal, nil, nil, nil)
+	h.SetNowFn(func() time.Time { return injectTestNow })
 
 	req := httptest.NewRequest(http.MethodGet, "/api/events/prediction", nil)
 	rec := httptest.NewRecorder()
