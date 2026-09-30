@@ -2450,6 +2450,32 @@ PY
 
 ---
 
+### FU-20260930-08 — `atlas_calibration_freshness_ok{artifact="parameters"}` **恆為 0**（SSOT 檔久未被校準寫入）⇒ 疑似**永久假訊號**
+
+- **狀態**：`open`
+- **記錄日期**：2026-09-30
+- **來源**：`#2166`（`auto_calibrate` 真的跑）部署第 2 階段驗收時的**附帶觀察**（lane B 唯讀實查 ＋ root 覆核 ✓）
+- **讀數（生產，2026-09-30T04:18Z）**：
+  ```
+  atlas_calibration_freshness_ok{artifact="parameters"}           = 0
+  atlas_calibration_freshness_age_seconds{artifact="parameters"}  = 7,468,529.78 s ≈ 86.4 天
+  atlas_calibration_freshness_ok{artifact="parameters_overlay"}   = 1
+  atlas_calibration_freshness_age_seconds{…"parameters_overlay"}  = 10,105.88 s ≈ 2.8 小時
+  ```
+- **判讀**：**不觸發任何 alert**（同刻 `firing` = 0 ✓）；且**很可能本來就這樣** —— 容器內一律寫 overlay（`--writeback=overlay` ✓），
+  SSOT `configs/parameters.json` 只由**人工審閱後的校準**寫入（與 `FU-20260926-07` 的 overlay 設計一致 ✓）
+- **風險**：若該 metric 的**語意**是「校準新鮮度」，那對 SSOT 檔而言它**永遠不會新鮮** ⇒ 屬**永久假訊號**（日後若有人為它加 alert ⇒ 立即變成假警報 ✗）；
+  反之若語意是「檔案是否曾被改過」則為正確讀數 ✓ ⇒ 需**先確定語意**再決定是否調整
+- **最小處置建議（二選一；皆零行為變更）**：
+  ① 對 `artifact="parameters"` 改用**不同期望**（不設 alert，或標 `expected_stale=true` ＋ 具名理由 ✓）
+  ② 或在文件明寫「SSOT 檔的 freshness 不具告警意義」✓
+- **查法（可重現）**：
+  ```
+  ssh kmacmini "curl -s localhost:9090/api/v1/query --data-urlencode 'query=atlas_calibration_freshness_ok'"
+  ```
+
+---
+
 > **來源注記（2026-09-30 第五批）**：`FU-20260930-01`／`-02` 來自 `#2160`（I22-overheat）實作與審查；
 > `-03`／`-04` 來自 `#2151`（公司行為調整）與 `#2095`（注入符號）兩線的交叉調查；
 > `-05` 來自 `FU-20260929-10`（criteria 校準）的量測結論（同一批的 `stockpicker` ETF 母體與 `leo` 半邊結案）。
