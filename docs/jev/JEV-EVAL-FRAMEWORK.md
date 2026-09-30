@@ -7,9 +7,24 @@
 | 上位規範 | [`JEV-USAGE-CONTRACT.md`](JEV-USAGE-CONTRACT.md)（§1 傳輸、§2 判斷設計、§3 門檻、§4 評估紀律、§5 生產整合） |
 | 實作 | `scripts/jev_eval/`（Python 框架）+ `cmd/experimental/jev-eval-panel/`（Go：canonical 口徑的 GT/特徵匯出） |
 | Stage 1 結果 | [`JEV-EVAL-STAGE1-INDUSTRY-L1.md`](JEV-EVAL-STAGE1-INDUSTRY-L1.md) |
-| Stage 1 結果 | [`JEV-EVAL-STAGE1-INDUSTRY-L1.md`](JEV-EVAL-STAGE1-INDUSTRY-L1.md) |
 | Stage 3 結果 | [`JEV-EVAL-STAGE3-EVENTS.md`](JEV-EVAL-STAGE3-EVENTS.md)（事件層；另新增 `cmd/experimental/jev-eval-events` 匯出事件骨架與平台事件調整量） |
 | 已量測的成本 | 台股產業層 E0：3240 cases / 180 requests = **$0.0456**（1,085,311 input tokens @ $0.042/Mtok）。事件層 E0：1656 cases / 92 requests = **$0.0297**；探針 +$0.0088 |
+
+---
+
+## ★ 協議修訂政策（**強制**；2026-09-30 起 —— prompt／protocol 變更的通則）
+
+任何 **prompt 措辭**或**評估協議**的變更（例：noul 的 escape 指示、criteria 邊界寫法、題型、metric 定義）都必須：
+
+1. **在受影響的結果文件加修訂註記**（帶**日期 ＋ PR 編號**），標明該結果屬於**修訂前（pre-revision）**；
+2. **明示「不可與修訂後之結果直接比」** —— 舊結果只能當修訂前的**基線**，不得與新結果並列比較或據以宣告改善／退步；
+3. **重跑時使用新措辭**（**不為求可比而重跑舊措辭**；若確需對照，必須另立明確的 A/B 設計並記錄兩版措辭）。
+
+> 首個適用案例：`scripts/jev_eval/specs/{event_calendar,industry_l1}.py` 的 noul escape 指示由
+> 「answer with **low confidence**」改為「answer with a **probability near 0.5**」——
+> 原因：**noul 不含 confidence 通道**（官方 `/confidence`）⇒ 原指示要求模型走一條**不存在**的通道；
+> 新指示改用 noul 真正能表達的量（機率；官方：0.5 ＝ yes/no 等機率，不是「中等」）。
+> 題型／criteria／metric 皆未變 ⇒ **probe／judge 仍共用同一題**、AUC 仍可比（僅跨修訂邊界不可比）✓
 
 ---
 

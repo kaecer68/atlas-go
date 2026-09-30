@@ -33,10 +33,12 @@ from scripts.jev_eval import runner  # noqa: E402
 from scripts.jev_eval.spec import TaskSpec, parse_spec_args  # noqa: E402
 from scripts.jev_eval.specs.event_calendar import EventCalendarSpec  # noqa: E402
 from scripts.jev_eval.specs.industry_l1 import IndustryL1Spec  # noqa: E402
+from scripts.jev_eval.specs.stock_layer import StockLayerSpec  # noqa: E402
 
 SPECS: Dict[str, TaskSpec] = {
     IndustryL1Spec.name: IndustryL1Spec(),
     EventCalendarSpec.name: EventCalendarSpec(),
+    StockLayerSpec.name: StockLayerSpec(),
 }
 
 
