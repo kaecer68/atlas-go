@@ -2507,8 +2507,18 @@ PY
 
 ### FU-20260930-10 — `atlas-watchdog` 的 `restart-detect` 對**計畫性部署**也發 warning ⇒ 每次部署都給業主一則 Telegram 警告
 
-- **狀態**：`open`
+- **狀態**：`done`
 - **記錄日期**：2026-09-30
+- **完成於**：2026-09-30 `86c6db3e`（PR [#2177](https://github.com/kaecer68/atlas-go/pull/2177) squash，2026-09-30T10:26:46Z）
+  — 採 **方案②**：以 **image ID 區分計畫性／異常**（基準取自 **ledger** ⇒ 跨版本／跨重啟／跨 state 重建都在 ✓，勝於 state 檔）＋
+  以 **`/tmp/atlas-deploy-window` MARKER**（`A2A_DEPLOY_MARKER` 可覆寫）涵蓋「**沒換映像**」的部署（例：`docker compose restart` 只為載入新 config）✓
+  ⇒ **只改分類、不改偵測** ✓：同映像且窗口外 ⇒ 維持 `RESTART-DETECT`／warning ✓（崩潰迴圈不靜音 ✓）；計畫性 ⇒ `RESTART-EXPECTED`／INFO **且仍寫 ledger** ✓（歷史不消失 ✓）
+  ⇒ **舊行保守偏 warning** ✓（缺 `image=` ⇒ 映像**未知** ≠ 變更 ⇒ 維持 warning；把「不知道」降級成 INFO 等於給崩潰迴圈一條靜音路徑 ⇒ 刻意設計 ✓）
+  ⇒ 通知橋相容性已實查 ✓（`kind=$3` 不受影響 ✓、容器名仍排在 `image_name=` 之前 ✓、預設 pattern 不含 `RESTART-EXPECTED` ⇒ 計畫性**預設不通知** ✓）
+  ⇒ CI 新增 **hermetic 契約 job** ✓（**非** required check ✓）＋ 契約測試（8 case ＋ mutation 自證）掛進 `ci-gate` ✓
+  ⇒ **部署方義務**已寫入 [`local-deploy.md` §容器守護腳本](local-deploy.md)：窗口開始 `touch /tmp/atlas-deploy-window`、**結束（含失敗路徑）`rm -f`** ✓；殘留 MARKER 會讓崩潰迴圈被歸 planned ✗
+  ⇒ **驗收**：`make imac-watchdog-install` 已執行 ✓；②③已驗 ✓（受控同映像重啟**仍 warning** ✓；ledger 兩類事件皆留存 ✓）
+  ★ **①待下次真實部署**（應見 `RESTART-EXPECTED`／INFO 且**無** Telegram `watchdog.restart-detect` warning ✓）
 - **來源**：hermes QC 的每日檢查轉發（`[FIRING] watchdog.restart-detect`，13:34:04）；root 唯讀實查
 - **實測（kmacmini，2026-09-30）**：watchdog log 當日 **3 筆** RESTART-DETECT（`08:09:20`／`09:27:43`／`13:34:04`），
   分別對應三次**授權部署**的容器重啟（`new=00:08:50Z`／`01:27:25Z`／**`05:33:46Z`** ✓）；每次 `n=1 since-notified=1`（**不重複騷擾** ✓）
