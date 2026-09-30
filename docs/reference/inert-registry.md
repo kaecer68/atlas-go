@@ -279,7 +279,7 @@
 
 | 項 | 理由 |
 |---|---|
-| **I22-overheat**（`PhaseOverheat` 生產不可達） | ~~延後到 #1971 之後~~ **業主 2026-09-30 授權提前變更**（#1971 註記：以上線日分界、可回滾、變更後輸出改變屬預期），已由 **#2160** 實作；且「靜默」半邊已滿足（`silicon_cycle.go:68` 明載 `SiliconTWIndexIsMADeviation=false` ＋ 本表 ＋ baseline 附理由） |
+| **I22-overheat**（`PhaseOverheat` 生產不可達） | ~~延後到 #1971 之後~~ **業主 2026-09-30 授權提前變更**（#1971 註記：以上線日分界、可回滾、變更後輸出改變屬預期），已由 **#2160** 實作；**「靜默」半邊於修前已滿足**（當時 `silicon_cycle.go:68` 明載 `SiliconTWIndexIsMADeviation=false` ＋ 本表 ＋ baseline 附理由）——**修後該常數為 `true`**，本列保留歷史痕跡 |
 | **I27 殘留**（symbol→sector 值語意） | 改**值** ⇒ 會改變既有命中率口徑 ⇒ 污染觀察窗 |
 | 超界 `adjustment_factor` ＋ validator 只擋 `!=0` | 需先回答「正確界為何、那 4 個值是否合法」；且會擋 production 啟動 |
 | I7／I30 | 跨 lane（`internal/marketdata/**`／`.github/**`） |
