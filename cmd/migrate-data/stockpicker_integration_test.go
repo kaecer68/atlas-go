@@ -82,6 +82,22 @@ func TestMigrateStockpickerData(t *testing.T) {
 		t.Fatalf("second migrateStockpickerData: %v", err)
 	}
 	assertStockpickerPGCount(t, pool, seededOutcomeRows, "second backfill must insert 0 rows (idempotent)")
+
+	// Digest hard-check negative case: corrupt one integer column in the
+	// target, re-run, and the digest must fail loudly (protects the check
+	// from being silently removed by a future refactor). ON CONFLICT keeps
+	// the corrupted row, so only the digest can catch this class of drift.
+	if _, err := pool.Exec(ctx,
+		"UPDATE stock_signal_outcomes SET hit = 0 WHERE source LIKE 'migratetest-sp%'"); err != nil {
+		t.Fatalf("corrupt target rows: %v", err)
+	}
+	err := migrateStockpickerData(ctx, pool, srcPath, false)
+	if err == nil {
+		t.Fatal("digest mismatch must fail the run")
+	}
+	if !strings.Contains(err.Error(), "digest mismatch") {
+		t.Fatalf("error must name the digest check, got: %v", err)
+	}
 }
 
 func cleanupStockpickerTestRows(t *testing.T, pool *pgxpool.Pool) {

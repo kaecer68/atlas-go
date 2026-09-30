@@ -60,6 +60,18 @@ type stockpickerReport struct {
 	DigestMismatches []string
 }
 
+// requireStockpickerTargetAssertion enforces the fail-closed rule for the
+// stockpicker backfill (independent-review P1): it writes production data, so
+// it refuses to run without an explicit -expect-db target assertion. A
+// forgotten flag must abort the run — never backfill whatever DATABASE_URL
+// happens to point at.
+func requireStockpickerTargetAssertion(stockpicker bool, expectDB string) error {
+	if stockpicker && expectDB == "" {
+		return fmt.Errorf("-stockpicker requires -expect-db=<name> (refusing to write without a target assertion)")
+	}
+	return nil
+}
+
 // guardMigrateTarget reports the postgres connection target and, when expectDB
 // is set, aborts on mismatch before db.Init can apply any migration, so a
 // stray DATABASE_URL (e.g. source .env pointing at atlas_dev) can never

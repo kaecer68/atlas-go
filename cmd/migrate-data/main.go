@@ -65,6 +65,15 @@ func run() error {
 
 	ctx := context.Background()
 
+	// Fail-closed (independent-review P1): -stockpicker writes production
+	// data, so it refuses to run without an explicit -expect-db target
+	// assertion — a forgotten flag must abort, not backfill whatever
+	// DATABASE_URL happens to point at. Other modes keep their legacy
+	// behavior (guard applies only when -expect-db is provided).
+	if err := requireStockpickerTargetAssertion(*migrateStockpicker, *expectDB); err != nil {
+		return err
+	}
+
 	// M12 target guard: assert the migration target before db.Init can apply
 	// any migration, so a stray DATABASE_URL (e.g. source .env pointing at
 	// atlas_dev) can never migrate the wrong database. Prints host/db identity
