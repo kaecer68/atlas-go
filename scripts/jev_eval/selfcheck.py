@@ -231,6 +231,55 @@ class MetricMath(unittest.TestCase):
         self.assertIsNotNone(a[1])
 
 
+    def test_paired_auc_margin_zero_for_identical_streams(self):
+        """Same answers on both tasks ⇒ margin ~0 with a CI that includes 0 ⇒ recall not excluded."""
+        pairs = [(f"c{i}", (i % 10) / 10.0, i % 2 == 0) for i in range(120)]
+        m = metrics_mod.paired_auc_margin(pairs, pairs, iterations=300, seed=7)
+        self.assertIsNotNone(m)
+        self.assertEqual(m["n_shared"], 120)
+        self.assertLessEqual(abs(m["point"]), 1e-9)
+        self.assertLessEqual(m["ci"][0], 0.0)  # 下界 <= 0 ⇒ increment gate 會降級
+        self.assertGreaterEqual(m["ci"][1], 0.0)
+
+    def test_paired_auc_margin_positive_when_judge_beats_probe(self):
+        """Judge correlates with the label, probe is label-blind ⇒ margin CI lower bound > 0."""
+        labels = [i % 2 == 0 for i in range(200)]
+        judge = [(f"c{i}", 0.9 if labels[i] else 0.1, labels[i]) for i in range(len(labels))]
+        probe = [(f"c{i}", 0.5, labels[i]) for i in range(len(labels))]
+        m = metrics_mod.paired_auc_margin(judge, probe, iterations=300, seed=11)
+        self.assertIsNotNone(m)
+        self.assertGreater(m["ci"][0], 0.0)
+        # judge 完美（AUC 1.0）− probe 全平手（AUC 0.5）= 0.5
+        self.assertGreaterEqual(m["point"], 0.5)
+
+    def test_paired_auc_margin_none_when_too_few_shared(self):
+        judge = [(f"c{i}", 0.7, i % 2 == 0) for i in range(10)]
+        probe = [(f"c{i}", 0.4, i % 2 == 0) for i in range(10)]
+        self.assertIsNone(metrics_mod.paired_auc_margin(judge, probe, iterations=100))
+
+    def test_grade_increment_gate_downgrades_when_margin_ci_includes_zero(self):
+        """絕對 AUC 過關但增量 margin 下界 <= 0 ⇒ 仍須降為未驗證（洩漏不可排除）。"""
+        metrics = {
+            "n_cases": 400,
+            "n_answered": 400,
+            "evaluation": {
+                "n": 400,
+                "base_rate": 0.5,
+                "jev": {"precision": 0.6},
+                "lift": {"jev_auc": {"point": 0.62, "ci": [0.56, 0.68]}, "baselines": {}},
+            },
+        }
+        verdict = metrics_mod.grade(
+            metrics,
+            auc_margin={"point": 0.01, "ci": [-0.02, 0.04], "n_shared": 200},
+        )
+        self.assertEqual(verdict["verdict"], "未驗證")
+        self.assertIn("increment gate", verdict["detail"])
+
+class MetricMathExtra(unittest.TestCase):
+    pass
+
+
 class EvaluationFlow(unittest.TestCase):
     def _observations(self, n_dates=20, informed=True):
         obs = []
