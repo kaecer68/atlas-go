@@ -7,6 +7,7 @@
 | 上位規範 | [`JEV-USAGE-CONTRACT.md`](JEV-USAGE-CONTRACT.md)（§1 傳輸、§2 判斷設計、§3 門檻、§4 評估紀律、§5 生產整合） |
 | 實作 | `scripts/jev_eval/`（Python 框架）+ `cmd/experimental/jev-eval-panel/`（Go：canonical 口徑的 GT/特徵匯出） |
 | Stage 1 結果 | [`JEV-EVAL-STAGE1-INDUSTRY-L1.md`](JEV-EVAL-STAGE1-INDUSTRY-L1.md) |
+| Stage 2 結果 | [`JEV-EVAL-STAGE2-STOCK-LAYER.md`](JEV-EVAL-STAGE2-STOCK-LAYER.md)（個股／錢潮層；分層抽樣、token-aware 成本上限、兩階段、洩漏探針） |
 | Stage 3 結果 | [`JEV-EVAL-STAGE3-EVENTS.md`](JEV-EVAL-STAGE3-EVENTS.md)（事件層；另新增 `cmd/experimental/jev-eval-events` 匯出事件骨架與平台事件調整量） |
 | 已量測的成本 | 台股產業層 E0：3240 cases / 180 requests = **$0.0456**（1,085,311 input tokens @ $0.042/Mtok）。事件層 E0：1656 cases / 92 requests = **$0.0297**；探針 +$0.0088 |
 
