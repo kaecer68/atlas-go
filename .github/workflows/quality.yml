@@ -603,6 +603,19 @@ jobs:
     - name: Contract tests for the daily-maintenance liveness gate (hermetic, no network)
       run: bash tests/scripts/test-check-task-liveness.sh
 
+  # 容器 watchdog 的「計畫性部署 vs 異常重啟」分類契約（FU-20260930-10 方案②）。分類的失敗模式是
+  # 「安靜地分錯邊」——異常重啟被歸成計畫性 ⇒ 崩潰迴圈被靜音；計畫性部署被歸成異常 ⇒ 每次部署發一則
+  # warning。兩者在生產上當下都沒有徵兆，所以由 fixture（stub docker，**不打真 docker**、假 HOME）
+  # 釘住 8 個 case，並用 mutation 證明斷言有牙齒（拿掉映像比對／窗口標記 ⇒ 對應 case 必紅）。
+  watchdog-restart-classify-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+    - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+    - name: Contract tests for the watchdog restart classifier (hermetic, no docker daemon)
+      run: bash tests/scripts/test-watchdog-restart-classify.sh
+
   # F28 護欄：`$VAR` 緊接非 ASCII（全形）字元 —— 2026-09-26 實證：UTF-8 locale 下 bash 會把該字元的
   # **第一個位元組**吃進變數名（`bash -c 'set -u; V=1; echo "$V`＋全形括號`"'` ⇒ `V<xEF>: unbound
   # variable`）⇒ `set -u` 腳本那一行**永遠**崩潰（訊息永遠印不出來）；沒開 `set -u` 則靜默吞掉變數值。

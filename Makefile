@@ -1017,6 +1017,9 @@ ci-gate: embed-dirs
 	@echo "  → 母體執行真值盤查工具的契約測試（hermetic fixtures；判層 + mutation 自證；2026-09-27）"
 	@bash tests/scripts/test-verify-universe-run.sh
 	@echo "    ✅"
+	@echo "  → watchdog 重啟分類契約測試（hermetic：stub docker／假 HOME；8 case + mutation 自證；FU-20260930-10）"
+	@bash tests/scripts/test-watchdog-restart-classify.sh
+	@echo "    ✅"
 	@echo "  → Markdown 連結檢查器的 git-aware 蒐集契約測試（hermetic 臨時 git repo；#2114）"
 	@bash tests/scripts/test-check-markdown-links.sh
 	@echo "    ✅"
