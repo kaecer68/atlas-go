@@ -172,7 +172,12 @@ fi
 
 # Code change? (docs-only diffs skip ci-full — ci-gate suffices)
 code_changed=0
-if git diff --name-only origin/main...HEAD 2>/dev/null | grep -qE '\.(go|ts|tsx|js|jsx|vue|py|sh|c|cpp|h)$|(^|/)Makefile$|Dockerfile|docker-compose|\.github/|\.githooks/'; then
+# configs/ 全目錄皆為「值／治理」檔（parameters*.json、monitor_limits.json、stress_index_weights.json、
+# sector_symbols.json、etf_metadata.json、portfolio_allocation.json、agents.json、llm_router.yaml、
+# methodology_rules.yaml、realtime.yaml、parameters/ 目錄、constitution 讀的 allowed_env_vars.md）
+# ⇒ 其變更會改行為，必須與程式碼同級（跑 ci-full），不得歸為 docs-only。只納 parameters* 會漏掉
+# monitor_limits.json 等同為值變更的檔，故以整個 configs/ 為準。
+if git diff --name-only origin/main...HEAD 2>/dev/null | grep -qE '\.(go|ts|tsx|js|jsx|vue|py|sh|c|cpp|h)$|(^|/)Makefile$|Dockerfile|docker-compose|\.github/|\.githooks/|^configs/'; then
   code_changed=1
 fi
 
