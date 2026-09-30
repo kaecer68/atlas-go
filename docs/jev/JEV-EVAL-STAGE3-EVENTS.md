@@ -8,13 +8,13 @@
 | 前階段 | [`JEV-EVAL-STAGE1-INDUSTRY-L1.md`](JEV-EVAL-STAGE1-INDUSTRY-L1.md)（產業層；結論 **未驗證**） |
 | Issue | [#1968](https://github.com/kaecer68/atlas-go/issues/1968)（本階段追蹤）；日曆缺陷另開 [#1973](https://github.com/kaecer68/atlas-go/issues/1973)（見 §1.3） |
 | 日期 | 2026-09-25 |
-| ⚠️ **協議修訂（pre-revision）** | **2026-09-30，PR #__**：本頁結果產生於 **noul 措辭修訂前**（當時的 escape 指示為「answer with low confidence」，而 **noul 不含 confidence 通道**）⇒ **不可與修訂後之結果直接比** ✓ |
+| ⚠️ **協議修訂（pre-revision）** | **2026-09-30，PR #2182**：本頁結果產生於 **noul 措辭修訂前**（當時的 escape 指示為「answer with low confidence」，而 **noul 不含 confidence 通道**）⇒ **不可與修訂後之結果直接比** ✓ |
 | 模型 | `jev-1.13.0`（pin 版本 ID，非 alias） |
 | **分級結論** | **未驗證（pooled AUC CI 排除 0.5 且方向為負，但被洩漏上限降級）** |
 | 樣本數 | 1656 cases（92 個 event-anchor × 18 個 canonical L1）· held-out 630 cases（25 個交易日）· 62 個 cluster |
 | 成本 | **$0.0297**（92 requests、707,999 input tokens @ $0.042/Mtok，H=5 主配置）；本階段含廢棄迭代**實際支出 $0.1346** |
 
-> ⚠️ **pre-revision（2026-09-30，PR #__）**：本頁所有數字皆為 **noul 措辭修訂前**的結果（舊指示要求一條 noul 不存在的通道）。
+> ⚠️ **pre-revision（2026-09-30，PR #2182）**：本頁所有數字皆為 **noul 措辭修訂前**的結果（舊指示要求一條 noul 不存在的通道）。
 > 修訂後重跑請用新措辭（「answer with a probability near 0.5」），**且不得與本頁數字直接比** ✓（通則見 `JEV-EVAL-FRAMEWORK.md` §「協議修訂政策」）
 
 ---

@@ -7,13 +7,13 @@
 | 框架 | [`JEV-EVAL-FRAMEWORK.md`](JEV-EVAL-FRAMEWORK.md)（可重用評估框架本體） |
 | Issue | [#1968](https://github.com/kaecer68/atlas-go/issues/1968) |
 | 日期 | 2026-09-25 |
-| ⚠️ **協議修訂（pre-revision）** | **2026-09-30，PR #__**：本頁結果產生於 **noul 措辭修訂前**（當時的 escape 指示為「answer with low confidence」，而 **noul 不含 confidence 通道**）⇒ **不可與修訂後之結果直接比** ✓ |
+| ⚠️ **協議修訂（pre-revision）** | **2026-09-30，PR #2182**：本頁結果產生於 **noul 措辭修訂前**（當時的 escape 指示為「answer with low confidence」，而 **noul 不含 confidence 通道**）⇒ **不可與修訂後之結果直接比** ✓ |
 | 模型 | `jev-1.13.0`（pin 版本 ID，非 alias） |
 | **分級結論** | **未驗證（no statistically distinguishable signal）** |
 | 樣本數 | 3240 cases（18 個 canonical L1 × 180 交易日）；held-out 1296 cases（72 日） |
 | 成本 | **$0.0456**（180 requests、1,085,311 input tokens @ $0.042/Mtok）；洩漏探針 +$0.0067；repeat=3 複製實驗 +$0.137 |
 
-> ⚠️ **pre-revision（2026-09-30，PR #__）**：本頁所有數字皆為 **noul 措辭修訂前**的結果（舊指示要求一條 noul 不存在的通道）。
+> ⚠️ **pre-revision（2026-09-30，PR #2182）**：本頁所有數字皆為 **noul 措辭修訂前**的結果（舊指示要求一條 noul 不存在的通道）。
 > 修訂後重跑請用新措辭（「answer with a probability near 0.5」），**且不得與本頁數字直接比** ✓（通則見 `JEV-EVAL-FRAMEWORK.md` §「協議修訂政策」）
 
 ---
