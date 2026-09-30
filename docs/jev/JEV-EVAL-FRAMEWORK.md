@@ -13,6 +13,22 @@
 
 ---
 
+## ★ 協議修訂政策（**強制**；2026-09-30 起 —— prompt／protocol 變更的通則）
+
+任何 **prompt 措辭**或**評估協議**的變更（例：noul 的 escape 指示、criteria 邊界寫法、題型、metric 定義）都必須：
+
+1. **在受影響的結果文件加修訂註記**（帶**日期 ＋ PR 編號**），標明該結果屬於**修訂前（pre-revision）**；
+2. **明示「不可與修訂後之結果直接比」** —— 舊結果只能當修訂前的**基線**，不得與新結果並列比較或據以宣告改善／退步；
+3. **重跑時使用新措辭**（**不為求可比而重跑舊措辭**；若確需對照，必須另立明確的 A/B 設計並記錄兩版措辭）。
+
+> 首個適用案例：`scripts/jev_eval/specs/{event_calendar,industry_l1}.py` 的 noul escape 指示由
+> 「answer with **low confidence**」改為「answer with a **probability near 0.5**」——
+> 原因：**noul 不含 confidence 通道**（官方 `/confidence`）⇒ 原指示要求模型走一條**不存在**的通道；
+> 新指示改用 noul 真正能表達的量（機率；官方：0.5 ＝ yes/no 等機率，不是「中等」）。
+> 題型／criteria／metric 皆未變 ⇒ **probe／judge 仍共用同一題**、AUC 仍可比（僅跨修訂邊界不可比）✓
+
+---
+
 ## §0 這個框架回答什麼問題
 
 > **「Jev 的判斷對〈某個預測目標〉是否攜帶資訊，且相對該目標既有的 baseline 是否帶來增量？」**

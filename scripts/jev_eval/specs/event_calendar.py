@@ -474,8 +474,8 @@ def _leakage_question(row: Mapping[str, Any], anchor: str, hold_days: int, cost_
             f"knowledge only, judge this single question: over the {hold_days} trading sessions "
             f"ENDING at the close of {anchor} (from the close of {start} to the close of {anchor}), "
             f"was this industry index return > 0 after subtracting the {cost_pct}% round-trip "
-            "transaction cost? If you do not know the historical outcome, answer with low "
-            "confidence instead of guessing."
+            "transaction cost? If you do not know the historical outcome, answer with a "
+            "probability near 0.5 instead of guessing."
         ),
         "criteria": {
             "true": f"the industry index rose by more than {cost_pct}% over those {hold_days} trading sessions",
