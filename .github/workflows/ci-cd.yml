@@ -680,6 +680,7 @@ jobs:
         go build -mod=mod -ldflags="$ldflags" -o .build-atlas/atlas-go ./cmd/atlas
         go build -mod=mod -ldflags="$ldflags" -o .build-atlas/atlas-mcp ./cmd/atlas-mcp
         go build -mod=mod -ldflags="$ldflags" -o .build-atlas/daily-replay-sync ./cmd/daily-replay-sync
+        go build -mod=mod -ldflags="$ldflags" -o .build-atlas/calibrate-parameters ./cmd/calibrate-parameters
         go build -mod=mod -ldflags="$ldflags" -o .build-atlas/calibrate-seasonal ./cmd/calibrate-seasonal
         # Guard: alpine cannot exec glibc-dynamic binaries. Catch regressions
         # here instead of a 3-minute invisible crash loop in the container.
@@ -767,6 +768,7 @@ jobs:
         go build -mod=mod -ldflags="$ldflags" -o .build-atlas/atlas-go ./cmd/atlas
         go build -mod=mod -ldflags="$ldflags" -o .build-atlas/atlas-mcp ./cmd/atlas-mcp
         go build -mod=mod -ldflags="$ldflags" -o .build-atlas/daily-replay-sync ./cmd/daily-replay-sync
+        go build -mod=mod -ldflags="$ldflags" -o .build-atlas/calibrate-parameters ./cmd/calibrate-parameters
         go build -mod=mod -ldflags="$ldflags" -o .build-atlas/calibrate-seasonal ./cmd/calibrate-seasonal
         # Guard: alpine cannot exec glibc-dynamic binaries. Catch regressions
         # here instead of a 3-minute invisible crash loop in the container.

@@ -28,6 +28,10 @@ package main
 // cannot work in the container (no Go toolchain) and duplicated the
 // binary-guarded `seasonal_calibration` task in data_sync_health_tasks.go.
 //
+// #16 auto_calibrate followed the same path: it used to exec
+// `go run ./cmd/calibrate-parameters` (guaranteed failure in the container,
+// FU-20260930-06) and is now guarded on the shipped sibling binary.
+//
 // Out of scope (PR10c): auto_swarm_simulation, autobacktest_daily, and other
 // experiment/simulation/capital tasks.
 
@@ -38,6 +42,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/apigateway"
@@ -677,32 +682,79 @@ func (d calibrationDeps) registerFactorWeightStrategyCalibrate() {
 	log.Printf("[Gateway] registered factor_weight_strategy_calibrate background task (24h interval)")
 }
 
+// autoCalibrateArgs are the arguments handed to the shipped calibrate-parameters
+// binary. --writeback=overlay (FU-20260926-07) is mandatory: this runs inside the
+// container, where configs/ is not bind-mounted, so the run must persist only the
+// changed leaves to data/state/parameters.calibrated.json and never rewrite the
+// SSOT. A test pins that "ssot" can never appear here.
+var autoCalibrateArgs = []string{"--module=darwinian", "--writeback=overlay"}
+
+// Test seams. Both are variables so a test can drive the guard and observe the
+// spawned command without shipping a binary or spawning a real process.
+var (
+	// executablePathFn resolves the running binary; production value is os.Executable.
+	executablePathFn = os.Executable
+	// autoCalibrateExecFn runs the calibration binary in dir. Production value
+	// spawns it with exec.CommandContext; the seam exists so tests can assert the
+	// resolved target, the working directory and the arguments.
+	autoCalibrateExecFn = func(ctx context.Context, dir, bin string, args ...string) ([]byte, error) {
+		cmd := exec.CommandContext(ctx, bin, args...)
+		cmd.Dir = dir
+		return cmd.CombinedOutput()
+	}
+)
+
+// registerAutoCalibrate registers the 7-day Darwinian parameter calibration task,
+// guarded on the calibrate-parameters binary being co-located with the running
+// binary (the pattern established by seasonal_calibration in
+// data_sync_health_tasks.go).
+//
+// History: this task used to run `go run ./cmd/calibrate-parameters`, which can
+// never work in the container — the alpine image ships no Go toolchain — so every
+// 7-day tick failed with `exec: "go": executable file not found in $PATH` and a
+// confusing WARN (FU-20260930-06). The sibling `seasonal_calibrate` task was
+// removed for exactly this reason (see the file header) and replaced by the
+// binary-guarded seasonal_calibration task.
+//
+// The binary is now built into the image (Dockerfile + Dockerfile.atlas.local +
+// the CI/Makefile build lists), so the task runs for real. When the binary is
+// missing — a host or image that does not ship it — registration is skipped with
+// one explicit line instead of a recurring failure.
 func (d calibrationDeps) registerAutoCalibrate() {
+	exePath, exeErr := executablePathFn()
+	if exeErr != nil {
+		log.Printf("[Gateway] auto_calibrate skipped: os.Executable failed: %v", exeErr)
+		return
+	}
+	calibrateBin := filepath.Join(filepath.Dir(exePath), "calibrate-parameters")
+	if _, statErr := os.Stat(calibrateBin); statErr != nil {
+		log.Printf("[Gateway] auto_calibrate skipped: binary not found at %s (build cmd/calibrate-parameters into the image to enable; before FU-20260930-06 this task ran `go run`, which cannot work in the container)", calibrateBin)
+		return
+	}
+
 	_ = d.TaskMgr.Register(&apigateway.ScheduledTask{
 		Name:     "auto_calibrate",
 		Interval: 7 * 24 * time.Hour,
 		Jitter:   4 * time.Hour,
 		Enabled:  true,
 		Task: func(ctx context.Context) error {
-			// --writeback=overlay (FU-20260926-07): this runs inside the container,
-			// where configs/ is not bind-mounted. (The task cannot run there at all
-			// today — the image has no Go toolchain — so this is a guard: if it is
-			// ever wired to a working binary it must not rewrite the SSOT.)
-			cmd := exec.CommandContext(ctx, "go", "run", "./cmd/calibrate-parameters",
-				"--module=darwinian", "--writeback=overlay")
-			cmd.Dir = d.Cfg.WorkDir
-			out, err := cmd.CombinedOutput()
+			out, err := autoCalibrateExecFn(ctx, d.Cfg.WorkDir, calibrateBin, autoCalibrateArgs...)
 			if err != nil {
 				logging.Warn("auto_calibrate", "failed",
 					logging.Err(err),
 					logging.FStr("output", string(out)))
 				return nil
 			}
-			logging.Info("auto_calibrate", "completed")
+			// The tool prints "Wrote N changed value(s) …"; N may legitimately be
+			// 0 (calibration that changes nothing). That is success, not failure —
+			// deployment acceptance must not read an unchanged overlay as an error.
+			logging.Info("auto_calibrate", "completed",
+				logging.FStr("binary", calibrateBin),
+				logging.FStr("output", strings.TrimSpace(string(out))))
 			return nil
 		},
 	})
-	log.Printf("[Gateway] registered auto_calibrate background task (7-day interval)")
+	log.Printf("[Gateway] registered auto_calibrate background task (7-day interval, binary %s, args %v)", calibrateBin, autoCalibrateArgs)
 }
 
 func (d calibrationDeps) registerRSITwCalibrate() {
