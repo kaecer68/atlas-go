@@ -93,8 +93,8 @@ def _judge_question(row: Mapping[str, Any], date: str, hold_days: int, cost_pct:
         "instructions": (
             f"Stock: {name} ({row['symbol']}), Taiwan equities, industry {row.get('industry_id')}. "
             f"Judge the NEXT {hold_days} trading sessions from the close of {date}: will this stock's "
-            f"return exceed the {cost_pct}% round-trip transaction cost? Answer with low confidence if "
-            "the evidence in the state is weak."
+            f"return exceed the {cost_pct}% round-trip transaction cost? Answer with a probability "
+            "near 0.5 if the evidence in the state is weak."
         ),
         "criteria": {
             "true": f"the stock rose by more than {cost_pct}% over the next {hold_days} trading sessions",
@@ -113,7 +113,7 @@ def _leakage_question(row: Mapping[str, Any], date: str, hold_days: int, cost_pc
             f"provided in this state. From your own knowledge only: over the {hold_days} trading sessions "
             f"ENDING at the close of {date} (from the close of {start} to the close of {date}), was this "
             f"stock's return > 0 after subtracting the {cost_pct}% round-trip cost? If you do not know the "
-            "historical outcome, answer with low confidence instead of guessing."
+            "historical outcome, answer with a probability near 0.5 instead of guessing."
         ),
         "criteria": {
             "true": f"the stock rose by more than {cost_pct}% over those {hold_days} trading sessions",
