@@ -22,7 +22,7 @@ import argparse
 import json
 import os
 import sys
-from typing import Any, Dict, List, Mapping, Optional
+from typing import Tuple, Any, Dict, List, Mapping, Optional
 
 if __package__ in (None, ""):  # allow `python3 scripts/jev_eval/cli.py`
     sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
@@ -161,7 +161,60 @@ def _build_and_metrics(args, *, log=print) -> Dict[str, Any]:
         "created_at": manifest.get("created_at"),
         "git_rev": manifest.get("git_rev"),
     }
-    return {"payload": payload, "manifest": manifest, "build": build, "spec": spec, "cfg": cfg}
+    return {
+        "payload": payload,
+        "manifest": manifest,
+        "build": build,
+        "spec": spec,
+        "cfg": cfg,
+        "scores": scores,
+    }
+
+
+def _paired_margin(args, data: Mapping[str, Any], spec: Any) -> Optional[Mapping[str, Any]]:
+    """AUC margin (judge − probe) on shared cases, or None when it cannot be measured.
+
+    Requires the same spec for both runs; the probe run dir must carry its own
+    requests.jsonl. Any failure degrades to None (the verdict then relies on the
+    existing absolute-AUC + probe-cap rules) rather than crashing the score command.
+    """
+    path = getattr(args, "leakage_run_dir", None)
+    if not path:
+        return None
+    try:
+        judge_pairs = _judge_pairs(data["build"], data.get("scores") or {})
+        probe_pairs = _leakage_pairs(path, spec, data.get("cfg") or {})
+        return metrics_mod.paired_auc_margin(
+            judge_pairs, probe_pairs, iterations=getattr(args, "bootstrap", 1000), seed=args.seed
+        )
+    except Exception:
+        return None
+
+
+def _leakage_pairs(path: str, spec: Any, cfg: Mapping[str, Any]) -> List[Tuple[str, float, bool]]:
+    """(case_id, score, gt) triples of a leakage-probe run, for the paired AUC margin."""
+    try:
+        probe_build = spec.build(dict(cfg, mode="leakage"))
+        judgments, _ = runner.load_judgments(path)
+        scores = runner.score_cases(probe_build, judgments)
+    except Exception:
+        return []
+    out: List[Tuple[str, float, bool]] = []
+    for case in probe_build.cases:
+        score = scores.get(case.case_id)
+        if score is not None:
+            out.append((case.case_id, float(score), bool(case.gt)))
+    return out
+
+
+def _judge_pairs(build: Any, scores: Mapping[str, Optional[float]]) -> List[Tuple[str, float, bool]]:
+    """(case_id, score, gt) triples of the judge run."""
+    out: List[Tuple[str, float, bool]] = []
+    for case in build.cases:
+        score = scores.get(case.case_id)
+        if score is not None:
+            out.append((case.case_id, float(score), bool(case.gt)))
+    return out
 
 
 def _leakage_metrics(path: Optional[str]) -> Optional[Mapping[str, Any]]:
@@ -263,6 +316,7 @@ def cmd_score(args) -> int:
     verdict = metrics_mod.grade(
         payload,
         leakage=_leakage_metrics(args.leakage_run_dir),
+        auc_margin=_paired_margin(args, data, data["spec"]),
         min_eval_cases=args.min_eval_cases,
     )
     payload["verdict"] = verdict
@@ -277,6 +331,7 @@ def cmd_report(args) -> int:
     verdict = metrics_mod.grade(
         payload,
         leakage=_leakage_metrics(args.leakage_run_dir),
+        auc_margin=_paired_margin(args, data, data["spec"]),
         min_eval_cases=args.min_eval_cases,
     )
     payload["verdict"] = verdict

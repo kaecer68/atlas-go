@@ -202,6 +202,71 @@ def _decision_stats(obs: Sequence[Observation], decisions: Sequence[Optional[boo
     }
 
 
+def paired_auc_margin(
+    judge: Sequence[Tuple[str, float, bool]],
+    probe: Sequence[Tuple[str, float, bool]],
+    *,
+    iterations: int = 1000,
+    seed: int = 20260925,
+    min_shared: int = 30,
+) -> Optional[Dict[str, Any]]:
+    """AUC margin of the judge task over the memorisation probe, measured on SHARED cases.
+
+    Why this exists (Stage 3 leakage cap, 2026-09-30): the absolute held-out AUC cannot be
+    read as forecasting skill when the same model can recall the evaluated series — the
+    probe question (`specs/event_calendar.py:_leakage_question`) asks about an ALREADY
+    REALISED historical window with no market data, and the judge question asks about the
+    next `hold_days` from the SAME historical anchors, which is realised as well. So the
+    evidence that matters is the *increment*: AUC(judge) − AUC(probe) on the cases both
+    runs share, with a paired bootstrap CI. A lower bound <= 0 means recall alone explains
+    the absolute number.
+
+    `judge` / `probe` are (case_id, score, ground_truth) triples; cases missing from
+    either side are dropped (and counted). Returns None when fewer than `min_shared`
+    shared scored cases exist, because a margin from a handful of cases is noise.
+    """
+    jmap = {cid: (score, gt) for cid, score, gt in judge if score is not None}
+    pmap = {cid: (score, gt) for cid, score, gt in probe if score is not None}
+    shared = sorted(set(jmap) & set(pmap))
+    if len(shared) < min_shared:
+        return None
+
+    js = [jmap[c][0] for c in shared]
+    ps = [pmap[c][0] for c in shared]
+    labels = [jmap[c][1] for c in shared]
+    point_j, point_p = auc(js, labels), auc(ps, labels)
+    if point_j is None or point_p is None:
+        return None
+
+    rng = random.Random(seed)
+    margins: List[float] = []
+    for _ in range(max(1, iterations)):
+        idx = [rng.randrange(len(shared)) for _ in shared]
+        y = [labels[i] for i in idx]
+        if len({bool(v) for v in y}) < 2:
+            continue
+        a = auc([js[i] for i in idx], y)
+        b = auc([ps[i] for i in idx], y)
+        if a is None or b is None:
+            continue
+        margins.append(a - b)
+    if len(margins) < max(10, iterations // 10):
+        return None
+    margins.sort()
+    lo = margins[int(0.025 * (len(margins) - 1))]
+    hi = margins[int(0.975 * (len(margins) - 1))]
+    return {
+        "point": _fmt(point_j - point_p),
+        "ci": [_fmt(lo), _fmt(hi)],
+        "auc_judge": _fmt(point_j),
+        "auc_probe": _fmt(point_p),
+        "n_shared": len(shared),
+        "n_judge_only": len(set(jmap) - set(pmap)),
+        "n_probe_only": len(set(pmap) - set(jmap)),
+        "bootstrap_iterations": len(margins),
+    }
+
+
 def within_group_auc(observations: Sequence[Observation], key: str = "jev", threshold_metric: Optional[str] = None) -> Optional[float]:
     """Mean AUC computed INSIDE each group (trading date), then averaged.
 
@@ -498,6 +563,7 @@ def grade(
     metrics: Mapping[str, Any],
     *,
     leakage: Optional[Mapping[str, Any]] = None,
+    auc_margin: Optional[Mapping[str, Any]] = None,
     min_eval_cases: int = 200,
     min_answered_fraction: float = 0.9,
 ) -> Dict[str, Any]:
@@ -512,6 +578,10 @@ def grade(
       4. Leakage cap — if the memorisation probe shows the model can recall the
          evaluated series, the verdict is downgraded (the measured numbers may be
          knowledge, not prediction).
+      5. Increment gate (2026-09-30) — even when the probe is inconclusive on its own,
+         an AUC margin (judge − probe) CI lower bound <= 0 means recall cannot be
+         excluded as the source of the absolute AUC, so the verdict stays 未驗證.
+         The margin is computed on the cases both runs share (paired bootstrap).
     """
     ev = metrics.get("evaluation", {}) or {}
     lift = ev.get("lift", {}) or {}
@@ -584,9 +654,27 @@ def grade(
                 f"memorisation probe AUC {probe_auc.get('point')} (CI {probe_auc.get('ci')}) — no recall signal "
                 "detected for this series"
             )
+    margin_note = ""
+    if auc_margin:
+        m_ci = auc_margin.get("ci") or [None, None]
+        if m_ci[0] is not None and m_ci[0] <= 0:
+            verdict = "未驗證"
+            margin_note = (
+                f"incremental AUC margin {auc_margin.get('point')} (CI {m_ci}, "
+                f"n_shared={auc_margin.get('n_shared')}) has a lower bound <= 0 — the absolute AUC "
+                "is not separable from recall of the evaluated series"
+            )
+        else:
+            margin_note = (
+                f"incremental AUC margin {auc_margin.get('point')} (CI {m_ci}, "
+                f"n_shared={auc_margin.get('n_shared')}) — the judge beats the memorisation probe"
+            )
+
     if leakage_suspect:
         verdict = "未驗證"
         detail = (detail + "; " if detail else "") + "downgraded by leakage cap: " + leakage_note
+    if margin_note and (auc_margin.get("ci") or [None])[0] is not None and (auc_margin.get("ci") or [0])[0] <= 0:
+        detail = (detail + "; " if detail else "") + "downgraded by increment gate: " + margin_note
 
     return {
         "verdict": verdict,
@@ -596,4 +684,6 @@ def grade(
         "answered_fraction": round(answered_fraction, 4),
         "leakage_probe": leakage,
         "leakage_note": leakage_note,
+        "auc_margin": auc_margin,
+        "auc_margin_note": margin_note,
     }
