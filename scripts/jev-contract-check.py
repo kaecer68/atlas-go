@@ -6,9 +6,10 @@
   C2 URL 開啟必須帶 timeout
   C3 請求必須包在 try/except（fail-open）
   C4 choice 題的 criteria 不得是 list 字面值（TypeSafe 回 422）
-  C5 scripts/jevkit.py 自測（**warn-only 2026-09-24**：含實際 API 呼叫，依賴外部網路，
-     與本檢查「不需網路」的前提矛盾；網路/限流造成失敗只警告不阻擋。
-     需要嚴格模式時設 `JEV_CONTRACT_STRICT_SELFTEST=1`。jevkit.py **不存在**仍 blocking。）
+  C5 scripts/jevkit.py 自測（★ **2026-09-30 起 opt-in**：預設**不執行** ⇒ 預設路徑永不連外、
+     永不因網路/限流失敗而紅（修 `FU-20260926-21`）。要跑 live 自測請顯式加
+     `--with-selftest` 或設 `JEV_CONTRACT_SELFTEST=1`（`JEV_CONTRACT_STRICT_SELFTEST=1` 保留為相容別名）；
+     opt-in 下自測**失敗即 blocking**（因為是顯式要求才執行的）。jevkit.py **不存在**仍 blocking。）
   C6 呼叫 Jev 的 .py 必須有 `# jev-docs: <官方 URL>` 標註（≥1 條）
      —— 2026-09-23 新增：過去多次「先自行推論、才回頭對照官方文件」造成違規實作
      （atlas-wiki 閘門違反官方 ≥5 條指引；照官方問法改寫後同一批資料 F1 0.33→0.78）。
@@ -142,6 +143,12 @@ def check_file(path: str) -> List[str]:
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--root", default=os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    ap.add_argument(
+        "--with-selftest",
+        action="store_true",
+        help="also run the live jevkit self-test (performs ONE real API call, ~$0.000012); "
+        "default is static-only so this gate never fails because of the network",
+    )
     args = ap.parse_args()
     root = args.root
 
@@ -152,28 +159,35 @@ def main() -> int:
         scanned += 1
         problems.extend(check_file(p))
 
-    # C5 jevkit 自測
+    # C5 jevkit 自測（★ 2026-09-30 opt-in）
     #
-    # 2026-09-24 修正（fleet-wide，a2a-dev + atlas-go 同步）：
-    #   jevkit --selftest 含**實際 API 呼叫**，依賴外部網路（TypeSafe）。
-    #   這與本檢查宣稱的「AST 靜態分析，不需網路」自相矛盾，且 API 限流
-    #   （實測：同 session 反覆呼叫後被限流）會讓 pre-push gate 偽失敗、
-    #   阻擋正常推送。故預設改為 **warn-only**：
-    #     - jevkit.py **不存在** → 仍 blocking（靜態要求，規範 §0）
-    #     - selftest **回非 0** → warn-only（可能只是網路/限流）
-    #   需要嚴格模式（例：CI 專用 runner，網路穩定）時設：
-    #     JEV_CONTRACT_STRICT_SELFTEST=1
+    # 沿革：2026-09-24 先把它從「一律執行／失敗即 blocking」降為 warn-only，因為
+    #   jevkit --selftest 含**實際 API 呼叫**（依賴外部網路），與本檢查宣稱的
+    #   「AST 靜態分析，不需網路」自相矛盾，且限流會讓 pre-push gate 偽失敗、
+    #   阻擋正常推送（`FU-20260926-21`）。
+    #
+    # 2026-09-30：改為 **opt-in** —— 預設**完全不呼叫**（純靜態、永不連外）；
+    #   要跑 live 自測必須顯式要求：`--with-selftest` 或 `JEV_CONTRACT_SELFTEST=1`
+    #   （`JEV_CONTRACT_STRICT_SELFTEST=1` 保留為**相容別名**，語意同 opt-in）。
+    #   顯式要求才執行的檢查，其失敗即 **blocking**（不再 warn-only）。
+    #   - jevkit.py **不存在** → 仍 blocking（靜態要求，規範 §0）
+    live_selftest = (
+        args.with_selftest
+        or os.environ.get("JEV_CONTRACT_SELFTEST") == "1"
+        or os.environ.get("JEV_CONTRACT_STRICT_SELFTEST") == "1"
+    )
     kit = os.path.join(root, "scripts", "jevkit.py")
     if os.path.exists(kit):
-        r = subprocess.run([sys.executable, kit, "--selftest"], capture_output=True, text=True)
-        if r.returncode != 0:
-            msg = f"scripts/jevkit.py: C5 自測失敗（可能為網路/限流，非靜態違規）\n{r.stdout}{r.stderr}"
-            if os.environ.get("JEV_CONTRACT_STRICT_SELFTEST") == "1":
-                problems.append(msg)
-            else:
-                warnings.append(msg)
+        if not live_selftest:
+            print("  ↷ C5 live 自測未執行（預設純靜態、不連外；"
+                  "以 --with-selftest 或 JEV_CONTRACT_SELFTEST=1 啟用）")
         else:
-            print(f"  ✓ jevkit 自測通過（{r.stdout.strip().splitlines()[-1][:70]}）")
+            r = subprocess.run([sys.executable, kit, "--selftest"], capture_output=True, text=True)
+            if r.returncode != 0:
+                problems.append(
+                    f"scripts/jevkit.py: C5 live 自測失敗（顯式 opt-in ⇒ blocking）\n{r.stdout}{r.stderr}")
+            else:
+                print(f"  ✓ jevkit 自測通過（{r.stdout.strip().splitlines()[-1][:70]}）")
     else:
         problems.append("scripts/jevkit.py 不存在（規範 §0 要求所有呼叫者使用它）")
 

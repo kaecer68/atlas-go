@@ -48,6 +48,9 @@ func run() error {
 		migrateTradesSQLite      = flag.Bool("trades-sqlite", false, "Migrate trades from SQLite atlas.db (absent from JSONL — E5)")
 		migrateExperimentsSQLite = flag.Bool("experiments-sqlite", false, "Migrate experiments from SQLite atlas.db (C1: id space disjoint from JSONL)")
 		migrateSummariesSQLite   = flag.Bool("summaries-sqlite", false, "Migrate session summaries from SQLite atlas.db (C2: sessions missing from JSONL)")
+		migrateStockpicker       = flag.Bool("stockpicker", false, "Migrate stock_signal_outcomes + stock_win_rate from SQLite atlas.db into the PG tables created by migrations 000018/000019")
+		expectDB                 = flag.String("expect-db", "", "assert the postgres database name before migrations (e.g. atlas); aborts with the actual current_database on mismatch (M12 target guard)")
+		dryRun                   = flag.Bool("dry-run", false, "-stockpicker only: compute and print expected migration volumes + source/target digests without writing")
 		outcomesSQLiteSessions   = flag.Bool("outcomes-sqlite-sessions", false, "Backfill SQLite session-scoped outcomes (session_id != '') preserving session_id (A01)")
 		remapOutcomeSessionsFlag = flag.Bool("remap-outcome-sessions", false, "Remap PG date-format session_id to session-YYYYMMDD-daily (A01)")
 		sqlitePath               = flag.String("sqlite-path", "data/state/atlas.db", "source SQLite atlas.db path for -historical")
@@ -61,6 +64,24 @@ func run() error {
 	}
 
 	ctx := context.Background()
+
+	// Fail-closed (independent-review P1): -stockpicker writes production
+	// data, so it refuses to run without an explicit -expect-db target
+	// assertion — a forgotten flag must abort, not backfill whatever
+	// DATABASE_URL happens to point at. Other modes keep their legacy
+	// behavior (guard applies only when -expect-db is provided).
+	if err := requireStockpickerTargetAssertion(*migrateStockpicker, *expectDB); err != nil {
+		return err
+	}
+
+	// M12 target guard: assert the migration target before db.Init can apply
+	// any migration, so a stray DATABASE_URL (e.g. source .env pointing at
+	// atlas_dev) can never migrate the wrong database. Prints host/db identity
+	// (never the DSN or any credential).
+	if err := guardMigrateTarget(ctx, cfg.DatabaseURL, *expectDB); err != nil {
+		return err
+	}
+
 	pool, err := db.Init(ctx, cfg.DatabaseURL, cfg.MigrationsPath)
 	if err != nil {
 		return fmt.Errorf("init database: %w", err)
@@ -177,6 +198,15 @@ func run() error {
 	if *migrateAll || *migrateSummariesSQLite {
 		if err := migrateSummariesSQLiteData(ctx, pool, *sqlitePath); err != nil {
 			return fmt.Errorf("migrate summaries sqlite: %w", err)
+		}
+	}
+
+	// Deliberately NOT part of -all: the source is the job-local SQLite
+	// artifact which may legitimately be absent (stockpicker never ran), and
+	// -all must keep working in environments without stockpicker data.
+	if *migrateStockpicker {
+		if err := migrateStockpickerData(ctx, pool, *sqlitePath, *dryRun); err != nil {
+			return fmt.Errorf("migrate stockpicker: %w", err)
 		}
 	}
 
