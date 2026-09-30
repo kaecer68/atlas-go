@@ -74,7 +74,7 @@ func SaveWinRate(ctx context.Context, db *sql.DB, summary StockWinRateSummary) e
 		INSERT INTO stock_win_rate
 			(symbol, source, rolling_window, observations, hits, win_rate, wilson_lower, wilson_upper,
 			 confidence, calibration_status, net_cost_rate, avg_forward_return, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
 		ON CONFLICT(symbol, source, rolling_window) DO UPDATE SET
 			observations = excluded.observations,
 			hits = excluded.hits,
@@ -117,7 +117,7 @@ func LoadWinRate(ctx context.Context, db *sql.DB, symbol, source, window string)
 		SELECT symbol, source, rolling_window, observations, hits, win_rate, wilson_lower, wilson_upper,
 		       confidence, calibration_status, net_cost_rate, avg_forward_return, updated_at
 		FROM stock_win_rate
-		WHERE symbol = ? AND source = ? AND rolling_window = ?`,
+		WHERE symbol = $1 AND source = $2 AND rolling_window = $3`,
 		symbol, source, window,
 	).Scan(
 		&summary.Symbol,

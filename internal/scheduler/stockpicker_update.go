@@ -14,15 +14,17 @@
 //
 //   - 冪等（IdempotencyDay）：該 run 會產出的「最新 trigger date」
 //     （= AsOf 往前數 DefaultForwardDays 個交易日的日期）已有 outcomes →
-//     skip。失敗不會留下該日 outcome → 下一小時 tick 自動重試，BTM 記錄
-//     consecutive_failures 供監控。row-level 還有 ON CONFLICT DO NOTHING
-//     兜底，即使 gate 被繞過也不會重複寫入。
+//     skip。閘門以「所有已啟用目的地」為準（SSOT→PG batch B P1 修復）：
+//     dual-write 啟用時 PG 側缺該日 ⇒ 視為未完成 ⇒ 重跑補齊（ON CONFLICT
+//     冪等）；PG 計數失敗 ⇒ 整個 tick fail loud，不靜默。BTM 記錄
+//     consecutive_failures 供監控。
 //
 //   - enabled 預設 true：對齊本模組既有任務（narrative_weight_update /
 //     template_detector_scan / daily_report_generate 皆 Enabled: true），
-//     且本任務有「交易日 + 時段 + 交易日冪等 + row-level upsert」多重保護；
-//     資料只寫 job-local SQLite artifact，不碰 postgres target（除非
-//     ATLAS_STORE_BACKEND=postgres + 顯式 ExpectDB，該路徑有 M12 guard）。
+//     且本任務有「交易日 + 時段 + 目的地感知冪等 + row-level upsert」多重保護；
+//     資料寫 job-local SQLite artifact，dual-write 啟用時（ATLAS_STORE_BACKEND
+//     =postgres 且 ATLAS_STOCKPICKER_DUAL_WRITE 預設 ON）同時鏡射進 postgres
+//     target（該路徑有 M12 ExpectDB guard；kill switch 關閉則維持純 SQLite）。
 package scheduler
 
 import (
@@ -52,6 +54,7 @@ type StockpickerUpdateDeps struct {
 	TimeZone   *time.Location                                                                                  // nil → Asia/Taipei (fallback UTC+8)
 	Backend    string                                                                                          // "" → ATLAS_STORE_BACKEND env → job-local sqlite
 	ExpectDB   string                                                                                          // postgres migration-target guard (M12); "" default
+	DualWrite  bool                                                                                            // mirror outcomes/win-rates into PG on the postgres backend (SSOT→PG batch B kill switch); false default
 	Universe   string                                                                                          // comma-separated symbols (default: all quote symbols)
 	Conditions string                                                                                          // comma-separated condition IDs (default: parameters.json defaults)
 	DryRun     bool                                                                                            // compute coverage without persisting (observability/debug)
@@ -129,6 +132,7 @@ func StockpickerUpdateTaskFunc(deps StockpickerUpdateDeps) func(context.Context)
 			WorkDir:     deps.WorkDir,
 			Backend:     deps.Backend,
 			ExpectDB:    deps.ExpectDB,
+			DualWrite:   deps.DualWrite,
 			Idempotency: stockpicker.IdempotencyDay,
 			DryRun:      deps.DryRun,
 			Universe:    deps.Universe,

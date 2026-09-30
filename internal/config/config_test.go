@@ -371,6 +371,28 @@ func TestLoad_StockpickerExpectDB_EnvOr(t *testing.T) {
 	}
 }
 
+// TestLoad_StockpickerDualWrite_Knob pins the batch-B kill switch: default
+// ON (opt-out), explicit false/0/no/off disables, unparseable values stay ON
+// (a typo must not silently disable a data safeguard).
+func TestLoad_StockpickerDualWrite_Knob(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("ATLAS_STOCKPICKER_DUAL_WRITE", "")
+	if cfg := Load(); !cfg.StockpickerDualWrite {
+		t.Error("StockpickerDualWrite = false, want default true (opt-out knob)")
+	}
+	for _, v := range []string{"false", "0", "no", "off", "FALSE"} {
+		t.Setenv("ATLAS_STOCKPICKER_DUAL_WRITE", v)
+		if cfg := Load(); cfg.StockpickerDualWrite {
+			t.Errorf("StockpickerDualWrite = true, want false (env %q)", v)
+		}
+	}
+	t.Setenv("ATLAS_STOCKPICKER_DUAL_WRITE", "flase")
+	if cfg := Load(); !cfg.StockpickerDualWrite {
+		t.Error("StockpickerDualWrite = false on unparseable value, want true (fail-safe ON)")
+	}
+}
+
 func TestLoad_EnvFileDoesNotOverrideExisting(t *testing.T) {
 	dir := t.TempDir()
 	t.Chdir(dir)
