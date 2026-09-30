@@ -332,17 +332,51 @@ class StockLayerChecks(unittest.TestCase):
         self.assertLessEqual(ok.meta["estimated_cost_usd"], stock_layer.COST_CAP_USD)
         self.assertEqual(ok.meta["requests"], 20)
 
-    def test_stock_layer_two_stage_sizes(self):
-        """stage=screen ⇒ ≤400 cases；stage=confirm ⇒ 預設 60×40（但受成本上限保護）。"""
-        rows = [{
-            "date": f"2026-0{9}-{d:02d}", "symbol": f"S{i}.TW", "industry_id": f"ind{i % 3}",
-            "forward": {"ret": 0.01, "hit": i % 2 == 0}, "backward": {"backward_hit": True},
-        } for d in range(1, 21) for i in range(60)]
-        path = self._write_jsonl(rows)
-        screen = _stock_spec().build({"panel": path, "stage": "screen"})
-        self.assertLessEqual(len(screen.cases), 400)
-        self.assertEqual(screen.meta["stage"], "screen")
+    def _stage_fixture(self, industries, per_industry, dates):
+        rows = []
+        for iid in range(industries):
+            for k in range(per_industry):
+                for d in range(dates):
+                    rows.append({
+                        "date": f"2026-{(1 + d // 28):02d}-{(1 + d % 28):02d}",
+                        "symbol": f"I{iid}S{k}.TW",
+                        "industry_id": f"ind{iid}",
+                        "forward": {"ret": 0.01, "hit": (d + k) % 2 == 0},
+                        "backward": {"backward_hit": True, "backward_date": "2026-01-02"},
+                        "baselines": {"momentum_20d": 0.1},
+                    })
+        return self._write_jsonl(rows)
 
+    def test_stock_layer_stage_screen_is_20x20(self):
+        """★ 修 regression：stage=screen 必須真的 20×20（cases=400）。
+
+        修前 `merged_args` 先用 self.defaults 填好 max_symbols/max_dates，之後的
+        `setdefault(stage_defaults)` 永不生效 ⇒ screen 靜默變成 confirm 形狀（實測 40×39）。
+        """
+        path = self._stage_fixture(industries=12, per_industry=4, dates=25)
+        b = _stock_spec().build({"panel": path, "stage": "screen"})
+        self.assertEqual(b.meta["stage"], "screen")
+        self.assertEqual(b.meta["dates"], 20)
+        self.assertEqual(b.meta["symbols_sampled"], 20)
+        self.assertEqual(len(b.cases), 400)
+        self.assertEqual(len(b.requests), 20)
+
+    def test_stock_layer_stage_confirm_is_60x40(self):
+        """既有預期不變：stage=confirm ⇒ 40 dates × 60 symbols = 2,400 cases。"""
+        path = self._stage_fixture(industries=30, per_industry=2, dates=45)
+        b = _stock_spec().build({"panel": path, "stage": "confirm"})
+        self.assertEqual(b.meta["stage"], "confirm")
+        self.assertEqual(b.meta["dates"], 40)
+        self.assertEqual(b.meta["symbols_sampled"], 60)
+        self.assertEqual(len(b.cases), 2400)
+        self.assertEqual(len(b.requests), 40)
+
+    def test_stock_layer_explicit_arg_beats_stage_default(self):
+        """優先序：顯式 CLI 參數 > stage 預設 > self.defaults。"""
+        path = self._stage_fixture(industries=12, per_industry=4, dates=25)
+        b = _stock_spec().build({"panel": path, "stage": "screen", "max_dates": "5", "max_symbols": "8"})
+        self.assertEqual(b.meta["dates"], 5)
+        self.assertEqual(b.meta["symbols_sampled"], 8)
 
 class MetricMathExtra(unittest.TestCase):
     pass
