@@ -2426,13 +2426,27 @@ PY
     main clone @ d431f695（未改動）→ 同樣 4 個測試全紅
     lane worktree @ 6a5cf464      → 同樣 4 個測試全紅
   ```
-  ⇒ 屬 **既有／本機資料相依紅**（非 `misspell`／`staticcheck SA4000`／`gofmt` 等真失敗 ✓）
+  ⇒ 當時分類為「既有／本機資料相依紅」（非 `misspell`／`staticcheck SA4000`／`gofmt` 等真失敗 ✓）—— ⚠️ **此分類已被否證，見下節**
 - **交叉證據（為何判斷為「本機」而非「CI」）**：近期合併的 PR（#2161／#2163／#2165 等）**CI 全綠** ⇒ 這 4 個測試在 CI 環境會過
 - **影響（真實且立即）**：`.githooks/pre-push` 的 **Gate 1b＝有程式碼變更時跑 `ci-full`** ⇒ 這 4 個無關紅會**拒絕所有 lane 的 push** ✗
   （正規出口只有 `.githooks/pre-push:16` **記載**的 `PRE_PUSH_FULL=never`；`--no-verify` 為**禁止**用法 ✗）
 - **歸類**：issue **#1927**（`tests/scripts fixtures are not hermetic`）的**具體實例**
 - **最小修法建議**：讓期望值**不依賴本機 `data/state/**`**（注入固定 fixture ✓），或在 fixture 缺席時**明確 `skip` ＋ 具名 reason** ✓（**不得**靜默調整期望值 ✓）
-- **查法（可重現）**：`go test ./internal/eventdriven/ ./internal/stocktools/ -count=1`（在任何未改動 main 的 clone 上 ✓）
+- **★ 診斷更正（2026-09-30，lane A 實測否證）**：原記「**本機資料相依**」**不成立** ✗
+  - **反證**：①在**有** `data/state/**` 的 main clone 上，`internal/eventdriven` 的 3 個測試**照樣 FAIL** ②在**沒有** `data/state/**` 的 fresh worktree（`d431f695`）上 **4 個全 FAIL**
+    ⇒ 與本機資料無關 ✗
+  - **真因＝日期相依（calendar date bomb）**：
+    1. `internal/eventdriven` ×3：summary 的「關鍵事件：…」子句**只在 `len(active) > 0` 時**附加
+       （`internal/eventdriiven/predictor.go:549-555`；`active := p.calendar.DetectActiveEvents(now)` `:141`）
+       ⇒ **2026-09-30 當天無年曆窗**（實測 `DetectActiveEvents` = 0）⇒ 3 個斷言**必然**失敗
+    2. `internal/stocktools` ×1：fixture **硬編 trigger date**（`2026-06-01`／`2026-08-20`）⇒ 聚合只計請求窗內 outcome
+       ⇒ **`2026-06-01` 屆期後** observations 4→2、hits 2→0、date range 只剩單日
+  - **修法（保留意圖、不弱化斷言；僅 2 個測試檔，未動生產程式）**：
+    eventdriven ⇒ `RegisterRoutesWithDetectors` ＋ `h.SetNowFn(...)` **固定時鐘** ＋ `RefreshEvents` 固定基準 **2025-10-01**（該年曆年有 2 個窗）
+    ／ stocktools ⇒ `winRateFixtureDates()` 將 trigger date 改為**相對 now**（-60d／-30d）
+  - **反向證明（mutation）**：不固定時鐘 ⇒ 3 FAIL（`missing "關鍵事件"`）；還原硬編日期 ⇒ FAIL（`observations=2 want 4/2`）
+  - **同類前例**：#1585 的 2026-08-01 time-anchor 修法（同為測試依賴當日年曆狀態）
+- **查法（可重現）**：`go test ./internal/eventdriven/ ./internal/stocktools/ -count=1`（在任何未改動 main 的 clone 上 ✓；**修後應全綠** ✓）
 
 ---
 
