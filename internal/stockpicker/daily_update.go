@@ -461,7 +461,7 @@ func countExistingOutcomes(ctx context.Context, db *sql.DB, start, end time.Time
 	err := db.QueryRowContext(ctx, `
 		SELECT COUNT(*) FROM stock_signal_outcomes
 		WHERE source LIKE 'stockpicker-%'
-		  AND trigger_date >= ? AND trigger_date <= ?`,
+		  AND trigger_date >= $1 AND trigger_date <= $2`,
 		start.Format("2006-01-02"), end.Format("2006-01-02"),
 	).Scan(&n)
 	if err != nil {
@@ -477,7 +477,7 @@ func countOutcomesForTriggerDate(ctx context.Context, db *sql.DB, triggerDate ti
 	err := db.QueryRowContext(ctx, `
 		SELECT COUNT(*) FROM stock_signal_outcomes
 		WHERE source LIKE 'stockpicker-%'
-		  AND trigger_date = ?`,
+		  AND trigger_date = $1`,
 		triggerDate.Format("2006-01-02"),
 	).Scan(&n)
 	if err != nil {
