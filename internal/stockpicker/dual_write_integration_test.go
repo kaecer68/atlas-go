@@ -154,12 +154,17 @@ func TestRunDailyUpdate_DualWrite(t *testing.T) {
 	}
 }
 
-func TestRunDailyUpdate_DualWrite_PGFailureFailsRun(t *testing.T) {
-	// A PG destination without the stockpicker tables must fail the run
-	// loudly (never a silent SQLite-only skip).
+// barePGPool returns a connection to a freshly created database WITHOUT any
+// tables — every query against it fails (used to simulate a broken/migrated-
+// away PG destination).
+func barePGPool(t *testing.T) *pgxpool.Pool {
+	t.Helper()
 	admin := testdb.Connect(t, testdb.URL(t))
 	ctx := context.Background()
-	bareDB := "stockpicker_dwtest_bare"
+	bareDB := "stockpicker_dwtest_bare_" + strings.ToLower(t.Name()[len("TestRunDailyUpdate_"):])
+	if len(bareDB) > 60 {
+		bareDB = bareDB[:60]
+	}
 	if _, err := admin.Exec(ctx, "CREATE DATABASE "+bareDB); err != nil {
 		t.Skipf("cannot create bare database (needs createdb privilege): %v", err)
 	}
@@ -169,13 +174,18 @@ func TestRunDailyUpdate_DualWrite_PGFailureFailsRun(t *testing.T) {
 		}
 		admin.Close()
 	})
-	barePool := testdb.Connect(t, replaceDBName(t, testdb.URL(t), bareDB))
-	t.Cleanup(func() { barePool.Close() })
+	pool := testdb.Connect(t, replaceDBName(t, testdb.URL(t), bareDB))
+	t.Cleanup(func() { pool.Close() })
+	return pool
+}
 
+func TestRunDailyUpdate_DualWrite_PGFailureFailsRun(t *testing.T) {
+	// A PG destination without the stockpicker tables must fail the run
+	// loudly (never a silent SQLite-only skip).
 	_, _, err := runUpdate(t, RunDailyOptions{
 		Idempotency:  IdempotencyNone,
 		Conditions:   dwCondition,
-		PGOutcomesDB: stdlib.OpenDBFromPool(barePool),
+		PGOutcomesDB: stdlib.OpenDBFromPool(barePGPool(t)),
 	})
 	if err == nil {
 		t.Fatal("PG write failure must fail the run")
@@ -219,4 +229,139 @@ func replaceDBName(t *testing.T, dsn, dbName string) string {
 	}
 	return fmt.Sprintf("postgres://%s%s@%s:%d/%s?sslmode=disable",
 		cfg.ConnConfig.User, password, cfg.ConnConfig.Host, cfg.ConnConfig.Port, dbName)
+}
+
+// TestRunDailyUpdate_DualWrite_IdempotencyDay_HealsPGGap is the direct
+// regression of independent-review P1: with dual-write, a PG-side gap must
+// NOT be hidden behind the SQLite idempotency gate.
+//
+// Step 1 (bad PG, IdempotencyDay): fresh workdir → gate sees 0 SQLite rows →
+// run proceeds → PG write fails → error (the scheduler records the failure).
+// Step 2 (good PG, same workdir, IdempotencyDay): OLD code would see the
+// SQLite rows and return Skipped=true with PG forever empty (the P1
+// disproof); the fix counts the PG side, reruns, and heals the gap.
+// Step 3 (good PG, again): both destinations recorded → Skipped=true.
+func TestRunDailyUpdate_DualWrite_IdempotencyDay_HealsPGGap(t *testing.T) {
+	pool := stockpickerPGTestDB(t)
+	cleanupDualWriteRows(t, pool)
+	workdir := writeTestWorkdir(t)
+
+	if _, _, err := runUpdate(t, RunDailyOptions{
+		WorkDir:      workdir,
+		Idempotency:  IdempotencyDay,
+		Conditions:   dwCondition,
+		PGOutcomesDB: stdlib.OpenDBFromPool(barePGPool(t)),
+	}); err == nil {
+		t.Fatal("step 1: PG write failure must fail the run")
+	}
+
+	_, res2, err := runUpdate(t, RunDailyOptions{
+		WorkDir:      workdir,
+		Idempotency:  IdempotencyDay,
+		Conditions:   dwCondition,
+		PGOutcomesDB: stdlib.OpenDBFromPool(pool),
+	})
+	if err != nil {
+		t.Fatalf("step 2: %v", err)
+	}
+	if res2.Skipped {
+		t.Fatal("step 2: P1 regression — SQLite rows hid the PG gap and the rerun was skipped")
+	}
+	if n := pgOutcomeCount(t, pool); n == 0 {
+		t.Fatal("step 2: PG gap was not healed")
+	}
+
+	_, res3, err := runUpdate(t, RunDailyOptions{
+		WorkDir:      workdir,
+		Idempotency:  IdempotencyDay,
+		Conditions:   dwCondition,
+		PGOutcomesDB: stdlib.OpenDBFromPool(pool),
+	})
+	if err != nil {
+		t.Fatalf("step 3: %v", err)
+	}
+	if !res3.Skipped {
+		t.Fatal("step 3: both destinations recorded — the run must skip")
+	}
+}
+
+// TestRunDailyUpdate_DualWrite_IdempotencyRange_HealsPGGap covers the
+// IdempotencyRange gate with the same three-step contract as the Day case.
+func TestRunDailyUpdate_DualWrite_IdempotencyRange_HealsPGGap(t *testing.T) {
+	pool := stockpickerPGTestDB(t)
+	cleanupDualWriteRows(t, pool)
+	workdir := writeTestWorkdir(t)
+
+	if _, _, err := runUpdate(t, RunDailyOptions{
+		WorkDir:      workdir,
+		Idempotency:  IdempotencyRange,
+		Conditions:   dwCondition,
+		PGOutcomesDB: stdlib.OpenDBFromPool(barePGPool(t)),
+	}); err == nil {
+		t.Fatal("step 1: PG write failure must fail the run")
+	}
+
+	_, res2, err := runUpdate(t, RunDailyOptions{
+		WorkDir:      workdir,
+		Idempotency:  IdempotencyRange,
+		Conditions:   dwCondition,
+		PGOutcomesDB: stdlib.OpenDBFromPool(pool),
+	})
+	if err != nil {
+		t.Fatalf("step 2: %v", err)
+	}
+	if res2.Skipped {
+		t.Fatal("step 2: P1 regression — range gate skipped the PG-healing rerun")
+	}
+	if n := pgOutcomeCount(t, pool); n == 0 {
+		t.Fatal("step 2: PG gap was not healed")
+	}
+
+	_, res3, err := runUpdate(t, RunDailyOptions{
+		WorkDir:      workdir,
+		Idempotency:  IdempotencyRange,
+		Conditions:   dwCondition,
+		PGOutcomesDB: stdlib.OpenDBFromPool(pool),
+	})
+	if err != nil {
+		t.Fatalf("step 3: %v", err)
+	}
+	if !res3.Skipped {
+		t.Fatal("step 3: both destinations recorded — the run must skip")
+	}
+}
+
+// TestRunDailyUpdate_DualWrite_PGCountFailureIsDistinct pins the hard
+// requirement that a failing PG COUNT inside the idempotency gate is
+// distinguishable from "the day genuinely has 0 rows": the error must name
+// the postgres idempotency check (a "0 rows" outcome never errors).
+func TestRunDailyUpdate_DualWrite_PGCountFailureIsDistinct(t *testing.T) {
+	pool := stockpickerPGTestDB(t)
+	cleanupDualWriteRows(t, pool)
+	workdir := writeTestWorkdir(t)
+
+	// Heal both destinations first.
+	if _, _, err := runUpdate(t, RunDailyOptions{
+		WorkDir:      workdir,
+		Idempotency:  IdempotencyNone,
+		Conditions:   dwCondition,
+		PGOutcomesDB: stdlib.OpenDBFromPool(pool),
+	}); err != nil {
+		t.Fatalf("seed run: %v", err)
+	}
+
+	// Now the gate reaches the PG count (SQLite side has rows) and that
+	// count fails against a table-less database.
+	_, _, err := runUpdate(t, RunDailyOptions{
+		WorkDir:      workdir,
+		Idempotency:  IdempotencyDay,
+		Conditions:   dwCondition,
+		PGOutcomesDB: stdlib.OpenDBFromPool(barePGPool(t)),
+	})
+	if err == nil {
+		t.Fatal("PG count failure inside the gate must fail the run")
+	}
+	if !strings.Contains(err.Error(), "idempotency check (postgres)") {
+		t.Fatalf("error must name the postgres idempotency count, got: %v", err)
+	}
 }

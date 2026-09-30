@@ -188,63 +188,84 @@ func RunDailyUpdate(ctx context.Context, opts RunDailyOptions) (RunDailyResult, 
 	outStore := NewSignalOutcomeStore(outcomeDB)
 	winStore := NewWinRateStore(outcomeDB)
 
-	// Idempotency: skip when this run's contribution is already recorded.
+	// Resolve the dual-write destination BEFORE the idempotency gate: the
+	// gate below must reflect every enabled destination (P1 fix, see the
+	// idempotency block).
+	pgOutcomesDB, pgPool, err := resolvePGDest(ctx, opts, backend, opts.Panel != nil)
+	if err != nil {
+		return res, err
+	}
+	if pgOutcomesDB != nil && opts.PGOutcomesDB == nil {
+		// Derived handle (stdlib wrapper over the opened pool): close at the
+		// end of the run. Injected handles are owned by the caller.
+		defer func() { _ = pgOutcomesDB.Close() }()
+	}
+
+	// Idempotency: skip when this run's contribution is already recorded in
+	// EVERY enabled destination. With dual-write, the SQLite count alone
+	// would skip the rerun that should heal a PG-side gap, leaving that day
+	// permanently missing from PG (independent-review P1, 2026-09-30).
 	if opts.Idempotency != IdempotencyNone && !opts.DryRun {
-		var n int
+		var newest time.Time
+		var sqliteN int
 		switch opts.Idempotency {
 		case IdempotencyDay:
-			newest := newestTriggerDate(opts.AsOf, DefaultForwardDays)
-			n, err = countOutcomesForTriggerDate(ctx, outcomeDB, newest)
-			if err != nil {
-				return res, fmt.Errorf("idempotency check: %w", err)
+			newest = newestTriggerDate(opts.AsOf, DefaultForwardDays)
+			sqliteN, err = countOutcomesForTriggerDate(ctx, outcomeDB, newest)
+		default: // IdempotencyRange
+			sqliteN, err = countExistingOutcomes(ctx, outcomeDB, opts.Start, opts.End)
+		}
+		if err != nil {
+			return res, fmt.Errorf("idempotency check: %w", err)
+		}
+		recorded := sqliteN > 0
+		if recorded && pgOutcomesDB != nil {
+			// The gate counts the PG side too: a day/range missing there is
+			// "not yet recorded" and must rerun to heal it. A PG COUNT
+			// failure is a hard error naming the postgres side — never
+			// silently read as "0 rows" (that would misjudge a failed count
+			// as "not yet run" and fire a doomed rerun).
+			var pgN int
+			switch opts.Idempotency {
+			case IdempotencyDay:
+				pgN, err = countOutcomesForTriggerDate(ctx, pgOutcomesDB, newest)
+			default:
+				pgN, err = countExistingOutcomes(ctx, pgOutcomesDB, opts.Start, opts.End)
 			}
-			if n > 0 {
+			if err != nil {
+				return res, fmt.Errorf("idempotency check (postgres): %w", err)
+			}
+			recorded = pgN > 0
+		}
+		if recorded {
+			if opts.Idempotency == IdempotencyDay {
 				logging.Info("stockpicker_daily_update", "skip_day_done",
 					"asof", opts.AsOf.Format("2006-01-02"),
 					"newest_trigger", newest.Format("2006-01-02"),
-					"existing", n)
-				res.Existing = n
-				res.Skipped = true
-				return res, nil
+					"existing", sqliteN)
 			}
-		default: // IdempotencyRange
-			n, err = countExistingOutcomes(ctx, outcomeDB, opts.Start, opts.End)
-			if err != nil {
-				return res, fmt.Errorf("idempotency check: %w", err)
-			}
-			res.Existing = n
-			if n > 0 {
-				res.Skipped = true
-				return res, nil
-			}
+			res.Existing = sqliteN
+			res.Skipped = true
+			return res, nil
+		}
+		if opts.Idempotency == IdempotencyRange {
+			res.Existing = sqliteN
 		}
 	}
 
 	panel := opts.Panel
-	// pgOutcomesDB is the dual-write destination (nil = SQLite-only, the
-	// pre-batch-B behavior). Resolution order: injected handle wins; else,
-	// when the postgres backend runs a real panel build, derive the handle
-	// from the same pool as the quote store.
-	var pgOutcomesDB *sql.DB
-	switch {
-	case opts.PGOutcomesDB != nil:
-		pgOutcomesDB = opts.PGOutcomesDB
-	case backend == "postgres" && opts.DualWrite && !opts.DryRun:
-		// Panel must be built here to share the pool; an injected panel
-		// without an injected handle cannot dual-write.
-		if panel != nil {
-			return res, fmt.Errorf("dual-write requested (backend=postgres) but panel was injected without PGOutcomesDB; pass PGOutcomesDB explicitly")
-		}
-	}
 	if panel == nil {
 		if backend == "postgres" {
-			pool, err := openPostgres(ctx)
-			if err != nil {
-				return res, err
-			}
-			if opts.DualWrite && !opts.DryRun {
-				pgOutcomesDB = stdlib.OpenDBFromPool(pool)
-				defer func() { _ = pgOutcomesDB.Close() }()
+			// Reuse the pool resolvePGDest opened for the derived dual-write
+			// handle; open one only when dual-write did not (kill switch off,
+			// or a dry-run that still needs quotes).
+			pool := pgPool
+			if pool == nil {
+				opened, err := openPostgres(ctx)
+				if err != nil {
+					return res, err
+				}
+				pool = opened
 			}
 			panel, err = NewRealPanel(ctx, ledger.NewPostgresQuoteStore(pool), opts.WorkDir)
 			if err != nil {
@@ -303,8 +324,12 @@ func RunDailyUpdate(ctx context.Context, opts RunDailyOptions) (RunDailyResult, 
 	}
 	// Dual-write (SSOT→PG batch B): mirror the just-committed SQLite batch
 	// into PG. A PG failure fails the whole run — the scheduler records the
-	// failure and retries on the next tick; ON CONFLICT DO NOTHING makes the
-	// retry idempotent, and the SQLite artifact is never silently skipped.
+	// failure, and the NEXT tick's idempotency gate re-runs the day because
+	// it counts every enabled destination (a PG-side gap reads as "not yet
+	// recorded"); ON CONFLICT DO NOTHING / upsert then make the healing
+	// rewrite idempotent. The already-committed SQLite rows are never rolled
+	// back (compensating deletes on the hot path are riskier than an
+	// idempotent rewrite).
 	if pgOutcomesDB != nil {
 		if err := RecordOutcomes(ctx, pgOutcomesDB, outcomes); err != nil {
 			return res, fmt.Errorf("record outcomes (postgres): %w", err)
@@ -415,6 +440,36 @@ func openOutcomeDB(workDir string) (*sql.DB, error) {
 		return nil, fmt.Errorf("init schema: %w", err)
 	}
 	return db, nil
+}
+
+// resolvePGDest picks the dual-write destination for this run.
+//
+// Resolution order: an injected PGOutcomesDB wins (explicit caller intent —
+// the test seam); otherwise the postgres backend derives a handle from the
+// migration-target pool opened for the quote store, but ONLY when the
+// DualWrite kill switch is ON and the run is not a dry-run. Every other
+// combination yields nil = SQLite-only, the pre-batch-B behavior (no PG
+// connection is ever attempted on non-postgres backends).
+//
+// The returned pool is non-nil only when this helper opened it (derived
+// path); the panel build reuses it instead of opening a second connection.
+// A derived pgDB is stdlib.OpenDBFromPool(pool) — the caller closes it
+// (injected handles stay caller-owned).
+func resolvePGDest(ctx context.Context, opts RunDailyOptions, backend string, panelInjected bool) (pgDB *sql.DB, pool *pgxpool.Pool, err error) {
+	if opts.PGOutcomesDB != nil {
+		return opts.PGOutcomesDB, nil, nil
+	}
+	if backend != "postgres" || !opts.DualWrite || opts.DryRun {
+		return nil, nil, nil
+	}
+	if panelInjected {
+		return nil, nil, fmt.Errorf("dual-write requested (backend=postgres) but panel was injected without PGOutcomesDB; pass PGOutcomesDB explicitly")
+	}
+	pool, err = openPostgres(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+	return stdlib.OpenDBFromPool(pool), pool, nil
 }
 
 // openPostgres connects to the migration target, applies pending migrations,
