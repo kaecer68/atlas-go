@@ -1171,7 +1171,7 @@
 
 ### FU-20260926-21 — `scripts/ci/check_jev_contract.sh` **會真的連外呼叫 Jev 服務**：外部服務／網路一 flake 就紅 ⇒ 擋住合法 push（同日第二次同型事故）
 
-- **狀態**：`open`
+- **狀態**：`done`（2026-09-30 完成；**PR #2188**，squash `40b63ae5`）
 - **記錄日期**：2026-09-26
 - **來源**：2026-09-26 推送 PR #2029（`fix/ci-swallowed-errors`，commit `e2e1b0de`）時，pre-push hook 的
   `make ci-full` 在 `make ci-gate` → `ci-quick` 階段紅：
@@ -1205,6 +1205,17 @@
 - **不可動**：`.githooks/pre-push` 本身（該檔已由 FU-20260926-15 佔用）。
 
 ---
+**FU-20260926-21 · 完成記錄（2026-09-30）**
+
+- **處置**：`scripts/jev-contract-check.py` 的 **C5 自測改為 opt-in**（`--with-selftest`／`JEV_CONTRACT_SELFTEST=1`；`JEV_CONTRACT_STRICT_SELFTEST=1` 保留為**相容別名**）⇒ **預設路徑純靜態、不連外** ✓；opt-in 失敗仍 **blocking** ✓
+- **同步**：契約測試**反向重寫**（預設須「不含 `實際呼叫`」＋出現「live 自測未執行」提示 ✓）＋ `scripts/ci/check_jev_contract.sh` 檔頭註解更正（原「AST 靜態分析，不連網」在改動前**不實** ✗）＋ `docs/jev/JEV-USAGE-CONTRACT.md` **§6.1** 文件化「live 為手動入口」
+- **驗收（附原文）**：**成對正反控制**（預設不呼叫 ✓／opt-in 走 live 且 blocking ✓）＋ **mutation**（拿掉旗標判斷 ⇒ 預設案例**轉紅** ✓）＋ ★**成本 0**（測試一律以無效 key 執行 ⇒ live 路徑為 **401 被拒** ⇒ **不計費** ✓）
+- **併入**：**PR #2188**（4 檔），squash **`40b63ae5`**；內容身分 4/4 blob SAME ✓
+- ★ **證據取法（重要）**：`ci-gate`／`ci-full` 對**通過的腳本抑制輸出** ⇒ **不可**用 gate log 證明「C5 沒跑」✗ ⇒ 一律以**兩項獨立執行**佐證：
+  ① `python3 scripts/jev-contract-check.py --root .` ⇒ 輸出「live 自測未執行」＋ `grep -c '實際呼叫' → 0` ✓
+  ② `bash tests/scripts/test-jev-contract-c5-selftest.sh` ⇒ `PASS=4 FAIL=0`；**mutation**（拿掉旗標判斷）⇒ `PASS=3 FAIL=1`（預設案例轉紅 ✓）
+- **效果**：pre-push 的 `ci-full` **不再因外部 flake 擋合法 push** ✓（本條根因消失 ✓）
+
 ### FU-20260926-18 — E8：`internal/config` 的 `WalkDir("internal")` 偶發假紅（apigateway 測試在 repo 樹內寫／刪相對 `data/`）
 
 - **狀態**：`done`
@@ -2567,6 +2578,33 @@ PY
 `FU-20260929-08`～`-13` 來自 `#1944` 的 T1／T2 系列
 > （`#2153` T1、`#2155` T2 拆標籤、`#2154` I36 敘述修正）與 G3 缺口盤查；其中 T2 的生產讀數由 T2 線實測，
 > 本批僅登錄（來源具名於各條）。
+
+
+**FU-20260930-11 · 進展補記（root，2026-09-30）**
+
+- ★ **①「6 處 handler 硬讀 JSONL」⇒ 已不成立（不是現況）**
+  - 該敘述出自 `docs/specs/dashboard-metrics-ssot-spec.md` **§1「問題陳述（實測證據，2026-09-03 07:27 UTC）」**——是**當日快照**，非現況；
+  - **同日即修**：`82d434d92`（2026-09-03，SSOT 接線：`SessionHistoryProvider` ＋ **移除 6 處違規 `os.ReadDir`** ＋ source/degraded）與 `1ab932449`（P1-4）**皆已在 main**（root 以 `git merge-base --is-ancestor` ＋ 讀 `internal/monitoring/dashboard_api.go` 複驗：`1442/1444`、`1564`、`1823/1832` 注入點均在）；
+  - ⇒ 本條 ① 由「可追蹤化」轉為「**文件真相修正**」：spec §1 標為**已解決（2026-09-03，`82d434d92`）**，由遷移**批次 D** 執行；
+  - 殘留 3 處 raw JSONL 讀取（`tax` fallback／`dataloaders`／`data_integrity`）＝**清理項、非 SSOT 缺口** ⇒ **批次 E**（可選）。
+- ★ **②備份 ⇒ 已完成（2026-09-30）**
+  - `pg_dump -Fc` 生產 `atlas` ＋ `--schema-only` ＋ 主機 SQLite（**`sqlite3 .backup`，非 `cp`**）＋ JSON 快照；四項驗證全通過（含**還原到臨時 DB 逐表比對**）；
+  - ⇒ **還原點鎖定 `~/workspace/atlas-backups/20260930-1934/`**（後續任何 store 遷移／切換的**唯一還原點**）。
+- ★ **③遷移 ⇒ 進行中**（業主裁定：**全部 SSOT 收斂到 PG**）
+  - 設計：`~/workspace/atlas-notes/2026-09-30-atlas-ssot-pg-convergence-design.md`（完整 inventory ＋ 逐 store 設計 ＋ R1–R8 風險 ＋ **批次 A–E（各自可獨立驗收／回滾）** ＋ T1–T10）；
+  - **批次 A**：`cmd/migrate-data -stockpicker`（`-dry-run`、`-expect-db` **fail-closed**、digest 對帳、冪等成對驗收）＝ **PR #2184**；
+  - **批次 B**：`?`→`$n`（**雙方言單一寫法**）＋ `RunDailyUpdate` **dual-write**（失敗不靜默）＝ **PR #2186**（獨立審查 1×P1 ⇒ 修復中）；
+  - 本條事實 2／3／4（SQLite 為該鏈唯一事實來源、PG 同名表 0 曾致誤判、備份未涵蓋）都指向**同一條** stockpicker 訊號結果鏈 ⇒ 遷移即其根治。
+
+### FU-20260930-12 — `internal/stockpicker` 的 PG pool 每 tick 新建未關：資源隨 tick 累積（**pre-existing**）
+
+- **狀態**：`open`
+- **記錄日期**：2026-09-30
+- **來源**：PR #2186（批次 B dual-write）的**獨立審查**發現；審查者判定為 **pre-existing**（舊 `openPostgres…` 同款），**非該 PR 引入** ⇒ 當時不併入該 PR。
+- **事實**：`internal/stockpicker/daily_update.go`（經 `openPostgres…` 路徑）**每 tick 建立 pgxpool 但未 `Close`**；`stdlib.OpenDBFromPool` 的 `*sql.DB` wrapper 本身**無洩漏**（`MaxIdleConns(0)` ⇒ 連線逐操作還池）。
+- **風險**：長時間執行下連線／資源累積（與 pool 上限互動）；**目前無觀測指標** ⇒ 不易察覺。
+- **最小處置**：①tick 結束 `defer pool.Close()`（或改用長生命週期共享 pool）②加「pool 建立／關閉次數」可觀測讀數。
+- **查法（可重現）**：`grep -n "pgxpool.New\|NewPool\|defer .*Close" internal/stockpicker/daily_update.go` ⇒ 確認建立與關閉**不對稱**。
 
 ## 相關文件
 
