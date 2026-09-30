@@ -2,7 +2,7 @@
 # jev-docs: https://docs.typesafe.ai/primitives  https://docs.typesafe.ai/noul  https://docs.typesafe.ai/score  https://docs.typesafe.ai/choice
 #   ⚠️ 官方未涵蓋（我們的工程實作）：User-Agent 強制（Cloudflare 403）、WAF 降級、
 #       backoff 的 base/jitter/上限、state 截斷（官方只要求 429/529 指數退避 + honor Retry-After）
-#   ⚠️ 已知缺口：noul() 尚未支援官方 `criteria:{true,false}`（見 docs/jev/JEV-USAGE-MAP.md）
+#   規範與出處：docs/jev/JEV-USAGE-CONTRACT.md（noul() 已支援官方 criteria:{true,false} —— noul(instructions, criteria) 會驗證 true/false 鍵）
 """jevkit — 本生態唯一被認可的 Jev (TypeSafe System One) 呼叫方式。
 
 為什麼要有這支：2026-09 的實測反覆踩到同一批坑（詳見 docs/jev/JEV-USAGE-CONTRACT.md）。
