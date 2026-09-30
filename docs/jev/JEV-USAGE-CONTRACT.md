@@ -102,6 +102,22 @@ cal = calibrate_threshold([(0.9, True), (0.2, False)], min_precision=0.95)
 > 例外者屬既有生產程式碼，改動風險高於收益；新程式碼一律從 `jevkit` 起手（CI 會擋）。
 > Mac Mini 已安裝 `~/.local/lib/jevkit.py` 供該機新程式使用。
 
+## 6.1 契約檢查器的自測（C5）——**預設純靜態；live 為手動入口**
+
+- **預設不再連外** ✓：`scripts/jev-contract-check.py` 預設只做 AST／靜態檢查 ⇒
+  **預設路徑永不因網路或限流失敗而紅** ✓（`make ci-quick`／pre-push／CI 皆走預設 ✓）
+- **live 檢查保留為手動入口** ✓（兩個確切命令）：
+  - `python3 scripts/jevkit.py --selftest` —— 直接驗證 jevkit 對 API 的呼叫
+  - `python3 scripts/jev-contract-check.py --with-selftest` —— 靜態檢查 ＋ live 自測
+  - （等義環境變數：`JEV_CONTRACT_SELFTEST=1`；`JEV_CONTRACT_STRICT_SELFTEST=1` 為**相容別名** ✓）
+- **opt-in 下的失敗語意** ✓：live 自測失敗 ⇒ **blocking（rc≠0）** ✓（顯式要求才執行的檢查，不該再降級為警告）
+- **動機與出處** ✓：原設計把**真實連外呼叫**放在閘門內 ⇒ 外部服務／網路一 flake 就擋合法 push ✗
+  （`FU-20260926-21`）；且一次 live 檢查成本 ≈ **$0.000012**（281 input tokens @ $0.042/Mtok，官方價 ✓）
+  ⇒ 改為「**預設零連外、要驗才驗**」✓
+
+> 範圍：本節只改 **C5 的 live 部分**。`# jev-docs:` 標頭要求（**C6**）與其餘靜態檢查
+> （**C1–C4**、**C6**、**C7**）**不受影響** ✓ —— 它們從不連外，且仍是預設路徑的一部分 ✓
+
 ## 7. 官方文件出處（**normative 依據**；本契約每一條都指回這裡）
 
 > 索引：**`https://docs.typesafe.ai/llms.txt`**（57 條；新增規則前先讀索引 ✓）。
