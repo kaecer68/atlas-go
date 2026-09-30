@@ -2229,6 +2229,12 @@ PY
 - **部署驗收（窗口）**：log 必須出現 `official price adjustments applied` 且 `symbols_adjusted > 0`（若見 `official adjusted prices unavailable…` ⇒ 未命中推導路徑 ⇒ 等於沒修）
 - **同機制的第二表現（本次量測發現）**：收集器端 `screened_items` 對 `6669.TW` 的 `factor_scores` 為退化值（`momentum=-1, quality=-1, liquidity=0`）⇒ `ai-desk-01`／`growth-momentum-01` 因此被 `momentum_20d.min=-0.5` 與 `factor_quality_gate` 擋下。
   ⇒ **部署後複驗**：`6669.TW` 的 `momentum ≠ −1`（且 quality／liquidity 不再同時退化）；若拒絕仍在，**必須報出殘留的 `criterion`／`threshold`／`actual_value`**，不得直接判「#2151 未生效」（該符號仍可能過不了其他閘）
+- **部署後複驗結果（2026-09-30，lane B 唯讀；場次 `session-20260930-daily`，`ts 00:16:49Z` ≥ 分界 00:08:50Z）**：
+  ✅ **PASS** — ①部署後**無任何** `momentum_20d_min` 拒絕（部署前 ai＋growth 共 20 row 全為該符號）②skip 桶位移對帳：`ai-desk-01` `{fq2,no_quote45}`→`{fq3,no_quote1}`、`growth-momentum-01` `{fq5,no_quote44}`→`{fq6}` ⇒ 兩者各恰好 **+1 進品質閘**＝該符號 ✓ ③輸入端自行重算（官方序列）**20 根動能 = −0.13** vs raw **−0.7083**（raw 巨幅跳點 2026-09-01 `7800→2610` ✓）
+  ⚠️ 限制（申報）：引擎端**不印出**該符號的 `factor_scores.momentum`（既非 rejected 亦非 recommended）⇒ 結論來自「準則通過＋桶位移＋輸入重算」三層，非直讀 ✓
+  ★ **可見行為變更（本條的預期效果）**：`etf-rotation-01` 的建議集合 **1 進（`00929.TW`）／2 出（`00881.TW`、`00891.TW`）**；
+  對照組 `session-20260927→0928→0929` 變動 = **0**（排除日常市場差異 ✓）；該 3 檔 raw vs 官方序列在 **517／517／539（共 546）根**上比值 ≠1 ⇒ 屬本條調整的 **replay 44 檔** ✓
+  ⇒ 已另記於 `#1971` 的部署分界附錄 ✓
 - **現況**：replay/extended 的價格序列未做公司行為（分割／減資）調整 ⇒ **索引式** `ret20`／`volatility`
   對分割符號產生**假跌**（實證：3/44 檔）。
 - **影響**：任何以「索引」抓取該序列的因子在分割日附近會看到不存在的崩跌 ⇒ 汙染特徵與回測結論。
