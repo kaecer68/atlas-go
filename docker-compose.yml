@@ -465,7 +465,7 @@ services:
       - CRON_TASK_NAME=cron_c07_collect
       - ATLAS_LIVENESS_URL=http://atlas-go:18080/api/internal/task-liveness
       - ATLAS_BASE_URL=http://atlas:18080
-      - C07_OBS_LOG=/app/.omo/evidence/sector-prediction-observation-log.md
+      - C07_OBS_LOG=/app/logs/c07/sector-prediction-observation-log.md
       - C07_ALERT_DIR=/app/data/state/alerts
       - C07_TZ=Asia/Taipei
     volumes:
@@ -503,7 +503,7 @@ services:
       - CRON_COMMAND=/app/scripts/c07-evaluate.sh
       - CRON_TASK_NAME=cron_c07_evaluate
       - ATLAS_LIVENESS_URL=http://atlas-go:18080/api/internal/task-liveness
-      - C07_OBS_LOG=/app/.omo/evidence/sector-prediction-observation-log.md
+      - C07_OBS_LOG=/app/logs/c07/sector-prediction-observation-log.md
       - C07_REPORT_DIR=/app/reports/c07-evaluation
       - C07_TZ=Asia/Taipei
     volumes:
@@ -543,7 +543,6 @@ services:
       - CRON_COMMAND=/app/cron-quote-backfill
       - CRON_TASK_NAME=cron_quote_backfill
       - ATLAS_LIVENESS_URL=http://atlas-go:18080/api/internal/task-liveness
-      - FINMIND_API_KEY=${FINMIND_API_KEY:-}
     volumes:
       - ./data:/app/data
       - ./reports:/app/reports
