@@ -1005,20 +1005,25 @@ func (tec *EventCalendar) GetEventsForDate(date time.Time) []CalendarEvent {
 	return tec.DetectActiveEvents(date)
 }
 
-// IsTaiwanTradingDay reports whether `date` is a weekday outside every Taiwan
-// public-holiday window (long_holiday event). Used by alert rules to suppress
-// spurious "no events" signals on weekends and lunar/fixed-date holidays.
+// IsTaiwanTradingDay reports whether `date` is a Taiwan trading day — a
+// weekday that is NOT a Taiwan public holiday. Used by alert rules and tasks to
+// suppress spurious "no data / no events" signals on weekends and holidays.
+//
+// The judgement is date-exact and comes from the authoritative table
+// (internal/taiwanholidays, via marketdata), which includes the adjusted
+// holidays (補假/調整放假, e.g. 2026-09-28 教師節).
+//
+// It previously returned false for any date inside a long_holiday EVENT window,
+// where buildHolidayEvent defines each public holiday as [holiday-3d,
+// holiday+2d]. That window is a sentiment window ("連假前後交易淡季"), not a
+// closure, so 4 trading days around every holiday were reported as non-trading.
+// For 2026 中秋 (09-25) the window covered 09-22..09-27, i.e. three real trading
+// days; gates keyed on this method skipped them (issue #1947). It also missed
+// holidays that produce no long_holiday occurrence (the adjusted ones), so
+// 2026-09-28 was judged a trading day. A trading-day judgement must be
+// date-exact on both sides.
 func (tec *EventCalendar) IsTaiwanTradingDay(date time.Time) bool {
-	wd := date.Weekday()
-	if wd == time.Saturday || wd == time.Sunday {
-		return false
-	}
-	for _, evt := range tec.GetEventsForDate(date) {
-		if evt.EventType == string(EventLongHoliday) {
-			return false
-		}
-	}
-	return true
+	return taiwanholidays.IsTradingDay(date)
 }
 
 // GetAllActiveEventNames returns the names of currently active events.

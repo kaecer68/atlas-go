@@ -39,12 +39,32 @@ const (
 // ChannelCoverageExpectation describes how we expect a channel's data to be
 // represented on disk and how far back we care about.
 type ChannelCoverageExpectation struct {
-	ChannelID    string `json:"channel_id"`
+	ChannelID string `json:"channel_id"`
+	// DataDir is the on-disk directory name under data/state that actually
+	// holds this channel's files. Empty means "same as ChannelID".
+	//
+	// The two names are NOT always the same: the producer (channel adapter)
+	// picks the directory, while the consumer (this scanner) historically
+	// derived it from the channel id. Where they diverged the scanner pointed
+	// at a directory that is never written and reported the channel as
+	// permanently missing coverage, which is a false alert (channel-dir
+	// contract drift). Set DataDir to the producer's name whenever the two
+	// differ.
+	DataDir      string `json:"data_dir,omitempty"`
 	CoverageType string `json:"coverage_type"` // daily_files | latest_file | none
 	// FilePattern is a Go time.Format layout string, e.g. "20060102.json".
 	FilePattern  string `json:"file_pattern,omitempty"`
 	LookbackDays int    `json:"lookback_days"`
 	Enabled      bool   `json:"enabled"`
+}
+
+// dir returns the data/state subdirectory this expectation reads. It is the
+// producer's directory name (DataDir) when set, otherwise the channel id.
+func (e ChannelCoverageExpectation) dir() string {
+	if e.DataDir != "" {
+		return e.DataDir
+	}
+	return e.ChannelID
 }
 
 // defaultChannelCoverageExpectations is the initial, hard-coded coverage map.
@@ -65,9 +85,16 @@ func defaultChannelCoverageExpectations() []ChannelCoverageExpectation {
 		{ChannelID: "fubon", CoverageType: CoverageLatestFile, FilePattern: "latest.json", LookbackDays: 7, Enabled: true},
 		{ChannelID: "geopolitical", CoverageType: CoverageLatestFile, FilePattern: "latest.json", LookbackDays: 7, Enabled: true},
 		// G01 live (2026-09-01): latest.json refreshed on each weekly fetch.
-		{ChannelID: "tdcc_equity_dispersion", CoverageType: CoverageLatestFile, FilePattern: "latest.json", LookbackDays: 14, Enabled: true},
-		// G02 live (2026-09-01): per-day report files.
-		{ChannelID: "twse_sbl", CoverageType: CoverageDailyFiles, FilePattern: "20060102_sbl.json", LookbackDays: 30, Enabled: true},
+		// The adapter writes to data/state/tdcc_dispersion (see
+		// register_adapters.go NewTDCClientChannelAdapter SetStorageDir), NOT
+		// to a directory named after the channel id — hence the explicit
+		// DataDir. Without it the scanner read a non-existent
+		// data/state/tdcc_equity_dispersion and raised a daily false gap.
+		{ChannelID: "tdcc_equity_dispersion", DataDir: "tdcc_dispersion", CoverageType: CoverageLatestFile, FilePattern: "latest.json", LookbackDays: 14, Enabled: true},
+		// G02 live (2026-09-01): per-day report files. Adapter storage dir is
+		// data/state/sbl (register_adapters.go, TWSESBL adapter), not the
+		// channel id — same channel-dir contract drift as G01 above.
+		{ChannelID: "twse_sbl", DataDir: "sbl", CoverageType: CoverageDailyFiles, FilePattern: "20060102_sbl.json", LookbackDays: 30, Enabled: true},
 		// Stubs / file-backed / conditional channels with no uniform date layout.
 		{ChannelID: "janus_regime", CoverageType: CoverageNone, Enabled: false},
 		{ChannelID: "sector_data", CoverageType: CoverageNone, Enabled: false},
@@ -150,7 +177,7 @@ func (g *gapDetector) detectDailyFiles(reference time.Time, exp ChannelCoverageE
 		}
 		dateStr := d.Format("2006-01-02")
 		fileName := d.Format(exp.FilePattern)
-		filePath := filepath.Join(g.workDir, "data", "state", exp.ChannelID, fileName)
+		filePath := filepath.Join(g.workDir, "data", "state", exp.dir(), fileName)
 		expected = append(expected, dateStr)
 		if _, err := os.Stat(filePath); err != nil {
 			missing = append(missing, dateStr)
@@ -164,7 +191,7 @@ func (g *gapDetector) detectDailyFiles(reference time.Time, exp ChannelCoverageE
 
 func (g *gapDetector) detectLatestFile(reference time.Time, exp ChannelCoverageExpectation) ChannelGapReport {
 	report := ChannelGapReport{ChannelID: exp.ChannelID}
-	filePath := filepath.Join(g.workDir, "data", "state", exp.ChannelID, exp.FilePattern)
+	filePath := filepath.Join(g.workDir, "data", "state", exp.dir(), exp.FilePattern)
 	info, err := os.Stat(filePath)
 	if err != nil {
 		report.Error = fmt.Sprintf("%s not accessible: %v", exp.FilePattern, err)
