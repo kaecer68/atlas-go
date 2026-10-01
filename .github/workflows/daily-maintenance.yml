@@ -66,6 +66,118 @@ jobs:
         # 在本機 A/B 實測：warn ⇒ node exit 0；error ⇒ node exit 1），且沒有步驟層 continue-on-error。
         if-no-files-found: error
 
+    # 2026-10-01（A 案，業主定案）：cron 任務的存活監控。daemon 自己的 staleness 告警對 cron row
+    # **永遠不會響**：internal/liveness/staleness.go 的 CheckOnce 對「不在 BackgroundTaskManager
+    # 的 row」直接 continue，且 cron row 沒有 interval ⇒ IsStale 的 `interval <= 0` 分支回 false。
+    # 實測 2026-10-01（/api/dashboard/task-liveness：114 tasks、stale_count=0）：
+    #   cron_quote_backfill → consecutive_failures=8（last_error: exit code 1）
+    #   cron_c07_evaluate   → consecutive_failures=6（last_error: exit code 2）
+    # 兩者在全站**0 告警**。A 案＝不改 Go、不加空轉的 Prometheus rule，改由本 job
+    # （GitHub runner 是唯一的外部 vantage point）把「正確行為」釘死：
+    #   (a) HTTP 200；(b) 頂層 stale_count == 0；
+    #   (c) 任何 cron_* 任務 consecutive_failures > 0 ⇒ exit 1（補上缺失的那個告警）；
+    #   (d) 任何 cron_* 任務出現 interval 欄位 ⇒ exit 1（＝它變成可判 stale 了）。
+    # 為什麼 (d) 看的是「interval 這個鍵」：internal/monitoring/api/dashboard/handlers.go 的
+    # `Interval string json:"interval,omitempty"` 只在該 row 被併入 BTM runtime 狀態時才有值
+    # （cron-only row 不帶這個鍵）⇒ 鍵一出現，該任務就離開「ping-only」世界、開始受
+    # interval×3（或 gate window）staleness 判定，必須先有 metric + rule 或明確排除。
+    #
+    # ⚠️ 本步驟刻意**不**呼叫 scripts/ci/check_task_liveness.sh：tests/scripts/test-check-task-liveness.sh
+    #    以精確計數釘住「三個 job 各呼叫一次」。改在步驟內用 curl + python3 stdlib 斷言
+    #    （不新增相依，也不動既有 gate 的參數）。
+    # 放在第一個 job 的**最後**一步：artifact 先上傳（失敗不影響它），且只跑一次而非三個 job 各一次。
+    - name: "Cron tasks: no consecutive failures and still staleness-ineligible"
+      env:
+        # 與上面三個 job 用同一個端點來源（空字串 ⇒ 回退內建生產常數，見 check_task_liveness.py）。
+        ATLAS_TASK_LIVENESS_URL: ${{ vars.ATLAS_TASK_LIVENESS_URL }}
+      run: |
+        set -euo pipefail
+        url="${ATLAS_TASK_LIVENESS_URL:-https://atlas.goluck.uk/api/dashboard/task-liveness}"
+        snapshot="$(mktemp)"
+        rc=0
+        code="$(curl -fsS --max-time 30 -H 'Accept: application/json' -o "$snapshot" -w '%{http_code}' "$url")" || rc=$?
+        if [ "$rc" -ne 0 ]; then
+          echo "::error::cron liveness: cannot fetch ${url} (curl rc=${rc}) — 看不到快照不得等於綠燈"
+          exit 1
+        fi
+        export CRON_LIVENESS_URL="$url"
+        export CRON_LIVENESS_HTTP_CODE="$code"
+        export CRON_LIVENESS_SNAPSHOT="$snapshot"
+        python3 - <<'PY'
+        import json
+        import os
+        import sys
+
+        url = os.environ["CRON_LIVENESS_URL"]
+
+
+        def fail(message):
+            print(f"::error::{message}")
+            print(f"CRON LIVENESS CONTRACT FAILED: {message}", file=sys.stderr)
+            sys.exit(1)
+
+
+        http_code = os.environ["CRON_LIVENESS_HTTP_CODE"]
+        if http_code != "200":
+            fail(f"task-liveness returned HTTP {http_code} (expected 200) from {url}")
+
+        try:
+            with open(os.environ["CRON_LIVENESS_SNAPSHOT"], encoding="utf-8") as handle:
+                snapshot = json.load(handle)
+        except (OSError, ValueError) as exc:
+            fail(f"cannot read/parse the task-liveness snapshot from {url}: {exc}")
+
+        tasks = snapshot.get("tasks")
+        if not isinstance(tasks, list) or not tasks:
+            fail(f"snapshot from {url} contains no tasks — an empty snapshot must never be treated as healthy")
+
+        stale_count = snapshot.get("stale_count")
+        if stale_count != 0:
+            fail(f"stale_count={stale_count!r} (expected 0) — at least one task is overdue")
+
+        crons = [t for t in tasks if isinstance(t, dict) and str(t.get("name", "")).startswith("cron_")]
+        if not crons:
+            fail("no cron_* task in the snapshot — the cron liveness contract would be vacuous "
+                 "(cron rows vanished, were renamed, or the store was wiped)")
+
+        failing = []
+        eligible = []
+        for task in crons:
+            name = task["name"]
+            raw = task.get("consecutive_failures") or 0
+            try:
+                failures = int(raw)
+            except (TypeError, ValueError):
+                fail(f"{name}: consecutive_failures is not an integer: {raw!r}")
+            if failures > 0:
+                detail = f"{name}: consecutive_failures={failures}"
+                if task.get("last_error"):
+                    detail += f" (last_error: {task['last_error']})"
+                failing.append(detail)
+            # (d) 不變式：出現 interval 鍵 ⇒ 這個 cron row 已被併入 BTM runtime 狀態 ⇒ 可判 stale。
+            if "interval" in task:
+                eligible.append(f"{name}: interval={task['interval']!r}")
+
+        print(f"cron liveness probe: source={url} generated_at={snapshot.get('generated_at', 'unknown')} "
+              f"total={snapshot.get('total')} stale_count={stale_count} cron_tasks={len(crons)}")
+        for task in crons:
+            print(f"  [cron] {task['name']}: consecutive_failures={task.get('consecutive_failures', 0)} "
+                  f"interval={task.get('interval', '-')} last_success_at={task.get('last_success_at', '-')}")
+
+        if failing:
+            for detail in failing:
+                print(f"  FAIL {detail}")
+            fail(f"{len(failing)} cron task(s) with consecutive_failures > 0 "
+                 f"(the daemon-side staleness alert cannot flag these): " + "; ".join(failing))
+
+        if eligible:
+            fail("cron task is now staleness-eligible — add a metric+rule (or explicitly exclude) "
+                 "before enabling; see liveness/staleness.go: " + "; ".join(eligible))
+
+        print(f"PASS: {len(crons)} cron task(s) healthy and staleness-ineligible "
+              f"(0 consecutive failures, no interval field)")
+        PY
+
   prism-maintenance:
     runs-on: ubuntu-latest
     timeout-minutes: 10
