@@ -439,6 +439,11 @@ func TestIsTaiwanTradingDay(t *testing.T) {
 	}
 }
 
+// TestIsTaiwanTradingDay_228HolidayWindow pins the date-exact semantics around
+// 228: only the holiday itself and the adjusted holiday (補假) are non-trading.
+// A long_holiday EVENT window is a sentiment window and must not mark the
+// surrounding trading days as closed (the previous behaviour here reported
+// Monday 2026-03-02 as non-trading).
 func TestIsTaiwanTradingDay_228HolidayWindow(t *testing.T) {
 	tec := NewEventCalendar()
 	tec.RefreshEvents(time.Date(2026, 6, 25, 0, 0, 0, 0, time.UTC))
@@ -448,9 +453,9 @@ func TestIsTaiwanTradingDay_228HolidayWindow(t *testing.T) {
 		date time.Time
 		want bool
 	}{
-		{"friday before 228 (in window)", time.Date(2026, 2, 27, 0, 0, 0, 0, time.UTC), false},
+		{"friday before 228 (228 補假)", time.Date(2026, 2, 27, 0, 0, 0, 0, time.UTC), false},
 		{"228 saturday itself", time.Date(2026, 2, 28, 0, 0, 0, 0, time.UTC), false},
-		{"monday after 228 (in window)", time.Date(2026, 3, 2, 0, 0, 0, 0, time.UTC), false},
+		{"monday after 228 (trading day, window is sentiment only)", time.Date(2026, 3, 2, 0, 0, 0, 0, time.UTC), true},
 		{"regular post-window weekday", time.Date(2026, 3, 4, 0, 0, 0, 0, time.UTC), true},
 	}
 

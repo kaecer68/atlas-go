@@ -11,10 +11,16 @@ package capitalflow
 // data/state/capital_flow/20260923_capital_flow.json present). 2026 中秋 is
 // 09-25, so 09-23 (Wed) and 09-24 (Thu) are ordinary trading days.
 //
-// Mechanism: industry.EventCalendar.IsTaiwanTradingDay returns false for any
+// Mechanism: industry.EventCalendar.IsTaiwanTradingDay returned false for any
 // date inside a long_holiday event window, and buildHolidayEvent defines every
 // public holiday as [holiday-3d, holiday+2d] — 2026-09-22..2026-09-27 for
 // 09-25. The gate therefore suppressed a week of trading days.
+//
+// That method is now date-exact (it delegates to internal/taiwanholidays like
+// marketdata does), so the two calendars agree; see
+// TestEventCalendarAgreesWithAuthoritativeTable_Issue1947. The gate below still
+// uses marketdata.IsTaiwanTradingDay — the authoritative table is the authority
+// for a trading-day gate, whatever any event calendar says.
 
 import (
 	"context"
@@ -60,25 +66,47 @@ func TestTradingDayTable_Issue1947Dates(t *testing.T) {
 	}
 }
 
-// TestEventCalendarLongHolidayWindow_Issue1947Premise documents WHY the gate
-// was wrong: the event calendar's long_holiday window spans trading days.
+// TestEventCalendarAgreesWithAuthoritativeTable_Issue1947 locks the other half
+// of issue #1947: industry.EventCalendar.IsTaiwanTradingDay must agree with the
+// authoritative holiday table (marketdata.IsTaiwanTradingDay ->
+// internal/taiwanholidays) on every date of the frozen 中秋/教師節 week.
 //
-// If this test ever fails, industry.EventCalendar no longer reports the
-// 中秋 window over 09-23/09-24 — the premise of issue #1947 changed and this
-// file's comments (and the divergent-gate warning in service.go) should be
-// revisited. The behaviour assertions in the other tests stay valid either way.
-func TestEventCalendarLongHolidayWindow_Issue1947Premise(t *testing.T) {
+// Before the fix the event calendar returned false for any date inside a
+// long_holiday window ([holiday-3d, holiday+2d]) and true for 2026-09-28 (an
+// adjusted holiday that produces no long_holiday occurrence), so the two
+// calendars diverged in BOTH directions. This test fails if either divergence
+// comes back; it also covers the service.go tripwire
+// (warnIfLongHolidayWindowCoversTradingDay), which can only fire while the
+// divergence exists.
+func TestEventCalendarAgreesWithAuthoritativeTable_Issue1947(t *testing.T) {
 	cal := industry.NewEventCalendar()
 	cal.RefreshEvents(taipeiDay("2026-09-24", "12:00")) // generate 2026 events
 
-	for _, date := range []string{"2026-09-23", "2026-09-24"} {
-		if cal.IsTaiwanTradingDay(taipeiDay(date, "13:00")) {
-			t.Errorf("premise changed: industry.EventCalendar.IsTaiwanTradingDay(%s) = true; "+
-				"the 中秋 long_holiday window no longer covers this trading day (issue #1947 premise)", date)
-		}
+	cases := []struct {
+		date      string
+		wantTrade bool
+		why       string
+	}{
+		{"2026-09-22", true, "Tuesday, inside the 中秋 long_holiday window"},
+		{"2026-09-23", true, "Wednesday, inside the 中秋 long_holiday window"},
+		{"2026-09-24", true, "Thursday, inside the 中秋 long_holiday window"},
+		{"2026-09-25", false, "中秋節"},
+		{"2026-09-28", false, "教師節/孔子誕辰紀念日 — adjusted holiday, no long_holiday occurrence"},
+		{"2026-09-29", true, "first trading day after the 中秋/教師節 weekend"},
 	}
-	if cal.IsTaiwanTradingDay(taipeiDay("2026-09-25", "13:00")) {
-		t.Error("industry.EventCalendar must still treat 2026-09-25 (中秋) as non-trading")
+	for _, c := range cases {
+		t.Run(c.date, func(t *testing.T) {
+			instant := taipeiDay(c.date, "13:00")
+			authoritative := marketdata.IsTaiwanTradingDay(instant)
+			eventCalendar := cal.IsTaiwanTradingDay(instant)
+			if authoritative != c.wantTrade {
+				t.Errorf("marketdata.IsTaiwanTradingDay(%s) = %v, want %v (%s)", c.date, authoritative, c.wantTrade, c.why)
+			}
+			if eventCalendar != authoritative {
+				t.Errorf("calendars diverge on %s (%s): industry.EventCalendar=%v marketdata=%v (issue #1947)",
+					c.date, c.why, eventCalendar, authoritative)
+			}
+		})
 	}
 }
 

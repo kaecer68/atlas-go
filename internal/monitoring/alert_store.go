@@ -30,9 +30,33 @@ func NewAlertStore(dir string) (*AlertStore, error) {
 }
 
 // Save appends an alert record to the JSONL file.
+//
+// Dedup at the write point (#1787 follow-up, 2026-10-01): when the record
+// carries a dedup_key and an OPEN (status=triggered) record with the same key
+// already exists, that record is updated in place instead of appending another
+// row. One condition therefore keeps ONE open row no matter how often it is
+// re-emitted, and no matter which writer re-emits it — including writers with
+// no AlertDeduplicator wired and writers in other processes (the read, the
+// decision and the write all happen under the store's write lock).
+//
+// Row history is preserved, not rewritten: rows that are already closed
+// (resolved / acknowledged / silenced) are never merged into and never removed,
+// so each past episode stays on disk and remains traceable. A new episode
+// (after the previous row was closed) still appends a new row.
 func (s *AlertStore) Save(alert domain.AlertRecord) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+
+	if alert.DedupKey != "" {
+		records, err := s.loadFromFile()
+		if err != nil {
+			return fmt.Errorf("load alerts: %w", err)
+		}
+		if idx := openRecordIndex(records, alert.DedupKey); idx >= 0 {
+			mergeIntoOpenRecord(&records[idx], alert)
+			return s.rewriteAll(records)
+		}
+	}
 
 	f, err := os.OpenFile(s.filePath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
 	if err != nil {
@@ -44,6 +68,53 @@ func (s *AlertStore) Save(alert domain.AlertRecord) error {
 		return fmt.Errorf("encode alert record: %w", err)
 	}
 	return nil
+}
+
+// openRecordIndex returns the index of the most recent OPEN (status=triggered)
+// record carrying dedupKey, or -1 when there is none.
+//
+// "Most recent" is deliberate. FindByDedupKey returns the FIRST match in file
+// order, which may be a row that was already resolved or acknowledged; an
+// unresolved-record check built on that match fails for every later emission,
+// so each repeat appended yet another row with the same dedup_key — the
+// duplicate-row growth this write-point dedup exists to stop.
+func openRecordIndex(records []domain.AlertRecord, dedupKey string) int {
+	idx := -1
+	for i := range records {
+		if records[i].DedupKey != dedupKey || records[i].Status != domain.AlertStatusTriggered {
+			continue
+		}
+		if idx < 0 || records[i].Timestamp.After(records[idx].Timestamp) {
+			idx = i
+		}
+	}
+	return idx
+}
+
+// mergeIntoOpenRecord folds a repeated occurrence (src) of an open condition
+// into its open row (dst). The row keeps its ID (its history is the same
+// episode), Count accumulates the occurrences, and LastSeen records the newest
+// sighting — the same bookkeeping the Monitor reuse path (#1787) applies.
+func mergeIntoOpenRecord(dst *domain.AlertRecord, src domain.AlertRecord) {
+	occurrences := src.Count
+	if occurrences < 1 {
+		occurrences = 1
+	}
+	dst.Count += occurrences
+	if !src.Timestamp.IsZero() {
+		dst.Timestamp = src.Timestamp
+		lastSeen := src.Timestamp
+		dst.LastSeen = &lastSeen
+	}
+	if src.Message != "" {
+		dst.Message = src.Message
+	}
+	if src.Severity != "" {
+		dst.Severity = src.Severity
+	}
+	if src.Breakdown != nil {
+		dst.Breakdown = src.Breakdown
+	}
 }
 
 // LoadAll reads all alert records from the JSONL file.

@@ -141,3 +141,92 @@ func TestRegisterBackfillTasks_TaskRegistered(t *testing.T) {
 		t.Fatal("auto_gap_detection task was not registered")
 	}
 }
+
+// --- channel-dir contract (2026-10-01) -------------------------------------
+//
+// The channel id and the on-disk directory under data/state are two different
+// names, and only the producer (the channel adapter's SetStorageDir) decides the
+// directory. Rows below lock the two that diverged in production; before the
+// DataDir field existed the scanner read a directory that is never written and
+// reported a permanent false "missing coverage" gap.
+
+// TestDefaultChannelCoverageExpectations_DataDirIsProducerDir locks the mapping
+// against the producer's own path in internal/apigateway/register_adapters.go.
+func TestDefaultChannelCoverageExpectations_DataDirIsProducerDir(t *testing.T) {
+	want := map[string]string{
+		"tdcc_equity_dispersion": "tdcc_dispersion",
+		"twse_sbl":               "sbl",
+	}
+
+	seen := map[string]bool{}
+	for _, exp := range defaultChannelCoverageExpectations() {
+		dir, ok := want[exp.ChannelID]
+		if !ok {
+			continue
+		}
+		seen[exp.ChannelID] = true
+		if got := exp.dir(); got != dir {
+			t.Errorf("channel %s reads data/state/%s, want data/state/%s (producer directory)", exp.ChannelID, got, dir)
+		}
+	}
+	for channelID := range want {
+		if !seen[channelID] {
+			t.Errorf("channel %s missing from defaultChannelCoverageExpectations", channelID)
+		}
+	}
+}
+
+// TestGapDetector_ProducerDir_NoFalseGap is the behavioural regression: with the
+// data present under the PRODUCER directories only (as in production), the
+// default expectations must report no gap and no error for both channels. Both
+// assertions fail before the DataDir fix — the scanner looked under
+// data/state/tdcc_equity_dispersion and data/state/twse_sbl, which do not exist.
+func TestGapDetector_ProducerDir_NoFalseGap(t *testing.T) {
+	dir := t.TempDir()
+	reference := time.Date(2026, 7, 24, 10, 0, 0, 0, time.UTC) // Friday
+
+	// G01: a fresh latest snapshot under the producer directory.
+	tdccDir := filepath.Join(dir, "data", "state", "tdcc_dispersion")
+	if err := os.MkdirAll(tdccDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(tdccDir, "latest.json"), []byte("{}"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// G02: one per-day report file for every weekday in the 30-day window.
+	sblDir := filepath.Join(dir, "data", "state", "sbl")
+	if err := os.MkdirAll(sblDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	end := reference.AddDate(0, 0, -1)
+	for d := reference.AddDate(0, 0, -30); !d.After(end); d = d.AddDate(0, 0, 1) {
+		if wd := d.Weekday(); wd == time.Saturday || wd == time.Sunday {
+			continue
+		}
+		name := d.Format("20060102") + "_sbl.json"
+		if err := os.WriteFile(filepath.Join(sblDir, name), []byte("{}"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	detector := newGapDetector(dir, mockTradingDayCalendar{})
+	report := detector.detect(reference)
+
+	byChannel := map[string]ChannelGapReport{}
+	for _, ch := range report.Channels {
+		byChannel[ch.ChannelID] = ch
+	}
+	for _, channelID := range []string{"tdcc_equity_dispersion", "twse_sbl"} {
+		ch, ok := byChannel[channelID]
+		if !ok {
+			t.Fatalf("expected a %s report, got %+v", channelID, report.Channels)
+		}
+		if ch.Error != "" {
+			t.Errorf("%s: unexpected error %q (producer directory not read?)", channelID, ch.Error)
+		}
+		if ch.MissingCount != 0 {
+			t.Errorf("%s: missing_count = %d, want 0 (files exist under the producer directory)", channelID, ch.MissingCount)
+		}
+	}
+}

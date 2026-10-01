@@ -207,6 +207,7 @@
     {
       "fields": [
         "ChannelID string",
+        "DataDir string",
         "CoverageType string",
         "FilePattern string",
         "LookbackDays int",
