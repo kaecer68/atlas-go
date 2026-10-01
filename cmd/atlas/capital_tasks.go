@@ -281,12 +281,35 @@ func registerCapitalTasks(d capitalDeps) {
 	// for future data). Self-advancing month cursor: each run fetches the
 	// next 30-day chunk for both channels (~2 FinMind calls), then no-ops
 	// until the cursor passes today. Idempotent (existing files skipped).
+	//
+	// ── 已知問題（2026-10-01 業主裁定 ③）────────────────────────────────
+	// 原因＝FinMind 帳號**層級不足**，不是 atlas 缺陷、也不是 key/compose 問題：
+	// TDCC 段用 TaiwanStockHoldingSharesPer 的**歷史**查詢，上游回
+	//   HTTP 200 + {"msg":"Your level is register. Please update your user
+	//   level. …"} + data=[]
+	// （finmind_client.go 把它歸類為 ErrQuotaExhausted＝可重置的額度態；同源的
+	//  maintenance_ratio_source_failed 則來自贊助級 dataset
+	//  TaiwanTotalExchangeMarginMaintenance）。live 段（auto_tdcc_dispersion
+	//  抓最近快照）在同層級下正常 ⇒ 只有「回補歷史」失敗，cursor 永遠停在
+	// 2026-03-01 之後第一個拿不到資料的週五。
+	// 裁定：**不改程式修資料問題**（SBL 不建置），只降頻；失敗誤差
+	// 刻意保留向上（不吞成 nil），層級一旦升級，下一次探測即成功並自動恢復
+	// 前進——升級後的恢復訊號就是這個任務本身。
+	// 記錄與判讀步驟：docs/operations/finmind-tier-sbl-tdcc-backfill-followup.md
+	//
+	// ── 探測頻率（原本 1h）─────────────────────────────────────────────
+	// 1h tick 讓純等待態變成小時級重試：2026-10-01 生產 last_error=
+	// "tdcc: history probe 2026-03-06: finmind: circuit breaker open"、
+	// consecutive_failures=21（同日同錯 21 次），且每次失敗都會記一次
+	// FinMind 斷路器失敗。168h 讓同一訊號的成本降到 1/168，且新 process 起跑
+	// 時仍會立刻執行一次（runTask 的 first-run 語意不變）。
+	const sblTDCCHistoryProbeInterval = 7 * 24 * time.Hour
 	historyStart, _ := time.Parse("2006-01-02", "2026-03-01")
 	cursor := historyStart
 	_ = d.taskMgr.Register(&apigateway.ScheduledTask{
 		Name:      "auto_sbl_tdcc_history_backfill",
 		ChannelID: "twse_sbl",
-		Interval:  1 * time.Hour,
+		Interval:  sblTDCCHistoryProbeInterval,
 		Enabled:   true,
 		Task: func(ctx context.Context) error {
 			if cursor.After(time.Now()) {
@@ -337,6 +360,11 @@ func registerCapitalTasks(d capitalDeps) {
 			}
 			if tdcc, ok := tdccProvider.(*apigateway.TDCClientChannelAdapter); ok {
 				if _, err := tdcc.Provider().FetchDispersionHistory(ctx, cursor, chunkEnd); err != nil {
+					// 已知問題：層級不足時歷史探測必然失敗（見本任務註冊處的
+					// 長註解與 docs/operations/finmind-tier-sbl-tdcc-backfill-followup.md）。
+					// 這裡刻意**不**把錯誤吞成 nil：連續失敗 ≥3 次仍會進
+					// AlertStore 的 background_task 警報，當層級升級後成功即自動
+					// resolve（monitor.ResolveByIdentity 的 task-success 路徑）。
 					log.Printf("[Backfill] tdcc history chunk %s..%s deferred: %v", cursor.Format("2006-01-02"), chunkEnd.Format("2006-01-02"), err)
 					return err
 				}
@@ -346,7 +374,7 @@ func registerCapitalTasks(d capitalDeps) {
 			return nil
 		},
 	})
-	log.Printf("[Gateway] registered auto_sbl_tdcc_history_backfill (monthly chunks from %s, self-advancing)", historyStart.Format("2006-01-02"))
+	log.Printf("[Gateway] registered auto_sbl_tdcc_history_backfill (weekly %s probe, monthly chunks from %s, self-advancing)", sblTDCCHistoryProbeInterval, historyStart.Format("2006-01-02"))
 
 	// Register auto_tdcc_dispersion — weekly fetch of the 集保戶股權分散表
 	// (G01 live). The table is weekly (data dated Friday, published early
