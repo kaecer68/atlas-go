@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"net"
@@ -12,11 +13,21 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/kaecer68/atlas-go/internal/config"
 )
 
 const postgresContainerName = "atlas-postgres"
+
+// SQLSTATE codes that mean the server rejected the credentials. Every other
+// failure — connection refused, DNS failure, timeout, or 57P03
+// (cannot_connect_now) while the postmaster is still starting up — is not a
+// credential problem and must not be reported as one.
+const (
+	sqlstateInvalidPassword          = "28P01"
+	sqlstateInvalidAuthorizationSpec = "28000"
+)
 
 // ensurePostgres attempts to make PostgreSQL available before the application
 // initializes its database connection. It returns an empty string on success
@@ -34,19 +45,45 @@ func ensurePostgres() string {
 
 	logPostgres("connecting...")
 
-	// Fast path: TCP reachable + credentials valid
-	if tryAuthPostgres(dsn, 3*time.Second) {
+	// Fast path: TCP reachable + credentials valid.
+	authErr := tryAuthPostgres(dsn, 3*time.Second)
+	if authErr == nil {
 		logPostgres("connected")
 		return ""
 	}
 
+	// A connection-layer error is not a credential problem. The application and
+	// the PostgreSQL container can start within milliseconds of each other, so
+	// the first probe can land inside the postmaster's startup window (the server
+	// answers 57P03 cannot_connect_now while it is not ready). Retry with backoff
+	// before classifying. Only a server-side rejection of the credentials
+	// (SQLSTATE 28P01/28000) skips the retry: that one is never a race.
+	if !isPostgresAuthFailure(authErr) {
+		logPostgres("initial probe failed at the connection layer — retrying with backoff before classification...")
+		if authErr = tryAuthPostgresWithRetry(dsn, 3, 5*time.Second); authErr == nil {
+			logPostgres("connected")
+			return ""
+		}
+	}
+
+	// Classify only now that the retry window has passed, and only from the probe
+	// error: TCP reachability alone cannot tell rejected credentials apart from a
+	// server that is still starting up.
+	tcpReachable := tryConnectPostgres(dsn, 3*time.Second)
+	authFailed := isPostgresAuthFailure(authErr)
+
 	var diags []string
 	needsDocker := false
-	if tryConnectPostgres(dsn, 3*time.Second) {
+	switch {
+	case authFailed && tcpReachable:
 		logPostgres("TCP reachable but authentication failed — attempting password repair...")
-		diags = append(diags, "auth failed; attempted password repair")
+		diags = append(diags, "auth failed (credentials rejected)")
 		needsDocker = true
-	} else {
+	case tcpReachable:
+		logPostgres("TCP reachable but the authenticated probe did not succeed — checking startup state...")
+		diags = append(diags, "TCP reachable but no authenticated connection")
+		needsDocker = true
+	default:
 		logPostgres("not reachable — checking Docker...")
 		diags = append(diags, "not reachable")
 		needsDocker = true
@@ -59,7 +96,17 @@ func ensurePostgres() string {
 	dockerPath, err := exec.LookPath("docker")
 	if err != nil {
 		diags = append(diags, "docker CLI not found")
-		logPostgres("docker CLI not found (install Docker Desktop or set DATABASE_URL= to skip)")
+		// A missing Docker CLI combined with a TCP-reachable server means this is
+		// not a host-mode dev setup: the docker-exec repair below can never run
+		// and there is nothing left to attempt. That combination alone is
+		// informational. Downgrading on either condition by itself would hide a
+		// real outage (server not reachable) or a real misconfiguration
+		// (credentials rejected), so those keep the warning.
+		if tcpReachable && !authFailed {
+			logPostgresInfo("docker CLI not found — no local Docker CLI (container mode); skipping automated repair")
+		} else {
+			logPostgres("docker CLI not found (install Docker Desktop or set DATABASE_URL= to skip)")
+		}
 		printPostgresHints()
 		return strings.Join(diags, "; ")
 	}
@@ -104,25 +151,25 @@ func ensurePostgres() string {
 		return strings.Join(diags, "; ")
 	}
 
-	if tryAuthPostgres(dsn, 5*time.Second) {
+	if tryAuthPostgres(dsn, 5*time.Second) == nil {
 		logPostgres("ready")
 		return ""
 	}
 
 	user, pass := parsePostgresCredentials(dsn)
 	if user != "" && pass != "" {
-		diags = append(diags, "auth failed; attempted password repair via docker exec")
-		logPostgres("authentication failed — attempting password repair via docker exec...")
-		if fixPostgresPassword(postgresContainerName, user, pass) {
+		repairDiags, repaired := attemptPasswordRepair(postgresContainerName, user, pass, fixPostgresPassword)
+		diags = append(diags, repairDiags...)
+		if repaired {
 			logPostgres("password repaired, retrying connection (up to 3 attempts with backoff)...")
 			// PostgreSQL SCRAM/MD5 auth cache settles ~2s after ALTER ROLE;
 			// single probe misses this. Linear backoff retries cover it.
-			if tryAuthPostgresWithRetry(dsn, 3, 5*time.Second) {
+			if tryAuthPostgresWithRetry(dsn, 3, 5*time.Second) == nil {
 				logPostgres("ready")
 				return ""
 			}
+			diags = append(diags, "password repair failed or did not resolve auth")
 		}
-		diags = append(diags, "password repair failed or did not resolve auth")
 	}
 
 	logPostgres("postgres did not become ready")
@@ -131,33 +178,55 @@ func ensurePostgres() string {
 }
 
 // tryAuthPostgres attempts a real PostgreSQL connection to verify credentials.
-// Uses the provided DSN with a context deadline.
-func tryAuthPostgres(dsn string, timeout time.Duration) bool {
+// Uses the provided DSN with a context deadline. It returns the underlying error
+// (nil on success) so the caller can tell a server-side rejection of the
+// credentials apart from a connection-layer failure.
+func tryAuthPostgres(dsn string, timeout time.Duration) error {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
 	conn, err := pgx.Connect(ctx, dsn)
 	if err != nil {
-		return false
+		return err
 	}
 	_ = conn.Close(ctx)
-	return true
+	return nil
 }
 
-// tryAuthPostgresWithRetry is the post-password-repair variant. After a
-// successful ALTER ROLE the server may need a few seconds to refresh its
-// auth cache; a single probe is unreliable. We retry with linear backoff
-// (1s, 2s, 3s, ...) up to `attempts` times, each with the same per-call
-// context deadline.
-func tryAuthPostgresWithRetry(dsn string, attempts int, perCallTimeout time.Duration) bool {
+// isPostgresAuthFailure reports whether err is a server-side rejection of the
+// credentials: SQLSTATE 28P01 (invalid_password) or 28000
+// (invalid_authorization_specification). Everything else — connection refused,
+// DNS failure, timeout, or 57P03 cannot_connect_now while the postmaster is
+// starting up — is not a credential problem, so it must not send the caller down
+// the password-repair path.
+func isPostgresAuthFailure(err error) bool {
+	if err == nil {
+		return false
+	}
+	var pgErr *pgconn.PgError
+	if !errors.As(err, &pgErr) {
+		return false
+	}
+	return pgErr.Code == sqlstateInvalidPassword || pgErr.Code == sqlstateInvalidAuthorizationSpec
+}
+
+// tryAuthPostgresWithRetry covers both callers of the retry window. After a
+// successful ALTER ROLE the server may need a few seconds to refresh its auth
+// cache, and after a connection-layer first failure the postmaster may still be
+// starting up. A single probe is unreliable in both cases. We retry with linear
+// backoff (1s, 2s, 3s, ...) up to `attempts` times, each with the same per-call
+// context deadline. It returns nil on success, otherwise the last probe error so
+// the caller can classify it.
+func tryAuthPostgresWithRetry(dsn string, attempts int, perCallTimeout time.Duration) error {
+	var err error
 	for i := 1; i <= attempts; i++ {
 		time.Sleep(time.Duration(i) * time.Second)
-		if tryAuthPostgres(dsn, perCallTimeout) {
-			return true
+		if err = tryAuthPostgres(dsn, perCallTimeout); err == nil {
+			return nil
 		}
-		logPostgres(fmt.Sprintf("retry %d/%d: auth still failing", i, attempts))
+		logPostgres(fmt.Sprintf("retry %d/%d: connection still failing", i, attempts))
 	}
-	return false
+	return err
 }
 
 // fixPostgresPassword resets the postgres user's password inside the Docker container
@@ -169,6 +238,24 @@ func fixPostgresPassword(containerName, user, password string) bool {
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	return cmd.Run() == nil
+}
+
+// attemptPasswordRepair runs the Docker-exec password repair and returns the
+// diagnostic fragments to report, in the order the steps actually happened. The
+// "attempted" fragment is produced only after fix has run: an earlier version
+// appended it before the call, so the diagnostic claimed a repair attempt that
+// had not happened yet. fix is a parameter so the ordering is unit-testable.
+func attemptPasswordRepair(
+	containerName, user, password string,
+	fix func(containerName, user, password string) bool,
+) (diags []string, repaired bool) {
+	logPostgres("authentication failed — attempting password repair via docker exec...")
+	repaired = fix(containerName, user, password)
+	diags = append(diags, "auth failed; attempted password repair via docker exec")
+	if !repaired {
+		diags = append(diags, "password repair command failed")
+	}
+	return diags, repaired
 }
 
 // isPostgresContainerRunning checks if the postgres container exists and is running.
@@ -289,6 +376,13 @@ func waitForPostgres(dsn string, timeout time.Duration) bool {
 
 func logPostgres(msg string) {
 	log.Printf("[PostgreSQL] %s", msg)
+}
+
+// logPostgresInfo emits an informational PostgreSQL startup note. Informational
+// notes are expected conditions, not degradations, and must stay distinguishable
+// from the warnings that the caller escalates to the monitoring stack.
+func logPostgresInfo(msg string) {
+	log.Printf("[PostgreSQL] INFO: %s", msg)
 }
 
 func printPostgresHints() {
