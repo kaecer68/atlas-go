@@ -4,6 +4,15 @@
 
 > 0.0.2.0（2026-07-22）後累積功能補記（2026-08-07 盤查生成）。
 
+### feat(monitoring): quotes 新鮮度交易日感知告警（F54 phase 1，2026-10-03）
+- **背景（2026-10-02 實損）**：quotes 無任何排程結構性保障（無 cron、無契約檢查），當日 universe build 僅 **2/117** 個標的有 quotes 而無人發現；週一早晨 universe build 是下個風險點。
+- **設計（判斷後動手）**：`/metrics` 無既有 quotes 新鮮度指標（grep 僅 universe scoring 提到 quote）⇒ 採「小 Go gauge + rule」而非只加 rule。交易日判定**在 Go 側**重用 `internal/taiwanholidays`（純查表、成本可忽略），PromQL 只讀 `_ok`，不重寫第二套交易日曆；刻意用交易日感知而非簡化 24–36h 門檻（後者週末必誤報）。
+- **新增**：`ledger.QuoteMaxDater`（可選介面，postgres/sqlite 各一支 `SELECT MAX(date)`；JSONL 不實作 ⇒ 任務註冊時跳過）；`internal/monitoring/quotes_freshness.go`（`atlas_quotes_freshness_ok` / `_run_ok` / `_max_date_timestamp_seconds` / `_checked_timestamp_seconds`，fail-closed、心跳每輪覆寫）；背景任務 `quotes_freshness_metrics_export`（5m，掛 `registerBackfillTasks`，`backfillDeps` 新增 `quoteStore`）；`monitoring/rules/quotes_freshness_alerts.yml` 三條（`QuotesDataStale` warning 1h / `QuotesFreshnessUnverifiable` error 15m / `QuotesFreshnessExporterDown` warning，互不重複 paging、以 `up{job="atlas-go"}` 為閘門）；`docs/operations/quotes-freshness-runbook.md`。
+- **判定**：交易日 18:00（Asia/Taipei）起要求當日 quotes；否則要求前一交易日 ⇒ 週一早晨（universe build 前）即覆蓋「週五 quotes 缺席」；硬護欄 max(date) 舊 >7 日曆日 ⇒ 不新鮮（防假日表缺口）。
+- **known_issue（刻意不加 silence）**：18:00 固定 cutoff 非 backfill 落地觀測，落地漂移有 ≤1h 假陽性窗（`for: 1h` 吸收）；規則 annotation 與 runbook §5 明示。
+- **測試**：Go 單元測試（10-02 實損形狀、週一早晨場景、週末不誤報、查詢失敗 fail-closed、凍結樣本語意、SQLite MaxQuoteDate）；promtool 7 案例（預期自規則檔程式生成、逐字比對 annotations）。
+- **驗證**：`go build ./...`、`go vet`、`go test ./internal/monitoring/ ./internal/ledger/ ./cmd/atlas/`、`promtool check rules` + `promtool test rules`（v3.14.0 釘版容器）、`make ci-gate`。
+
 ### feat(industry): 啟用 per-stock 產業母體 gate（#1943 後續，issue #1971 業主簽核）（2026-09-25）
 - **背景**：`industry.substrate_from_symbol_industry_enabled` 於 #1965 建好但預設關閉。唯讀 pre-flight（issue #1971）實測生產現況：`universe_snapshot.json` = `symbols_built: 27 / symbols_filtered: 27 / **symbols_ranked: 0**`，且現行代表股映射對 10 檔取樣（含全部 3 檔持倉）**0/10 解出** ⇒ 產業層配置與 universe 選擇實際上沒有可用母體。
 - **變更**：gate 預設由 `false` 改為 `true`（`configs/parameters.json` + `internal/config/defaults_narrative.go`，含 golden 重生）。開啟後改由第一方 `symbol_industry` channel（TWSE `t187ap03_L` + TPEx `mopsfin_t187ap03_O` → `sectormap` namespace `twse_industry_code`）供應 per-stock 產業欄位：實測上游 **1988 檔 / mapped 1599 / unmapped 379（逐碼附 reason，不猜測）/ unknown 10（TDR 91）/ canonical L1 20/20**。

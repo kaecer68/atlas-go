@@ -1,0 +1,147 @@
+# monitoring/rules/quotes_freshness_alerts.yml
+# 建立:2026-10-03（F54 phase 1）：quotes 無排程結構性空窗的「落後告警」。
+#
+# 背景（2026-10-02 實損）
+# ----------------------
+# quotes 沒有任何排程結構性保障（無 cron、無契約檢查）：10-02 universe build
+# 只有 **2/117** 個標的有 quotes，無人發現；週一早晨的 universe build 是
+# 下個風險點。本檔是觀測面的判讀層；指標由 Go 側
+# `internal/monitoring/quotes_freshness.go`（背景任務
+# `quotes_freshness_metrics_export`，5m interval）匯出。
+#
+# 指標族
+# ------
+#   atlas_quotes_freshness_ok
+#       1 = max(date) >= 期望交易日（交易日感知，Go 側以
+#       internal/taiwanholidays 判定）；0 = 落後 / 空表 / **查詢失敗**
+#       （fail-closed）。
+#   atlas_quotes_freshness_run_ok
+#       1 = max(date) 查詢成功；0 = 查詢/解析失敗（此時 _ok 的 0 是「未知」，
+#       由第 2 條 error 規則負責，與第 1 條互不重複 paging）。
+#   atlas_quotes_max_date_timestamp_seconds
+#       max(date)（Asia/Taipei 午夜 Unix 秒）。只在查詢成功且表非空時輸出；
+#       **沒有任何規則拿它做判定**（凍結值不製造誤報；判定一律看 _ok）。
+#   atlas_quotes_freshness_checked_timestamp_seconds
+#       任務心跳。
+#
+# ⚠️ known_issue（刻意不加 silence，由值班依 runbook 判讀）
+# -------------------------------------------------------
+#   · 判定門檻 QuotesFreshnessCutoffHour=18（Asia/Taipei）是**簡化的固定門檻**，
+#     不是 backfill 實際落地時刻的觀測：交易日 18:00 後、backfill 落地前會
+#     短暫 `_ok`=0；`for: 1h` 吸收單輪抖動。
+#   · 連續假日（如春休）期間期望值停在假日前最後交易日，`_ok` 維持 1（正確）。
+#   · 假日表（taiwanholidays，2021–2040 實測）缺新假日時，硬護欄
+#     （max(date) 比今天舊 >7 日曆日 ⇒ 不新鮮）限制誤判窗口。
+
+groups:
+  - name: quotes_freshness
+    rules:
+      # ══ 1. quotes 落後（交易日感知；warning）═══════════════════════════════
+      # 10-02 實損形狀：交易日晚上 max(date) 仍停在前一交易日 ⇒ 18:00+1h 內
+      # 觸發，同日晚間即可處置，不必等到週一 universe build 才發現。
+      # 「週一早晨 build」場景：週一 00:00 起期望值已是上週五，週五 quotes
+      # 缺席 ⇒ build 之前就 firing。
+      - alert: QuotesDataStale
+        expr: |
+          atlas_quotes_freshness_ok == 0
+          and on()
+          (atlas_quotes_freshness_run_ok == 1)
+        for: 1h
+        labels:
+          severity: warning
+          service: atlas
+          component: quotes-freshness
+          incident_ref: "F54"
+        annotations:
+          summary: "quotes 新鮮度落後（max(date) 早於期望交易日，或 quotes 表為空）"
+          description: |
+            背景任務 quotes_freshness_metrics_export 每 5 分鐘查詢 quotes.max(date)，
+            以交易日感知契約判定（Go 側 internal/taiwanholidays）：
+              · 交易日 18:00（Asia/Taipei）起要求當日 quotes 已落地；
+              · 非交易日 / 交易日 18:00 前要求「之前最近一個交易日」的 quotes。
+            目前判定為不新鮮（atlas_quotes_freshness_ok = 0）且查詢本身成功
+            （run_ok = 1）⇒ 這是**真的落後**，不是讀取失敗。
+
+            先查什麼（依序）:
+            1. max(date) 與期望值差幾天:
+               docker exec atlas-go curl -s localhost:18080/metrics | grep -E "atlas_quotes_(freshness|max_date)"
+            2. backfill 任務是否還在跑（auto_quote_backfill 是 24h interval，
+               無 time-gate，落地時刻會漂移）:
+               docker logs atlas-go --since 48h 2>&1 | grep -E "auto_quote_backfill|quote_backfill"
+            3. ⚠️ 已知假陽性（known_issue，不要直接當故障回報）:交易日 18:00 後、
+               backfill 實際落地前的 1h 窗口可能短暫觸發；連續多輪（>1h）才視為真實落後。
+               若本告警在 18:00–19:00 之間 firing 後自行 resolve，先對照 backfill 日誌。
+            4. 連假結束後第一個交易日早晨：期望值已是最近交易日，若仍 firing
+               ⇒ 連假期間 backfill 整段沒跑，週一 universe build 前必須先補資料。
+          known_issue: "F54-quotes-unscheduled-gap"
+          runbook_url: "https://github.com/kaecer68/atlas-go/blob/main/docs/operations/quotes-freshness-runbook.md"
+
+      # ══ 2. max(date) 查詢失敗（error；fail-closed）══════════════════════════
+      # 與第 1 條互斥（本條要求 run_ok==0、第 1 條要求 run_ok==1）⇒ 同一個根因
+      # 不會有兩條規則各自 paging。
+      - alert: QuotesFreshnessUnverifiable
+        expr: atlas_quotes_freshness_run_ok == 0
+        for: 15m
+        labels:
+          severity: error
+          service: atlas
+          component: quotes-freshness
+          incident_ref: "F54"
+        annotations:
+          summary: "quotes.max(date) 查詢持續失敗（新鮮度未知，fail-closed）"
+          description: |
+            背景任務 quotes_freshness_metrics_export 連續 15 分鐘查不到
+            quotes.max(date)（資料庫連線/查詢/解析失敗）。此時新鮮度是**未知**:
+            atlas_quotes_freshness_ok = 0 是 fail-closed 的預設值，
+            atlas_quotes_max_date_timestamp_seconds 是凍結的舊值，不代表現況。
+
+            先查什麼（依序）:
+            1. 資料庫是否可達（生產 backend=postgres）:
+               docker logs atlas-go --since 1h 2>&1 | grep -E "quotes_freshness|query_failed|postgres"
+            2. 任務是否真的在執行（心跳）:
+               docker exec atlas-go curl -s localhost:18080/metrics | grep atlas_quotes_freshness_checked_timestamp_seconds
+               落後遠大於 300s ⇒ 先查第 3 條 QuotesFreshnessExporterDown。
+            3. quotes 表是否存在（migration 000012）:
+               與 AtlasGoTargetDown / 資料庫連線類告警對照，不要重複 paging。
+          known_issue: "F54-quotes-unscheduled-gap"
+          runbook_url: "https://github.com/kaecer68/atlas-go/blob/main/docs/operations/quotes-freshness-runbook.md"
+
+      # ══ 3. 匯出任務沒在跑 / 指標族消失（warning）══════════════════════════════
+      # 覆蓋「任務被移除、panic、指標改名」這種與資料本身無關的失效模式。
+      # 以 up{job="atlas-go"} == 1 當閘門：服務沒在跑時 liveness 告警已在 paging，
+      # 不重複。
+      - alert: QuotesFreshnessExporterDown
+        expr: |
+          (
+            absent(atlas_quotes_freshness_checked_timestamp_seconds)
+            or
+            time() - atlas_quotes_freshness_checked_timestamp_seconds > 1800
+          )
+          and on()
+          (up{job="atlas-go"} == 1)
+        for: 15m
+        labels:
+          severity: warning
+          service: atlas
+          component: quotes-freshness
+          incident_ref: "F54"
+        annotations:
+          summary: "quotes 新鮮度匯出任務沒有心跳（指標族缺席或超過 30 分鐘未執行）"
+          description: |
+            atlas_quotes_freshness_checked_timestamp_seconds 缺席或距今超過 1800 秒
+            （= 6 個 5 分鐘匯出週期），而 up{job="atlas-go"} = 1 ⇒ atlas-go 活著、
+            /metrics 還在，但這個檢查不再更新。此時 QuotesDataStale /
+            QuotesFreshnessUnverifiable 的輸出**不可信**（全部凍結），先修本條再讀那兩條。
+
+            先查什麼（依序）:
+            1. 指標族是否整個消失:
+               docker exec atlas-go curl -s localhost:18080/metrics | grep '^atlas_quotes_'
+            2. 任務是否被註冊（registerBackfillTasks → registerQuotesFreshnessMetricsTask
+               接線回歸）:
+               docker logs atlas-go --since 1h 2>&1 | grep "registered quotes_freshness_metrics_export"
+               沒有這行 ⇒ 看啟動 log 的 skipped 原因（quote store 為 nil 或
+               後端不實作 QuoteMaxDater——JSONL 後端**不支援**此檢查，屬已知限制）。
+            3. 服務其實沒在跑（閘門邊界）:up{job="atlas-go"} = 0 時本條不該 firing,
+               先看 AtlasGoTargetDown。
+          known_issue: "F54-quotes-unscheduled-gap"
+          runbook_url: "https://github.com/kaecer68/atlas-go/blob/main/docs/operations/quotes-freshness-runbook.md"
