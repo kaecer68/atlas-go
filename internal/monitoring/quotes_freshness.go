@@ -145,7 +145,7 @@ func ObserveQuotesFreshness(collector *MetricsCollector, maxDate time.Time, quer
 		// 硬護欄：max(date) 比今天（Taipei 日曆日）舊超過 7 天 ⇒ 無論
 		// 交易日判定如何都不新鮮。
 		today := now.In(taipeiLocation())
-		tooOld := today.AddDate(0, 0, -7).After(maxDate)
+		tooOld := today.Add(-quotesHardStalenessWindow).After(maxDate)
 		if !maxDate.Before(obs.ExpectedDate) && !tooOld {
 			obs.Fresh = true
 			obs.Reason = "fresh"
