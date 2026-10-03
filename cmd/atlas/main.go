@@ -1758,11 +1758,12 @@ func run(args []string, deps appDeps) error {
 			})
 
 			registerBackfillTasks(backfillDeps{
-				taskMgr:   taskMgr,
-				cfg:       cfg,
-				monitor:   monitor,
-				calendar:  eventCalendar,
-				collector: collector,
+				taskMgr:    taskMgr,
+				cfg:        cfg,
+				monitor:    monitor,
+				calendar:   eventCalendar,
+				collector:  collector,
+				quoteStore: quoteStore,
 			})
 
 			// Schedule daily report generation after market close (14:00–14:59

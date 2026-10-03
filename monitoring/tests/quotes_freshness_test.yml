@@ -1,0 +1,184 @@
+# monitoring/tests/quotes_freshness_test.yml
+# promtool unit tests for monitoring/rules/quotes_freshness_alerts.yml（F54 phase 1）。
+#
+# 為什麼需要：check rules 只看語法；這裡把「10-02 實損形狀會 firing、週末健康形狀
+# 沉默、查詢失敗與『真的舊』不重複 paging、任務死掉由心跳規則兜住」寫成可執行規格。
+#
+# ⚠️ 紀律：expectation 是完整比對（labels + annotations 逐字，自規則檔程式生成）。
+# 改規則檔文案 ⇒ 重新生成本檔（見檔尾註解）。
+rule_files:
+- ../rules/quotes_freshness_alerts.yml
+evaluation_interval: 1m
+tests:
+- name: A 健康(週六, max(date)=週五):交易日感知判定新鮮 ⇒ 三條全部沉默
+  interval: 1m
+  input_series:
+  - series: atlas_quotes_freshness_ok
+    values: 1x80
+  - series: atlas_quotes_freshness_run_ok
+    values: 1x80
+  - series: atlas_quotes_max_date_timestamp_seconds
+    values: 1760000000x80
+  - series: atlas_quotes_freshness_checked_timestamp_seconds
+    values: 3300x80
+  - series: up{job="atlas-go"}
+    values: 1x80
+  alert_rule_test:
+  - eval_time: 1h
+    alertname: QuotesDataStale
+    exp_alerts: []
+  - eval_time: 1h
+    alertname: QuotesFreshnessUnverifiable
+    exp_alerts: []
+  - eval_time: 1h
+    alertname: QuotesFreshnessExporterDown
+    exp_alerts: []
+- name: B 10-02 實損形狀(交易日晚上 max(date) 停在前一交易日,持續 ≥1h) ⇒ 只有 QuotesDataStale firing
+  interval: 1m
+  input_series:
+  - series: atlas_quotes_freshness_ok
+    values: '0x70'
+  - series: atlas_quotes_freshness_run_ok
+    values: 1x70
+  - series: atlas_quotes_max_date_timestamp_seconds
+    values: 1760000000x70
+  - series: atlas_quotes_freshness_checked_timestamp_seconds
+    values: 3300x70
+  - series: up{job="atlas-go"}
+    values: 1x70
+  alert_rule_test:
+  - eval_time: 1h
+    alertname: QuotesDataStale
+    exp_alerts:
+    - exp_labels:
+        alertname: QuotesDataStale
+        severity: warning
+        service: atlas
+        component: quotes-freshness
+        incident_ref: F54
+      exp_annotations:
+        summary: quotes 新鮮度落後（max(date) 早於期望交易日，或 quotes 表為空）
+        description: "背景任務 quotes_freshness_metrics_export 每 5 分鐘查詢 quotes.max(date)，\n以交易日感知契約判定（Go 側 internal/taiwanholidays）：\n  · 交易日 18:00（Asia/Taipei）起要求當日 quotes 已落地；\n  · 非交易日 / 交易日 18:00 前要求「之前最近一個交易日」的 quotes。\n目前判定為不新鮮（atlas_quotes_freshness_ok = 0）且查詢本身成功\n（run_ok = 1）⇒ 這是**真的落後**，不是讀取失敗。\n\n先查什麼（依序）:\n1. max(date) 與期望值差幾天:\n   docker exec atlas-go curl -s localhost:18080/metrics | grep -E \"atlas_quotes_(freshness|max_date)\"\n2. backfill 任務是否還在跑（auto_quote_backfill 是 24h interval，\n   無 time-gate，落地時刻會漂移）:\n   docker logs atlas-go --since 48h 2>&1 | grep -E \"auto_quote_backfill|quote_backfill\"\n3. ⚠️ 已知假陽性（known_issue，不要直接當故障回報）:交易日 18:00 後、\n   backfill 實際落地前的 1h 窗口可能短暫觸發；連續多輪（>1h）才視為真實落後。\n   若本告警在 18:00–19:00 之間 firing 後自行 resolve，先對照 backfill 日誌。\n4. 連假結束後第一個交易日早晨：期望值已是最近交易日，若仍 firing\n   ⇒ 連假期間 backfill 整段沒跑，週一 universe build 前必須先補資料。\n"
+        known_issue: F54-quotes-unscheduled-gap
+        runbook_url: https://github.com/kaecer68/atlas-go/blob/main/docs/operations/quotes-freshness-runbook.md
+  - eval_time: 1h
+    alertname: QuotesFreshnessUnverifiable
+    exp_alerts: []
+  - eval_time: 1h
+    alertname: QuotesFreshnessExporterDown
+    exp_alerts: []
+- name: C max(date) 查詢失敗(run_ok=0,持續 ≥15m) ⇒ 只有 QuotesFreshnessUnverifiable firing
+  interval: 1m
+  input_series:
+  - series: atlas_quotes_freshness_ok
+    values: '0x40'
+  - series: atlas_quotes_freshness_run_ok
+    values: '0x40'
+  - series: atlas_quotes_freshness_checked_timestamp_seconds
+    values: 3300x40
+  - series: up{job="atlas-go"}
+    values: 1x40
+  alert_rule_test:
+  - eval_time: 30m
+    alertname: QuotesDataStale
+    exp_alerts: []
+  - eval_time: 30m
+    alertname: QuotesFreshnessUnverifiable
+    exp_alerts:
+    - exp_labels:
+        alertname: QuotesFreshnessUnverifiable
+        severity: error
+        service: atlas
+        component: quotes-freshness
+        incident_ref: F54
+      exp_annotations:
+        summary: quotes.max(date) 查詢持續失敗（新鮮度未知，fail-closed）
+        description: "背景任務 quotes_freshness_metrics_export 連續 15 分鐘查不到\nquotes.max(date)（資料庫連線/查詢/解析失敗）。此時新鮮度是**未知**:\natlas_quotes_freshness_ok = 0 是 fail-closed 的預設值，\natlas_quotes_max_date_timestamp_seconds 是凍結的舊值，不代表現況。\n\n先查什麼（依序）:\n1. 資料庫是否可達（生產 backend=postgres）:\n   docker logs atlas-go --since 1h 2>&1 | grep -E \"quotes_freshness|query_failed|postgres\"\n2. 任務是否真的在執行（心跳）:\n   docker exec atlas-go curl -s localhost:18080/metrics | grep atlas_quotes_freshness_checked_timestamp_seconds\n   落後遠大於 300s ⇒ 先查第 3 條 QuotesFreshnessExporterDown。\n3. quotes 表是否存在（migration 000012）:\n   與 AtlasGoTargetDown / 資料庫連線類告警對照，不要重複 paging。\n"
+        known_issue: F54-quotes-unscheduled-gap
+        runbook_url: https://github.com/kaecer68/atlas-go/blob/main/docs/operations/quotes-freshness-runbook.md
+  - eval_time: 30m
+    alertname: QuotesFreshnessExporterDown
+    exp_alerts: []
+- name: D 指標族完全缺席但 atlas-go 活著 ⇒ 只有 QuotesFreshnessExporterDown firing
+  interval: 1m
+  input_series:
+  - series: up{job="atlas-go"}
+    values: 1x40
+  alert_rule_test:
+  - eval_time: 30m
+    alertname: QuotesDataStale
+    exp_alerts: []
+  - eval_time: 30m
+    alertname: QuotesFreshnessUnverifiable
+    exp_alerts: []
+  - eval_time: 30m
+    alertname: QuotesFreshnessExporterDown
+    exp_alerts:
+    - exp_labels:
+        alertname: QuotesFreshnessExporterDown
+        severity: warning
+        service: atlas
+        component: quotes-freshness
+        incident_ref: F54
+      exp_annotations:
+        summary: quotes 新鮮度匯出任務沒有心跳（指標族缺席或超過 30 分鐘未執行）
+        description: "atlas_quotes_freshness_checked_timestamp_seconds 缺席或距今超過 1800 秒\n（= 6 個 5 分鐘匯出週期），而 up{job=\"atlas-go\"} = 1 ⇒ atlas-go 活著、\n/metrics 還在，但這個檢查不再更新。此時 QuotesDataStale /\nQuotesFreshnessUnverifiable 的輸出**不可信**（全部凍結），先修本條再讀那兩條。\n\n先查什麼（依序）:\n1. 指標族是否整個消失:\n   docker exec atlas-go curl -s localhost:18080/metrics | grep '^atlas_quotes_'\n2. 任務是否被註冊（registerBackfillTasks → registerQuotesFreshnessMetricsTask\n   接線回歸）:\n   docker logs atlas-go --since 1h 2>&1 | grep \"registered quotes_freshness_metrics_export\"\n   沒有這行 ⇒ 看啟動 log 的 skipped 原因（quote store 為 nil 或\n   後端不實作 QuoteMaxDater——JSONL 後端**不支援**此檢查，屬已知限制）。\n3. 服務其實沒在跑（閘門邊界）:up{job=\"atlas-go\"} = 0 時本條不該 firing,\n   先看 AtlasGoTargetDown。\n"
+        known_issue: F54-quotes-unscheduled-gap
+        runbook_url: https://github.com/kaecer68/atlas-go/blob/main/docs/operations/quotes-freshness-runbook.md
+- name: E 指標族缺席且 up=0(服務沒跑) ⇒ 三條全部沉默(避免與 liveness 重複 paging)
+  interval: 1m
+  input_series:
+  - series: up{job="atlas-go"}
+    values: '0x40'
+  alert_rule_test:
+  - eval_time: 30m
+    alertname: QuotesDataStale
+    exp_alerts: []
+  - eval_time: 30m
+    alertname: QuotesFreshnessUnverifiable
+    exp_alerts: []
+  - eval_time: 30m
+    alertname: QuotesFreshnessExporterDown
+    exp_alerts: []
+- name: F 心跳停在 25 分鐘前(未達 30m 門檻) ⇒ QuotesFreshnessExporterDown 沉默
+  interval: 1m
+  input_series:
+  - series: atlas_quotes_freshness_ok
+    values: 1x70
+  - series: atlas_quotes_freshness_run_ok
+    values: 1x70
+  - series: atlas_quotes_freshness_checked_timestamp_seconds
+    values: 2100x70
+  - series: up{job="atlas-go"}
+    values: 1x70
+  alert_rule_test:
+  - eval_time: 1h
+    alertname: QuotesDataStale
+    exp_alerts: []
+  - eval_time: 1h
+    alertname: QuotesFreshnessUnverifiable
+    exp_alerts: []
+  - eval_time: 1h
+    alertname: QuotesFreshnessExporterDown
+    exp_alerts: []
+- name: 'G 落後只持續 30 分鐘 ⇒ QuotesDataStale 沉默(for: 1h 的負向對照)'
+  interval: 1m
+  input_series:
+  - series: atlas_quotes_freshness_ok
+    values: 1x30 0x30
+  - series: atlas_quotes_freshness_run_ok
+    values: 1x60
+  - series: atlas_quotes_freshness_checked_timestamp_seconds
+    values: 3300x60
+  - series: up{job="atlas-go"}
+    values: 1x60
+  alert_rule_test:
+  - eval_time: 1h
+    alertname: QuotesDataStale
+    exp_alerts: []
+  - eval_time: 1h
+    alertname: QuotesFreshnessUnverifiable
+    exp_alerts: []
+  - eval_time: 1h
+    alertname: QuotesFreshnessExporterDown
+    exp_alerts: []

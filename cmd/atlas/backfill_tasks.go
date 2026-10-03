@@ -26,6 +26,7 @@ import (
 	"github.com/kaecer68/atlas-go/internal/apigateway"
 	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/industry"
+	"github.com/kaecer68/atlas-go/internal/ledger"
 	"github.com/kaecer68/atlas-go/internal/monitoring"
 )
 
@@ -259,6 +260,9 @@ type backfillDeps struct {
 	monitor   *monitoring.Monitor
 	calendar  tradingDayChecker
 	collector *monitoring.MetricsCollector
+	// quoteStore 供 quotes_freshness_metrics_export 查 max(date)（F54
+	// phase 1）。nil 或後端不支援 ledger.QuoteMaxDater 時該任務跳過註冊。
+	quoteStore ledger.QuoteStore
 }
 
 // registerBackfillTasks wires the gap-detection background task into the
@@ -312,4 +316,5 @@ func registerBackfillTasks(d backfillDeps) {
 	registerChannelHealthMetricsTask(d)
 	registerCalibrationFreshnessMetricsTask(d)
 	registerReplayFreshnessMetricsTask(d)
+	registerQuotesFreshnessMetricsTask(d)
 }
