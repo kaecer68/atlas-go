@@ -134,7 +134,7 @@ func exportChannelHealthMetrics(workDir string, collector *monitoring.MetricsCol
 		if rec.LatencyMs > 0 {
 			collector.RecordGauge(MetricChannelFetchLatencySeconds, float64(rec.LatencyMs)/1000.0, map[string]string{"channel": channelID})
 		}
-		staleSec, err := computeChannelStalenessSeconds(rec, now)
+		staleSec, dataAt, err := computeChannelStalenessSeconds(rec, now)
 		if err == nil {
 			collector.RecordGauge(MetricChannelDataStalenessSeconds, staleSec, map[string]string{"channel": channelID})
 			// Contract-aware overage: how much staleness EXCEEDS the
@@ -147,14 +147,18 @@ func exportChannelHealthMetrics(workDir string, collector *monitoring.MetricsCol
 			// 的 gauge 是 last-write-wins 且不清序列——若條件消失就跳過輸出,
 			// 舊樣本會永久凍結在 /metrics,Prometheus 永遠看到 >0,alert
 			// 永遠 firing。輸出 0 讓序列持續更新,alert 自然 resolved。
-			window := apigateway.ChannelContracts().Contract(channelID).FreshnessWindow
-			if window <= 0 {
-				window = apigateway.StaleDataThreshold
-			}
-			overage := staleSec - window.Seconds()
-			if overage < 0 {
-				overage = 0
-			}
+			// 2026-10-04 (F58 週末假陽性): the arithmetic moved into the
+			// contract (ChannelContract.StalenessOverageSeconds). A channel
+			// whose upstream only publishes on Taiwan trading days is judged
+			// against that calendar (ExpectedChannelDataDate), because over a
+			// weekend the wall-clock window above grows while the upstream has
+			// no publish opportunity at all — that is what made ChannelDataStale
+			// fire every Sunday evening for twse_sbl / government_broker while
+			// both channels were healthy. All other channels keep the exact
+			// wall-clock semantics they had (staleSec - EffectiveFreshnessWindow,
+			// clamped at 0).
+			contract := apigateway.ChannelContracts().Contract(channelID)
+			overage := contract.StalenessOverageSeconds(staleSec, dataAt, now)
 			collector.RecordGauge(MetricChannelStalenessOverageSeconds, overage, map[string]string{"channel": channelID})
 		}
 	}
@@ -180,7 +184,12 @@ func governanceReminderLine(gov *monitoring.GovernanceNotifier, channelID string
 		channelID, decision.Status, decision.DataAgeWindows, decision.Overdue, decision.ShouldRetire, decision.Reasons), true
 }
 
-func computeChannelStalenessSeconds(rec apigateway.ChannelHealthRecord, now time.Time) (float64, error) {
+// computeChannelStalenessSeconds returns the raw data age in seconds together
+// with the stamp it was measured from. The stamp is returned because the
+// contract's calendar-aware overage needs BOTH the age and the moment it
+// belongs to: a duration alone cannot answer "which trading day is this data
+// from?".
+func computeChannelStalenessSeconds(rec apigateway.ChannelHealthRecord, now time.Time) (float64, time.Time, error) {
 	// Prefer LastDataAt (when the upstream data itself was produced), fall back
 	// to LastFetchAt (when we last tried to refresh it).
 	timeField := rec.LastDataAt
@@ -188,17 +197,17 @@ func computeChannelStalenessSeconds(rec apigateway.ChannelHealthRecord, now time
 		timeField = rec.LastFetchAt
 	}
 	if timeField == "" {
-		return 0, fmt.Errorf("no timestamp available")
+		return 0, time.Time{}, fmt.Errorf("no timestamp available")
 	}
 	t, err := time.Parse(time.RFC3339, timeField)
 	if err != nil {
-		return 0, err
+		return 0, time.Time{}, err
 	}
 	staleSec := now.Sub(t).Seconds()
 	if staleSec < 0 {
 		staleSec = 0
 	}
-	return staleSec, nil
+	return staleSec, t, nil
 }
 
 // healthStatusValue maps a channel status to the atlas_channel_health_status

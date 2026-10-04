@@ -7,6 +7,20 @@ groups:
         # raw staleness > 24h 會對「資料時間戳合法落後」的通道日日誤報
         # （實證: us10y/vix data-as-of 落後 ~27h）與週快照通道
         # （tdcc_equity_dispersion 8 天窗口）。
+        #
+        # 2026-10-04 修（F58，週末假陽性）: overage 的算法移進契約本身
+        # （apigateway.ChannelContract.StalenessOverageSeconds），讓「上游只在
+        # **交易日**發布」的通道以交易日曆判定而非牆鐘窗口（Go 側重用
+        # internal/taiwanholidays；同型於 F54 phase 1 的 ExpectedQuoteDate）。
+        # 實證: twse_sbl last_success 10-02T07:20Z / government_broker
+        # 10-02T07:18Z ⇒ 週日晚 raw age 55h8m > 48h 窗口而兩個通道完全正常
+        # （上游週末無發布機會，過窗 7h 純屬曆法假象）。宣告
+        # PublishCalendar=tw_trading_day 的通道改問「資料是否來自最新一個
+        # 已過發布窗口的交易日（台北 18:00）」，日曆無關的通道語意不變。
+        # ⚠️ 未納入本次變更（已知殘留，已登錄）: atlas_channel_health_status 的
+        # stale→warn 判定仍用牆鐘窗口 ⇒ 週末儀表板可能顯示 stale（不 page，
+        # 規則只匹配 ==2）。追蹤: a2a-dev docs/FOLLOWUPS.md **F58**（本 repo
+        # 的 F-item SSOT 沿例放 a2a-dev，同 F54）。
         expr: atlas_channel_staleness_overage_seconds > 0
         for: 15m
         labels:

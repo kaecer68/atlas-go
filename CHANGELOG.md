@@ -4,6 +4,14 @@
 
 > 0.0.2.0（2026-07-22）後累積功能補記（2026-08-07 盤查生成）。
 
+### fix(monitoring): ChannelDataStale 週末假陽性 —— 通道新鮮度契約交易日感知（F58，2026-10-04）
+- **根因（形狀，非症狀）**：`ChannelDataStale` 的輸入是 `atlas_channel_staleness_overage_seconds`（＝ raw staleness − 契約 `FreshnessWindow`），而 raw staleness 是**牆鐘**差值。上游只在**交易日**發布的通道（`twse_sbl`、`government_broker`）在週末沒有發布機會，年齡卻持續累加 ⇒ 48h 預設窗口被純曆法假象超過。實證（F58 已知讀數）：`twse_sbl` last_success `10-02T07:20Z`、`government_broker` `10-02T07:18Z` ⇒ `10-02T07:22Z + 48h` 起過窗約 7h，週日整晚 firing，而兩個通道當日/當週都正常。**同一缺口的第二面**：F54 phase 1（#2200）已為 `quotes` 導入交易日判定，通道契約仍無此維度。
+- **修法（重用，不新造）**：契約新增 `PublishCalendar`（opt-in，預設空＝日曆無關，語意完全不變）；`tw_trading_day` 的通道改以 `ExpectedChannelDataDate`（重用 `internal/taiwanholidays`，同型於 #2200 的 `ExpectedQuoteDate`）判定「資料是否來自最新一個已過發布窗口（台北 18:00）的交易日」。overage 算法收斂到單一權威 `ChannelContract.StalenessOverageSeconds`（`cmd/atlas/channel_health_metrics_task.go` 不再自己算 `staleSec − window`）。
+- **只改判定來源，不改門檻值**：`FreshnessWindow` / `expected_refresh` 全部未動；未宣告日曆的通道走原路徑（測試釘住 `twse_replay` 6d、`tdcc_equity_dispersion` 3d、`fugle` 27h 三個既有案例不變）。沒有 silence、沒有 annotation 例外。
+- **偵測不是放寬而是提前**：`twse_sbl` 若在週五漏抓，週一 18:15（台北）即 overage > 0；舊牆鐘窗口只會在週日 15:20 才「發現」（而且那時候是假陽性）。
+- **已知殘留（誠實聲明）**：`atlas_channel_health_status` 的 stale→warn（不 page，規則只匹配 `==2`）仍用牆鐘窗口 ⇒ 週末儀表板可能顯示 stale；追蹤 a2a-dev `docs/FOLLOWUPS.md` **F58**。規則檔註解同步說明。
+- **驗證**：`go build ./...`、`go vet`、`go test ./internal/apigateway/ ./cmd/atlas/ ./internal/monitoring/`（新增兩支：真實讀數形狀的週日/週一對照＋匯出層對照組，證明只有宣告日曆的通道被改）、`promtool check rules`（v3.14.0 釘版容器；規則僅註解變更）。
+
 ### feat(monitoring): quotes 新鮮度交易日感知告警（F54 phase 1，2026-10-03）
 - **背景（2026-10-02 實損）**：quotes 無任何排程結構性保障（無 cron、無契約檢查），當日 universe build 僅 **2/117** 個標的有 quotes 而無人發現；週一早晨 universe build 是下個風險點。
 - **設計（判斷後動手）**：`/metrics` 無既有 quotes 新鮮度指標（grep 僅 universe scoring 提到 quote）⇒ 採「小 Go gauge + rule」而非只加 rule。交易日判定**在 Go 側**重用 `internal/taiwanholidays`（純查表、成本可忽略），PromQL 只讀 `_ok`，不重寫第二套交易日曆；刻意用交易日感知而非簡化 24–36h 門檻（後者週末必誤報）。
