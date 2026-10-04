@@ -78,6 +78,31 @@ type ChannelContract struct {
 	// still alarms via the staleness-overage path, which is session-blind.
 	// Empty = no session capping.
 	MarketSession string `json:"market_session,omitempty"`
+	// PublishCalendar declares which days the upstream can produce new data at
+	// all, so freshness is judged against the upstream's own calendar instead
+	// of the wall clock:
+	//
+	//   - "" / PublishCalendarDaily (default) — the upstream may publish on any
+	//     calendar day; the record's raw data age is compared against
+	//     EffectiveFreshnessWindow.
+	//   - PublishCalendarTWTradingDay — Taiwan trading days only (TWSE/TPEx
+	//     daily datasets). No wall-clock window can express this contract: over
+	//     a weekend or a holiday stretch the upstream has NO publish
+	//     opportunity, yet the age keeps growing, so the 48h default window
+	//     makes ChannelDataStale fire while the channel is perfectly healthy
+	//     (2026-10-04 實證: twse_sbl last_success 10-02T07:20Z /
+	//     government_broker 10-02T07:18Z ⇒ 07:22Z+48h 起過窗 ~7h 至週日晚，
+	//     兩個通道當日/當週皆正常). For these channels freshness is
+	//     date-anchored (see ExpectedChannelDataDate): "does the record's data
+	//     come from the newest Taipei trading day whose publish window has
+	//     passed?"
+	//     Precondition: the channel's fetch gate runs after the same trading
+	//     day's close (sblFetchGate / shouldRunGovFlow: 15:00 Taipei), so a
+	//     data stamp is never carried across midnight into the next trading day.
+	//
+	// Opt-in per channel on purpose: enabling it for an unmeasured channel
+	// would change that channel's alerting behavior without evidence.
+	PublishCalendar string `json:"publish_calendar,omitempty"`
 }
 
 // MarketSessionTW is the Taiwan market session value for MarketSession.
@@ -100,6 +125,83 @@ func twMarketSessionActive(now time.Time) bool {
 	}
 	m := tpe.Hour()*60 + tpe.Minute()
 	return m >= twSessionStartMinute && m <= twSessionEndMinute
+}
+
+// PublishCalendar values (see ChannelContract.PublishCalendar).
+const (
+	// PublishCalendarDaily is the default: the upstream may publish on any
+	// calendar day, so freshness is a wall-clock question.
+	PublishCalendarDaily = ""
+	// PublishCalendarTWTradingDay marks an upstream that publishes only on
+	// Taiwan trading days (TWSE/TPEx daily datasets). Freshness for such a
+	// channel is date-anchored — see ExpectedChannelDataDate.
+	PublishCalendarTWTradingDay = "tw_trading_day"
+)
+
+// twPublishCutoffHour is the Asia/Taipei hour from which a trading-day-only
+// upstream's data for that trading day must have landed. Both channels that
+// declare PublishCalendarTWTradingDay open their fetch gate at 15:00 Taipei
+// (sblFetchGate in cmd/atlas/capital_task_gates.go; shouldRunGovFlow in
+// cmd/atlas/operations_tasks.go), so 18:00 leaves ~3h of slack for the fetch
+// and for the upstream's own publication lag. Same value, and the same reason,
+// as monitoring.QuotesFreshnessCutoffHour (F54 phase 1).
+const twPublishCutoffHour = 18
+
+// ExpectedChannelDataDate returns the newest Asia/Taipei calendar date whose
+// data a trading-day-only upstream must have published by now: today once the
+// trading day has passed the publish cutoff (18:00 Taipei), otherwise the
+// previous trading day. Date-anchored on purpose — the question a wall-clock
+// window cannot answer is "was there even an opportunity to publish?".
+//
+// It reuses internal/taiwanholidays (the single authority for "is this a
+// trading day") and mirrors the F54 phase 1 pattern
+// (internal/monitoring/quotes_freshness.go ExpectedQuoteDate), so the
+// gateway's and the monitoring pipeline's freshness contracts cannot drift.
+func ExpectedChannelDataDate(now time.Time) time.Time {
+	t := now.In(taipeiLoc)
+	today := time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, taipeiLoc)
+	if taiwanholidays.IsTradingDay(today) && t.Hour() >= twPublishCutoffHour {
+		return today
+	}
+	return taiwanholidays.PreviousTradingDay(today, 1)
+}
+
+// StalenessOverageSeconds returns how many seconds the record's data staleness
+// exceeds its contract (0 = within contract). dataAt is the stamp staleSec was
+// measured against (ChannelHealthRecord.LastDataAt, falling back to
+// LastFetchAt).
+//
+// It is the single authority for the overage the ChannelDataStale alert keys on
+// (atlas_channel_staleness_overage_seconds): callers must not re-implement
+// "staleSec - window", or a calendar-aware channel would be judged twice, two
+// different ways.
+func (c ChannelContract) StalenessOverageSeconds(staleSec float64, dataAt, now time.Time) float64 {
+	if c.PublishCalendar == PublishCalendarTWTradingDay && !dataAt.IsZero() {
+		return twTradingDayOverageSeconds(dataAt, now)
+	}
+	if overage := staleSec - c.EffectiveFreshnessWindow().Seconds(); overage > 0 {
+		return overage
+	}
+	return 0
+}
+
+// twTradingDayOverageSeconds is the trading-day-aware overage: 0 while the
+// record's data comes from the newest expected trading day, otherwise the
+// seconds elapsed since that day's publish deadline (18:00 Taipei). A zero
+// dataAt never reaches here (StalenessOverageSeconds falls back to the
+// wall-clock window), so "unknown stamp" cannot silently read as fresh.
+func twTradingDayOverageSeconds(dataAt, now time.Time) float64 {
+	expected := ExpectedChannelDataDate(now)
+	d := dataAt.In(taipeiLoc)
+	dataDate := time.Date(d.Year(), d.Month(), d.Day(), 0, 0, 0, 0, taipeiLoc)
+	if !dataDate.Before(expected) {
+		return 0
+	}
+	overage := now.Sub(expected.Add(twPublishCutoffHour * time.Hour)).Seconds()
+	if overage < 0 {
+		return 0
+	}
+	return overage
 }
 
 var taipeiLoc = func() *time.Location {
@@ -690,6 +792,10 @@ func buildChannelContractRegistry() *ChannelContractRegistry {
 	c.SourcePriority = []string{"TWSE", "TPEx", "FinMind"}
 	c.HealthSource = HealthSourceFileState
 	c.SuccessCriteria = SuccessCriteriaFileExists
+	// 2026-10-04 (F58 週末假陽性): TWSE TWT93U / TPEx SBL 只在**交易日**發布
+	// （adapter 亦以交易日為探測日），所以新鮮度必須以交易日曆判定，否則
+	// 週末的牆鐘窗口會讓 ChannelDataStale 在通道完全正常時 firing。
+	c.PublishCalendar = PublishCalendarTWTradingDay
 	r.Register(c)
 
 	// government_flow: operator-imported daily readings (flat YYYYMMDD.json
@@ -725,6 +831,9 @@ func buildChannelContractRegistry() *ChannelContractRegistry {
 	c.HealthSource = HealthSourceFileState
 	c.SuccessCriteria = SuccessCriteriaValueNonzero
 	c.DegradedOnEmpty = true
+	// 2026-10-04 (F58 週末假陽性): TWSE bsr 券商買賣日報表是**交易日**日報
+	// （fetch gate 為台北 15:00+，見 shouldRunGovFlow），與 twse_sbl 同型。
+	c.PublishCalendar = PublishCalendarTWTradingDay
 	r.Register(c)
 
 	return r
