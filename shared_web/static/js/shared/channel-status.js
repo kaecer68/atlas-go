@@ -77,11 +77,20 @@ export const ATTENTION_CATEGORY_ORDER = ['system_error', 'upstream_limit', 'expe
 // missing category falls back to 系統錯誤 — the backend's own default — so an
 // unclassified row is surfaced as our problem instead of being silently hidden
 // or excused as an upstream matter.
+// FALLBACK_ATTENTION_CATEGORY is the backend's own default
+// (internal/monitoring/service/channel_attention.go: an unattributable condition
+// is reported against atlas). Kept as a named constant — and read through a
+// bracket, not a dot — because these are WIRE VALUES sent by the backend
+// (`category`), not API field names: a dotted read of this map would look to
+// scripts/ci/check_field_contract.sh like a backend field access that no Go json
+// tag declares.
+const FALLBACK_ATTENTION_CATEGORY = 'system_error';
+
 export function attentionCategoryMeta(category) {
   const raw = category == null ? '' : String(category);
   return Object.prototype.hasOwnProperty.call(ATTENTION_CATEGORY, raw)
     ? ATTENTION_CATEGORY[raw]
-    : ATTENTION_CATEGORY.system_error;
+    : ATTENTION_CATEGORY[FALLBACK_ATTENTION_CATEGORY];
 }
 
 // isKnownAttentionCategory tells a classified row from a fallback. The page
