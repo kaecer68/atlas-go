@@ -47,15 +47,60 @@ export const CHANNEL_STATUS = {
   partial:        { label: '部分異常', tone: 'err' },
   // Operator toggle (channels.json enabled=false) — a decision, not an incident.
   inactive:       { label: '未啟用',   tone: 'muted' },
+  // Retired BY DESIGN (backend: ChannelContract.Retirement) — the upstream is
+  // permanently gone and a replacement input already serves the consumer. Not
+  // the same state as `inactive` (switched off right now, reversible): this one
+  // can never come back, so it is never an attention case. `retired: true`
+  // removes it from needsAttention below (2026-10-05 三分類).
+  retired:        { label: '已退役',   tone: 'muted', retired: true },
   // No health record at all.
   unknown:        { label: '未知',     tone: 'muted' },
 };
+
+// 需關注的三種成因（SSOT for the frontend; the backend classifies —
+// internal/monitoring/service/channel_attention.go — and these entries only
+// carry the display text/tone, exactly like CHANNEL_STATUS above).
+//
+// The point of the split (2026-10-05):「系統錯誤」是我們的問題、「已知上游限制」
+// 是上游的問題、「預期等待」是時間還沒到。混成一張清單會讓管理者無法判斷該不該
+// 動手。
+export const ATTENTION_CATEGORY = {
+  system_error:   { key: 'system_error',   title: '系統錯誤（我們的問題）', hint: 'atlas 這一側的問題，需要有人處理',        tone: 'err' },
+  upstream_limit: { key: 'upstream_limit', title: '已知上游限制（配額／tier）', hint: '已登錄的上游限制，等上游恢復或配額重置', tone: 'warn' },
+  expected_wait:  { key: 'expected_wait',  title: '預期等待（日曆未到）', hint: '上游在該期間沒有發布機會，現在不必處理',   tone: 'muted' },
+};
+
+// Render order: our problem first (it is the only one that needs action).
+export const ATTENTION_CATEGORY_ORDER = ['system_error', 'upstream_limit', 'expected_wait'];
+
+// attentionCategoryMeta maps a category to its display metadata. An unknown or
+// missing category falls back to 系統錯誤 — the backend's own default — so an
+// unclassified row is surfaced as our problem instead of being silently hidden
+// or excused as an upstream matter.
+export function attentionCategoryMeta(category) {
+  const raw = category == null ? '' : String(category);
+  return Object.prototype.hasOwnProperty.call(ATTENTION_CATEGORY, raw)
+    ? ATTENTION_CATEGORY[raw]
+    : ATTENTION_CATEGORY.system_error;
+}
+
+// isKnownAttentionCategory tells a classified row from a fallback. The page
+// renders both under 系統錯誤 (fail-safe: surface it, never hide it), but only a
+// KNOWN category may drive the block's tone — an unclassified row keeps the
+// historical status-derived tone so a stale-only set is not framed as an outage.
+export function isKnownAttentionCategory(category) {
+  const raw = category == null ? '' : String(category);
+  return Object.prototype.hasOwnProperty.call(ATTENTION_CATEGORY, raw);
+}
 
 // Worst-first ordering, used when a caller must pick one label for a set of
 // channels (e.g. the home data-quality badge).
 export const CHANNEL_SEVERITY_ORDER = [
   'error', 'partial', 'stale', 'degraded', 'warn', 'unknown',
   'expected_delay', 'ok', 'inactive',
+  // Least severe: a retired channel must never dominate a set's verdict (the
+  // home data-quality badge reads worstChannelStatus).
+  'retired',
 ];
 
 const FALLBACK_STATUS = 'unknown';
@@ -81,10 +126,15 @@ export function channelStatusMeta(status) {
     normal: entry.tone === 'ok',
     // abnormal → amber/red: must be counted as「非正常」on every page.
     abnormal: entry.tone === 'warn' || entry.tone === 'err',
-    // needsAttention → not normal, but not an operator-disabled channel
-    // either; `unknown` belongs here so a missing verdict is surfaced (muted)
+    // retired → off BY DESIGN (upstream gone, replacement wired). Exposed so
+    // callers can report it separately from 未啟用 instead of guessing.
+    retired: entry.retired === true,
+    // needsAttention → not normal, but not a decision either: an
+    // operator-disabled channel (`inactive`) and a retired-by-design one
+    // (`retired`) are both off on purpose, so neither belongs in「需關注」.
+    // `unknown` DOES belong here so a missing verdict is surfaced (muted)
     // instead of silently passing as normal.
-    needsAttention: entry.tone !== 'ok' && key !== 'inactive',
+    needsAttention: entry.tone !== 'ok' && key !== 'inactive' && !entry.retired,
   };
 }
 

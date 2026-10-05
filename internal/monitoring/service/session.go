@@ -160,6 +160,11 @@ func StatusText(status string) string {
 		return "部分異常"
 	case "inactive":
 		return "未啟用"
+	case "retired":
+		// Retired BY DESIGN (contract.Retirement): the upstream is permanently
+		// gone and a replacement input already serves the consumer. Distinct from
+		// 未啟用, which is a reversible "switched off right now" state.
+		return "已退役"
 	case "stale":
 		// Derived verdict: last fetch is older than the channel contract's
 		// freshness window. Distinct from 待更新 (warn = transient waiting) so

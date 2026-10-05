@@ -1,7 +1,7 @@
 ---
 title: channel 健康狀態單一真相規格（channel-health-status single truth）
 status: active
-updated: 2026-09-24
+updated: 2026-10-05
 owner: apigateway / monitoring
 related:
   - docs/reference/traps.md（channel 狀態只有一個判定）
@@ -17,6 +17,22 @@ related:
 > - **消費端不受影響**：零售商零股失衡輸入（`a6_odd_lot`）改由 `twse_capital_flow` 代理（`monitoring.NewOddLotFetcher` → `oddLotFromCapitalFlow`，`-tanh(totalNet/30)`）；代理不可用時**回 error、不回 0**，A6 落到 `A6OddLotFallback=0.5`。
 > - 同型同判準：`twse_etf`（TWT44U 移除、Fubon PCF 替代）維持未註冊／`inactive`，本次只對齊敘述，不動其實作。
 > - 本規格的判定語意（§2）**未變**：退役只是讓某一條 record 不再走「degraded 過期 ⇒ error」的升級路徑，不是放寬規則、不是抑制告警。
+
+> **2026-10-05 更新（前端分類缺陷；F58 的第二個消費者）**：三處修正在同一個 PR。
+> 1. **前端跟上交易日契約**：`DeriveChannelStatus` 的規則 2b／3 原本各自再寫一次牆鐘比較
+>    （`age > contract.EffectiveFreshnessWindow()`），而告警側（`ChannelDataStale` ⊆ `StalenessOverageSeconds`）
+>    已於 #2201（F58）改成交易日感知 ⇒ 同一通道在週末有兩種判定。現在**兩個消費者共用同一個
+>    `ChannelContract.StalenessOverageSeconds`**；未宣告 `PublishCalendar` 的通道語意逐字不變。
+> 2. **退役成為契約事實**：新增 `ChannelContract.Retirement`（＋狀態 `retired`），宣告 `twse_oddlot`
+>    （含 dash alias `twse-oddlot`）與 `twse_etf`。`DeriveChannelStatus` 的**規則 0** 在讀 record 之前
+>    就回 `retired`，因此任何殘留 record（甚至 `error`）都無法讓它回到可告警的判定；gauge 對映 `3`。
+>    `retired` 與 `inactive` **不同義**：前者是設計退休（不可逆、替代輸入已接線），後者是「現在被關掉」
+>    （可逆，例如 operator opt-in 未開通，`tej`）。前端把 `retired` 移出「需關注」，理由降為資訊級。
+> 3. **「需關注」三分類**：後端 `ClassifyChannelAttention`
+>    （`internal/monitoring/service/channel_attention.go`）把非 ok 的通道分成
+>    `system_error`（我們的問題）／`upstream_limit`（已知上游限制，配額・tier）／`expected_wait`（日曆未到），
+>    隨 `/api/dashboard/data-channels` 的 `channels[].category` 與 `alerts[].category` 輸出；前端只負責標題與排版。
+>    未宣告、無法歸因者一律算 `system_error`（寧可誤指自己，也不要靜默略過）。
 
 ## 1. 問題（2026-09-24 生產實證）
 
@@ -37,13 +53,18 @@ related:
 1. **單一判定函式**：`internal/apigateway/channel_status.go` 的
    `DeriveChannelStatus(rec *ChannelHealthRecord, contract ChannelContract, now time.Time) string`
    是 channel 狀態的唯一權威。任何呈現層、告警、DB mirror 都必須呼叫它或其 `ForID` 變體。
-2. **判定順序**：
+2. **判定順序**（2026-10-05 起，`PublishCalendar` 感知）：
+   0. `contract.Retirement != nil` → `retired`（契約事實優先於任何 record；見上）
    1. 無 record → `unknown`
-   2. `rec.Status != "ok"` → 原值 pass-through（`warn`/`error`/`degraded`/`inactive` 已是抓取路徑寫入的判定）
+   2. `rec.Status != "ok"` → 原值 pass-through（`warn`/`error`/`degraded`/`inactive` 已是抓取路徑寫入的判定）；
+      `degraded` 例外：資料**逾約**（`StalenessOverageSeconds > 0`）時升級為 `error`（規則 2b）
    3. `Provenance == "derived"`（vix/us10y 等指標欄位鏡射）→ 原值（本身沒有抓取節奏，不套窗口）
-   4. `ok` 且 `LastFetchAt` 超過 `contract.EffectiveFreshnessWindow()`（預設 `StaleDataThreshold=48h`）→ `stale`
+   4. `ok` 且 `LastFetchAt` **逾約**（`contract.StalenessOverageSeconds(age, LastFetchAt, now) > 0`）→ `stale`。
+      未宣告 `PublishCalendar` 時等價於「超過 `EffectiveFreshnessWindow()`（預設 `StaleDataThreshold=48h`）」；
+      宣告 `tw_trading_day` 時改判「資料是否來自最新一個已過發布窗口（台北 18:00）的交易日」
    5. 時間戳空/不可解析 → 保留 `ok`（record 壞了，但不是「過期」，誤標會誤導 on-call）
-3. **狀態語彙**：`ok` / `warn` / `error` / `degraded` / `inactive`（record 寫入）+ `stale` / `unknown`（僅 derived 產生）。
+3. **狀態語彙**：`ok` / `warn` / `error` / `degraded` / `inactive`（record 寫入）+ `stale` / `retired` / `unknown`
+   （僅 derived 產生；`retired` 由契約宣告驅動）。
    新增字串必須同步 `internal/monitoring/service/session.go` 的 `StatusText`（前端 label）與 `monitoring/rules/*.yml`。
 4. **空/停用 payload 不得記成 `ok`**：adapter 回 `FetchResult{Stale:true}` 時，
    `FetchOutcomeStatus` 依契約 `DegradedOnEmpty` 決定：宣告者（`twse_oddlot`，上游已消失）記 `degraded` + 原因；
@@ -70,6 +91,12 @@ related:
   - `internal/monitoring/api/system/health_aggregate_test.go`（Tier 2 `stale` 桶）
   - `internal/monitoring/dashboard_api_test.go`（`/api/dashboard/channel-health` derived + 原因文字（走既有 `last_error`）+ known-issue 欄位保留）
   - `cmd/atlas/channel_health_metrics_task_test.go`（gauge 不得對過期 channel 輸出 0）
+- 2026-10-05（前端分類缺陷；F58 第二個消費者）：
+  - `internal/apigateway/channel_status_trading_day_test.go`（週末 SBL／gov 不再 stale、週一 18:30 起才 stale、
+    未宣告通道語意逐字不變、2b 升級走同一契約、退役契約壓過任何 record）
+  - `internal/monitoring/service/channel_attention_test.go`（① 週末分類、③ finmind／tdcc 為已知上游限制、
+    預設為系統錯誤、② 退役列 = retired＋資訊級、`GetAlerts` 不含退役通道）
+  - `shared_web/static/js/__tests__/datachannels-attention-categories.test.mjs`（前端三分類與退役列）
 
 
 ## 4. 永久損壞 channel 的治理判準：必須退役或修復（issue #2138）

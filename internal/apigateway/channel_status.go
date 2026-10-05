@@ -21,6 +21,17 @@ const (
 	StatusError    = "error"
 	StatusDegraded = "degraded"
 	StatusInactive = "inactive"
+	// StatusRetired is the verdict for a channel that is retired BY DESIGN: the
+	// upstream is permanently gone, the fetch path is removed, and a replacement
+	// input already serves the consumer (ChannelContract.Retirement).
+	//
+	// It is deliberately NOT StatusInactive: "inactive" means "this channel is
+	// switched off right now" — an operator toggle or a missing API key — which
+	// is a REVERSIBLE state that a human may act on. "retired" means the channel
+	// can never produce data again and nothing is waiting for it. Only the second
+	// one may be moved out of「需關注」and rendered as information instead of a
+	// warning (2026-10-05 前端資料通道分類缺陷).
+	StatusRetired = "retired"
 	// StatusStale is the verdict for a channel whose last fetch is older than
 	// its contract FreshnessWindow (Issue #1086: ok-but-frozen channels).
 	StatusStale = "stale"
@@ -50,11 +61,22 @@ const (
 // writes and the status a human reads can never disagree.
 //
 // Rules (in order):
+//  0. contract.Retirement != nil → StatusRetired. The verdict is a property of
+//     the CONTRACT, not of any record: a retired channel has no
+//     "will recover" state, so no record may talk it out of the verdict. This is
+//     what keeps the page, the gauge and the DB mirror from showing "degraded"
+//     (amber, actionable) for a channel that will never fetch again.
 //  1. no record                 → StatusUnknown
 //  2. record.Status != "ok"     → passthrough (error/warn/inactive are already
 //     verdicts written by the fetch path). "degraded" is the ONE exception, and
 //     it escalates: a degraded record becomes StatusError once the DATA behind
-//     it is older than contract.EffectiveFreshnessWindow(). "degraded" means the
+//     it is OVERDUE per contract.StalenessOverageSeconds — the very judgment the
+//     ChannelDataStale alert keys on, so a page and an alert can never disagree
+//     about the same channel. For a channel that declares no PublishCalendar
+//     that is exactly "older than EffectiveFreshnessWindow"; for a
+//     tw_trading_day channel it is date-anchored (F58, 2026-10-05: the second
+//     consumer of the same contract; the alert side was fixed by #2201).
+//     "degraded" means the
 //     fetch succeeded while the payload was empty/stale/partial, i.e. no real
 //     data landed; for less than the channel's own freshness window that stays a
 //     warning (whatever was cached is still within its contract), but beyond it
@@ -64,9 +86,13 @@ const (
 //     degraded record could never escalate — it keeps the fetch timestamp
 //     moving, so no freshness gate saw it, and permanent schema drift was
 //     discoverable only from a process exit code.
-//  3. record.Status == "ok"     → StatusStale when the age of LastFetchAt
-//     exceeds contract.EffectiveFreshnessWindow() (StaleDataThreshold = 48h
-//     when the contract does not declare a window)
+//  3. record.Status == "ok"     → StatusStale when the record is OVERDUE per
+//     contract.StalenessOverageSeconds (StaleDataThreshold = 48h when the
+//     contract does not declare a window — the same threshold the wall-clock
+//     comparison used, so an undeclared channel's verdict is unchanged to the
+//     second). For a PublishCalendar=tw_trading_day channel the question becomes
+//     "does the data come from the newest trading day whose publish window has
+//     passed?", so a weekend or a holiday stretch no longer reads as stale.
 //  4. empty/unparseable LastFetchAt → StatusOK: the record is broken, but not
 //     because of staleness, and mislabeling it "stale" would mislead on-call
 //     (same rule the pre-existing deriveStatusWithContract documented).
@@ -78,6 +104,13 @@ const (
 // fetch time" cases (us10y/vix) are covered by
 // atlas_channel_staleness_overage_seconds, which keys on LastDataAt.
 func DeriveChannelStatus(rec *ChannelHealthRecord, contract ChannelContract, now time.Time) string {
+	// Rule 0: retirement is a contract-level fact (see StatusRetired). It is
+	// checked before the record — even before the nil record — because it is not
+	// a statement about the last fetch but about whether there will ever be
+	// another one.
+	if contract.IsRetired() {
+		return StatusRetired
+	}
 	if rec == nil {
 		return StatusUnknown
 	}
@@ -86,7 +119,14 @@ func DeriveChannelStatus(rec *ChannelHealthRecord, contract ChannelContract, now
 		// one. Anchor = the data's own timestamps, never LastFetchAt (a degraded
 		// fetch still succeeds, so LastFetchAt keeps moving and would make this
 		// branch unreachable — the reason the state could never escalate).
-		if age, _, ok := degradedDataAge(rec, now); ok && age > contract.EffectiveFreshnessWindow() {
+		//
+		// Overdue is measured with the contract's own judgment
+		// (StalenessOverageSeconds) rather than a second wall-clock comparison:
+		// a tw_trading_day channel whose data is one trading day old is not
+		// "overdue" on a Sunday even though the wall clock says 2 days 23 hours
+		// (F58). Two implementations of the same question is how the alert path
+		// and the page drifted apart in the first place.
+		if age, at, _, ok := degradedDataAgeAt(rec, now); ok && contract.StalenessOverageSeconds(age.Seconds(), at, now) > 0 {
 			return StatusError
 		}
 		return StatusDegraded
@@ -103,11 +143,17 @@ func DeriveChannelStatus(rec *ChannelHealthRecord, contract ChannelContract, now
 		// metrics export and the dashboard badge have always shown.
 		return rec.Status
 	}
-	age, ok := lastFetchAge(rec, now)
+	// Rule 3. Same single authority as rule 2b: the contract's overage, never a
+	// second wall-clock comparison. For a channel that does not declare a
+	// PublishCalendar this is byte-for-byte the old `age > window` test; for a
+	// tw_trading_day channel it is the date-anchored question (see the function
+	// comment for why LastFetchAt, not LastDataAt, is the anchor).
+	fetchedAt, ok := lastFetchTime(rec)
 	if !ok {
 		return StatusOK
 	}
-	if age > contract.EffectiveFreshnessWindow() {
+	age := now.Sub(fetchedAt)
+	if contract.StalenessOverageSeconds(age.Seconds(), fetchedAt, now) > 0 {
 		return StatusStale
 	}
 	return StatusOK
@@ -126,10 +172,31 @@ func DeriveChannelStatusForID(rec *ChannelHealthRecord, channelID string, now ti
 // showing a bare red/grey pill.
 func DeriveChannelStatusReason(rec *ChannelHealthRecord, contract ChannelContract, now time.Time) string {
 	switch DeriveChannelStatus(rec, contract, now) {
+	case StatusRetired:
+		// A retirement explains itself: the reason is INFORMATIONAL (the channel
+		// is off by design and a replacement already serves the consumer), which
+		// is why the page renders it at info level and out of「需關注」.
+		if contract.Retirement == nil {
+			return ""
+		}
+		r := fmt.Sprintf("已退役（%s）：%s", contract.Retirement.RetiredAt, contract.Retirement.Reason)
+		if contract.Retirement.Replacement != "" {
+			r += "；替代輸入：" + contract.Retirement.Replacement
+		}
+		return r
 	case StatusStale:
-		age, ok := lastFetchAge(rec, now)
+		fetchedAt, ok := lastFetchTime(rec)
 		if !ok {
 			return ""
+		}
+		age := now.Sub(fetchedAt)
+		if contract.PublishCalendar == PublishCalendarTWTradingDay {
+			// Calendar-anchored staleness: the wall-clock wording ("超過合約更新
+			// 窗口 48 小時") would be wrong here — the channel is judged against
+			// the newest trading day whose 18:00 publish window has passed, not
+			// against an elapsed duration.
+			return fmt.Sprintf("資料不是來自最新應發布的交易日：最後一次成功抓取 %s（%s 前），早於應有之交易日 %s（台北 18:00 發布截止）",
+				rec.LastFetchAt, humanizeAge(age), ExpectedChannelDataDate(now).Format("2006-01-02"))
 		}
 		return fmt.Sprintf("資料已 %s 未更新，超過合約更新窗口 %s（最後一次成功抓取 %s）",
 			humanizeAge(age), humanizeWindow(contract.EffectiveFreshnessWindow()), rec.LastFetchAt)
@@ -143,6 +210,10 @@ func DeriveChannelStatusReason(rec *ChannelHealthRecord, contract ChannelContrac
 		age, stamp, ok := degradedDataAge(rec, now)
 		if !ok {
 			return ""
+		}
+		if contract.PublishCalendar == PublishCalendarTWTradingDay {
+			return fmt.Sprintf("degraded 的資料已早於最新應發布的交易日 %s：資料已 %s 未落地（最後一次成功資料 %s）⇒ 升級為 error",
+				ExpectedChannelDataDate(now).Format("2006-01-02"), humanizeAge(age), stamp)
 		}
 		return fmt.Sprintf("degraded 已超過合約更新窗口 %s：資料已 %s 未落地（最後一次成功資料 %s）⇒ 升級為 error",
 			humanizeWindow(contract.EffectiveFreshnessWindow()), humanizeAge(age), stamp)
@@ -170,8 +241,17 @@ func DeriveChannelStatusReason(rec *ChannelHealthRecord, contract ChannelContrac
 // the record ("degraded since") or a streak-based rule, and a streak-based rule
 // would page for deliberately deferred upstreams (twse_oddlot and friends).
 func degradedDataAge(rec *ChannelHealthRecord, now time.Time) (time.Duration, string, bool) {
+	age, _, stamp, ok := degradedDataAgeAt(rec, now)
+	return age, stamp, ok
+}
+
+// degradedDataAgeAt is degradedDataAge plus the PARSED stamp it measured against.
+// Rule 2b needs the instant, not just the duration, because the overdue judgment
+// is calendar-anchored for channels that declare PublishCalendar (F58): "how
+// long ago" cannot answer "was there even an opportunity to publish?".
+func degradedDataAgeAt(rec *ChannelHealthRecord, now time.Time) (time.Duration, time.Time, string, bool) {
 	if rec == nil {
-		return 0, "", false
+		return 0, time.Time{}, "", false
 	}
 	var newest time.Time
 	var stamp string
@@ -188,9 +268,9 @@ func degradedDataAge(rec *ChannelHealthRecord, now time.Time) (time.Duration, st
 		}
 	}
 	if newest.IsZero() {
-		return 0, "", false
+		return 0, time.Time{}, "", false
 	}
-	return now.Sub(newest), stamp, true
+	return now.Sub(newest), newest, stamp, true
 }
 
 // DataAge returns how long ago the DATA behind a record was last seen, plus the
@@ -208,16 +288,16 @@ func DataAge(rec *ChannelHealthRecord, now time.Time) (age time.Duration, stamp 
 	return degradedDataAge(rec, now)
 }
 
-// lastFetchAge returns how long ago the record's last fetch happened.
-func lastFetchAge(rec *ChannelHealthRecord, now time.Time) (time.Duration, bool) {
+// lastFetchTime returns the parsed instant of the record's last fetch.
+func lastFetchTime(rec *ChannelHealthRecord) (time.Time, bool) {
 	if rec == nil || rec.LastFetchAt == "" {
-		return 0, false
+		return time.Time{}, false
 	}
 	ts, err := time.Parse(time.RFC3339, rec.LastFetchAt)
 	if err != nil {
-		return 0, false
+		return time.Time{}, false
 	}
-	return now.Sub(ts), true
+	return ts, true
 }
 
 // humanizeAge renders a duration as a compact, operator-readable age:

@@ -188,10 +188,17 @@ func TestCheckChannelHealth_WithRecords(t *testing.T) {
 // record as ok even when its last fetch was 17 days old, so /api/health/aggregate
 // reported a healthy channel_health tier for a channel the health summary called
 // stale. It must now land in the stale bucket instead.
+//
+// The vehicle is a plain (non-retired) channel: since 2026-10-05 the retired
+// contract (twse_oddlot / twse_etf) reports "retired" for every record and lands
+// in its own bucket — asserted at the end of this test.
 func TestCheckChannelHealth_ExpiredOkCountsAsStale(t *testing.T) {
 	store := apigateway.NewChannelHealthStore(t.TempDir())
 	store.WithRecordClock(func() time.Time { return time.Now().Add(-17 * 24 * time.Hour) })
-	if err := store.Record("twse_oddlot", "ok", ""); err != nil {
+	if err := store.Record("twse_margin", "ok", ""); err != nil {
+		t.Fatalf("Record: %v", err)
+	}
+	if err := store.Record("twse_oddlot", "inactive", "retired by design"); err != nil {
 		t.Fatalf("Record: %v", err)
 	}
 	store.WithRecordClock(time.Now)
@@ -210,6 +217,14 @@ func TestCheckChannelHealth_ExpiredOkCountsAsStale(t *testing.T) {
 	}
 	if detail.OK != 1 {
 		t.Errorf("detail.OK = %d, want 1 (only the fresh channel)", detail.OK)
+	}
+	// Retired by design (2026-10-05): neither ok nor an incident, so it gets its
+	// own bucket instead of being counted as ok, stale or "other".
+	if detail.Retired != 1 {
+		t.Errorf("detail.Retired = %d, want 1 (twse_oddlot is retired by contract)", detail.Retired)
+	}
+	if detail.Other != 0 {
+		t.Errorf("detail.Other = %d, want 0 (a retired channel must be classified, not lumped into other)", detail.Other)
 	}
 }
 

@@ -120,12 +120,21 @@ type DataChannel struct {
 	// this as a 停用 / muted badge even if health status is otherwise "ok".
 	// Absence in channels.json is treated as enabled=true (default-on).
 	Enabled bool `json:"enabled"`
+	// Category is WHY this non-ok row is non-ok (see channel_attention.go):
+	// system_error / upstream_limit / expected_wait / retired, or "" for a row
+	// that is not an attention case. The page groups「需關注」by it so an operator
+	// can tell "our problem" from "their problem" from "not yet due".
+	Category string `json:"category,omitempty"`
 }
 
 type ChannelAlert struct {
 	ChannelID string `json:"channel_id"`
 	Status    string `json:"status"`
 	Error     string `json:"error"`
+	// Category is the same classification as DataChannel.Category — computed by
+	// service.ClassifyChannelAttention, so the row and the alert for one channel
+	// cannot disagree about who has to act.
+	Category string `json:"category,omitempty"`
 }
 
 // ChannelHealthRecord aliases the canonical apigateway definition.
@@ -298,7 +307,35 @@ func (s *DataChannelService) GetAllChannelStatuses(ctx context.Context) ([]DataC
 		channels = append(channels, mergeEnabled(c))
 	}
 
+	// Contract-level verdicts last, as one pass over the assembled list: a
+	// retirement is a property of the CONTRACT, and it must be applied to every
+	// row regardless of which builder produced it. Doing it here (not in each
+	// builder) is what keeps a future builder from quietly rendering a retired
+	// channel as an actionable one.
+	for i, c := range channels {
+		channels[i] = s.applyContractVerdicts(c, now)
+	}
+
 	return channels, nil
+}
+
+// applyContractVerdicts rewrites the row fields that belong to the channel's
+// CONTRACT rather than to its latest health record, and attaches the attention
+// category.
+func (s *DataChannelService) applyContractVerdicts(c DataChannel, now time.Time) DataChannel {
+	contract := apigateway.ChannelContracts().Contract(c.ChannelID)
+	if contract.IsRetired() {
+		c.Status = apigateway.StatusRetired
+		c.StatusText = statusText(c.Status)
+		if c.LastError == "" {
+			c.LastError = apigateway.DeriveChannelStatusReason(nil, contract, now)
+		}
+		// 退役是決策，不是事故：原因留在列上供辨識，但降到資訊級，不得看起來像
+		// 待處理的告警（2026-10-05 業主：退休通道的理由文字降為資訊級）。
+		c.ErrorSeverity = ErrorSeverityInfo
+	}
+	c.Category = ClassifyChannelAttention(contract, s.healthStore.Get(c.ChannelID), c.Status, c.LastError, now)
+	return c
 }
 
 // loadEnabledStates reads data/state/channels.json (the same file written by
@@ -638,6 +675,14 @@ func (s *DataChannelService) GetAlerts(ctx context.Context) ([]ChannelAlert, err
 	knownInactive := map[string]bool{}
 	var alerts []ChannelAlert
 	for _, c := range channels {
+		if c.Status == apigateway.StatusRetired {
+			// 設計退休的通道不進「需關注」（2026-10-05）：上游永久消失、替代輸入已
+			// 接線，沒有任何人可以對它採取動作。它仍留在通道表上（含退休理由），
+			// 只是不再冒充待辦事項。getAllChannelStatuses 已經把退役列寫成 retired，
+			// 這裡是第二道防線：即使未來某條 builder 路徑沒有經過 applyContractVerdicts，
+			// 「需關注」也不會被退役通道污染。
+			continue
+		}
 		if c.Status == "error" || c.Status == "warn" {
 			if knownInactive[c.ChannelID] {
 				continue
@@ -646,6 +691,7 @@ func (s *DataChannelService) GetAlerts(ctx context.Context) ([]ChannelAlert, err
 				ChannelID: c.ChannelID,
 				Status:    c.Status,
 				Error:     c.LastError,
+				Category:  c.Category,
 			})
 		}
 	}

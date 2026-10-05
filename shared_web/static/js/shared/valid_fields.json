@@ -1605,6 +1605,7 @@
   "retail_short_oi",
   "retail_short_pct",
   "retail_value",
+  "retired",
   "retry_backoff_ms",
   "retry_of",
   "retry_status_codes",

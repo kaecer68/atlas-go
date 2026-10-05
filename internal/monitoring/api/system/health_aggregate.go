@@ -149,7 +149,12 @@ type channelHealthDetail struct {
 	// such a record as ok, so /api/health/aggregate said "ok" for a channel the
 	// health summary called stale).
 	Stale int `json:"stale"`
-	Other int `json:"other"`
+	// Retired counts channels retired BY DESIGN (contract.Retirement): the
+	// upstream is gone and a replacement input is wired. They are neither ok nor
+	// broken — the tier must not report readiness for a channel that will never
+	// fetch again, and must not count it as an incident either.
+	Retired int `json:"retired"`
+	Other   int `json:"other"`
 }
 
 func (h *HealthHandlers) checkChannelHealth() (bool, string, any) {
@@ -171,6 +176,10 @@ func (h *HealthHandlers) checkChannelHealth() (bool, string, any) {
 			detail.Degraded++
 		case "inactive":
 			detail.Inactive++
+		case "retired":
+			// Counted apart from "inactive": a retired channel is off BY DESIGN
+			// (upstream gone, replacement wired), not switched off right now.
+			detail.Retired++
 		case "stale":
 			detail.Stale++
 		default:
