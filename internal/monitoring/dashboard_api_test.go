@@ -1087,8 +1087,16 @@ func TestDashboardAPI_ChannelHealthEndpoint_ExpiredOkIsStaleAndKeepsKnownIssue(t
 	fetched := time.Now().UTC().Add(-17 * 24 * time.Hour).Round(time.Second)
 	payload := map[string]any{
 		"channels": map[string]any{
-			"twse_oddlot": map[string]any{
+			// Plain (non-retired) channel: the vehicle for the stale verdict.
+			"twse_margin": map[string]any{
 				"status":          "ok",
+				"last_fetch_at":   fetched.Format(time.RFC3339),
+				"last_success_at": fetched.Format(time.RFC3339),
+			},
+			// Retired by design since 2026-10-05: its verdict is "retired" for
+			// ANY record, and the known-issue badge must survive that too.
+			"twse_oddlot": map[string]any{
+				"status":          "degraded",
 				"last_fetch_at":   fetched.Format(time.RFC3339),
 				"last_success_at": fetched.Format(time.RFC3339),
 			},
@@ -1119,17 +1127,34 @@ func TestDashboardAPI_ChannelHealthEndpoint_ExpiredOkIsStaleAndKeepsKnownIssue(t
 	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
 		t.Fatalf("decode: %v", err)
 	}
-	if len(resp.Channels) != 1 {
-		t.Fatalf("expected 1 channel, got %d", len(resp.Channels))
+	if len(resp.Channels) != 2 {
+		t.Fatalf("expected 2 channels, got %d", len(resp.Channels))
 	}
-	ch := resp.Channels[0]
+	byID := map[string]map[string]any{}
+	for _, c := range resp.Channels {
+		byID[fmt.Sprint(c["channel_id"])] = c
+	}
+	ch := byID["twse_margin"]
+	if ch == nil {
+		t.Fatalf("twse_margin missing from the payload: %v", byID)
+	}
 	if ch["status"] != "stale" {
 		t.Errorf("status = %v, want stale (17-day-old fetch must not read ok)", ch["status"])
 	}
 	if reason, _ := ch["last_error"].(string); reason == "" {
 		t.Error("the derived stale verdict must explain itself through last_error (an existing, contract-registered view field)")
 	}
-	if ch["known_issue"] == nil {
+
+	// Retired by design (2026-10-05): the degraded record below may NOT escalate
+	// (rule 0 short-circuits it) and may NOT read as ok either.
+	retired := byID["twse_oddlot"]
+	if retired == nil {
+		t.Fatalf("twse_oddlot missing from the payload: %v", byID)
+	}
+	if retired["status"] != "retired" {
+		t.Errorf("status = %v, want retired (a channel retired by contract never ages into error)", retired["status"])
+	}
+	if retired["known_issue"] == nil {
 		t.Error("known_issue badge must survive the derived status (upstream really is gone)")
 	}
 }

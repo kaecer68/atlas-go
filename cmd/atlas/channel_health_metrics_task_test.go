@@ -49,7 +49,11 @@ func TestExportChannelHealthMetrics_EmitsStalenessLatencyStatus(t *testing.T) {
 			// internal/monitoring/known_issues.go): must NOT emit
 			// staleness/latency series (they only feed false
 			// ChannelDataStale / ChannelFetchLatencyHigh alerts), but the
-			// status gauge stays for the dashboard known-issue badge.
+			// status gauge stays for the dashboard known-issue badge. Since
+			// 2026-10-05 the value is 3 (retired) even though this leftover
+			// record says "error": the contract's Retirement outranks the record
+			// (rule 0), so a frozen record from before the retirement cannot
+			// re-open the alert loop.
 			"twse_oddlot": {
 				Status:     "error",
 				LastDataAt: now.Add(-3 * 24 * time.Hour).Format(time.RFC3339),
@@ -83,8 +87,9 @@ func TestExportChannelHealthMetrics_EmitsStalenessLatencyStatus(t *testing.T) {
 		`atlas_channel_fetch_latency_seconds{channel="finmind"} 5`,
 		`atlas_channel_data_staleness_seconds{channel="finmind"} 172800`,
 		`atlas_channel_data_staleness_seconds{channel="us_yahoo"} 259200`,
-		// known-issue 通道仍輸出 status gauge（dashboard badge 需要），
-		`atlas_channel_health_status{channel="twse_oddlot"} 2`,
+		// known-issue 通道仍輸出 status gauge（dashboard badge 需要）；3 = retired
+		// （2026-10-05 起契約宣告退役，任何殘留 record 都不再升級為 2）。
+		`atlas_channel_health_status{channel="twse_oddlot"} 3`,
 	}
 	for _, want := range mustContain {
 		if !strings.Contains(body, want) {
@@ -202,8 +207,11 @@ func TestExportChannelHealthMetrics_ExpiredOkExportsStaleNotOk(t *testing.T) {
 		Channels map[string]*apigateway.ChannelHealthRecord `json:"channels"`
 	}{
 		Channels: map[string]*apigateway.ChannelHealthRecord{
-			// Registered channel, record says ok, data 17 days old.
-			"twse_oddlot": {
+			// Registered channel, record says ok, data 17 days old. The vehicle
+			// is a plain (non-retired) channel: since 2026-10-05 a retired
+			// contract reports "retired" (value 3) for every record, which is its
+			// own test (TestExportChannelHealthMetrics_TwseOddlotRetirementClosesTheAlertLoop).
+			"twse_margin": {
 				Status:      "ok",
 				LastFetchAt: now.Add(-17 * 24 * time.Hour).Format(time.RFC3339),
 			},
@@ -232,14 +240,14 @@ func TestExportChannelHealthMetrics_ExpiredOkExportsStaleNotOk(t *testing.T) {
 	body := rec.Body.String()
 
 	for _, want := range []string{
-		`atlas_channel_health_status{channel="twse_oddlot"} 1`,
+		`atlas_channel_health_status{channel="twse_margin"} 1`,
 		`atlas_channel_health_status{channel="twse_capital_flow"} 0`,
 	} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("missing /metrics line %q\n--- full body ---\n%s", want, body)
 		}
 	}
-	if strings.Contains(body, `atlas_channel_health_status{channel="twse_oddlot"} 0`) {
+	if strings.Contains(body, `atlas_channel_health_status{channel="twse_margin"} 0`) {
 		t.Fatal("expired ok channel must not be exported as ok")
 	}
 }
@@ -420,16 +428,29 @@ func TestExportChannelHealthMetrics_TwseOddlotRetirementClosesTheAlertLoop(t *te
 		return -1
 	}
 
-	t.Run("pre-fix production record exports 2 (the firing condition)", func(t *testing.T) {
-		// Measured in production 2026-09-29.
-		got := exportedStatus(t, &apigateway.ChannelHealthRecord{
+	t.Run("pre-fix production record exports 3 through the retired contract", func(t *testing.T) {
+		// Measured in production 2026-09-29: a degraded record whose data is 17
+		// days old under a 48h window. That shape is what made the gauge 2 (the
+		// only value the alert rules match) — and it is exactly the shape that
+		// must be unreachable for a retired channel.
+		preFix := &apigateway.ChannelHealthRecord{
 			Status:        apigateway.StatusDegraded,
 			LastFetchAt:   "2026-09-27T12:59:28Z",
 			LastSuccessAt: "2026-09-07T00:18:11Z",
 			LastError:     "twse_oddlot: 上游回傳空/停用資料（stale payload）",
-		})
-		if got != 2 {
-			t.Fatalf("pre-fix record exported status %v, want 2 (that is the state the retirement removes)", got)
+		}
+		got := exportedStatus(t, preFix)
+		if got != 3 {
+			t.Fatalf("pre-fix record exported status %v, want 3 (the retirement short-circuits the escalation)", got)
+		}
+		// The firing condition itself is still pinned — against the contract as
+		// it stood BEFORE the retirement was declared in it (2026-10-05). Without
+		// this assertion the test could go green just because rule 2b stopped
+		// working.
+		preRetirement := apigateway.ChannelContracts().Contract("twse_oddlot")
+		preRetirement.Retirement = nil
+		if v := healthStatusValue(apigateway.DeriveChannelStatus(preFix, preRetirement, now)); v != 2 {
+			t.Fatalf("pre-fix record against the PRE-retirement contract = %v, want 2 (that is the state the retirement removes)", v)
 		}
 	})
 

@@ -519,6 +519,7 @@ export interface ChannelAlert {
   channel_id: string;
   status: string;
   error: string;
+  category?: string;
 }
 
 export interface ChannelHealthJSONRecord {
@@ -958,6 +959,7 @@ export interface DataChannel {
   last_error?: string;
   error_severity?: string;
   enabled: boolean;
+  category?: string;
 }
 
 export interface DataChannelInfo {
@@ -4926,6 +4928,7 @@ export interface channelHealthDetail {
   degraded: number;
   inactive: number;
   stale: number;
+  retired: number;
   other: number;
 }
 

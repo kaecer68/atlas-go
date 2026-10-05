@@ -84,22 +84,40 @@ func TestResolveChannelStatusFromStore_Error(t *testing.T) {
 
 // TestResolveChannelStatusFromStore_Inactive covers the inactive status: the
 // record's own verdict must be reported (2026-09-24). It used to fall through
-// to the file-age fallback, so /admin/datachannels rendered twse_etf — whose
-// record says inactive with a reason — as an empty status / 未知.
+// to the file-age fallback, so /admin/datachannels rendered an inactive channel
+// — with a reason — as an empty status / 未知.
+//
+// Vehicle: tej, which is inactive by OPERATOR DECISION (no API key / opt-in
+// not taken) and stays inactive — the reversible case, deliberately distinct
+// from the retired-by-contract case asserted right below.
 func TestResolveChannelStatusFromStore_Inactive(t *testing.T) {
 	store := apigateway.NewChannelHealthStoreWithPool(t.TempDir(), nil)
-	if err := store.Record("twse_etf", "inactive", "TWT44U removed upstream (2026-08-10)"); err != nil {
+	if err := store.Record("tej", "inactive", "TEJ API 未開通（opt-in）"); err != nil {
 		t.Fatalf("record inactive: %v", err)
 	}
-	status, updated, lastErr := resolveChannelStatusFromStore(store, "twse_etf", "ok", "20260611")
+	status, updated, lastErr := resolveChannelStatusFromStore(store, "tej", "ok", "20260611")
 	if status != "inactive" {
 		t.Fatalf("expected inactive to be reported, got %q", status)
 	}
 	if updated == "20260611" {
 		t.Fatalf("expected the record's LastFetchAt, got the file timestamp %q", updated)
 	}
-	if lastErr != "TWT44U removed upstream (2026-08-10)" {
+	if lastErr != "TEJ API 未開通（opt-in）" {
 		t.Fatalf("expected store LastError to be attached, got %q", lastErr)
+	}
+
+	// Retired BY DESIGN (2026-10-05) is NOT the same state: twse_etf carries an
+	// inactive record too, but its contract declares a retirement, so the page
+	// must say 已退役 (with the replacement input named) rather than 未啟用.
+	if err := store.Record("twse_etf", "inactive", "TWT44U removed upstream (2026-08-10)"); err != nil {
+		t.Fatalf("record inactive: %v", err)
+	}
+	retiredStatus, _, retiredErr := resolveChannelStatusFromStore(store, "twse_etf", "ok", "20260611")
+	if retiredStatus != apigateway.StatusRetired {
+		t.Fatalf("twse_etf status = %q, want %q (retired by design, not merely switched off)", retiredStatus, apigateway.StatusRetired)
+	}
+	if !strings.Contains(retiredErr, "Fubon PCF") {
+		t.Fatalf("the retired reason must name the replacement input, got %q", retiredErr)
 	}
 }
 
@@ -140,19 +158,22 @@ func TestResolveChannelStatusFromStore_StaleRecordIsNotDropped(t *testing.T) {
 
 // TestResolveChannelStatusFromStore_ExpiredOkIsStale is the regression test for
 // the reported symptom: a channel whose record says ok but whose last successful
-// fetch is 17 days old (twse_oddlot, upstream removed) used to read "ok / 正常"
-// on /admin/datachannels while the health summary logged "stale" at the same
-// second. Both must now say stale.
+// fetch is 17 days old used to read "ok / 正常" on /admin/datachannels while the
+// health summary logged "stale" at the same second. Both must now say stale.
+//
+// Vehicle: a plain (non-retired) 48h channel. The retired channels cannot carry
+// this case any more — for them the derived verdict is 已退役 for every record
+// (10-05), asserted in the test above.
 func TestResolveChannelStatusFromStore_ExpiredOkIsStale(t *testing.T) {
 	store := apigateway.NewChannelHealthStoreWithPool(t.TempDir(), nil)
 	fetched := time.Now().Add(-17 * 24 * time.Hour).UTC().Truncate(time.Second)
 	store.WithRecordClock(func() time.Time { return fetched })
-	if err := store.Record("twse_oddlot", "ok", ""); err != nil {
+	if err := store.Record("twse_margin", "ok", ""); err != nil {
 		t.Fatalf("record ok: %v", err)
 	}
 	// Back to the real clock for the control case below.
 	store.WithRecordClock(time.Now)
-	status, updated, lastErr := resolveChannelStatusFromStore(store, "twse_oddlot", "ok", "20260907")
+	status, updated, lastErr := resolveChannelStatusFromStore(store, "twse_margin", "ok", "20260907")
 	if status != "stale" {
 		t.Fatalf("expected stale for a 17-day-old ok record, got %q", status)
 	}
@@ -163,10 +184,10 @@ func TestResolveChannelStatusFromStore_ExpiredOkIsStale(t *testing.T) {
 		t.Fatalf("expected a reason quoting the freshness window, got %q", lastErr)
 	}
 	// The same clock (now) must not turn a freshly fetched record stale.
-	if err := store.Record("twse_margin", "ok", ""); err != nil {
+	if err := store.Record("us_yahoo", "ok", ""); err != nil {
 		t.Fatalf("record ok: %v", err)
 	}
-	if st, _, _ := resolveChannelStatusFromStore(store, "twse_margin", "warn", "20260907"); st != "ok" {
+	if st, _, _ := resolveChannelStatusFromStore(store, "us_yahoo", "warn", "20260907"); st != "ok" {
 		t.Fatalf("fresh record = %q, want ok", st)
 	}
 }

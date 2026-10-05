@@ -99,7 +99,14 @@ for JS_DIR in "${JS_DIRS[@]}"; do
         foreign_capital_signal|foreign_investor_net_billions|\
         taiwan_ex_change_pct|taiwan_ex_direction|\
         total_pnl|total_value|\
-        sample_days|strategy_id|strategy_name) continue ;;
+        sample_days|strategy_id|strategy_name|\
+        system_error) continue ;;
+        # system_error = the value of the monitoring.AttentionCategory* Go
+        # constants (the `category` WIRE VALUE the backend sends), not an API
+        # field: shared/channel-status.js looks it up in the ATTENTION_CATEGORY
+        # map, and this scanner's dot-access regex cannot tell a map lookup from
+        # a field read. upstream_limit / expected_wait need no entry today —
+        # they only appear as string literals in ATTENTION_CATEGORY_ORDER.
       esac
 
       echo "$field" >> "$FOUND_FIELDS"

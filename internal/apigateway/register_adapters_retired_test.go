@@ -68,8 +68,14 @@ func TestRegisterChannelAdapters_TwseOddlotRetired(t *testing.T) {
 		if !strings.Contains(rec.LastError, "twse_capital_flow") {
 			t.Errorf("%s record reason = %q, want it to name the replacement input (twse_capital_flow)", id, rec.LastError)
 		}
-		if derived := DeriveChannelStatusForID(rec, id, time.Now()); derived != StatusInactive {
-			t.Errorf("%s derived status = %q, want %q (an inactive verdict never escalates)", id, derived, StatusInactive)
+		// The RECORD stays "inactive" (that is what the startup write records),
+		// but the DERIVED verdict — the one the metrics export, the admin page and
+		// the DB mirror read — is "retired" since 2026-10-05, because the contract
+		// declares the retirement (ChannelContract.Retirement; rule 0 in
+		// DeriveChannelStatus). "retired" never escalates either: the gauge maps
+		// it next to inactive (3), and ChannelHealthStatusError matches == 2 only.
+		if derived := DeriveChannelStatusForID(rec, id, time.Now()); derived != StatusRetired {
+			t.Errorf("%s derived status = %q, want %q (a retired channel never escalates, and must not read as merely switched off)", id, derived, StatusRetired)
 		}
 	}
 
@@ -93,6 +99,10 @@ func TestRegisterChannelAdapters_TwseOddlotRetired(t *testing.T) {
 // value 2 the alert rule matches), and the retired record does not.
 func TestDeriveChannelStatus_TwseOddlotRetirementClosesTheAlertLoop(t *testing.T) {
 	contract := ChannelContracts().Contract("twse_oddlot")
+	// The pre-retirement contract, i.e. the registry entry before the 2026-10-05
+	// contract-level retirement was declared.
+	preRetirement := contract
+	preRetirement.Retirement = nil
 
 	// Production 2026-09-29: degraded record, last real data 2026-09-07, contract
 	// window 48h. DeriveChannelStatus escalates it to error — this is what made
@@ -104,7 +114,7 @@ func TestDeriveChannelStatus_TwseOddlotRetirementClosesTheAlertLoop(t *testing.T
 		LastSuccessAt: "2026-09-07T00:18:11Z",
 		LastError:     "twse_oddlot: 上游回傳空/停用資料（stale payload）",
 	}
-	if got := DeriveChannelStatus(preFix, contract, time.Date(2026, 9, 29, 7, 0, 0, 0, time.UTC)); got != StatusError {
+	if got := DeriveChannelStatus(preFix, preRetirement, time.Date(2026, 9, 29, 7, 0, 0, 0, time.UTC)); got != StatusError {
 		t.Fatalf("pre-fix production record derived status = %q, want %q (this is the firing condition the retirement removes)", got, StatusError)
 	}
 
@@ -120,8 +130,21 @@ func TestDeriveChannelStatus_TwseOddlotRetirementClosesTheAlertLoop(t *testing.T
 		time.Date(2026, 9, 29, 7, 0, 0, 0, time.UTC),
 		time.Date(2026, 12, 31, 7, 0, 0, 0, time.UTC),
 	} {
-		if got := DeriveChannelStatus(retired, contract, now); got != StatusInactive {
-			t.Errorf("retired record derived status at %s = %q, want %q (must never age into error)", now.Format(time.RFC3339), got, StatusInactive)
+		if got := DeriveChannelStatus(retired, contract, now); got != StatusRetired {
+			t.Errorf("retired record derived status at %s = %q, want %q (must never age into error)", now.Format(time.RFC3339), got, StatusRetired)
+		}
+	}
+
+	// 2026-10-05: rule 0 is stronger than "the record happens to be inactive" —
+	// even the pre-fix DEGRADED record cannot escalate through a retired
+	// contract, so a leftover record from before the retirement can never
+	// re-open the alert loop.
+	for _, now := range []time.Time{
+		time.Date(2026, 9, 29, 7, 0, 0, 0, time.UTC),
+		time.Date(2027, 1, 31, 7, 0, 0, 0, time.UTC),
+	} {
+		if got := DeriveChannelStatus(preFix, contract, now); got != StatusRetired {
+			t.Errorf("pre-fix record against the RETIRED contract at %s = %q, want %q", now.Format(time.RFC3339), got, StatusRetired)
 		}
 	}
 }

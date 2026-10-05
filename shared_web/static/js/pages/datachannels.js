@@ -1,7 +1,12 @@
 import { silentGetJSON, notify, postJSON } from '../shared/app-utils.js';
 import { fmtSafeNumber, fmtSafeSignedPct } from '../shared/format-metric.js';
 import { confirmAction } from '../components/confirm-modal.js';
-import { channelStatusMeta } from '../shared/channel-status.js';
+import {
+  channelStatusMeta,
+  attentionCategoryMeta,
+  isKnownAttentionCategory,
+  ATTENTION_CATEGORY_ORDER,
+} from '../shared/channel-status.js';
 
 export async function loadDataChannels() {
   const data = await silentGetJSON('/api/dashboard/data-channels');
@@ -183,6 +188,10 @@ export function renderDataChannels(data) {
   const expiredCount = channels.filter(c => c.status === 'stale' || c.status === 'degraded').length;
   const normalCount = channels.filter(c => channelStatusMeta(c.status).normal).length;
   const inactiveCount = channels.filter(c => c.status === 'inactive').length;
+  // Retired by design (backend: contract Retirement) — off for good, replacement
+  // wired. Neither normal nor an incident, so it is reported separately instead
+  // of inflating any of the tiles above (2026-10-05).
+  const retiredCount = channels.filter(c => channelStatusMeta(c.status).retired).length;
   const unknownCount = channels.filter(c => !channelStatusMeta(c.status).known).length;
 
   // Group by country
@@ -210,6 +219,7 @@ export function renderDataChannels(data) {
   // explicitly so the tiles above are not read as covering every channel.
   const unaccounted = [];
   if (inactiveCount > 0) unaccounted.push(`未啟用 ${inactiveCount}`);
+  if (retiredCount > 0) unaccounted.push(`已退役 ${retiredCount}`);
   if (unknownCount > 0) unaccounted.push(`未知 ${unknownCount}`);
   if (unaccounted.length) {
     html += `<div class="text-muted text-xs mt-xs">另有未計入通道狀態：${unaccounted.join('、')}（不算正常，也不算異常）</div>`;
@@ -247,9 +257,15 @@ export function renderDataChannels(data) {
     html += '</tbody></table></div></div>';
   });
 
-  // 需要關注的通道 — exclude intentionally-disabled channels (#1758): an
-  // operator-disabled channel is a decision, not an incident.
-  const visibleAlerts = (data.alerts || []).filter(a => !disabledIds.has(a.channel_id));
+  // 需要關注的通道 — exclude decisions, not incidents:
+  //   · disabled rows (#1758): the operator switched the channel off;
+  //   · retired rows (2026-10-05): the channel is off BY DESIGN (upstream gone,
+  //     replacement wired), so there is nothing for anyone to act on.
+  const visibleAlerts = (data.alerts || []).filter(
+    a => !disabledIds.has(a.channel_id)
+      && a.status !== 'retired'
+      && !channelStatusMeta(a.status).retired,
+  );
   if (visibleAlerts.length) {
     // Alert rows carry the alert's own status; use the shared label so a
     // stale/degraded row reads 「資料過期」/「降級」in amber instead of being
@@ -262,13 +278,44 @@ export function renderDataChannels(data) {
       if (tone === 'warn') return 'var(--warn)';
       return 'var(--muted)';
     };
-    // Container tone follows the worst row: a stale-only set must not be framed
-    // as an outage (red) — amber for warn/stale/degraded, red only for error.
-    const alertToneColor = visibleAlerts.some(a => channelStatusMeta(a.status).tone === 'err')
-      ? 'var(--color-danger)' : 'var(--warn)';
+    // 三分類（backend: service.ClassifyChannelAttention）— 讓管理者一眼分辨
+    // 「我們的問題 vs 上游的問題 vs 時間還沒到」。分類未知時 attentionCategoryMeta
+    // 會退回「系統錯誤」，與後端的預設一致（寧可誤指自己，也不要靜默略過）。
+    const sections = ATTENTION_CATEGORY_ORDER
+      .map(key => ({
+        meta: attentionCategoryMeta(key),
+        rows: visibleAlerts.filter(a => attentionCategoryMeta(a.category).key === key),
+      }))
+      .filter(sec => sec.rows.length > 0);
+    const toneColor = tone => (tone === 'err' ? 'var(--color-danger)' : (tone === 'warn' ? 'var(--warn)' : 'var(--muted)'));
+    const rank = { muted: 0, warn: 1, err: 2 };
+    // Container tone = worst of (a row's own STATUS tone, a CLASSIFIED
+    // category's tone). Two rules are being kept at once here:
+    //   · a stale/degraded-only set must not be framed as an outage (red) — the
+    //     2026-09-24 rule, which is why the status tone still counts;
+    //   · a set that contains our own problems (系統錯誤) or an upstream limit
+    //     must be coloured by that, not by the row's amber/red pill.
+    // An UNCLASSIFIED row carries no category claim, so it falls back to its
+    // status tone instead of being painted red by the default grouping.
+    const tones = visibleAlerts.map(a => channelStatusMeta(a.status).tone).concat(
+      visibleAlerts
+        .filter(a => isKnownAttentionCategory(a.category))
+        .map(a => attentionCategoryMeta(a.category).tone),
+    );
+    const worstTone = tones.reduce((acc, t) => (rank[t] > rank[acc] ? t : acc), 'muted');
+    const alertToneColor = toneColor(worstTone);
+    const blocks = sections.map(sec => {
+      const color = toneColor(sec.meta.tone);
+      const rows = sec.rows.map(a => `<div style="font-size:12px;margin:3px 0"><strong>${escapeHtml(a.channel_id)}</strong>：<span style="color:${statusColor(a.status)}">${escapeHtml(a.error || statusLabel(a.status))}</span></div>`).join('');
+      return `<div style="margin-top:8px">
+        <div style="font-size:12px;font-weight:700;color:${color}">${sec.meta.title}（${sec.rows.length}）</div>
+        <div class="text-muted text-xs">${sec.meta.hint}</div>
+        ${rows}
+      </div>`;
+    }).join('');
     html += `<div style="margin-top:14px;padding:10px 12px;background:color-mix(in srgb, ${alertToneColor} 8%, transparent);border-left:3px solid ${alertToneColor};border-radius:6px">
       <div style="font-size:13px;font-weight:700;color:${alertToneColor};margin-bottom:6px">需要關注的通道</div>
-      ${visibleAlerts.map(a => `<div style="font-size:12px;margin:3px 0"><strong>${escapeHtml(a.channel_id)}</strong>：<span style="color:${statusColor(a.status)}">${a.error || statusLabel(a.status)}</span></div>`).join('')}
+      ${blocks}
     </div>`;
   }
 

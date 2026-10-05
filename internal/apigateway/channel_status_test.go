@@ -13,7 +13,13 @@ func mustRFC(t time.Time) string { return t.Format(time.RFC3339) }
 // for every consumer.
 func TestDeriveChannelStatus(t *testing.T) {
 	now := time.Date(2026, 9, 24, 6, 0, 0, 0, time.UTC)
+	// A copy of the twse_oddlot contract with its RETIREMENT CLEARED. The
+	// registry entry itself is retired since 2026-10-05 (contract.Retirement),
+	// and rule 0 short-circuits every record rule for a retired channel — so the
+	// general rule table below needs the pre-retirement shape to be observable at
+	// all. The retirement case has its own table entry further down.
 	oddlot := ChannelContracts().Contract("twse_oddlot") // window = 48h
+	oddlot.Retirement = nil
 	tdcc := ChannelContracts().Contract("tdcc_equity_dispersion")
 
 	cases := []struct {
@@ -142,7 +148,10 @@ func TestChannelHealthSyncValuesFor(t *testing.T) {
 		LastSuccessAt:       mustRFC(now.Add(-17 * 24 * time.Hour)),
 		ConsecutiveFailures: 0,
 	}
-	v := ChannelHealthSyncValuesFor("twse_oddlot", rec, now)
+	// Vehicle: a plain (non-retired) 48h channel. A retired channel reports
+	// "retired" for EVERY record — that is its own assertion right below.
+	const vehicle = "twse_margin"
+	v := ChannelHealthSyncValuesFor(vehicle, rec, now)
 	if v.Status != StatusStale {
 		t.Errorf("mirrored status = %q, want stale", v.Status)
 	}
@@ -151,6 +160,12 @@ func TestChannelHealthSyncValuesFor(t *testing.T) {
 	}
 	if v.LastSuccessAt == nil || !v.LastSuccessAt.Equal(now.Add(-17*24*time.Hour)) {
 		t.Errorf("mirrored last_success_at = %v, want the record's own timestamp", v.LastSuccessAt)
+	}
+
+	// One verdict, every consumer, including the retired case: the DB mirror must
+	// not say "stale" for a channel the page calls retired by design (2026-10-05).
+	if retired := ChannelHealthSyncValuesFor("twse_oddlot", rec, now); retired.Status != StatusRetired {
+		t.Errorf("mirrored status for the retired channel = %q, want %q", retired.Status, StatusRetired)
 	}
 
 	broken := ChannelHealthSyncValuesFor("twse_capital_flow", &ChannelHealthRecord{Status: StatusOK}, now)
@@ -168,7 +183,10 @@ func TestChannelHealthSyncValuesFor(t *testing.T) {
 // code.
 func TestDegradedSelfEscalatesWhenTheDataIsGone(t *testing.T) {
 	now := time.Date(2026, 9, 27, 6, 0, 0, 0, time.UTC)
+	// Pre-retirement copy (see TestDeriveChannelStatus): rule 2b must be
+	// observable, and the shipped twse_oddlot entry is now retired.
 	oddlot := ChannelContracts().Contract("twse_oddlot") // window = 48h
+	oddlot.Retirement = nil
 	rec := &ChannelHealthRecord{
 		Status:        StatusDegraded,
 		LastFetchAt:   mustRFC(now.Add(-5 * time.Minute)), // the fetch still works
@@ -183,7 +201,7 @@ func TestDegradedSelfEscalatesWhenTheDataIsGone(t *testing.T) {
 		t.Errorf("escalation reason = %q, want the data age and the escalation", reason)
 	}
 	// One judgment, every consumer: the DB mirror carries the same verdict.
-	if v := ChannelHealthSyncValuesFor("twse_oddlot", rec, now); v.Status != StatusError {
+	if v := ChannelHealthSyncValuesFor("twse_margin", rec, now); v.Status != StatusError {
 		t.Errorf("mirrored status = %q, want error", v.Status)
 	}
 

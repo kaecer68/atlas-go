@@ -233,7 +233,11 @@ func healthStatusValue(status string) float64 {
 		return 1
 	case "error":
 		return 2
-	case "inactive":
+	case "inactive", "retired":
+		// "retired" shares inactive's value on purpose: no alert rule matches 3
+		// (ChannelHealthStatusError matches == 2 only), and a channel retired by
+		// design must never page. Keeping the two on the same gauge value also
+		// keeps the series set unchanged for existing dashboards.
 		return 3
 	default:
 		return 4

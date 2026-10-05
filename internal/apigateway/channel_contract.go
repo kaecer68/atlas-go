@@ -103,7 +103,56 @@ type ChannelContract struct {
 	// Opt-in per channel on purpose: enabling it for an unmeasured channel
 	// would change that channel's alerting behavior without evidence.
 	PublishCalendar string `json:"publish_calendar,omitempty"`
+	// Retirement declares that the channel is RETIRED BY DESIGN: the upstream is
+	// permanently gone, no code path fetches it any more, and a replacement input
+	// already serves the consumer. nil (the default) means "not retired" — that
+	// is a positive declaration, not an omission: a channel that is merely
+	// switched off right now (missing API key, operator toggle) is `inactive`,
+	// and conflating the two is what made the frontend unable to tell a
+	// deliberate retirement from a temporary outage (2026-10-05).
+	//
+	// It is the CONTRACT field and not a record field because retirement is not
+	// an observation about the last fetch: it is a decision whose consequences
+	// outlive every record. DeriveChannelStatus therefore answers StatusRetired
+	// from this field alone, so the page, the gauge and the DB mirror cannot show
+	// an actionable verdict for a channel that will never fetch again.
+	Retirement *ChannelRetirement `json:"retirement,omitempty"`
+	// KnownUpstreamLimit declares that this channel's non-ok verdicts are
+	// expected to come from a KNOWN UPSTREAM-SIDE limitation — a quota/tier
+	// wall, an upstream-side rate limit, a report the upstream stopped
+	// publishing — and carries the operator-facing explanation. Empty means
+	// "nothing declared", which is the honest default: an undeclared condition
+	// stays classified as an atlas problem instead of being excused.
+	//
+	// It exists so the admin page can separate "their problem" from "our
+	// problem" (2026-10-05 三分類) WITHOUT string-matching an error message: the
+	// message text is a moving target (it was rewritten twice in 2026 alone) and
+	// this codebase already learned that lesson when typed sentinels replaced
+	// message matching in classifyErrorSeverity. The declaration is per channel
+	// and evidence-backed (finmind / tdcc_equity_dispersion: FinMind's shared
+	// daily quota answers HTTP 402 with "Requests reach the upper limit").
+	KnownUpstreamLimit string `json:"known_upstream_limit,omitempty"`
 }
+
+// ChannelRetirement is the machine-readable form of "this channel is retired by
+// design" (ChannelContract.Retirement).
+type ChannelRetirement struct {
+	// RetiredAt is the RFC3339 date the retirement shipped. It is the same fact
+	// the known-issues governance registry records (KnownIssue.RetiredAt) and is
+	// printed to operators, so a reader can tell how long the channel has been
+	// off.
+	RetiredAt string `json:"retired_at"`
+	// Reason is the operator-facing explanation (why the channel can never
+	// produce data again). Rendered at INFORMATION level: a retirement is a
+	// decision, not an incident.
+	Reason string `json:"reason"`
+	// Replacement names the input that already serves the consumer, so "retired"
+	// never reads as "we lost the data".
+	Replacement string `json:"replacement,omitempty"`
+}
+
+// IsRetired reports whether the channel is retired by design.
+func (c ChannelContract) IsRetired() bool { return c.Retirement != nil }
 
 // MarketSessionTW is the Taiwan market session value for MarketSession.
 const MarketSessionTW = "tw"
@@ -507,6 +556,27 @@ func (r *ChannelContractRegistry) Validate() []ContractViolation {
 			})
 		}
 
+		// Retirement hygiene (2026-10-05): a retirement is rendered to operators
+		// and consumed by DeriveChannelStatus (rule 0 short-circuits every other
+		// rule), so an incomplete one is worse than none — it would silence a
+		// channel with no explanation of why, or for how long.
+		if c.Retirement != nil {
+			if c.Retirement.RetiredAt == "" {
+				violations = append(violations, ContractViolation{
+					ChannelID: id,
+					Check:     "invalid_retirement",
+					Detail:    "Retirement.RetiredAt is empty: an operator must be able to tell when the channel was retired",
+				})
+			}
+			if c.Retirement.Reason == "" {
+				violations = append(violations, ContractViolation{
+					ChannelID: id,
+					Check:     "invalid_retirement",
+					Detail:    "Retirement.Reason is empty: a retired channel must explain why it can never produce data again",
+				})
+			}
+		}
+
 		// Criteria / source vocabulary.
 		switch c.SuccessCriteria {
 		case SuccessCriteriaDataPresent, SuccessCriteriaValueNonzero, SuccessCriteriaFileExists:
@@ -660,6 +730,16 @@ func buildChannelContractRegistry() *ChannelContractRegistry {
 	// atlas_channel_staleness_overage_seconds stays 0 for finmind.
 	// Only real faults (transport, 4xx/5xx, schema change) escalate to "error".
 	live("finmind", []string{"FinMind"}, 24*time.Hour)
+
+	// Known upstream-side limit (2026-10-05): the FinMind account's daily request
+	// quota (HTTP 402 "Requests reach the upper limit") is shared by every FinMind
+	// consumer, and the wall is the upstream's, not atlas's — the fetch path is
+	// healthy and the budget resets at 00:00 UTC (08:00 Taipei). Declared here so
+	// the admin page classifies finmind's warn as 已知上游限制 instead of a
+	// generic warning an operator has to re-investigate.
+	finmindContract := r.Contract("finmind")
+	finmindContract.KnownUpstreamLimit = "FinMind 帳號日配額（tier 限制；額度用盡時上游回 HTTP 402 \"Requests reach the upper limit\"）——配額於 00:00 UTC（台北 08:00）自動重置"
+	r.Register(finmindContract)
 	live("frankfurter_fx", []string{"Frankfurter"}, 24*time.Hour)
 	live("geopolitical", []string{"GDELT", "RSS"}, 6*time.Hour)
 	live("twse_margin", []string{"TWSE", "FinMind"}, 24*time.Hour)
@@ -678,7 +758,11 @@ func buildChannelContractRegistry() *ChannelContractRegistry {
 	live("bdi", []string{"BDI"}, 24*time.Hour)
 	live("taifex_daily", []string{"TAIFEX"}, 24*time.Hour)
 	live("taifex_institutional", []string{"TAIFEX"}, 24*time.Hour)
-	live("twse_oddlot", []string{"TWSE", "FinMind"}, 24*time.Hour)
+	// The dash form is declared as an alias here (not left as a registry miss):
+	// the runtime also carries a "twse-oddlot" record (see known_issues.go), and
+	// without the alias that spelling would fall back to DefaultChannelContract
+	// and read as an ordinary channel again.
+	live("twse_oddlot", []string{"TWSE", "FinMind"}, 24*time.Hour, "twse-oddlot")
 
 	// twse_oddlot (2026-09-24 channel-status-truth): the upstream is gone —
 	// BFI84U was repurposed (2026-08, see internal/monitoring/known_issues.go)
@@ -688,6 +772,19 @@ func buildChannelContractRegistry() *ChannelContractRegistry {
 	// indistinguishable from real data on the channel page.
 	oddlotContract := r.Contract("twse_oddlot")
 	oddlotContract.DegradedOnEmpty = true
+	// 2026-10-05 (前端資料通道分類): RETIRED BY DESIGN, declared on the CONTRACT
+	// so the page can move it out of「需關注」instead of showing a permanent
+	// amber/red verdict for a channel nobody can fix. The retirement itself
+	// shipped 2026-09-29 (#2134, register_adapters.go writes status="inactive"
+	// and the adapter is no longer registered); this field is the machine-
+	// readable statement of that decision, and DeriveChannelStatus answers
+	// "retired" from it alone.
+	//
+	oddlotContract.Retirement = &ChannelRetirement{
+		RetiredAt:   "2026-09-29",
+		Reason:      "TWSE 零股交易報表已移除（exchangeReport/BFI84U 2026-08 改服務停券預告表、MI_INDEX type=ODDLOT 回空集合）⇒ 上游永久消失，抓取路徑已移除，本通道不再抓取也不再告警",
+		Replacement: "twse_capital_flow 代理（monitoring.NewOddLotFetcher → oddLotFromCapitalFlow；a6_odd_lot 已接線）",
+	}
 	r.Register(oddlotContract)
 	live("twse_insider", []string{"TWSE"}, 24*time.Hour)
 	live("us_spx", []string{"Yahoo"}, 24*time.Hour)
@@ -725,6 +822,18 @@ func buildChannelContractRegistry() *ChannelContractRegistry {
 	// "twse-etf" so operators referencing the old hyphenated name still
 	// resolve to the canonical channel.
 	live("twse_etf", []string{"TWSE"}, 24*time.Hour, "twse-etf")
+	// 2026-10-05: RETIRED BY DESIGN, same shape as twse_oddlot. TWSE removed the
+	// TWT44U aggregate report (2026-08-10), the replacement (Fubon PCF) is wired
+	// since 2026-08-17, and TWSE_ETF_API_KEY is only an opt-in that would
+	// re-register an adapter for a 404 endpoint — so the channel is off by
+	// decision, not by incident.
+	etfContract := r.Contract("twse_etf")
+	etfContract.Retirement = &ChannelRetirement{
+		RetiredAt:   "2026-08-17",
+		Reason:      "TWSE ETF 申購贖回彙總報表已移除（exchangeReport/TWT44U 2026-08-10 起 HTTP 307 → 404）⇒ 上游永久消失，本通道不再抓取（TWSE_ETF_API_KEY 僅是重新註冊已失效端點的 opt-in，非憑證）",
+		Replacement: "Fubon PCF（marketdata.NewFubonETFProvider → monitoring.NewETFFetcher；subC3 已接線 2026-08-17）",
+	}
+	r.Register(etfContract)
 
 	// R2 (k3 audit 2026-09-08): TW market-session channels — their upstreams
 	// only publish during TW market hours, so failures outside the session
@@ -776,6 +885,12 @@ func buildChannelContractRegistry() *ChannelContractRegistry {
 	c.SourcePriority = []string{"TDCC"}
 	c.HealthSource = HealthSourceFileState
 	c.SuccessCriteria = SuccessCriteriaFileExists
+	// Known upstream-side limit (2026-10-05): the data comes from FinMind
+	// (TaiwanStockHoldingSharesPer) and therefore shares finmind's daily quota —
+	// a 402 on that shared budget surfaces here as a warn even though TDCC's own
+	// weekly snapshot is not overdue. The limit is upstream-side, so the page
+	// must say so instead of presenting it as an atlas fault.
+	c.KnownUpstreamLimit = "共用 finmind 帳號日配額（上游回 HTTP 402）；TDCC 股權分散本身為週快照，非發布日無資料是正常——兩者皆非 atlas 故障"
 	// TDCC 股權分散是週快照（2026-09-04 盤查: upstream 對未發布日回
 	// "no dispersion data ... weekly snapshot may not be published yet"）。
 	// 預設 48h 窗口會讓 ChannelDataStale 一週誤報大半; 放寬為 8 天
