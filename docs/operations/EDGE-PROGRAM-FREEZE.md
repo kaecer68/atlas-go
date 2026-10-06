@@ -52,7 +52,7 @@
 
 ## ③ 命中率語彙 SSOT
 
-**本節為命中率語彙的唯一 SSOT**；`docs/specs/edge-lab-spec.md`（Phase 1）**只引用、不得複寫定義**（避免雙 SSOT）。
+**本節為命中率語彙的唯一 SSOT**；Phase 1 的 `edge-lab-spec.md`（將建立於目錄 `docs/specs/`）**只引用、不得複寫定義**（避免雙 SSOT）。
 
 | 語彙 | 定義 | 禁止用法 |
 |---|---|---|
