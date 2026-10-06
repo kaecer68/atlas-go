@@ -80,6 +80,7 @@ if Direction == "avoid": magnitude = -magnitude
 | 情境 | `applied` | `reason` | 行為 |
 |---|---|---|---|
 | gate off | false | `disabled` | provider **不被呼叫**；driver 與 assessment 皆為改動前基準 |
+| gate on、condition 已被降級（demoted） | false | `demoted_condition` | provider **不被呼叫**；不改任何 driver（WARN log）。見 §2.3a |
 | gate on、未註冊 provider | false | `no_provider` | 不改任何 driver（WARN log：wiring bug） |
 | gate on、provider 回錯 | false | `provider_error` | 不改任何 driver（WARN log） |
 | gate on、報告 0 列 | false | `no_rows` | 不改任何 driver |
@@ -87,6 +88,14 @@ if Direction == "avoid": magnitude = -magnitude
 | gate on、≥1 列 eligible | true | `applied` | 產生 tilt |
 
 未 applied 時仍會發出 evidence 區塊（gate on 的情況下），讓操作者能分辨「關掉了」與「開了但證據不足」。這組 reason 字串是契約（`sectorallocation` 的 `IndustryHitRateReason*` 常數），測試直接斷言。
+
+### 2.3a Demoted condition（2026-10-06 新增，fail-closed）
+
+生產 tuple 消費的 `stockpicker-momentum-20d-positive` 於 2026-10-06 被**降級**：其在 `stock_signal_outcomes` 的 5 日淨成本期望值為 **−0.987%（t=−21.3，n=31,107）**，扣掉 0.585% 來回成本後沒有 edge（姊妹家族 `foreign-3d-net-buy` 為 −0.517%，t=−11.4，同樣降級）。副作用是：開著 gate 也只會把真實的產業權重往一個「量測上確定虧錢」的家族傾斜。
+
+因此 `EvaluateIndustryHitRateConsume` 在 gate 檢查之後、provider 讀取之前直接拒絕，回傳 `demoted_condition`（WARN log 帶 source／condition_id），不呼叫 provider、不產生任何 tilt。降級清單的**唯一真相來源**是 `internal/config/stockpicker_edge.go`（`IsDemotedStockpickerCondition`），同一份清單同時被 `StockpickerWinrateExecutor` 與 MCP `stock_picker_scan` 讀取；本套件不 import `internal/stockpicker`（import 方向：stockpicker → ledger → portfolio → sectorallocation），但已依賴 `internal/config`。
+
+**已知後果（刻意的）**：因為生產 tuple 指向被降級家族，gate 打開後此鏈**恆為** `demoted_condition`（不再有 `applied` 案例）。要恢復 tilt 能力必須改 tuple 指向仍有 edge 的家族 —— 那會改變「用哪個條件的產業命中率驅動 tilt」的語意，屬另行決策，本批不動。量測面（outcome 寫入、win-rate 聚合、read-only 端點）完全不受影響。
 
 ### 2.4 Provider 綁定（非 inert）
 
@@ -102,9 +111,9 @@ if Direction == "avoid": magnitude = -magnitude
 
 | 測試 | 覆蓋 |
 |---|---|
-| `internal/sectorallocation/industry_hitrate_consume_test.go` | gate off（且 provider 未被呼叫）／no_provider／provider_error／no_rows／insufficient_calibration／applied 行數學／±0.05 夾制／非 L1 丟棄／fail-closed 不動 driver／applied 累加且不汙染呼叫端 map |
-| `internal/sectorallocation/industry_hitrate_byte_identity_test.go` | gate off（含已註冊 provider）與 gate on + fail-closed 三情境逐位元等於改動前快照；gate on + applied 確實改變投影且維持 20 L1 / sum=1±1e-9／方向正確 |
-| `internal/sectorallocation/industry_hitrate_decorator_internal_test.go` | decorator gate off 留 nil／gate on fail-closed 帶 reason／no_provider／applied 摘要統計且不動 CalibrationStatus |
+| `internal/sectorallocation/industry_hitrate_consume_test.go` | gate off（且 provider 未被呼叫）／**demoted_condition（provider 未被呼叫、無 tilt；同一組列換成未降級條件則仍 applied）**／no_provider／provider_error／no_rows／insufficient_calibration／applied 行數學／±0.05 夾制／非 L1 丟棄／fail-closed 不動 driver／applied 累加且不汙染呼叫端 map |
+| `internal/sectorallocation/industry_hitrate_byte_identity_test.go` | gate off（含已註冊 provider）逐位元等於改動前快照；gate on + **demoted condition（thin 與 eligible 兩組列皆拒絕、provider 未被呼叫、投影逐位元等於快照、20 L1 / sum=1±1e-9）**；applied 分支的「確實改變投影」改由 driver 層測試覆蓋（見 `industry_hitrate_consume_test.go` 的 `TestApplyIndustryHitRateToDrivers_Applied_*`） |
+| `internal/sectorallocation/industry_hitrate_decorator_internal_test.go` | decorator gate off 留 nil／gate on **demoted_condition（production tuple 被拒、provider 未被呼叫、無 tilt 統計）**／fail-closed 帶 reason（`insufficient_calibration`）／no_provider／applied 摘要統計且不動 CalibrationStatus（後三項改以未降級條件直接驅動 evaluate + evidence 函式） |
 | `internal/capitalflow/assessment_decorator_test.go`、`assessment_decorator_internal_test.go` | registry 語意／無註冊時零成本 no-op／decorator 在副本上執行／evidence 的 JSON omitempty 契約 |
 | `internal/stocktools/industry_hitrate_consume_provider_test.go` | canonical 列映射／found=false 視為空報告（非 error）／error 包裝／nil inner fail-closed |
 | `internal/config/testdata/*.golden.json` | 新參數進入 public API snapshot 與 default config golden |

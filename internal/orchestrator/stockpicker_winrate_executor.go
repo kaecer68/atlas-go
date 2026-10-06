@@ -13,6 +13,12 @@
 // backfill-stockpicker-flows), then applies the documented gates from
 // prompts/agents/stockpicker_winrate.md:
 //
+//  0. guard rails, before any read: avoid-semantics conditions (頂背離) cannot
+//     drive a BUY gate, and families demoted from advice surfaces for negative
+//     5-day net-cost expectancy (2026-10-06 —
+//     internal/config/stockpicker_edge.go) are refused outright. Both fail
+//     closed silently; the win-rate gates below only prove a condition is
+//     measurable, not that it has edge.
 //  1. calibration gate: only calibration_status == eligible is
 //     recommendation-worthy (calibrating/degraded are observation-only);
 //  2. win-rate gate: observations >= 30, win_rate >= 0.55,
@@ -253,6 +259,23 @@ func (e StockpickerWinrateExecutor) Recommend(agent domain.AgentSpec, quote doma
 		logging.Debug("stockpicker_winrate", "skip",
 			logging.Symbol(quote.Symbol), "stage", "direction_guard",
 			"source", src, "reason", "avoid-semantics condition cannot drive BUY gate")
+		return domain.Recommendation{}, false
+	}
+
+	// Stage 0b: edge guard (2026-10-06). The default source is one of the
+	// families demoted for losing money after costs (see
+	// internal/config/stockpicker_edge.go: 5-day net-cost expectancy -0.517%
+	// for foreign-3d-net-buy, t=-11.4, n=31,982; -0.987% for
+	// momentum-20d-positive, t=-21.3). The win-rate gates below only prove the
+	// condition is measurable — a high win rate on a negative-expectancy
+	// family is not edge (the gates read win_rate, not net_forward_return), so
+	// a demoted family must never back a BUY recommendation. Fail closed,
+	// mirroring the direction guard above; measurement (outcome writes, the
+	// win-rate aggregates and the read-only MCP/HTTP reads) is unaffected.
+	if reason := config.DemotedStockpickerConditionReason(src); reason != "" {
+		logging.Debug("stockpicker_winrate", "skip",
+			logging.Symbol(quote.Symbol), "stage", "edge_guard",
+			"source", src, "reason", reason)
 		return domain.Recommendation{}, false
 	}
 

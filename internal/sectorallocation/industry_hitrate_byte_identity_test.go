@@ -117,60 +117,54 @@ func TestProductionPath_GateOff_WithProviderRegistered_MatchesBaseline(t *testin
 	}
 }
 
-// TestProductionPath_GateOn_FailClosed_MatchesBaseline proves requirement §2.3
-// of the task: when the canonical hit-rate has no calibration-eligible row, the
-// gate-on path falls back to the pre-change output instead of tilting on thin
-// evidence.
-func TestProductionPath_GateOn_FailClosed_MatchesBaseline(t *testing.T) {
-	provider := &fakeHitRateProvider{rows: []sectorallocation.IndustryHitRateSummary{
-		calibratingRow("semiconductor", 0.95, 3),
-		calibratingRow("financials", 0.10, 11),
-	}}
-	assertMatchesBaseline(t, runProductionPath(t, true, provider))
-	if provider.calls != 1 {
-		t.Fatalf("gate on must consult the provider once, calls = %d", provider.calls)
-	}
-}
-
-// TestProductionPath_GateOn_Applied_MovesWeights proves the other half: with
-// calibration-eligible evidence the applied weights actually move, in the
-// direction the hit-rate implies, and the L1 invariants still hold.
-func TestProductionPath_GateOn_Applied_MovesWeights(t *testing.T) {
-	provider := &fakeHitRateProvider{rows: []sectorallocation.IndustryHitRateSummary{
-		eligibleRow("semiconductor", "buy", 0.7, 200), // +0.04
-		eligibleRow("shipping", "buy", 0.3, 200),      // -0.04
-	}}
-	got := runProductionPath(t, true, provider)
-
-	baseline := baselineGolden(t)
-	if string(got) == string(baseline) {
-		t.Fatal("gate on with calibration-eligible rows must change the projection")
-	}
-
-	var parsed struct {
-		Target map[string]float64
-	}
-	if err := json.Unmarshal(got, &parsed); err != nil {
-		t.Fatalf("unmarshal target: %v", err)
-	}
-	if len(parsed.Target) != 20 {
-		t.Fatalf("target keys = %d, want 20", len(parsed.Target))
-	}
-	sum := 0.0
-	for _, v := range parsed.Target {
-		sum += v
-	}
-	if sum < 1-1e-9 || sum > 1+1e-9 {
-		t.Fatalf("target sum = %.12f, want 1 +/- 1e-9", sum)
-	}
-	base := 1.0 / 20.0
-	if parsed.Target["semiconductor"] <= base {
-		t.Errorf("semiconductor = %v, want above the uniform base %v (positive evidence)", parsed.Target["semiconductor"], base)
-	}
-	if parsed.Target["shipping"] >= base {
-		t.Errorf("shipping = %v, want below the uniform base %v (negative evidence)", parsed.Target["shipping"], base)
-	}
-	if parsed.Target["steel"] == 0 {
-		t.Errorf("steel must keep its baseline share, got %v", parsed.Target["steel"])
+// TestProductionPath_GateOn_DemotedCondition_RefusesAndMatchesBaseline
+// (2026-10-06) replaces the former fail-closed + applied pair. The production
+// query tuple consumes stockpicker-momentum-20d-positive, demoted on
+// 2026-10-06 for negative net-cost expectancy (-0.987%, t=-21.3; see
+// internal/config/stockpicker_edge.go). With the gate ON the engine must
+// therefore keep the pre-change projection byte-for-byte and must never read
+// the provider — for thin AND for calibration-eligible evidence alike (tilting
+// real sector weights on a measured-losing family is exactly what the demotion
+// forbids).
+//
+// The applied branch itself is not lost: it stays covered at the driver level
+// by TestApplyIndustryHitRateToDrivers_Applied_SumsWithoutMutatingCaller and
+// TestEvaluateIndustryHitRateConsume_Applied, which drive the same functions
+// with a retained condition.
+func TestProductionPath_GateOn_DemotedCondition_RefusesAndMatchesBaseline(t *testing.T) {
+	for name, provider := range map[string]*fakeHitRateProvider{
+		"thin evidence": {rows: []sectorallocation.IndustryHitRateSummary{
+			calibratingRow("semiconductor", 0.95, 3),
+			calibratingRow("financials", 0.10, 11),
+		}},
+		"eligible evidence": {rows: []sectorallocation.IndustryHitRateSummary{
+			eligibleRow("semiconductor", "buy", 0.7, 200), // +0.04
+			eligibleRow("shipping", "buy", 0.3, 200),      // -0.04
+		}},
+	} {
+		t.Run(name, func(t *testing.T) {
+			got := runProductionPath(t, true, provider)
+			assertMatchesBaseline(t, got)
+			if provider.calls != 0 {
+				t.Fatalf("demoted condition must be refused before the provider read, calls = %d", provider.calls)
+			}
+			// The projection keeps its L1 invariants on the refused path too.
+			var parsed struct {
+				Target map[string]float64
+			}
+			if err := json.Unmarshal(got, &parsed); err != nil {
+				t.Fatalf("unmarshal target: %v", err)
+			}
+			if len(parsed.Target) != 20 {
+				t.Fatalf("target keys = %d, want 20", len(parsed.Target))
+			}
+			sum := 0.0
+			for _, v := range parsed.Target {
+				sum += v
+			}
+			if sum < 1-1e-9 || sum > 1+1e-9 {
+				t.Fatalf("target sum = %.12f, want 1 +/- 1e-9", sum)
+			}
+		})
 	}
 }

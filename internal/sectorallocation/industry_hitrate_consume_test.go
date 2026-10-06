@@ -108,6 +108,49 @@ func TestEvaluateIndustryHitRateConsume_GateOff_IsDisabledAndNeverReadsProvider(
 	}
 }
 
+// TestEvaluateIndustryHitRateConsume_DemotedCondition_RefusesBeforeProviderRead
+// (2026-10-06): the production tuple consumes stockpicker-momentum-20d-positive,
+// a family demoted for losing money after costs (5-day net-cost expectancy
+// -0.987%; the sibling foreign-3d-net-buy is -0.517%). Tilting sector weights
+// from a measured-losing family is advice built on a loser, so the chain must
+// refuse BEFORE reading the provider — never producing a decision that a
+// caller could still turn into tilts.
+func TestEvaluateIndustryHitRateConsume_DemotedCondition_RefusesBeforeProviderRead(t *testing.T) {
+	withHitRateGate(t, true)
+	provider := &fakeHitRateProvider{rows: []sectorallocation.IndustryHitRateSummary{eligibleRow("semiconductor", "buy", 0.9, 200)}}
+
+	for _, cond := range []string{
+		config.StockpickerConditionMomentum20DPositive,
+		config.StockpickerConditionForeign3DNetBuy,
+	} {
+		provider.calls = 0
+		decision := sectorallocation.EvaluateIndustryHitRateConsume(
+			provider, config.StockpickerSourcePrefix+cond, cond, "120d")
+
+		if decision.Applied {
+			t.Errorf("%s: applied = true, want false", cond)
+		}
+		if decision.Reason != sectorallocation.IndustryHitRateReasonDemotedCondition {
+			t.Errorf("%s: reason = %q, want %q", cond, decision.Reason,
+				sectorallocation.IndustryHitRateReasonDemotedCondition)
+		}
+		if provider.calls != 0 {
+			t.Errorf("%s: provider consulted %d times, want 0", cond, provider.calls)
+		}
+		if len(decision.Tilts) != 0 {
+			t.Errorf("%s: tilts = %+v, want none", cond, decision.Tilts)
+		}
+	}
+
+	// The same rows through a RETAINED condition still apply: the refusal is a
+	// targeted verdict, not a blanket disable.
+	decision := sectorallocation.EvaluateIndustryHitRateConsume(
+		provider, "stockpicker-price-volume-bottom-divergence", "price-volume-bottom-divergence", "120d")
+	if !decision.Applied || decision.Reason != sectorallocation.IndustryHitRateReasonApplied {
+		t.Fatalf("retained condition decision = %+v, want applied", decision)
+	}
+}
+
 func TestEvaluateIndustryHitRateConsume_NoProvider(t *testing.T) {
 	withHitRateGate(t, true)
 

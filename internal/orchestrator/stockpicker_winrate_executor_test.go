@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/capitalflow"
+	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/ledger"
 	"github.com/kaecer68/atlas-go/internal/stockpicker"
@@ -116,10 +117,18 @@ func stockpickerWinrateQuote() domain.Quote {
 	return domain.Quote{Symbol: "2330.TW", Last: 500, IsTradable: true}
 }
 
+// testRetainedSource is the outcome source the executor fixtures use. Since
+// 2026-10-06 the executor's own default source (stockpicker-foreign-3d-net-buy)
+// is demoted from every recommendation path — see the edge_guard tests below —
+// so the gate-cascade fixtures must inject a family that still has edge
+// (price-volume-bottom-divergence: 5-day net-cost expectancy +0.618%, t=+7.7).
+// That keeps each test exercising ITS OWN gate instead of the edge guard.
+const testRetainedSource = "stockpicker-price-volume-bottom-divergence"
+
 func eligibleWinRateSummary() stockpicker.StockWinRateSummary {
 	return stockpicker.StockWinRateSummary{
 		Symbol:            "2330",
-		Source:            "stockpicker-foreign-3d-net-buy",
+		Source:            testRetainedSource,
 		Window:            "120d",
 		Observations:      40,
 		Hits:              26,
@@ -188,6 +197,7 @@ func TestStockpickerWinrateSupports(t *testing.T) {
 
 func TestStockpickerWinrateRecommendHappyPath(t *testing.T) {
 	e := StockpickerWinrateExecutor{
+		Source:       testRetainedSource,
 		WinRateStore: &mockWinRateStore{summary: eligibleWinRateSummary(), found: true},
 		FlowSource:   mockFlowSource{net: 50000, ok: true}, // 0.5 億股 > 0.1
 		Gateway:      testFlowGateway(),
@@ -231,6 +241,7 @@ func TestStockpickerWinrateRecommendCalibrationGate(t *testing.T) {
 		s := eligibleWinRateSummary()
 		s.CalibrationStatus = status
 		e := StockpickerWinrateExecutor{
+			Source:       testRetainedSource,
 			WinRateStore: &mockWinRateStore{summary: s, found: true},
 			FlowSource:   mockFlowSource{net: 50000, ok: true},
 			Gateway:      testFlowGateway(),
@@ -256,6 +267,7 @@ func TestStockpickerWinrateRecommendWinRateGates(t *testing.T) {
 			s := eligibleWinRateSummary()
 			tc.mutate(&s)
 			e := StockpickerWinrateExecutor{
+				Source:       testRetainedSource,
 				WinRateStore: &mockWinRateStore{summary: s, found: true},
 				FlowSource:   mockFlowSource{net: 50000, ok: true},
 				Gateway:      testFlowGateway(),
@@ -287,6 +299,7 @@ func TestStockpickerWinrateRecommendBoundaries(t *testing.T) {
 			s := base
 			tc.mutate(&s)
 			e := StockpickerWinrateExecutor{
+				Source:       testRetainedSource,
 				WinRateStore: &mockWinRateStore{summary: s, found: true},
 				FlowSource:   mockFlowSource{net: 50000, ok: true},
 				Gateway:      testFlowGateway(),
@@ -302,6 +315,7 @@ func TestStockpickerWinrateRecommendBoundaries(t *testing.T) {
 	// layer uses strict > (abs(億股) > min_abs_net), so exactly 0.1 fails.
 	t.Run("flow exactly 0.1 億股 fails (strict >)", func(t *testing.T) {
 		e := StockpickerWinrateExecutor{
+			Source:       testRetainedSource,
 			WinRateStore: &mockWinRateStore{summary: eligibleWinRateSummary(), found: true},
 			FlowSource:   mockFlowSource{net: 10000, ok: true},
 			Gateway:      testFlowGateway(),
@@ -313,6 +327,7 @@ func TestStockpickerWinrateRecommendBoundaries(t *testing.T) {
 	// Just above the gate passes: 10001 千股 = 0.10001 億股 > 0.1.
 	t.Run("flow just above 0.1 億股 passes", func(t *testing.T) {
 		e := StockpickerWinrateExecutor{
+			Source:       testRetainedSource,
 			WinRateStore: &mockWinRateStore{summary: eligibleWinRateSummary(), found: true},
 			FlowSource:   mockFlowSource{net: 10001, ok: true},
 			Gateway:      testFlowGateway(),
@@ -326,6 +341,7 @@ func TestStockpickerWinrateRecommendBoundaries(t *testing.T) {
 func TestStockpickerWinrateRecommendFlowGateReject(t *testing.T) {
 	// 500 千股 = 0.005 億股 ≤ min_abs_net 0.1 → foreign layer fails.
 	e := StockpickerWinrateExecutor{
+		Source:       testRetainedSource,
 		WinRateStore: &mockWinRateStore{summary: eligibleWinRateSummary(), found: true},
 		FlowSource:   mockFlowSource{net: 500, ok: true},
 		Gateway:      testFlowGateway(),
@@ -338,6 +354,7 @@ func TestStockpickerWinrateRecommendFlowGateReject(t *testing.T) {
 func TestStockpickerWinrateRecommendFlowMissing(t *testing.T) {
 	// Missing flow data → fail closed (不誤殺也不亂推).
 	e := StockpickerWinrateExecutor{
+		Source:       testRetainedSource,
 		WinRateStore: &mockWinRateStore{summary: eligibleWinRateSummary(), found: true},
 		FlowSource:   mockFlowSource{net: 0, ok: false},
 		Gateway:      testFlowGateway(),
@@ -354,6 +371,7 @@ func TestStockpickerWinrateRecommendFlowMissing(t *testing.T) {
 // passing report the full two-level gate passes.
 func TestStockpickerWinrateRecommendMarketReportPass(t *testing.T) {
 	e := StockpickerWinrateExecutor{
+		Source:       testRetainedSource,
 		WinRateStore: &mockWinRateStore{summary: eligibleWinRateSummary(), found: true},
 		FlowSource:   mockFlowSource{net: 50000, ok: true},
 		Gateway:      twoLevelFlowGateway(),
@@ -376,6 +394,7 @@ func TestStockpickerWinrateRecommendMarketReportPass(t *testing.T) {
 // and would have emitted a recommendation.
 func TestStockpickerWinrateRecommendMarketReportReject(t *testing.T) {
 	e := StockpickerWinrateExecutor{
+		Source:       testRetainedSource,
 		WinRateStore: &mockWinRateStore{summary: eligibleWinRateSummary(), found: true},
 		FlowSource:   mockFlowSource{net: 50000, ok: true},
 		Gateway:      twoLevelFlowGateway(),
@@ -393,6 +412,7 @@ func TestStockpickerWinrateRecommendMarketReportReject(t *testing.T) {
 // passing foreign flow (market layers fail-open skip).
 func TestStockpickerWinrateRecommendNilCapitalFlowForeignOnlyFallback(t *testing.T) {
 	e := StockpickerWinrateExecutor{
+		Source:       testRetainedSource,
 		WinRateStore: &mockWinRateStore{summary: eligibleWinRateSummary(), found: true},
 		FlowSource:   mockFlowSource{net: 50000, ok: true},
 		Gateway:      twoLevelFlowGateway(),
@@ -413,6 +433,7 @@ func TestStockpickerWinrateRecommendNilCapitalFlowForeignOnlyFallback(t *testing
 // foreign-only scope instead of failing the recommendation closed.
 func TestStockpickerWinrateRecommendCapitalFlowErrorFallback(t *testing.T) {
 	e := StockpickerWinrateExecutor{
+		Source:       testRetainedSource,
 		WinRateStore: &mockWinRateStore{summary: eligibleWinRateSummary(), found: true},
 		FlowSource:   mockFlowSource{net: 50000, ok: true},
 		Gateway:      twoLevelFlowGateway(),
@@ -426,6 +447,7 @@ func TestStockpickerWinrateRecommendCapitalFlowErrorFallback(t *testing.T) {
 
 func TestStockpickerWinrateRecommendNotFound(t *testing.T) {
 	e := StockpickerWinrateExecutor{
+		Source:       testRetainedSource,
 		WinRateStore: &mockWinRateStore{summary: stockpicker.StockWinRateSummary{}, found: false},
 		FlowSource:   mockFlowSource{net: 50000, ok: true},
 		Gateway:      testFlowGateway(),
@@ -437,6 +459,7 @@ func TestStockpickerWinrateRecommendNotFound(t *testing.T) {
 
 func TestStockpickerWinrateRecommendDBError(t *testing.T) {
 	e := StockpickerWinrateExecutor{
+		Source:       testRetainedSource,
 		WinRateStore: &mockWinRateStore{err: context.DeadlineExceeded},
 		FlowSource:   mockFlowSource{net: 50000, ok: true},
 		Gateway:      testFlowGateway(),
@@ -450,6 +473,7 @@ func TestStockpickerWinrateRecommendUnsupportedSkill(t *testing.T) {
 	agent := stockpickerWinrateAgent()
 	agent.Skill = "semiconductor_desk"
 	e := StockpickerWinrateExecutor{
+		Source:       testRetainedSource,
 		WinRateStore: &mockWinRateStore{summary: eligibleWinRateSummary(), found: true},
 		FlowSource:   mockFlowSource{net: 50000, ok: true},
 		Gateway:      testFlowGateway(),
@@ -479,7 +503,8 @@ func TestStockpickerWinrateNilDependenciesDefaultBehavior(t *testing.T) {
 	// Decision clock on the fixture's flow date: the default file FlowSource
 	// read the newest flow point (flowFixtureDate) as fresh, which is the
 	// pre-#1945 behavior for a file that is still being refreshed.
-	e := StockpickerWinrateExecutor{WorkDir: tmp, Now: flowFixtureNow}
+	e := StockpickerWinrateExecutor{
+		Source: testRetainedSource, WorkDir: tmp, Now: flowFixtureNow}
 	rec, ok := e.Recommend(stockpickerWinrateAgent(), stockpickerWinrateQuote(), "", domain.Regime(""), nil)
 	if !ok {
 		t.Fatal("Recommend (nil deps, real ledger + flow file) = false, want true")
@@ -505,7 +530,8 @@ func TestStockpickerWinrateNilDependenciesMissingLedger(t *testing.T) {
 	t.Setenv("ATLAS_MCP_STOCKPICKER_DB", "")
 	t.Setenv("ATLAS_WORK_DIR", "")
 
-	e := StockpickerWinrateExecutor{WorkDir: tmp}
+	e := StockpickerWinrateExecutor{
+		Source: testRetainedSource, WorkDir: tmp}
 	if _, ok := e.Recommend(stockpickerWinrateAgent(), stockpickerWinrateQuote(), "", domain.Regime(""), nil); ok {
 		t.Fatal("Recommend with missing ledger = true, want false (silent DB failure)")
 	}
@@ -526,6 +552,7 @@ func TestStockpickerWinrateStaleFlowFailsClosed(t *testing.T) {
 	t.Setenv("ATLAS_WORK_DIR", "")
 
 	e := StockpickerWinrateExecutor{
+		Source:  testRetainedSource,
 		WorkDir: tmp,
 		// Default Now (real clock): every decision after the file froze is
 		// stale relative to the newest stored flow point.
@@ -558,10 +585,12 @@ func TestStockpickerWinrateFreshnessMaxAgeOverride(t *testing.T) {
 	t.Setenv("ATLAS_WORK_DIR", "")
 
 	now := func() time.Time { return time.Date(2026, 9, 2, 12, 0, 0, 0, time.UTC) } // 7 days after the flow point
-	if _, ok := (StockpickerWinrateExecutor{WorkDir: tmp, Now: now}).Recommend(stockpickerWinrateAgent(), stockpickerWinrateQuote(), "", domain.Regime(""), nil); !ok {
+	if _, ok := (StockpickerWinrateExecutor{
+		Source: testRetainedSource, WorkDir: tmp, Now: now}).Recommend(stockpickerWinrateAgent(), stockpickerWinrateQuote(), "", domain.Regime(""), nil); !ok {
 		t.Fatal("7-day-old point with the default limit = false, want true")
 	}
-	e := StockpickerWinrateExecutor{WorkDir: tmp, Now: now, MaxFlowAgeDays: 3}
+	e := StockpickerWinrateExecutor{
+		Source: testRetainedSource, WorkDir: tmp, Now: now, MaxFlowAgeDays: 3}
 	if _, ok := e.Recommend(stockpickerWinrateAgent(), stockpickerWinrateQuote(), "", domain.Regime(""), nil); ok {
 		t.Fatal("7-day-old point with MaxFlowAgeDays=3 = true, want false")
 	}
@@ -654,6 +683,68 @@ func writeStockpickerFlowFile(t *testing.T, tmp string) {
 // Source at an avoid-semantics condition (price-volume-top-divergence 頂背離)
 // must fail closed — otherwise the win_rate >= 0.55 gate would recommend BUY
 // on exactly the stocks whose top-divergence signal FAILED.
+// ── edge guard (demoted families, 2026-10-06) ─────────────────────────
+
+// TestStockpickerWinrateRecommendDemotedSourceRefused pins the new Stage 0b
+// edge guard: a family demoted for negative 5-day net-cost expectancy must not
+// back a BUY recommendation even when every downstream gate passes (eligible
+// calibration, 40 observations, win_rate 0.65, wilson_lower 0.50, fresh
+// passing flow). The win-rate gates read win_rate, not net_forward_return, so
+// before this guard a measured-losing family could still be recommended.
+func TestStockpickerWinrateRecommendDemotedSourceRefused(t *testing.T) {
+	for _, src := range []string{
+		"stockpicker-foreign-3d-net-buy",
+		"stockpicker-momentum-20d-positive",
+	} {
+		e := StockpickerWinrateExecutor{
+			Source:       src,
+			WinRateStore: &mockWinRateStore{summary: eligibleWinRateSummary(), found: true},
+			FlowSource:   mockFlowSource{net: 50000, ok: true},
+			Gateway:      testFlowGateway(),
+		}
+		if rec, ok := e.Recommend(stockpickerWinrateAgent(), stockpickerWinrateQuote(), "", domain.Regime(""), nil); ok {
+			t.Errorf("%s: Recommend = %+v, want (_, false) — demoted family", src, rec)
+		}
+	}
+}
+
+// TestStockpickerWinrateRetainedSourceStillRecommends is the contrast half:
+// the same wiring with a RETAINED family still emits the recommendation, so
+// the edge guard is a targeted refusal and not a blanket disable of the
+// executor.
+func TestStockpickerWinrateRetainedSourceStillRecommends(t *testing.T) {
+	e := StockpickerWinrateExecutor{
+		Source:       testRetainedSource,
+		WinRateStore: &mockWinRateStore{summary: eligibleWinRateSummary(), found: true},
+		FlowSource:   mockFlowSource{net: 50000, ok: true},
+		Gateway:      testFlowGateway(),
+	}
+	if _, ok := e.Recommend(stockpickerWinrateAgent(), stockpickerWinrateQuote(), "", domain.Regime(""), nil); !ok {
+		t.Fatal("Recommend with a retained source = (_, false), want (rec, true)")
+	}
+}
+
+// TestStockpickerWinrateDefaultSourceIsDemoted documents the production
+// consequence of the demotion: the executor's default source IS one of the two
+// demoted families, so the zero-value production executor (configs/agents.json
+// → stockpicker-winrate-01, enabled) now produces nothing. Re-pointing it at a
+// family that still has edge is a separate decision (it changes what the agent
+// consumes), deliberately not taken here.
+func TestStockpickerWinrateDefaultSourceIsDemoted(t *testing.T) {
+	if !config.IsDemotedStockpickerSource(stockpickerWinrateDefaultSource) {
+		t.Fatalf("stockpickerWinrateDefaultSource = %q, want a demoted source (update the executor wiring)",
+			stockpickerWinrateDefaultSource)
+	}
+	e := StockpickerWinrateExecutor{
+		WinRateStore: &mockWinRateStore{summary: eligibleWinRateSummary(), found: true},
+		FlowSource:   mockFlowSource{net: 50000, ok: true},
+		Gateway:      testFlowGateway(),
+	}
+	if rec, ok := e.Recommend(stockpickerWinrateAgent(), stockpickerWinrateQuote(), "", domain.Regime(""), nil); ok {
+		t.Fatalf("zero-value executor = %+v, want (_, false): its default source is demoted", rec)
+	}
+}
+
 func TestStockpickerWinrateRecommendAvoidSourceRefused(t *testing.T) {
 	e := StockpickerWinrateExecutor{
 		WinRateStore: &mockWinRateStore{summary: eligibleWinRateSummary(), found: true},

@@ -94,6 +94,11 @@ const (
 	IndustryHitRateReasonInsufficient = "insufficient_calibration"
 	// IndustryHitRateReasonApplied: at least one eligible row produced a tilt.
 	IndustryHitRateReasonApplied = "applied"
+	// IndustryHitRateReasonDemotedCondition: the queried condition belongs to
+	// a family demoted from advice surfaces (negative 5-day net-cost
+	// expectancy — see internal/config/stockpicker_edge.go). No provider call,
+	// no tilt: sector weights are never tilted by a measured-losing family.
+	IndustryHitRateReasonDemotedCondition = "demoted_condition"
 )
 
 // industryHitRateTiltScale maps one unit of (WilsonLower - 0.5) to a weight
@@ -133,6 +138,9 @@ type IndustryHitRateDecision struct {
 //
 // Fail-closed rules (spec §2 of docs/specs/industry-hitrate-consumption-spec.md):
 //   - gate off            -> not applied, no provider call
+//   - demoted condition   -> not applied, no provider call (logged at WARN;
+//     the wired condition belongs to a family with negative measured
+//     net-cost expectancy, so its hit rate is evidence of a loser, not edge)
 //   - no provider         -> not applied (wiring bug, logged at WARN)
 //   - provider error      -> not applied, error returned (logged at WARN)
 //   - zero rows           -> not applied (reason no_rows)
@@ -145,6 +153,25 @@ type IndustryHitRateDecision struct {
 func EvaluateIndustryHitRateConsume(provider IndustryHitRateProvider, source, conditionID, rollingWindow string) IndustryHitRateDecision {
 	if !config.GetIndustryHitRateConsumeEnabled() {
 		return IndustryHitRateDecision{Reason: IndustryHitRateReasonDisabled}
+	}
+	// Demoted-condition guard (2026-10-06). The production tuple consumes
+	// stockpicker-momentum-20d-positive, one of the two families demoted for
+	// losing money after the 0.585% round-trip cost (5-day net-cost
+	// expectancy -0.987%, t=-21.3; the sibling is foreign-3d-net-buy at
+	// -0.517%, t=-11.4 — internal/config/stockpicker_edge.go is the single
+	// source of truth, shared with the win-rate executor and the
+	// stock_picker_scan ranking). Tilting real sector weights on a
+	// negative-expectancy family would be advice built on a measured loser,
+	// so the chain refuses before any provider read. This package cannot
+	// import internal/stockpicker (import direction: stockpicker -> ledger ->
+	// portfolio -> sectorallocation), but it already depends on config, which
+	// owns the list.
+	if config.IsDemotedStockpickerCondition(conditionID) {
+		slog.Warn("sector_allocation.industry_hit_rate_consume.degraded",
+			slog.String("reason", IndustryHitRateReasonDemotedCondition),
+			slog.String("source", source),
+			slog.String("condition_id", conditionID))
+		return IndustryHitRateDecision{Reason: IndustryHitRateReasonDemotedCondition}
 	}
 	if provider == nil {
 		slog.Warn("sector_allocation.industry_hit_rate_consume.degraded",
