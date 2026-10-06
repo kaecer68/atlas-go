@@ -60,8 +60,17 @@ func TestChannelHealthStore_SyncAllToDB_DerivedVerdictAndHonestTimestamps(t *tes
 	).Scan(&status, &lastFetch, &lastSuccess); err != nil {
 		t.Fatalf("query twse_oddlot: %v", err)
 	}
-	if status != StatusStale {
-		t.Errorf("DB status = %q, want stale (DB and the channel page must agree)", status)
+	// Rule 0 of DeriveChannelStatus (internal/apigateway/channel_status.go):
+	// retirement is a CONTRACT-level fact and outranks the record's freshness,
+	// so a retired channel reports StatusRetired even with a 17-day-old
+	// LastFetchAt. twse_oddlot was retired by design when TWSE removed BFI84U,
+	// so "stale" is no longer the verdict the channel page and the DB agree on.
+	//
+	// The stale-on-expiry rule itself stays covered by TestDeriveChannelStatus,
+	// which runs this exact shape against a copy of the same contract with its
+	// retirement stripped (internal/apigateway/channel_status_test.go).
+	if status != StatusRetired {
+		t.Errorf("DB status = %q, want retired (Rule 0: retirement outranks freshness — the DB and the channel page must agree)", status)
 	}
 	if lastFetch == nil || !lastFetch.UTC().Equal(now.Add(-17*24*time.Hour)) {
 		t.Errorf("DB last_fetch_at = %v, want the record's real fetch time (%s) — not the sync clock",
