@@ -118,8 +118,17 @@ test('renderHomePage: dashboard API failures render fallback without crashing', 
     'market pulse should render fallback values when data is unavailable'
   );
 
-  const predictionsContent = elements.get('home-predictions-content');
-  assert.ok(predictionsContent, 'predictions content should exist');
+  // Phase 0 (2026-10-06): the 5-day prediction card was withdrawn, so the
+  // page must not create its container at all. A resurrected container means
+  // the card (or a re-fetch of /api/events/prediction) came back.
+  assert.ok(
+    !container.innerHTML.includes('未來 5 日錢潮預測'),
+    'withdrawn prediction card must not render on the home page'
+  );
+  assert.ok(
+    !elements.has('home-predictions-content'),
+    'withdrawn prediction card container must not be created'
+  );
 
   const sevenForceContent = elements.get('home-seven-force-content');
   assert.ok(sevenForceContent, 'seven-force content should exist');
@@ -137,8 +146,12 @@ test('renderHomePage: new home sections render after redesign', async () => {
   await renderHomePage(container);
 
   assert.ok(container.innerHTML.includes('市場脈動'), 'market pulse section should render');
-  assert.ok(container.innerHTML.includes('未來 5 日錢潮預測'), 'predictions section should render');
   assert.ok(container.innerHTML.includes('七維錢潮雷達'), 'seven-force section should render');
+  // Phase 0 (2026-10-06): no 5-day direction forecast may be presented.
+  assert.ok(
+    !container.innerHTML.includes('未來 5 日錢潮預測'),
+    'home must not present a 5-day capital-flow prediction card'
+  );
 
   const marketGrid = elements.get('home-market-grid');
   assert.ok(marketGrid, 'market pulse grid should exist');

@@ -128,6 +128,7 @@
 | `docs/operations/sector-allocation-closure-runbook.md` | Sector Allocation Closure 操作手冊，含 SA11.B rollback drills | ✅ |
 | `docs/operations/rss-feed-replacement.md` | RSS feed 替換決策記錄 | ✅ |
 | `docs/operations/universe-run-truth-model.md` | 母體執行真值模型與判層（主真值階層／逐訊號可信度／工具與第 10 條告警） | ✅ |
+| `docs/operations/EDGE-PROGRAM-FREEZE.md` | edge 驗證計畫 Phase 0 凍結登記（凍結清單／解除條件／命中率語彙 SSOT） | ✅ |
 
 > **2026-08-17 清理**：移出、刪除與 distill 對照完整列於上方「文件瘦身治理」段。
 

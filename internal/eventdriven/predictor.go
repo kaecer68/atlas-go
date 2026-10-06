@@ -169,8 +169,8 @@ func (p *Predictor) Predict(now time.Time) PredictionReport {
 	}
 	baseline := scaleQualityScoreToBaseline(cfScore)
 
-	predictions := make([]FlowPrediction, 5)
-	for i := range 5 {
+	predictions := make([]FlowPrediction, forecastDays)
+	for i := range forecastDays {
 		day := now.AddDate(0, 0, i+1)
 		dir, conf, drivers := p.predictDay(day, timeline, baseline, cfStatus, i)
 		predictions[i] = FlowPrediction{
@@ -207,7 +207,78 @@ func (p *Predictor) Predict(now time.Time) PredictionReport {
 	if report.SectorPredictions == nil {
 		report.SectorPredictions = []SectorDayPrediction{}
 	}
+	report.AdvisoryStatus = p.advisoryStatus(report, timeline, now, baseline, cfStatus)
 	return report
+}
+
+// forecastDays is the length of the forward window the report covers.
+const forecastDays = 5
+
+// advisoryStatus derives the withdrawal state of the 5-day report plus the
+// abstention reasons that were actually observed for this request.
+//
+// The withdrawal itself is a governance decision (2026-10-06, edge
+// verification program Phase 0) and is therefore unconditional: a directional
+// day does not make the report advisory-usable, because the signal family
+// behind it has not passed G2/G3/G4'. The reasons, by contrast, are derived
+// per request from the inputs that produced the report.
+func (p *Predictor) advisoryStatus(report PredictionReport, timeline []industry.CalendarEvent, now time.Time, baseline float64, cfStatus string) *PredictionAdvisoryStatus {
+	status := &PredictionAdvisoryStatus{
+		AdvisoryUsable:    false,
+		Status:            AdvisoryStatusWithdrawn,
+		AbstentionReasons: []string{},
+		Message:           AdvisoryMessage,
+		EvidenceRef:       AdvisoryEvidenceRef,
+	}
+	if !allForecastDaysNeutral(report.Predictions) {
+		// At least one day cleared the band, so none of the abstention
+		// mechanisms below describes this report. The withdrawal still stands.
+		return status
+	}
+
+	reasons := []string{AdvisoryReasonNoEdgeEvidence}
+	if mixedEventsInWindow(timeline, now) > 0 {
+		reasons = append(reasons, AdvisoryReasonMixedEventCancellation)
+	}
+	if cfStatus != capitalflow.CalibrationEligible && math.Abs(baseline)*baselineWeightForDay(0, cfStatus) < neutralBand {
+		reasons = append(reasons, AdvisoryReasonCalibrationDiscountBelowThreshold)
+	}
+	sort.Strings(reasons)
+	status.AbstentionReasons = reasons
+	return status
+}
+
+// allForecastDaysNeutral reports whether every day of the window stayed inside
+// the neutral band, i.e. the report abstained from a directional call.
+func allForecastDaysNeutral(predictions []FlowPrediction) bool {
+	if len(predictions) == 0 {
+		return false
+	}
+	for _, p := range predictions {
+		if p.Direction != "neutral" {
+			return false
+		}
+	}
+	return true
+}
+
+// mixedEventsInWindow counts mixed-direction events overlapping at least one of
+// the forecast days, using the same day-overlap predicate as predictDay.
+func mixedEventsInWindow(timeline []industry.CalendarEvent, now time.Time) int {
+	count := 0
+	for _, e := range timeline {
+		if e.Direction != "mixed" {
+			continue
+		}
+		for i := range forecastDays {
+			day := now.AddDate(0, 0, i+1)
+			if !day.After(e.EndDate) && !day.Before(e.StartDate) {
+				count++
+				break
+			}
+		}
+	}
+	return count
 }
 
 // computeNarrativeTilt sums (weight × direction_sign) across narrative
@@ -287,8 +358,10 @@ func (p *Predictor) predictDay(day time.Time, timeline []industry.CalendarEvent,
 			bearishWeight += w
 			drivers = append(drivers, e.Name)
 		case "mixed":
-			bullishWeight += w * 0.3
-			bearishWeight += w * 0.3
+			// Same weight on both sides => net contribution exactly 0 (see
+			// PredictionAdvisoryStatus.AdvisoryReasonMixedEventCancellation).
+			bullishWeight += w * mixedEventCancellationFactor
+			bearishWeight += w * mixedEventCancellationFactor
 		}
 	}
 
@@ -321,9 +394,9 @@ func (p *Predictor) predictDay(day time.Time, timeline []industry.CalendarEvent,
 
 	net := bullishWeight - bearishWeight + narrativeTilt + scanTilt
 	switch {
-	case net > 0.3:
+	case net > neutralBand:
 		dir = "inflow"
-	case net < -0.3:
+	case net < -neutralBand:
 		dir = "outflow"
 	default:
 		dir = "neutral"
@@ -429,6 +502,17 @@ const (
 	calibratingConfidenceCap    = 0.6  // cap confidence when calibrating
 	degradedConfidenceCap       = 0.55 // cap confidence when degraded
 )
+
+// neutralBand is the |net weight| below which a forecast day is called neutral.
+// Exported reasoning lives in PredictionAdvisoryStatus: the calibrating
+// baseline ceiling (0.28) sits below this band, which is why a calibrating
+// report can never be steered by the baseline alone.
+const neutralBand = 0.3
+
+// mixedEventCancellationFactor is the weight a mixed-direction event gets on
+// EACH side. Both sides receive the same amount, so a mixed event's net
+// contribution is exactly zero while its weight still shows up as a driver.
+const mixedEventCancellationFactor = 0.3
 
 // scaleQualityScoreToBaseline maps the legacy QualityScore to a directional
 // baseline in [-0.8, 0.8] so it can be blended with event weights.
