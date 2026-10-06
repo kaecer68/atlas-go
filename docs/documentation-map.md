@@ -129,6 +129,7 @@
 | `docs/operations/rss-feed-replacement.md` | RSS feed 替換決策記錄 | ✅ |
 | `docs/operations/universe-run-truth-model.md` | 母體執行真值模型與判層（主真值階層／逐訊號可信度／工具與第 10 條告警） | ✅ |
 | `docs/operations/EDGE-PROGRAM-FREEZE.md` | edge 驗證計畫 Phase 0 凍結登記（凍結清單／解除條件／命中率語彙 SSOT） | ✅ |
+| `docs/operations/EDGE-PROGRAM-VERDICT.md` | edge 驗證計畫**最終裁決**（無可交易 edge；結構性原因、適用範圍、三條可移植教訓、交接與重啟條件） | ✅ |
 
 > **2026-08-17 清理**：移出、刪除與 distill 對照完整列於上方「文件瘦身治理」段。
 
