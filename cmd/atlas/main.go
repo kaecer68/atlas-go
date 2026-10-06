@@ -1053,7 +1053,7 @@ func run(args []string, deps appDeps) error {
 			// local path — acceptable; gosec G706 is satisfied because the
 			// path is never interpolated into a format string, only passed
 			// through %v inside the wrapped error).
-			log.Printf("[StockTools] win-rate store unavailable: %v (GET /api/stock/win_rate will 503)", err)
+			log.Printf("[StockTools] win-rate store unavailable: %v (GET /api/stock/win_rate and /api/stock/family-expectancy will 503)", err)
 		} else {
 			winRateProvider := stocktools.NewSQLiteWinRateProvider(winRateDB)
 			stockDeps.WinRate = winRateProvider
@@ -1062,6 +1062,9 @@ func run(args []string, deps appDeps) error {
 			stockDeps.ConditionWinRate = winRateProvider
 			// Industry-level (canonical L1) aggregate read (issue #1942).
 			stockDeps.IndustryWinRate = winRateProvider
+			// Family-level (per-source) net-expectancy + regime instrument
+			// (read-only, additive: one row per signal family).
+			stockDeps.FamilyExpectancy = winRateProvider
 			// Bind the same read-only aggregate to the industry hit-rate
 			// consumption chain (issues #1942/#1948). Inert by default: the
 			// chain checks sector_allocation.industry_hit_rate_consume_enabled

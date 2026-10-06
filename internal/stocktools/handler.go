@@ -69,6 +69,11 @@ type Deps struct {
 	// GET /api/stock/industry_winrate returns 503. Production injects the
 	// same *SQLiteWinRateProvider as WinRate (it implements all three).
 	IndustryWinRate IndustryWinRateProvider
+	// FamilyExpectancy is the read-only FAMILY-level (per-source) expectancy
+	// instrument. Optional — when nil,
+	// GET /api/stock/family-expectancy returns 503. Production injects the
+	// same *SQLiteWinRateProvider as WinRate (it implements all four).
+	FamilyExpectancy FamilyExpectancyProvider
 }
 
 // MonthlyRevenueProvider is the minimal interface the
@@ -119,6 +124,7 @@ func RegisterRoutes(mux *http.ServeMux, deps Deps) {
 	mux.Handle("GET /api/stock/volume_divergence", shared.Get(h.HandleVolumeDivergence))
 	mux.Handle("GET /api/stock/condition_winrate", shared.Get(h.HandleConditionWinRate))
 	mux.Handle("GET /api/stock/industry_winrate", shared.Get(h.HandleIndustryWinRate))
+	mux.Handle("GET /api/stock/family-expectancy", shared.Get(h.HandleFamilyExpectancy))
 }
 
 // normalizeFundamentalsSymbol maps an API input symbol to the Yahoo-suffix
@@ -863,5 +869,66 @@ func (h *Handler) HandleIndustryWinRate(r *http.Request) (int, any) {
 		return http.StatusOK, out
 	}
 	out.Industries = []stockpicker.IndustryWinRateSummary{row}
+	return http.StatusOK, out
+}
+
+// FamilyExpectancyResponse is the JSON body of GET
+// /api/stock/family-expectancy. found=false means the ledger holds no
+// attributable rows (empty ledger, or rows without a source) — informational,
+// not an error (same contract as /api/stock/win_rate,
+// /api/stock/condition_winrate and /api/stock/industry_winrate).
+//
+// The embedded report is the whole instrument; see
+// docs/specs/family-expectancy-instrument-spec.md for the caliber and the
+// data-quality counters.
+type FamilyExpectancyResponse struct {
+	Found   bool   `json:"found"`
+	Message string `json:"message,omitempty"`
+	stockpicker.FamilyExpectancyReport
+}
+
+// HandleFamilyExpectancy serves GET /api/stock/family-expectancy
+// [?trailing_days=60].
+//
+// It answers "哪個訊號家族還活著？" in one call: one row per family (source)
+// with n, net hit rate + Wilson CI, average net forward return, the net
+// expectancy t statistic, the per-regime strata (empty regime -> "unknown",
+// never imputed) and the same metrics over the trailing 60 distinct trigger
+// dates of the read.
+//
+// Read-only: it aggregates the persisted raw outcomes on the fly, never
+// recomputes a backtest and never changes an existing number. No query
+// parameter is required; the aggregate never pools families, so no
+// condition_id is needed. Measurement disclosure only — not investment advice.
+func (h *Handler) HandleFamilyExpectancy(r *http.Request) (int, any) {
+	if h.deps.FamilyExpectancy == nil {
+		return http.StatusServiceUnavailable, map[string]string{
+			"error": "family expectancy store not configured",
+		}
+	}
+
+	trailingDays := stockpicker.DefaultTrailingTradingDays
+	if raw := strings.TrimSpace(r.URL.Query().Get("trailing_days")); raw != "" {
+		n, err := strconv.Atoi(raw)
+		if err != nil || n <= 0 {
+			return http.StatusBadRequest, map[string]string{
+				"error": fmt.Sprintf("trailing_days %q must be a positive integer (default %d)",
+					raw, stockpicker.DefaultTrailingTradingDays),
+			}
+		}
+		trailingDays = n
+	}
+
+	generatedAt := h.now().UTC().Format(time.RFC3339)
+	report, found, err := h.deps.FamilyExpectancy.LoadFamilyExpectancy(r.Context(), trailingDays, generatedAt)
+	if err != nil {
+		return http.StatusServiceUnavailable, map[string]string{"error": err.Error()}
+	}
+
+	out := FamilyExpectancyResponse{Found: found, FamilyExpectancyReport: report}
+	if !found {
+		out.Message = "no stored signal outcomes attributable to a family (source) in the ledger"
+		return http.StatusOK, out
+	}
 	return http.StatusOK, out
 }
