@@ -1569,6 +1569,11 @@ export interface FallbackPriceTarget {
   stop_loss_multiplier: string;
 }
 
+export interface FamilyExpectancyResponse {
+  found: boolean;
+  message?: string;
+}
+
 export interface FetcherStatus {
   day_trading: string;
   taifex: string;
