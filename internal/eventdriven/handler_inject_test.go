@@ -40,6 +40,66 @@ func (s *stubCF) LatestAssessment(context.Context) (capitalflow.CapitalFlowAsses
 // windows (期貨結算日, 法說會旺季), so the assertion is stable on any run date.
 var injectTestNow = time.Date(2025, 10, 1, 12, 0, 0, 0, time.UTC)
 
+// dateBombE2EAnchor pins BOTH the calendar anchor (RefreshEvents) and the
+// handler clock (SetNowFn) for TestE2E_EventTriggers_NonNeutralPrediction.
+//
+// Why a fixed anchor instead of time.Now(): that test asserts a direction
+// verdict ("at least one non-neutral day"), which is a function of the event
+// mix that happens to overlap the 5-day window on the run date. With
+// RefreshEvents(time.Now()) plus a wall-clock handler the assertion was a date
+// bomb: on 2026-10-06 the window resolves to 法說會旺季(bullish 0.6) +
+// 期貨結算日(bearish 0.6) + 連假-國慶日(bearish 0.5) and 營收公布高峰(mixed 0.4
+// ⇒ net 0), i.e. an event net of −0.5. The bullish baseline (0.8 × day-1 weight
+// 0.7 = +0.56) cannot lift that over the ±0.3 direction threshold, so every day
+// came back neutral and the test was red on a clean main. This is the surviving
+// member of FU-20260930-07 (the 2026-08-01 time-anchor / 2026-09-16 #1585
+// family): #2168 fixed four sibling tests in this file with a fixed clock plus a
+// fixed calendar anchor and missed this one.
+//
+// 2025-03-20 is chosen so the prediction window (03-21..03-25) sits inside the
+// 季底作帳行情 (bullish 0.8) and 期貨結算日 (bearish 0.6, a whole-month
+// occurrence) windows, giving an event net of exactly +0.2 on all five days:
+//   - +0.2 is below the ±0.3 threshold on its own, which is what lets the
+//     zero-baseline control below assert "all five days neutral", and
+//   - the eligible bullish baseline keeps every day above the threshold
+//     (day-1: 0.8 × 0.7 = +0.56 ⇒ net +0.76; day-5: 0.8 × 0.358 = +0.29 ⇒ net
+//     +0.49).
+//
+// The 2025-10-01 anchor used by the summary tests above is a poor host for a
+// direction assertion: its window (10-02..10-06) is covered by the 中秋/國慶
+// 連假 bearish pair from 10-03 on (法說會旺季 +0.6 − 期貨結算日 −0.6 − 連假
+// −0.5 ⇒ event net −0.5), so only day 1 — which does not overlap a 連假 yet —
+// clears the threshold (observed: day 1 inflow, days 2-5 neutral). That single
+// surviving day depends on where the lunar 中秋 window opens, which is not a
+// margin worth re-arming a date bomb with. 2025-03-20 has the same +0.2 event
+// net on all five days instead.
+var dateBombE2EAnchor = time.Date(2025, 3, 20, 12, 0, 0, 0, time.UTC)
+
+// pinnedPredictionReport issues GET /api/events/prediction against a handler
+// whose clock is pinned to now, and returns the decoded report. cf may be nil,
+// in which case the predictor keeps its default zero-baseline staticCF.
+func pinnedPredictionReport(t *testing.T, cal *industry.EventCalendar, cf CapitalFlowProvider, now time.Time) PredictionReport {
+	t.Helper()
+
+	mux := http.NewServeMux()
+	h := RegisterRoutesWithDetectors(mux, cal, cf, nil, nil)
+	h.SetNowFn(func() time.Time { return now })
+
+	req := httptest.NewRequest(http.MethodGet, "/api/events/prediction", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d (body=%s)", rec.Code, rec.Body.String())
+	}
+
+	var report PredictionReport
+	if err := json.NewDecoder(rec.Body).Decode(&report); err != nil {
+		t.Fatalf("decode PredictionReport: %v (body=%s)", err, rec.Body.String())
+	}
+	return report
+}
+
 func newTestHandler() *Handler {
 	cal := industry.NewEventCalendar()
 	cal.RefreshEvents(time.Now())
@@ -192,76 +252,140 @@ func TestRegisterRoutesWithCapitalFlow_NilProviderFallsBack(t *testing.T) {
 // the Stage 5 end-to-end pipeline: EventCalendar → RefreshEvents →
 // Predictor → HTTP /api/events/prediction → JSON FlowPrediction[].Direction.
 //
-// fix/20260801-eventdriven-test-timeanchor — two pre-existing fragilities
-// patched in the test side only (no production code change):
+// fix/20261006-eventdriven-date-bomb — the test is now hermetic: both the
+// calendar anchor (RefreshEvents) and the handler clock (SetNowFn) are pinned
+// to dateBombE2EAnchor, so no wall clock can reach the assertion. See the
+// dateBombE2EAnchor docstring for the 2026-10-06 failure that made this
+// necessary (surviving member of FU-20260930-07) and for the window arithmetic.
 //
-//  1. RefreshEvents was hard-coded to time.Date(2026, 7, 12, ...). The
-//     date anchor in RefreshEvents controls which year's calendar is
-//     generated, but the test asserts the 5-day prediction window
-//     computed at the real `time.Now()`. Pinning one end to a fixed
-//     date while the other end is `time.Now()` made the test silently
-//     assume "now is 7/12"; on any subsequent run the
-//     events-versus-window alignment drifted out of range as wall-clock
-//     time moved past the test's assumed today. RefreshEvents is now
-//     time.Now() so the calendar anchor matches the prediction
-//     window's "now" without ever leaving test land.
+// Two earlier fragilities stay fixed here (test side only, no production change
+// — kept from fix/20260801-eventdriven-test-timeanchor):
 //
-//  2. The bullish stubCF score is 1.5, not 0.9. Predictor baseline
-//     scaling (scaleQualityScoreToBaseline, predictor.go:426) maps
-//     QualityScore (z-score-ish, ~[-3,3]) to [-0.8, 0.8] with a
-//     divisor of 1.5, so score=0.9 only yields baseline=0.48 — too
-//     weak to push any of the 5 days past the |0.3| net threshold
-//     once the 4 calendar events (配息/除權息/期貨結算/營收) split
-//     bull/bear/mixed across the window. score=1.5 saturates the
-//     scale to 0.8, which combined with the day-0/1 baseline weight
-//     (~0.7/0.58) and the event mix produces net ≈ +0.36 for days 1–2
-//     and inflow verdict there. The semantic meaning of the test
-//     ("strong bullish CF + active events → at least one non-neutral
-//     day") is preserved; only the score knob is moved to a value
-//     that actually exercises the production threshold.
+//  1. RefreshEvents was once hard-coded to a different date than the window
+//     computed at time.Now(), which made the test silently assume "now is
+//     7/12". Anchor and clock are now the same pinned instant.
+//
+//  2. The bullish stubCF score stays 1.5 (the value fix/20260801 chose over
+//     0.9). Predictor baseline scaling (scaleQualityScoreToBaseline,
+//     predictor.go:435; divisor 1.5 at predictor.go:426) maps QualityScore
+//     (~[-3,3]) to [-0.8, 0.8], so score=1.5 saturates the scale at baseline
+//     0.8. Saturation keeps the anchored days well clear of the ±0.3 direction
+//     threshold (day-1 net = 0.8 × 0.7 + 0.2 = +0.76; day-5 net = 0.8 × 0.358
+//     + 0.2 = +0.49), instead of leaving the assertion sitting on the boundary.
+//     The semantic meaning of the test ("strong bullish CF + active events → at
+//     least one non-neutral day") is preserved; the knob is not weakened.
 func TestE2E_EventTriggers_NonNeutralPrediction(t *testing.T) {
-	mux := http.NewServeMux()
 	cal := industry.NewEventCalendar()
-	cal.RefreshEvents(time.Now())
+	cal.RefreshEvents(dateBombE2EAnchor)
 
 	// Strong bullish CF provider amplifies event-driven signals into
-	// inflow-tilted predictions. score=1.5 saturates the baseline
-	// scaler (predictor.go:426) so day 1–2 net exceeds the ±0.3
-	// threshold; see test docstring for derivation.
-	RegisterRoutesWithCapitalFlow(mux, cal, &stubCF{score: 1.5, label: "strong_inflow"})
-
-	req := httptest.NewRequest(http.MethodGet, "/api/events/prediction", nil)
-	rec := httptest.NewRecorder()
-	mux.ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d (body=%s)", rec.Code, rec.Body.String())
-	}
-
-	var report PredictionReport
-	if err := json.NewDecoder(rec.Body).Decode(&report); err != nil {
-		t.Fatalf("decode PredictionReport: %v (body=%s)", err, rec.Body.String())
-	}
+	// inflow-tilted predictions. score=1.5 saturates the baseline scaler
+	// (predictor.go:426) so the anchored days exceed the ±0.3 threshold; see
+	// the test docstring and dateBombE2EAnchor for the derivation.
+	report := pinnedPredictionReport(t, cal, &stubCF{score: 1.5, label: "strong_inflow"}, dateBombE2EAnchor)
 
 	if len(report.Predictions) != 5 {
 		t.Fatalf("expected 5 daily predictions, got %d", len(report.Predictions))
 	}
 
-	// At least one of the 5 days must tilt non-neutral. With a strong
-	// bullish CF (score=1.5, baseline=0.8 saturating the scaler) plus
-	// 3 of 4 calendar events active in the 5-day window, the predictor
-	// should produce inflow-dominant output on the near days; if it
-	// falls back to all-neutral, the pipeline is broken.
-	nonNeutral := 0
+	// At least one of the 5 days must tilt non-neutral, and the tilt must be
+	// inflow (the wired baseline is bullish). With a strong bullish CF
+	// (score=1.5 → baseline 0.8 eligible) plus the anchored events this holds
+	// on all five days; if the pipeline falls back to all-neutral the
+	// prediction path is broken.
+	nonNeutral, inflow := 0, 0
 	for i, p := range report.Predictions {
 		if p.Direction != "neutral" {
 			nonNeutral++
+			if p.Direction == "inflow" {
+				inflow++
+			}
 			t.Logf("day %d (%s): direction=%s confidence=%.2f drivers=%v",
 				i+1, p.Date.Format("2006-01-02"), p.Direction, p.Confidence, p.DrivingEvents)
 		}
 	}
 	if nonNeutral == 0 {
 		t.Errorf("expected at least 1 non-neutral prediction among 5 days, got 0 (all neutral — pipeline broken)")
+	}
+	if inflow == 0 {
+		t.Errorf("strong bullish baseline (score=1.5 → baseline 0.8, calibration eligible) plus event net +0.2 must yield at least one inflow day; got 0 inflow (%d non-neutral)", nonNeutral)
+	}
+
+	// Anchor/clock alignment guard. Every day must carry at least one calendar
+	// event driver next to the baseline driver (measured: all five anchored days
+	// carry [當前資金流向, 季底作帳行情, 期貨結算日]). A list of length 1 can only
+	// be the baseline driver, because calendar drivers are appended only for
+	// events that overlap the day. So if the calendar were ever refreshed
+	// against a different instant than the pinned clock — the exact mismatch
+	// that produced the date bomb — the window would no longer overlap any
+	// generated event and every day would be baseline-only, and this guard
+	// fails instead of the test silently degrading to "baseline only".
+	for i, p := range report.Predictions {
+		if len(p.DrivingEvents) < 2 {
+			t.Errorf("day %d (%s): expected the pinned window to overlap calendar events (baseline driver + ≥1 event), got drivers=%v — anchor/clock misalignment (date bomb regression)", i+1, p.Date.Format("2006-01-02"), p.DrivingEvents)
+		}
+	}
+
+	// Mutation self-proof, tight half: same calendar, same pinned clock, only
+	// the capital-flow baseline removed (score=0 → baseline 0). The anchored
+	// event net is +0.2 on every day, below the ±0.3 threshold, so every day
+	// must now be neutral. If this run is not all-neutral the assertion above
+	// would be satisfied by the calendar alone and the test would be vacuous.
+	zeroReport := pinnedPredictionReport(t, cal, &stubCF{score: 0, label: "neutral"}, dateBombE2EAnchor)
+	if len(zeroReport.Predictions) != 5 {
+		t.Fatalf("control run: expected 5 daily predictions, got %d", len(zeroReport.Predictions))
+	}
+	for i, p := range zeroReport.Predictions {
+		if p.Direction != "neutral" {
+			t.Errorf("control run (zero capital-flow baseline, same calendar): day %d (%s) direction=%s confidence=%.2f drivers=%v — the anchored event net (+0.2) must stay under the ±0.3 threshold, otherwise the non-neutral assertion above proves nothing",
+				i+1, p.Date.Format("2006-01-02"), p.Direction, p.Confidence, p.DrivingEvents)
+		}
+	}
+}
+
+// TestE2E_EventTriggers_ZeroInputsAllNeutral is the deliberate negative control
+// for TestE2E_EventTriggers_NonNeutralPrediction: it proves that the
+// "at least 1 non-neutral prediction" assertion is able to fail, i.e. that the
+// positive test is a real check and not a claim that is true by construction
+// (mutation self-proof, loose half).
+//
+// Both inputs are removed by construction rather than by calendar-rule
+// coincidence, so the control cannot rot when event rules are revised:
+//   - the calendar is never RefreshEvents'd, so it holds zero events (no window
+//     can overlap anything), and
+//   - cf is nil, so the predictor keeps its default staticCF{score: 0} baseline
+//     (net weight 0 on every day).
+//
+// The clock is still pinned to dateBombE2EAnchor so the expected dates are
+// fixed as well. Cf. TestE2E_MissingData_Fallback, which covers the same nil
+// inputs but asserts only the response shape, not the neutral direction.
+func TestE2E_EventTriggers_ZeroInputsAllNeutral(t *testing.T) {
+	cal := industry.NewEventCalendar() // intentionally no RefreshEvents
+
+	report := pinnedPredictionReport(t, cal, nil, dateBombE2EAnchor)
+
+	if len(report.Predictions) != 5 {
+		t.Fatalf("expected 5 daily predictions, got %d", len(report.Predictions))
+	}
+
+	nonNeutral := 0
+	for i, p := range report.Predictions {
+		if !p.Date.Equal(dateBombE2EAnchor.AddDate(0, 0, i+1)) {
+			t.Errorf("day %d: pinned clock must place the window at %s, got %s",
+				i+1, dateBombE2EAnchor.AddDate(0, 0, i+1).Format("2006-01-02"), p.Date.Format("2006-01-02"))
+		}
+		if p.Direction != "neutral" {
+			nonNeutral++
+			t.Errorf("day %d (%s): no events and no baseline ⇒ direction must be neutral, got %s (confidence=%.2f drivers=%v)",
+				i+1, p.Date.Format("2006-01-02"), p.Direction, p.Confidence, p.DrivingEvents)
+		}
+		if len(p.DrivingEvents) != 0 {
+			t.Errorf("day %d (%s): zero inputs ⇒ no drivers may be fabricated, got %v",
+				i+1, p.Date.Format("2006-01-02"), p.DrivingEvents)
+		}
+	}
+	if nonNeutral != 0 {
+		t.Fatalf("%d non-neutral day(s) with zero inputs — the neutral branch is unreachable, so TestE2E_EventTriggers_NonNeutralPrediction cannot fail and proves nothing", nonNeutral)
 	}
 }
 
