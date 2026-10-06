@@ -55,6 +55,30 @@ function statusBadge(status) {
   }
 }
 
+// Demoted families (2026-10-06). Source of truth: internal/config/stockpicker_edge.go
+// (config.IsDemotedStockpickerCondition / DemotedStockpickerConditionIDs).
+// These two families lose money after the 0.585% round-trip cost (5-day
+// net-cost expectancy -0.517% t=-11.4 and -0.987% t=-21.3 measured on
+// stock_signal_outcomes, n=73,819), so no recommendation surface may present
+// them as usable. This card keeps MEASURING them — the aggregates stay visible
+// per the demotion's "measurement preserved" rule — but it must not label them
+// "可參考": the badge drops to a measurement-only wording and an explicit note
+// names the expectancy. Keep in sync with the Go list.
+const DEMOTED_CONDITIONS = new Map([
+  ['foreign-3d-net-buy', '−0.517%（t=−11.4，n=31,982）'],
+  ['momentum-20d-positive', '−0.987%（t=−21.3，n=31,107）'],
+]);
+
+// demotedBadge replaces the referenceable wording for a demoted condition while
+// keeping the calibration classes (the calibration status itself is still true —
+// what changed is whether the family may back advice).
+function demotedBadge(status) {
+  const inner = status === 'eligible' ? '僅供量測' : '';
+  const base = statusBadge(status);
+  if (!inner) return base;
+  return base.replace('>可參考<', `>${inner}<`).replace('sq-winrate-badge--eligible', 'sq-winrate-badge--eligible sq-winrate-badge--demoted');
+}
+
 // AVOID-semantics conditions (頂背離): a LOW forward win rate after trigger
 // CONFIRMS the signal — the condition fires as an avoid/exit warning, not a
 // buy signal. Rendered with an inverted badge + inverted return coloring so
@@ -65,14 +89,19 @@ const AVOID_CONDITIONS = new Set(['price-volume-top-divergence']);
 function renderCondition(cond) {
   const rawId = cond.condition_id || cond.source || '';
   const id = escapeHtml(rawId);
-  const isAvoid = AVOID_CONDITIONS.has(rawId.replace(/^stockpicker-/, ''));
-  const badge = statusBadge(cond.calibration_status);
+  const bareId = rawId.replace(/^stockpicker-/, '');
+  const isAvoid = AVOID_CONDITIONS.has(bareId);
+  const demotedReason = DEMOTED_CONDITIONS.get(bareId);
+  const badge = demotedReason ? demotedBadge(cond.calibration_status) : statusBadge(cond.calibration_status);
   const calibrating = cond.calibration_status === 'calibrating';
   const observeNote = calibrating
     ? '<div class="sq-winrate-note">樣本數不足，僅供觀察</div>'
     : '';
   const avoidNote = isAvoid
     ? '<div class="sq-winrate-note sq-winrate-note--avoid">反向指標（頂背離）：觸發後勝率越低、前瞻報酬越負，代表「迴避訊號」越有效</div>'
+    : '';
+  const demotedNote = demotedReason
+    ? `<div class="sq-winrate-note sq-winrate-note--demoted">已移出推薦與排名：5 日淨成本期望值 ${escapeHtml(demotedReason)}，扣掉 0.585% 來回成本後無 edge。數值僅供量測參考。</div>`
     : '';
 
   const range = (cond.data_start && cond.data_end)
@@ -105,6 +134,7 @@ function renderCondition(cond) {
     </div>
     ${observeNote}
     ${avoidNote}
+    ${demotedNote}
   </div>`;
 }
 

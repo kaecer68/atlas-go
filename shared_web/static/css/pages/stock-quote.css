@@ -438,6 +438,14 @@
   color: #fff;
 }
 
+/* 降級家族 (2026-10-06, internal/config/stockpicker_edge.go)：校準狀態仍為
+   eligible，但該家族已移出推薦/排名，徽章改用中性色避免讀成「可參考」。 */
+.sq-winrate-badge--demoted {
+  background: var(--panel);
+  color: var(--muted);
+  border: 1px solid var(--border);
+}
+
 .sq-winrate-note {
   margin-top: var(--space-xs);
   padding: var(--space-xs) var(--space-sm);
@@ -483,4 +491,9 @@
 /* 反向語義註記（頂背離條件） */
 .sq-winrate-note--avoid {
   border-left: 3px solid var(--color-warning);
+}
+
+/* 降級家族的說明（無淨成本優勢 ⇒ 僅保留量測） */
+.sq-winrate-note--demoted {
+  border-left: 3px solid var(--border);
 }

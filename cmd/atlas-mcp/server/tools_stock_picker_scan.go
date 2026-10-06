@@ -7,6 +7,8 @@ import (
 	"strings"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+
+	"github.com/kaecer68/atlas-go/internal/config"
 )
 
 // Defaults for stock_picker_scan. The min_observations default mirrors the
@@ -25,13 +27,13 @@ const (
 func registerStockPickerScanTools(mcpSrv *mcp.Server, s *server) {
 	countedAddTool(mcpSrv, &mcp.Tool{
 		Name:        "stock_picker_scan",
-		Description: autoDescOr("stock_picker_scan", "Scan persisted Phase-4 stock win-rate aggregates across symbols and return the best candidates (read-only; never recomputes). Data source: stockpicker backfill job output (stock_win_rate in the SQLite ledger configured via ATLAS_MCP_STOCKPICKER_DB). Input: optional condition_id, rolling_window, min_observations, min_win_rate, top_n (default 10), sort_by (wilson_lower default | win_rate), asof, direction. Candidates are filtered to observations >= min_observations, win_rate >= min_win_rate, calibration_status=eligible, then sorted and truncated to top_n. DIRECTION SEMANTICS: conditions are buy-side by default; condition price-volume-top-divergence (頂背離) is AVOID-semantics — a LOW forward win rate after trigger confirms the bearish signal, so for it pass direction=avoid to invert the filter (win_rate <= max_win_rate, default 0.5) and ordering (weakest forward performance first). Without direction=avoid the default buy filter hides exactly the rows where the avoid signal is strongest (k3 review F1). No stored data returns found=false with a clear message. Alternative: stock_get_win_rate for a single symbol."),
+		Description: autoDescOr("stock_picker_scan", "Scan persisted Phase-4 stock win-rate aggregates across symbols and return the best candidates (read-only; never recomputes). Data source: stockpicker backfill job output (stock_win_rate in the SQLite ledger configured via ATLAS_MCP_STOCKPICKER_DB). Input: optional condition_id, rolling_window, min_observations, min_win_rate, top_n (default 10), sort_by (wilson_lower default | win_rate), asof, direction. Candidates are filtered to observations >= min_observations, win_rate >= min_win_rate, calibration_status=eligible, then sorted and truncated to top_n. DEMOTED FAMILIES (2026-10-06): foreign-3d-net-buy and momentum-20d-positive lost their edge (5-day net-cost expectancy -0.517% / -0.987% after the 0.585% round-trip cost) and are excluded from ranking entirely — naming one in condition_id returns found=false with the reason, not candidates. Their persisted rows stay readable through stock_get_win_rate / stock_get_condition_winrate; only ranking is withheld. DIRECTION SEMANTICS: conditions are buy-side by default; condition price-volume-top-divergence (頂背離) is AVOID-semantics — a LOW forward win rate after trigger confirms the bearish signal, so for it pass direction=avoid to invert the filter (win_rate <= max_win_rate, default 0.5) and ordering (weakest forward performance first). Without direction=avoid the default buy filter hides exactly the rows where the avoid signal is strongest (k3 review F1). No stored data returns found=false with a clear message. Alternative: stock_get_win_rate for a single symbol."),
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: new(false)},
 	}, s.handleStockPickerScan)
 }
 
 type stockPickerScanInput struct {
-	ConditionID     string  `json:"condition_id,omitempty" jsonschema:"condition id, e.g. foreign-3d-net-buy or momentum-20d-positive; default: scan across every stockpicker condition"`
+	ConditionID     string  `json:"condition_id,omitempty" jsonschema:"condition id, e.g. price-volume-bottom-divergence; default: scan across every stockpicker condition except the demoted families (foreign-3d-net-buy, momentum-20d-positive), which are never ranked"`
 	RollingWindow   string  `json:"rolling_window,omitempty" jsonschema:"rolling window label, e.g. 120d; default 120d"`
 	MinObservations int     `json:"min_observations,omitempty" jsonschema:"minimum stored observations (sample size) for a candidate; default 20"`
 	MinWinRate      float64 `json:"min_win_rate,omitempty" jsonschema:"minimum win_rate (0..1) for a candidate; default 0.5"`
@@ -118,6 +120,19 @@ func (s *server) handleStockPickerScan(ctx context.Context, _ *mcp.CallToolReque
 		AsOf:       in.AsOf,
 		Direction:  direction,
 		Candidates: []stockPickerScanCandidate{},
+	}
+
+	// Demoted families (2026-10-06): foreign-3d-net-buy and
+	// momentum-20d-positive lose money after the 0.585% round-trip cost
+	// (5-day net-cost expectancy -0.517% / -0.987%, see
+	// internal/config/stockpicker_edge.go). This tool ranks candidates for a
+	// reader who acts on them, so a demoted family may not be ranked — not
+	// even when the caller names it explicitly. The stored rows stay readable
+	// through stock_get_win_rate / stock_get_condition_winrate: measurement is
+	// preserved, ranking is not.
+	if reason := config.DemotedStockpickerConditionReason(in.ConditionID); reason != "" {
+		out.Message = fmt.Sprintf("condition %q is demoted from candidate ranking (%s); its persisted win-rate rows remain readable via stock_get_win_rate or stock_get_condition_winrate", in.ConditionID, reason)
+		return nil, out, nil
 	}
 
 	err := s.withAudit(ctx, "stock_picker_scan", []string{"condition_id", "rolling_window", "min_observations", "min_win_rate", "top_n", "sort_by", "asof"}, func() error {
@@ -208,6 +223,17 @@ func scanWinRateRows(ctx context.Context, db *sql.DB, window, conditionID string
 		}
 		c.CalibrationStatus = status
 		c.ConditionID = strings.TrimPrefix(c.Source, stockWinRateSourcePrefix)
+		// Demoted families never rank (internal/config/stockpicker_edge.go):
+		// the exclusion lives here, in the one function every scan mode goes
+		// through, so neither the default cross-condition scan nor an explicit
+		// condition_id can surface them. It is a Go-side drop rather than a
+		// dynamic `source NOT IN (...)` fragment: a concatenated IN list trips
+		// gosec G202 (SQL string concatenation) and the constant list buys
+		// nothing that this filter does not, since the query returns the full
+		// result set for the caller to sort and truncate.
+		if config.IsDemotedStockpickerSource(c.Source) {
+			continue
+		}
 		out = append(out, c)
 	}
 	return out, rows.Err()
