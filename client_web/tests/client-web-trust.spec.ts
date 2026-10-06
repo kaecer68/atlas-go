@@ -66,7 +66,10 @@ test('home page renders without developer-facing strings', async ({ page }) => {
 
   // Core sections are rendered by home.js after the redesign
   // (home-event-calendar 已移至 retail_sentiment 頁，home 不再有)
-  await expect(page.locator('#home-predictions')).toBeAttached();
+  // Phase 0 (2026-10-06): the 5-day prediction card was withdrawn from the
+  // home page — the section must stay absent (re-adding it needs a gate
+  // report; see docs/specs/eventdriven-spec.md).
+  await expect(page.locator('#home-predictions')).toHaveCount(0);
   await expect(page.locator('#home-seven-force')).toBeAttached();
 });
 
