@@ -178,6 +178,75 @@ type SectorPredictionStatus struct {
 	Reason string `json:"reason,omitempty"`
 }
 
+// Advisory-status constants for PredictionAdvisoryStatus.
+//
+// Context (2026-10-06, edge-verification program Phase 0): the owner withdrew
+// the 5-day direction card from the retail home page and required the endpoint
+// to say out loud that its payload must not be used as a basis for advice. Two
+// measured mechanisms made the output non-discriminating in production
+// (day1-day5 identical direction/confidence/drivers):
+//
+//  1. mixed-direction calendar events add the same weight to BOTH sides, so
+//     their net contribution is exactly zero (predictor.go, mixed factor);
+//  2. while the capital-flow baseline is not eligible, its decay weight is
+//     discounted, capping day-1 at |baseline| <= 0.8 * 0.7 * 0.5 = 0.28 —
+//     below the +/-0.3 band, so the baseline alone can never set a direction.
+//
+// The endpoint itself stays (research/replay consumers read it); the evidence
+// is recorded in docs/specs/eventdriven-spec.md and the freeze list in
+// docs/operations/EDGE-PROGRAM-FREEZE.md.
+const (
+	// AdvisoryStatusWithdrawn is the only status shipped in this phase: the
+	// report is disclosed and withdrawn at the same time.
+	AdvisoryStatusWithdrawn = "withdrawn_constructive_abstention"
+
+	// AdvisoryReasonNoEdgeEvidence — no day in the 5-day window cleared the
+	// +/-0.3 net-weight band, i.e. the signal family produced no directional
+	// evidence at all.
+	AdvisoryReasonNoEdgeEvidence = "no_edge_evidence"
+	// AdvisoryReasonMixedEventCancellation — mixed-direction events were active
+	// inside the forecast window. They contribute w*0.3 to the bullish AND the
+	// bearish side, so their net contribution is exactly 0 while still
+	// inflating the driver list.
+	AdvisoryReasonMixedEventCancellation = "mixed_event_cancellation"
+	// AdvisoryReasonCalibrationDiscountBelowThreshold — the capital-flow
+	// baseline was not eligible, so its weight is discounted. The resulting
+	// ceiling (0.8 * day-1 weight 0.7 * discount 0.5 = 0.28) stays below the
+	// +/-0.3 band: while calibrating the baseline alone cannot set a direction.
+	AdvisoryReasonCalibrationDiscountBelowThreshold = "calibration_discount_below_threshold"
+
+	// AdvisoryMessage is the human-readable warning that consumers (web UI,
+	// MCP clients, agents) must render verbatim instead of presenting the
+	// predictions as a forecast.
+	AdvisoryMessage = "本報告未通過否證：5 日方向預測受構造性棄權影響（生產實測 day1-day5 同方向同信心同驅動），不得作為投資建議或任何決策依據。"
+	// AdvisoryEvidenceRef points at the spec section that records the measured
+	// mechanism.
+	AdvisoryEvidenceRef = "docs/specs/eventdriven-spec.md 十一、構造性棄權與建議下架"
+)
+
+// PredictionAdvisoryStatus makes the withdrawn state of the 5-day report
+// machine-readable, so no consumer has to infer it from the predictions. It
+// mirrors the SectorPredictionStatus pattern: the fact is derived per request
+// from the report and the live wiring, never hard-coded per deployment.
+type PredictionAdvisoryStatus struct {
+	// AdvisoryUsable is false for every report built in this phase. It is set
+	// unconditionally (not derived) because the decision is a governance one:
+	// the signal family has not passed G2/G3/G4', so no direction may be
+	// presented as advice even on a day that clears the band.
+	AdvisoryUsable bool `json:"advisory_usable"`
+	// Status is the machine-readable lifecycle state; currently always
+	// AdvisoryStatusWithdrawn.
+	Status string `json:"status"`
+	// AbstentionReasons lists, in sorted order, the mechanisms that were
+	// actually observed for this report. It is empty when a directional call
+	// cleared the band — the advisory withdrawal above still applies.
+	AbstentionReasons []string `json:"abstention_reasons"`
+	// Message is the consumer-facing warning (AdvisoryMessage).
+	Message string `json:"message"`
+	// EvidenceRef points at the spec section holding the measured evidence.
+	EvidenceRef string `json:"evidence_ref"`
+}
+
 // PredictionReport is the complete 5-day event-driven prediction.
 //
 // C06：etf_estimates 與 revenue_surprises 移除 omitempty，保證欄位總是出現
@@ -198,6 +267,12 @@ type PredictionReport struct {
 	// array (#1944 Batch 3, items I4/I5/I6).
 	SectorPredictionStatus *SectorPredictionStatus `json:"sector_prediction_status,omitempty"`
 	Summary                string                  `json:"summary"`
+
+	// AdvisoryStatus states in machine-readable form that this report must not
+	// be used as a basis for advice, and why it abstains from a directional
+	// call. Always populated by Predictor.Predict; nil only for reports built
+	// outside it (handler-constructed literals in tests).
+	AdvisoryStatus *PredictionAdvisoryStatus `json:"advisory_status,omitempty"`
 
 	// HistoricalHitRate is the realized directional hit rate over the
 	// recent window of completed (T+1-reconciled) predictions. nil when

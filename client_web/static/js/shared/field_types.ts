@@ -3190,6 +3190,14 @@ export interface PreciousMetalsParameters {
   comex_default_net_long: string;
 }
 
+export interface PredictionAdvisoryStatus {
+  advisory_usable: boolean;
+  status: string;
+  abstention_reasons: string[];
+  message: string;
+  evidence_ref: string;
+}
+
 export interface PredictionDistribution {
   inflow: number;
   outflow: number;
@@ -3206,6 +3214,7 @@ export interface PredictionReport {
   sector_predictions: SectorDayPrediction[];
   sector_prediction_status?: SectorPredictionStatus | null;
   summary: string;
+  advisory_status?: PredictionAdvisoryStatus | null;
   historical_hit_rate?: HistoricalHitRate | null;
 }
 

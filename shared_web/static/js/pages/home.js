@@ -1,10 +1,16 @@
 /**
  * Home page for retail investors.
  * Renders an editorial dashboard: market pulse, capital-flow radar,
- * predictions, and trust elements.
+ * and trust elements.
+ *
+ * The 5-day prediction card was removed in Phase 0 of the edge-verification
+ * program (2026-10-06): the endpoint's output is constructively abstaining
+ * (day1-day5 identical) and must not be presented as a forecast. The endpoint
+ * itself stays for research consumers and discloses the withdrawal in its
+ * payload (advisory_status) — see docs/specs/eventdriven-spec.md.
  */
 
-import { getJSON, silentGetJSON, getJSONWithTimeout, escapeHtml, renderMissingState } from '../shared/app-utils.js';
+import { getJSON, silentGetJSON, getJSONWithTimeout, escapeHtml } from '../shared/app-utils.js';
 import { metricCard } from '../components/metric-card.js';
 import { trustFooter } from '../components/trust-footer.js';
 
@@ -27,7 +33,6 @@ const DATA_SOURCES = ['TWSE', 'Fugle', 'Replay 資料'];
 
 const CHANNELS_BY_SECTION = {
   marketPulse: ['us_yahoo', 'us_spx', 'us_ndx', 'us_dji', 'sox_index', 'us_nvda', 'us_aapl', 'us_msft', 'tsm_adr', 'frankfurter_fx', 'twse_margin', 'taiex_index', 'tw_vol', 'export_statistics', 'twse_capital_flow'],
-  predictions: ['twse_capital_flow', 'geopolitical', 'tsmc_revenue'],
   sevenForce: ['twse_capital_flow', 'frankfurter_fx', 'us_yahoo', 'tsm_adr'],
 };
 
@@ -40,7 +45,6 @@ function renderDataBadges() {
     el.innerHTML = dataQualityBadge(_homeChannelMap, channelIds);
   };
   set('market-pulse-data-badge', CHANNELS_BY_SECTION.marketPulse);
-  set('predictions-data-badge', CHANNELS_BY_SECTION.predictions);
   set('seven-force-data-badge', CHANNELS_BY_SECTION.sevenForce);
 }
 
@@ -91,21 +95,6 @@ export async function renderHomePage(container) {
       <span class="sr-only" id="market-pulse-status" aria-live="polite" aria-atomic="true"></span>
     </section>
 
-    <section class="home-section" id="home-predictions">
-      <div class="home-section__header">
-        <h2>未來 5 日錢潮預測</h2>
-        <span class="home-section__subtitle">事件驅動的資金流向預測</span>
-        <span class="home-section__data-badge" id="predictions-data-badge"></span>
-      </div>
-      <div id="home-predictions-content" class="home-predictions__content">
-        <div class="home-loading-card">載入中…</div>
-      </div>
-      <button class="disclosure-toggle" id="predictions-toggle" type="button" aria-expanded="false" aria-controls="home-predictions-content" aria-label="展開未來 5 日錢潮預測">
-        <span class="disclosure-toggle__label">展開錢潮預測</span>
-        <span class="disclosure-toggle__icon disclosure-toggle__icon--down" aria-hidden="true"></span>
-      </button>
-    </section>
-
     <section class="home-section" id="home-seven-force">
       <div class="home-section__header">
         <h2>七維錢潮雷達（3+2+2 分層）</h2>
@@ -124,8 +113,6 @@ export async function renderHomePage(container) {
     </section>
   `;
 
-  bindPredictionsDisclosure();
-
   await loadHomeData();
   homeLoaded = true;
   initOnboarding();
@@ -142,7 +129,6 @@ async function loadHomeData() {
     if (isMockMode()) {
       const m = mockData();
       renderMarketPulse(m.macro, m.stress, null);
-      renderPredictionsCard(m.narrative);
       renderSevenForceBoard(document.getElementById('home-seven-force-content'), m.portfolio);
       renderSevenForceInterpretations(document.getElementById('home-seven-force-interpretations'), m.portfolio);
 
@@ -151,13 +137,15 @@ async function loadHomeData() {
     }
 
     try {
-      const [health, macro, stress, pipeline, bundle, predictionData, capitalFlowSummary] = await Promise.all([
+      // NOTE: /api/events/prediction is deliberately NOT fetched here. The
+      // 5-day direction card was withdrawn in Phase 0 of the edge-verification
+      // program (2026-10-06) — see docs/specs/eventdriven-spec.md.
+      const [health, macro, stress, pipeline, bundle, capitalFlowSummary] = await Promise.all([
         getJSONWithTimeout('/api/dashboard/system-health', 5000),
         getJSONWithTimeout('/api/macro/snapshot/latest', 5000),
         getJSONWithTimeout('/api/taiwan/stress-index', 5000),
         getJSONWithTimeout('/api/dashboard/recommendation-pipeline', 5000),
         getJSONWithTimeout('/api/narrative/bundle', 5000),
-        getJSONWithTimeout('/api/events/prediction', 5000),
         getJSONWithTimeout('/api/capital-flow/summary', 5000),
       ]);
 
@@ -189,7 +177,6 @@ async function loadHomeData() {
       renderDataBadges();
 
       renderMarketPulse(macro, stress);
-      renderPredictionsCard(predictionData);
       renderSevenForceBoard(document.getElementById('home-seven-force-content'), capitalFlowSummary);
       renderSevenForceInterpretations(document.getElementById('home-seven-force-interpretations'), capitalFlowSummary);
 
@@ -197,7 +184,6 @@ async function loadHomeData() {
     } catch (err) {
       console.warn('[home] failed to load dashboard data:', err);
       renderMarketPulse(null, null);
-      renderPredictionsCard(null);
       renderSevenForceBoard(document.getElementById('home-seven-force-content'), null);
       renderSevenForceInterpretations(document.getElementById('home-seven-force-interpretations'), null);
     }
@@ -211,123 +197,6 @@ async function loadHomeData() {
     renderTrustFooter();
   }
 }
-
-function predictionDirectionLabel(dir) {
-  if (dir === 'inflow') return '資金流入';
-  if (dir === 'outflow') return '資金流出';
-  return '中性觀望';
-}
-
-function predictionDirectionClass(dir) {
-  if (dir === 'inflow') return 'positive';
-  if (dir === 'outflow') return 'negative';
-  return 'neutral';
-}
-
-function fmtPredictionDate(d) {
-  if (!d) return '—';
-  const date = new Date(d);
-  if (Number.isNaN(date.getTime())) return '—';
-  return `${date.getMonth() + 1}/${date.getDate()}`;
-}
-
-/**
- * 渲染單一預測列的「方向機率分佈」3-bar stack + 3 個 label。
- * 對應 C03 修復後新增的 inflow / neutral / outflow 三段進度條。
- *
- * @param {{inflow?: number, neutral?: number, outflow?: number}|null|undefined} distribution
- * @returns {string} 內含 pred-row__dist + pred-row__dist-label 兩個區塊的 HTML 字串
- */
-export function renderDistributionSegments(distribution) {
-  const dist = distribution && typeof distribution === 'object' ? distribution : {};
-  const inflow = typeof dist.inflow === 'number' && dist.inflow >= 0 ? dist.inflow : 0;
-  const neutral = typeof dist.neutral === 'number' && dist.neutral >= 0 ? dist.neutral : 0;
-  const outflow = typeof dist.outflow === 'number' && dist.outflow >= 0 ? dist.outflow : 0;
-  const inflowPct = Math.round(inflow * 100);
-  const neutralPct = Math.round(neutral * 100);
-  const outflowPct = Math.round(outflow * 100);
-  return `
-        <div class="pred-row__dist" aria-hidden="true">
-          <div class="pred-row__dist-segment pred-row__dist-segment--inflow" style="width:${inflowPct}%"></div>
-          <div class="pred-row__dist-segment pred-row__dist-segment--neutral" style="width:${neutralPct}%"></div>
-          <div class="pred-row__dist-segment pred-row__dist-segment--outflow" style="width:${outflowPct}%"></div>
-        </div>
-        <div class="pred-row__dist-label">
-          <span>流入 ${inflowPct}%</span>
-          <span>觀望 ${neutralPct}%</span>
-          <span>流出 ${outflowPct}%</span>
-        </div>`;
-}
-
-function renderPredictionsCard(data) {
-  const container = document.getElementById('home-predictions-content');
-  if (!container) return;
-
-  const predictions = data && Array.isArray(data.predictions) ? data.predictions : [];
-  if (!predictions.length) {
-    container.innerHTML = renderMissingState('未來 5 日錢潮預測', 'no-data');
-    return;
-  }
-
-  const rows = predictions.slice(0, 5).map((p, idx) => {
-    const conf = typeof p.confidence === 'number' ? p.confidence : 0;
-    const dir = p.direction || 'neutral';
-    const width = Math.round(Math.min(1, Math.max(0, conf)) * 100);
-    const drivers = Array.isArray(p.driving_events) ? p.driving_events : [];
-    const driverText = drivers.length ? drivers.slice(0, 2).map(e => escapeHtml(e)).join('、') : '無顯著事件';
-    const dist = p.distribution && typeof p.distribution === 'object' ? p.distribution : {};
-    return `
-      <div class="pred-row" data-index="${idx}">
-        <div class="pred-row__meta">
-          <span class="pred-row__date">${escapeHtml(fmtPredictionDate(p.date))}</span>
-          <span class="pred-row__dir ${predictionDirectionClass(dir)}">${escapeHtml(predictionDirectionLabel(dir))}</span>
-          <span class="pred-row__conf">${width}%</span>
-        </div>
-        <div class="pred-row__bar" aria-hidden="true">
-          <div class="pred-row__bar-fill pred-row__bar-fill--${dir}" style="width:${width}%"></div>
-        </div>
-        ${renderDistributionSegments(dist)}
-        <div class="pred-row__drivers">${driverText}</div>
-      </div>
-    `;
-  }).join('');
-
-  // 誠實聲明 (product positioning §9): 預測是機率性陳述, 呈現時附歷史命中率
-  // 而非確定承諾。樣本不足時顯示「校準中」, 不顯示誤導的百分比。
-  const hitRateBadge = renderHitRateBadge(data && data.historical_hit_rate);
-
-  container.innerHTML = `<div class="pred-card">${hitRateBadge}${rows}</div>`;
-}
-
-/**
- * 渲染歷史命中率徽章。輸入為 /api/events/prediction 的 historical_hit_rate
- * 欄位 (可能為 null):
- *   - null / undefined → 無 store (不顯示, 保持舊 UI)
- *   - calibrated=true   → 「近 N 筆預測命中率 X% (H/T)」
- *   - calibrated=false  → 「校準中 (樣本 S/30)」 — 對齊 §6 校準語意
- *
- * 注意: window_records 是「讀取的預測筆數」 (1 筆/交易日 ≈ 60 交易日),
- * 不是日曆天數 — 標籤必須用「近 N 筆」而非「過去 N 天」, 避免誇大評估
- * 期間 (F4, §9 誠實聲明)。
- */
-function renderHitRateBadge(hhr) {
-  if (!hhr || typeof hhr !== 'object') return '';
-  const samples = typeof hhr.samples === 'number' ? hhr.samples : 0;
-  const hits = typeof hhr.hits === 'number' ? hhr.hits : 0;
-  if (samples === 0) {
-    return `<div class="pred-hitrate pred-hitrate--calibrating" role="status">校準中（樣本 0/${escapeHtml(String(MinHitSamples || 30))}）</div>`;
-  }
-  const pct = typeof hhr.hit_rate === 'number' ? Math.round(hhr.hit_rate * 100) : 0;
-  if (hhr.calibrated === true) {
-    const winRec = typeof hhr.window_records === 'number' ? hhr.window_records : 60;
-    return `<div class="pred-hitrate pred-hitrate--calibrated" role="status">近 ${escapeHtml(String(winRec))} 筆預測命中率 ${escapeHtml(String(pct))}%（${escapeHtml(String(hits))}/${escapeHtml(String(samples))}）</div>`;
-  }
-  return `<div class="pred-hitrate pred-hitrate--calibrating" role="status">校準中（樣本 ${escapeHtml(String(samples))}/30）</div>`;
-}
-
-// MinHitSamples mirrors the backend calibration gate (internal/eventdriven
-// MinHitSamples=30). Kept in sync manually; backend is authoritative.
-const MinHitSamples = 30;
 
 function isValidMacroPoint(v) {
   return v && typeof v === 'object' && v.symbol;
@@ -502,42 +371,6 @@ function bindMarketPulseDisclosure(advancedCardsHTML) {
   });
 }
 
-let _predictionsDisclosureBound = false;
-
-function bindPredictionsDisclosure() {
-  if (_predictionsDisclosureBound) return;
-  const btn = document.getElementById('predictions-toggle');
-  const content = document.getElementById('home-predictions-content');
-  if (!btn || !content) return;
-  _predictionsDisclosureBound = true;
-
-  content.setAttribute('data-disclosure-state', 'expanded');
-
-  const updateButton = (state) => {
-    btn.setAttribute('aria-expanded', state === 'expanded' ? 'true' : 'false');
-    const labelEl = btn.querySelector('.disclosure-toggle__label');
-    const iconEl = btn.querySelector('.disclosure-toggle__icon');
-    if (state === 'expanded') {
-      if (labelEl) labelEl.textContent = '收合錢潮預測';
-      if (iconEl) { iconEl.classList.remove('disclosure-toggle__icon--down'); iconEl.classList.add('disclosure-toggle__icon--up'); }
-      btn.setAttribute('aria-label', '收合未來 5 日錢潮預測');
-    } else {
-      if (labelEl) labelEl.textContent = '展開錢潮預測';
-      if (iconEl) { iconEl.classList.remove('disclosure-toggle__icon--up'); iconEl.classList.add('disclosure-toggle__icon--down'); }
-      btn.setAttribute('aria-label', '展開未來 5 日錢潮預測');
-    }
-  };
-
-  updateButton('expanded');
-
-  btn.addEventListener('click', () => {
-    const current = content.getAttribute('data-disclosure-state') || 'collapsed';
-    const next = current === 'expanded' ? 'collapsed' : 'expanded';
-    content.setAttribute('data-disclosure-state', next);
-    updateButton(next);
-  });
-}
-
 function explainFromEvent(e) {
   if (e.description && typeof e.description === 'string' && e.description.trim()) {
     return truncate(e.description.trim(), 50);
@@ -605,11 +438,6 @@ function mockData() {
       ],
     },
     stress: { score: 28.5, regime: 'risk_on' },
-    narrative: [
-      { theme: '除權息旺季', sentiment: 0.6, confidence: 0.7, severity: 'medium' },
-      { theme: '台指期結算', sentiment: 0.3, confidence: 0.8, severity: 'low' },
-      { theme: '台積電法說會', sentiment: 0.7, confidence: 0.85, severity: 'high' },
-    ],
     portfolio: { totalValue: 3028000, cumulativePnL: 0.032, cumulativePnLAmount: 96000, monthlyPnL: 0.015, sharpeRatio: 1.8, maxDrawdown: -0.021, winRate: 0.62 },
   };
 }
