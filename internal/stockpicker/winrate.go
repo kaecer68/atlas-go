@@ -3,6 +3,7 @@ package stockpicker
 import (
 	"fmt"
 	"math"
+	"slices"
 	"sort"
 	"strings"
 )
@@ -81,6 +82,68 @@ func WilsonScoreInterval(hits, observations int, confidence float64) (lower, upp
 	center := (p + z2/(2*n)) / denom
 	margin := z * math.Sqrt(p*(1-p)/n+z2/(4*n*n)) / denom
 	return math.Max(0, center-margin), math.Min(1, center+margin)
+}
+
+// ShrunkRate beta-binomial 經驗貝氏收縮勝率。
+//
+// (hits + priorHits) / (observations + priorHits + priorMisses)，其中
+// priorHits/priorMisses 為母體先驗（全條件 pooled 或同層 pooled 的命中/未命中
+// 計數）。小樣本向先驗收縮，大樣本貼近原始勝率；排序時小樣本高勝率不再
+// 淹沒大樣本實證（Phase 1 命中率校準）。
+//
+// 僅供排名/顯示用，不改變 SignalWinRate 既有聚合口徑（單一真相來源）。
+// 無效輸入（hits < 0、observations <= 0、hits > observations）回傳 0；
+// 先驗為 0 時退化為 WinRate；負先驗視為 0。
+func ShrunkRate(hits, observations int, priorHits, priorMisses float64) float64 {
+	if observations <= 0 || hits < 0 || hits > observations {
+		return 0
+	}
+	priorHits = max(priorHits, 0)
+	priorMisses = max(priorMisses, 0)
+	return (float64(hits) + priorHits) / (float64(observations) + priorHits + priorMisses)
+}
+
+// BreakEvenCostRate 損益兩平來回成本率 = forwardReturns 的中位數。
+//
+// hit 口徑 NetHit(forward, cost) = forward - cost > 0，故成本 c 处的勝率
+// win_rate(c) >= 0.5 若且唯若 c 低於中位數 —— 中位數即該條件可承受的
+// 最大來回成本上界。低於實際費率（台股約 0.00585）者無 edge，應標 degraded
+// 或排除（2026-10-06 降級事件即此判據的實例）。
+//
+// 空切片回傳 0；輸入切片不被改動；偶數 n 取中間兩值之均值。
+func BreakEvenCostRate(forwardReturns []float64) float64 {
+	if len(forwardReturns) == 0 {
+		return 0
+	}
+	sorted := slices.Sorted(slices.Values(forwardReturns))
+	n := len(sorted)
+	if n%2 == 1 {
+		return sorted[n/2]
+	}
+	return (sorted[n/2-1] + sorted[n/2]) / 2
+}
+
+// RegimeFilteredWinRate 同一切片先按 regime 過濾，再走 SignalWinRate 口徑。
+//
+// 空 Regime 視為 UnknownRegime（family_expectancy.go 同口徑，永不回填推測）。
+// 供未來 regime-conditional gate 使用：gate 應讀「當前 regime 下 eligible」
+// 而非 pooled eligible。過濾後為空時回傳 0 observations、calibrating，無 error
+// （與 SignalWinRate 空輸入一致）。
+func RegimeFilteredWinRate(outcomes []SignalOutcome, regime string, costRate float64, minSamples int, confidence float64) (SignalWinRateSummary, error) {
+	if regime == "" {
+		regime = UnknownRegime
+	}
+	var filtered []SignalOutcome
+	for _, o := range outcomes {
+		r := o.Regime
+		if r == "" {
+			r = UnknownRegime
+		}
+		if r == regime {
+			filtered = append(filtered, o)
+		}
+	}
+	return SignalWinRate(filtered, costRate, minSamples, confidence)
 }
 
 // CalibrationStatusFor 依觀察數判定校準狀態：observations < minSamples 為 calibrating。

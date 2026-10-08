@@ -175,7 +175,7 @@
 | Tool | 用途 |
 |------|------|
 | `stock_get_win_rate` | Phase 4 個股勝率聚合（read-only；從 stockpicker SQLite ledger 讀取，不重新計算；無資料回 found=false） |
-| `stock_picker_scan` | Phase 4 多 symbol 勝率掃描（read-only；過濾 observations/win_rate/calibration，wilson_lower 或 win_rate 排序，top_n 截斷） |
+| `stock_picker_scan` | Phase 4 多 symbol 勝率掃描（read-only；過濾 observations/win_rate/calibration，wilson_lower、win_rate 或 shrunk_rate 排序，top_n 截斷） |
 | `stock_get_quote` | 個股即時報價（最新價、漲跌、成交量） |
 | `stock_get_fundamentals` | 個股基本面（PE、PB、PS、殖利率、sector 等） |
 | `stock_get_chips` | 個股籌碼面（法人/外資/投信買賣超，可選日期） |
