@@ -347,6 +347,20 @@ func RunDailyUpdate(ctx context.Context, opts RunDailyOptions) (RunDailyResult, 
 			}
 		}
 	}
+	// Regime strata (Phase 1 regime-conditional gate): same outcomes,
+	// grouped by (symbol, source, regime) into stock_win_rate_by_regime,
+	// with the same PG dual-write mirror as the pooled summaries above.
+	regimeSummaries, err := AggregateRegimeFromStore(ctx, outStore, winStore, aggregationWindow, costRate, minSamples, confidenceLevel, opts.AsOf)
+	if err != nil {
+		return res, fmt.Errorf("aggregate by regime: %w", err)
+	}
+	if pgOutcomesDB != nil {
+		for _, summary := range regimeSummaries {
+			if err := SaveRegimeWinRate(ctx, pgOutcomesDB, summary); err != nil {
+				return res, fmt.Errorf("save regime win rate (postgres) %s/%s/%s: %w", summary.Symbol, summary.Source, summary.Regime, err)
+			}
+		}
+	}
 	statePath := filepath.Join(opts.WorkDir, "data", "state", "stock_win_rate.json")
 	if err := WriteStateJSON(statePath, summaries, opts.AsOf); err != nil {
 		return res, fmt.Errorf("write state json: %w", err)
@@ -364,6 +378,7 @@ func RunDailyUpdate(ctx context.Context, opts RunDailyOptions) (RunDailyResult, 
 		"backend", backend,
 		"outcomes", len(outcomes),
 		"keys", len(summaries),
+		"regime_keys", len(regimeSummaries),
 		"eligible", res.Eligible,
 		"state", statePath)
 	return res, nil

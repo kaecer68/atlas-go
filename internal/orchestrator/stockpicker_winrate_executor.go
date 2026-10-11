@@ -113,6 +113,14 @@ type WinRateStoreReader interface {
 	LoadWinRate(ctx context.Context, symbol, source, window string) (stockpicker.StockWinRateSummary, bool, error)
 }
 
+// RegimeWinRateReader is the optional regime-stratum read for the Stage 2b
+// gate (Phase 1 regime-conditional calibration). *stockpicker.WinRateStore
+// satisfies it. Stores that do not implement it (e.g. test mocks) keep the
+// pooled-only path — backward compatible by construction.
+type RegimeWinRateReader interface {
+	LoadRegimeWinRate(ctx context.Context, symbol, source, window, regime string) (stockpicker.RegimeWinRateSummary, bool, error)
+}
+
 // FlowSource supplies the latest per-symbol foreign net flow for the flow
 // gateway. The symbol argument is the bare TWSE code (exchange suffix
 // stripped); the value is FlowPoint.ForeignNet units (千股) and date is the
@@ -319,6 +327,55 @@ func (e StockpickerWinrateExecutor) Recommend(agent domain.AgentSpec, quote doma
 			logging.Symbol(quote.Symbol), "stage", "wilson_lower",
 			"wilson_lower", summary.WilsonLower, "min", minWL)
 		return domain.Recommendation{}, false
+	}
+
+	// Stage 2b: regime-stratum gate (Phase 1 regime-conditional calibration).
+	// The pooled gates above prove the condition is measurable; the stratum
+	// proves edge IN THE CURRENT REGIME (RISK_ON-trained parameters failing
+	// in RISK_OFF is the exact failure this blocks).
+	//
+	// Missing stratum (or a store without stratum reads) fails OPEN with a
+	// logged skip — the pooled gates still decide. Rationale: the strata
+	// table starts empty on deploy day; failing closed on "no evidence yet"
+	// would silence every stockpicker recommendation until the first regime
+	// aggregation runs (precedent: the #1737 market-report fail-open
+	// fallback). A PRESENT but weak stratum fails CLOSED below.
+	if regimeReader, ok := store.(RegimeWinRateReader); ok {
+		stratum, found, err := regimeReader.LoadRegimeWinRate(ctx, symbol, src, e.window(), string(regime))
+		if err != nil || !found {
+			logging.Debug("stockpicker_winrate", "skip",
+				logging.Symbol(quote.Symbol), "stage", "regime_stratum_missing",
+				"regime", string(regime), "found", found, "err", err)
+		} else {
+			if stratum.CalibrationStatus != stockpicker.CalibrationEligible {
+				logging.Debug("stockpicker_winrate", "skip",
+					logging.Symbol(quote.Symbol), "stage", "regime_stratum",
+					"regime", string(regime),
+					"status", string(stratum.CalibrationStatus))
+				return domain.Recommendation{}, false
+			}
+			if stratum.Observations < minObs {
+				logging.Debug("stockpicker_winrate", "skip",
+					logging.Symbol(quote.Symbol), "stage", "regime_stratum_observations",
+					"regime", string(regime),
+					"observations", stratum.Observations, "min", minObs)
+				return domain.Recommendation{}, false
+			}
+			if stratum.WinRate < minWR {
+				logging.Debug("stockpicker_winrate", "skip",
+					logging.Symbol(quote.Symbol), "stage", "regime_stratum",
+					"regime", string(regime),
+					"win_rate", stratum.WinRate, "min", minWR)
+				return domain.Recommendation{}, false
+			}
+			if stratum.WilsonLower < minWL {
+				logging.Debug("stockpicker_winrate", "skip",
+					logging.Symbol(quote.Symbol), "stage", "regime_stratum",
+					"regime", string(regime),
+					"wilson_lower", stratum.WilsonLower, "min", minWL)
+				return domain.Recommendation{}, false
+			}
+		}
 	}
 
 	// Stage 3: capital-flow gateway — fail closed when the per-symbol

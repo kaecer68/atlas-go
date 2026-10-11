@@ -165,6 +165,35 @@ func TestRunDailyUpdate_WritesOutcomes(t *testing.T) {
 	}
 }
 
+// TestRunDailyUpdate_WritesRegimeStrata: the same run also aggregates
+// per-regime strata into stock_win_rate_by_regime (Phase 1 gate's read
+// path). Synth regimes are empty, so every outcome lands in "unknown"
+// (never imputed) — the assertion is structural, not semantic.
+func TestRunDailyUpdate_WritesRegimeStrata(t *testing.T) {
+	wd, res, err := runUpdate(t, RunDailyOptions{})
+	if err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	if res.Skipped {
+		t.Fatal("first run must not skip")
+	}
+	db := openTestOutcomeDB(t, wd)
+	var n int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM stock_win_rate_by_regime`).Scan(&n); err != nil {
+		t.Fatalf("count regime strata: %v", err)
+	}
+	if n == 0 {
+		t.Fatal("expected regime strata rows in stock_win_rate_by_regime")
+	}
+	var regimes int
+	if err := db.QueryRow(`SELECT COUNT(DISTINCT regime) FROM stock_win_rate_by_regime`).Scan(&regimes); err != nil {
+		t.Fatalf("distinct regimes: %v", err)
+	}
+	if regimes == 0 {
+		t.Fatal("expected at least one regime label")
+	}
+}
+
 // TestRunDailyUpdate_RangeIdempotency: IdempotencyRange skips when outcomes
 // already exist anywhere in [Start, End] (the CLI same-range rerun guard).
 func TestRunDailyUpdate_RangeIdempotency(t *testing.T) {
