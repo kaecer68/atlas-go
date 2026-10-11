@@ -164,7 +164,7 @@ fi
 if ! bash scripts/ci/check_frontend_dist.sh --diff origin/main...HEAD 2>&1; then
   echo ""
   echo "❌ pre-push: frontend dist 過期/缺失 (見上方輸出)."
-  echo "   修復: 在對應前端目錄跑 npm ci && npm run build, 再重新 push."
+  echo "   修復: make build-frontend（rebuild client_web + admin_web 的 dist）, 再重新 push."
   echo "   Bypass with: git push --no-verify"
   echo ""
   exit 1
