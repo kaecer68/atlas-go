@@ -46,6 +46,9 @@ type SignalWinRateSummary struct {
 	CalibrationStatus CalibrationStatus
 	NetCostRate       float64
 	AvgForwardReturn  float64
+	// BreakEvenCostRate 是 forward 中位數：勝率跌破 5 成的成本上界
+	//（Phase 4 輸出欄位，僅供排名透明度，不做 gate）。
+	BreakEvenCostRate float64
 }
 
 // WinRate 樣本勝率 = hits / observations。
@@ -179,6 +182,7 @@ func SignalWinRate(outcomes []SignalOutcome, costRate float64, minSamples int, c
 	symbol := outcomes[0].Symbol
 	source := outcomes[0].Source
 	var totalReturn float64
+	forwards := make([]float64, 0, len(outcomes))
 	for _, o := range outcomes {
 		if o.Symbol != symbol {
 			return SignalWinRateSummary{}, fmt.Errorf("stockpicker: mixed symbols in SignalWinRate: %q and %q", symbol, o.Symbol)
@@ -190,6 +194,7 @@ func SignalWinRate(outcomes []SignalOutcome, costRate float64, minSamples int, c
 			summary.Hits++
 		}
 		totalReturn += o.ForwardReturn
+		forwards = append(forwards, o.ForwardReturn)
 	}
 
 	n := len(outcomes)
@@ -202,6 +207,7 @@ func SignalWinRate(outcomes []SignalOutcome, costRate float64, minSamples int, c
 	summary.CalibrationStatus = CalibrationStatusFor(n, minSamples)
 	summary.NetCostRate = costRate
 	summary.AvgForwardReturn = totalReturn / float64(n)
+	summary.BreakEvenCostRate = BreakEvenCostRate(forwards)
 	return summary, nil
 }
 
@@ -229,6 +235,8 @@ type ConditionWinRateSummary struct {
 	CalibrationStatus string  `json:"calibration_status"`
 	NetCostRate       float64 `json:"net_cost_rate"`
 	AvgForwardReturn  float64 `json:"avg_forward_return"`
+	// BreakEvenCostRate 是 forward 中位數（Phase 4 輸出欄位，僅供透明度）。
+	BreakEvenCostRate float64 `json:"break_even_cost_rate"`
 	DataStart         string  `json:"data_start"` // earliest trigger_date
 	DataEnd           string  `json:"data_end"`   // latest trigger_date
 	// Regime echoes the regime filter the aggregate was computed under
@@ -258,6 +266,7 @@ func ConditionWinRate(source string, outcomes []SignalOutcome, costRate float64,
 
 	symbols := make(map[string]bool)
 	var totalReturn float64
+	forwards := make([]float64, 0, len(outcomes))
 	for _, o := range outcomes {
 		if o.Source != source {
 			continue
@@ -268,6 +277,7 @@ func ConditionWinRate(source string, outcomes []SignalOutcome, costRate float64,
 			summary.Hits++
 		}
 		totalReturn += o.ForwardReturn
+		forwards = append(forwards, o.ForwardReturn)
 		if summary.DataStart == "" || o.TriggerDate < summary.DataStart {
 			summary.DataStart = o.TriggerDate
 		}
@@ -284,6 +294,7 @@ func ConditionWinRate(source string, outcomes []SignalOutcome, costRate float64,
 	summary.WilsonLower, summary.WilsonUpper = WilsonScoreInterval(summary.Hits, summary.Observations, confidence)
 	summary.CalibrationStatus = string(CalibrationStatusFor(summary.Observations, minSamples))
 	summary.AvgForwardReturn = totalReturn / float64(summary.Observations)
+	summary.BreakEvenCostRate = BreakEvenCostRate(forwards)
 	return summary
 }
 

@@ -28,11 +28,13 @@ func aggregateWinRate(outcomes []SignalOutcome, costRate float64, minSamples int
 	}
 
 	var totalReturn float64
+	forwards := make([]float64, 0, len(outcomes))
 	for _, o := range outcomes {
 		if NetHit(o.ForwardReturn, costRate) {
 			summary.Hits++
 		}
 		totalReturn += o.ForwardReturn
+		forwards = append(forwards, o.ForwardReturn)
 	}
 
 	n := len(outcomes)
@@ -43,6 +45,7 @@ func aggregateWinRate(outcomes []SignalOutcome, costRate float64, minSamples int
 	summary.CalibrationStatus = CalibrationStatusFor(n, minSamples)
 	summary.NetCostRate = costRate
 	summary.AvgForwardReturn = totalReturn / float64(n)
+	summary.BreakEvenCostRate = BreakEvenCostRate(forwards)
 	return summary
 }
 

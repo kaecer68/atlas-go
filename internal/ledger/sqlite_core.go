@@ -257,6 +257,7 @@ func InitSchema(db *sql.DB) error {
 		calibration_status TEXT NOT NULL,
 		net_cost_rate REAL,
 		avg_forward_return REAL,
+		break_even_cost_rate REAL,
 		updated_at TEXT NOT NULL,
 		UNIQUE(symbol, source, rolling_window)
 	);
@@ -278,6 +279,7 @@ func InitSchema(db *sql.DB) error {
 		calibration_status TEXT NOT NULL,
 		net_cost_rate REAL,
 		avg_forward_return REAL,
+		break_even_cost_rate REAL,
 		updated_at TEXT NOT NULL,
 		UNIQUE(symbol, source, rolling_window, regime)
 	);

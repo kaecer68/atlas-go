@@ -404,3 +404,31 @@ func TestRegimeFilteredWinRate_Empty(t *testing.T) {
 		t.Fatalf("empty input = %+v, want 0 obs calibrating", s)
 	}
 }
+
+// TestSignalWinRate_BreakEven 摘要帶損益兩平成本（forward 中位數）。
+func TestSignalWinRate_BreakEven(t *testing.T) {
+	outcomes := []SignalOutcome{
+		{Symbol: "2330", TriggerDate: "2026-08-01", ForwardReturn: 0.01, Source: "stockpicker-x"},
+		{Symbol: "2330", TriggerDate: "2026-08-02", ForwardReturn: 0.03, Source: "stockpicker-x"},
+		{Symbol: "2330", TriggerDate: "2026-08-03", ForwardReturn: 0.02, Source: "stockpicker-x"},
+	}
+	s, err := SignalWinRate(outcomes, 0.00585, 1, 0.95)
+	if err != nil {
+		t.Fatalf("SignalWinRate: %v", err)
+	}
+	if s.BreakEvenCostRate != 0.02 {
+		t.Fatalf("BreakEvenCostRate = %v, want 0.02 (median)", s.BreakEvenCostRate)
+	}
+}
+
+// TestConditionWinRate_BreakEven 條件摘要同帶損益兩平成本。
+func TestConditionWinRate_BreakEven(t *testing.T) {
+	outcomes := []SignalOutcome{
+		{Symbol: "2330", TriggerDate: "2026-08-01", ForwardReturn: 0.04, Source: "stockpicker-x"},
+		{Symbol: "2317", TriggerDate: "2026-08-02", ForwardReturn: 0.01, Source: "stockpicker-x"},
+	}
+	s := ConditionWinRate("stockpicker-x", outcomes, 0.00585, 1, 0.95)
+	if s.BreakEvenCostRate != 0.025 {
+		t.Fatalf("BreakEvenCostRate = %v, want 0.025 (median)", s.BreakEvenCostRate)
+	}
+}

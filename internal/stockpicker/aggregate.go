@@ -56,6 +56,7 @@ func GroupAndSummarize(outcomes []SignalOutcome, window string, costRate float64
 			CalibrationStatus: agg.CalibrationStatus,
 			NetCostRate:       agg.NetCostRate,
 			AvgForwardReturn:  agg.AvgForwardReturn,
+			BreakEvenCostRate: agg.BreakEvenCostRate,
 		})
 	}
 	return summaries
