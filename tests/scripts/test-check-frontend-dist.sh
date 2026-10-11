@@ -12,6 +12,10 @@
 #   4. --diff with only Go files → skip (exit 0)
 #   5. --diff with frontend file + stale dist → exit 1; rebuilt → exit 0
 #   6. --diff with only shared_web change → checks both frontends (exit 1 if stale)
+#   7. go:generate outputs (cmd/gentags) newer than dist → still exit 0
+#   8. dist holding only embed-dirs' `.keep` placeholder → exit 1 (never built)
+#   9. files outside the esbuild source trees (tests/, smoke/) → not stale
+#  10. stale failure names the offending source file + the newest dist file
 set -euo pipefail
 
 # git hooks (pre-push/pre-commit) export GIT_DIR, and any throwaway fixture repo
@@ -164,6 +168,54 @@ scenario7_generated_files_ignored() {
   echo "  ✓ scenario7: go-generated shared files ignored by freshness check"
 }
 
+scenario8_placeholder_only_dist_fails() {
+  # `make embed-dirs` (Makefile) creates <dir>/dist/.keep in a fresh worktree so
+  # `//go:embed all:dist` finds a directory. That placeholder is NOT a build:
+  # a dist holding only `.keep` must fail exactly like a missing dist, otherwise
+  # a fresh worktree would report "dist 最新" with no UI embedded.
+  local tmp; tmp=$(new_fixture); trap 'rm -rf "$tmp"' RETURN
+  make_frontend "$tmp" admin_web missing
+  touch -t 203001010000 "$tmp/admin_web/dist/.keep"
+  local rc=0
+  bash "$tmp/scripts/ci/check_frontend_dist.sh" admin_web >/dev/null 2>&1 || rc=$?
+  if [ "$rc" -ne 1 ]; then fail "scenario8: placeholder-only dist should exit 1, got $rc"; fi
+  echo "  ✓ scenario8: dist holding only embed-dirs .keep fails (exit=1)"
+}
+
+scenario9_non_build_inputs_ignored() {
+  # Only the trees esbuild reads count (<dir>/static + shared_web/static). Editing
+  # <dir>/tests or <dir>/smoke must NOT report dist as stale — the previous
+  # whole-directory scan did, which made every frontend test-only push rebuild.
+  local tmp; tmp=$(new_fixture); trap 'rm -rf "$tmp"' RETURN
+  make_frontend "$tmp" admin_web fresh
+  mkdir -p "$tmp/admin_web/tests" "$tmp/admin_web/smoke"
+  echo '// test' >"$tmp/admin_web/tests/dashboard.spec.ts"
+  echo '// smoke' >"$tmp/admin_web/smoke/run.mjs"
+  touch -t 203601010000 "$tmp/admin_web/tests/dashboard.spec.ts" "$tmp/admin_web/smoke/run.mjs"
+  local rc=0
+  bash "$tmp/scripts/ci/check_frontend_dist.sh" admin_web >/dev/null 2>&1 || rc=$?
+  if [ "$rc" -ne 0 ]; then fail "scenario9: non-build-input files must not fail dist check, got $rc"; fi
+  echo "  ✓ scenario9: files outside the esbuild source trees do not count as stale"
+}
+
+scenario10_stale_report_names_the_file() {
+  # The failure must name the offending source file (the operator should not have
+  # to guess which file outran dist), including shared_web files.
+  local tmp; tmp=$(new_fixture); trap 'rm -rf "$tmp"' RETURN
+  make_frontend "$tmp" admin_web fresh
+  mkdir -p "$tmp/shared_web/static/js"
+  echo '// shared' >"$tmp/shared_web/static/js/shared-new.js"
+  touch -t 203601010000 "$tmp/shared_web/static/js/shared-new.js"
+  local out rc=0
+  out=$(bash "$tmp/scripts/ci/check_frontend_dist.sh" admin_web 2>&1) || rc=$?
+  [ "$rc" -eq 1 ] || fail "scenario10: shared_web source newer than dist should exit 1, got $rc"
+  printf '%s\n' "$out" | grep -q "shared_web/static/js/shared-new.js" || \
+    fail "scenario10: failure must name the stale source file, got: $out"
+  printf '%s\n' "$out" | grep -q "admin_web/dist/js/main.js" || \
+    fail "scenario10: failure must name the newest dist file, got: $out"
+  echo "  ✓ scenario10: failure names the source file and the dist file"
+}
+
 echo "=== test-check-frontend-dist.sh ==="
 scenario1_fresh_passes
 scenario2_stale_fails
@@ -172,4 +224,7 @@ scenario4_pure_go_diff_skips
 scenario5_frontend_diff_checks
 scenario6_shared_web_change_checks_both
 scenario7_generated_files_ignored
-echo "✅ test-check-frontend-dist.sh PASSED (7/7)"
+scenario8_placeholder_only_dist_fails
+scenario9_non_build_inputs_ignored
+scenario10_stale_report_names_the_file
+echo "✅ test-check-frontend-dist.sh PASSED (10/10)"
