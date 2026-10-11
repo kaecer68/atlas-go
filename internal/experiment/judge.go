@@ -478,6 +478,12 @@ func (j *Judge) passesAcceptance(result domain.PromptExperimentResult, promptByt
 		}
 	}
 
+	// Deflated Sharpe gate (Phase 2 selection-bias correction). Additive:
+	// every skip fails open with a logged skip (see deflatedSharpeGate).
+	if reject, reason := j.deflatedSharpeGate(result); reject {
+		return false, reason
+	}
+
 	requiredChecks := j.requiredCheckCountForProfile(result.Brief.MaturityLevel, result.Experiment.MutationType)
 
 	if j.useAcceptancePipeline {

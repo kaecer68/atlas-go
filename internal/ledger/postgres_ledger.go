@@ -836,6 +836,32 @@ func (s *PostgresLedgerStore) UpdatePromptExperimentResult(experimentID string, 
 	return nil
 }
 
+// LoadTrialSharpes 讀回所有含 EvalMetrics 的歷史 trial Sharpe（newest first）。
+// 與 SQLiteStore.LoadTrialSharpes 同口徑：無 EvalMetrics 的舊 blob 跳過。
+func (s *PostgresLedgerStore) LoadTrialSharpes() ([]TrialSharpe, error) {
+	ctx := context.Background()
+	rows, err := s.pool.Query(ctx, `SELECT data_json FROM prompt_experiment_results ORDER BY id DESC`)
+	if err != nil {
+		return nil, fmt.Errorf("query trial sharpes: %w", err)
+	}
+	defer rows.Close()
+
+	var out []TrialSharpe
+	for rows.Next() {
+		var data string
+		if err := rows.Scan(&data); err != nil {
+			return nil, fmt.Errorf("scan trial sharpe: %w", err)
+		}
+		if ts, ok := trialSharpeFromResult(data); ok {
+			out = append(out, ts)
+		}
+	}
+	if rows.Err() != nil {
+		return nil, fmt.Errorf("trial sharpe rows: %w", rows.Err())
+	}
+	return out, nil
+}
+
 // ------------------------------------------------------------------
 // Backtest store surface
 // ------------------------------------------------------------------
