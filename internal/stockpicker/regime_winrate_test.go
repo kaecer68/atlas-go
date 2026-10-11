@@ -110,3 +110,34 @@ func TestAggregateRegimeFromStore_Writes(t *testing.T) {
 		t.Errorf("persisted RISK_ON stratum wrong: found=%v err=%v %+v", found, err, back)
 	}
 }
+
+// TestRegimeWinRate_BreakEvenPersisted break-even 欄位寫入並可讀回。
+func TestRegimeWinRate_BreakEvenPersisted(t *testing.T) {
+	db, err := ledger.OpenSQLiteDB(":memory:")
+	if err != nil {
+		t.Fatalf("open sqlite: %v", err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+	if err := ledger.InitSchema(db); err != nil {
+		t.Fatalf("init schema: %v", err)
+	}
+	ctx := context.Background()
+	winStore := NewWinRateStore(db)
+	summary := RegimeWinRateSummary{
+		Symbol: "2330", Source: "stockpicker-x", Window: "120d", Regime: "RISK_ON",
+		Observations: 3, Hits: 2, WinRate: 2.0 / 3.0,
+		WilsonLower: 0.15, WilsonUpper: 0.90, Confidence: 0.95,
+		CalibrationStatus: CalibrationEligible, NetCostRate: 0.00585,
+		AvgForwardReturn: 0.01, BreakEvenCostRate: 0.02, UpdatedAt: "2026-10-11T00:00:00Z",
+	}
+	if err := winStore.SaveRegimeWinRate(ctx, summary); err != nil {
+		t.Fatalf("save: %v", err)
+	}
+	back, found, err := winStore.LoadRegimeWinRate(ctx, "2330", "stockpicker-x", "120d", "RISK_ON")
+	if err != nil || !found {
+		t.Fatalf("load: found=%v err=%v", found, err)
+	}
+	if back.BreakEvenCostRate != 0.02 {
+		t.Errorf("BreakEvenCostRate = %v, want 0.02", back.BreakEvenCostRate)
+	}
+}

@@ -26,7 +26,9 @@ type RegimeWinRateSummary struct {
 	CalibrationStatus CalibrationStatus `json:"calibration_status"`
 	NetCostRate       float64           `json:"net_cost_rate"`
 	AvgForwardReturn  float64           `json:"avg_forward_return"`
-	UpdatedAt         string            `json:"updated_at"` // ISO-8601
+	// BreakEvenCostRate 是 forward 中位數（Phase 4 輸出欄位）。
+	BreakEvenCostRate float64 `json:"break_even_cost_rate"`
+	UpdatedAt         string  `json:"updated_at"` // ISO-8601
 }
 
 // normalizeOutcomeRegime 將 outcome 的 regime 標籤正規化：空白/空 → UnknownRegime。
@@ -72,6 +74,7 @@ func GroupAndSummarizeByRegime(outcomes []SignalOutcome, window string, costRate
 			CalibrationStatus: agg.CalibrationStatus,
 			NetCostRate:       agg.NetCostRate,
 			AvgForwardReturn:  agg.AvgForwardReturn,
+			BreakEvenCostRate: agg.BreakEvenCostRate,
 		})
 	}
 	return summaries
@@ -136,8 +139,8 @@ func SaveRegimeWinRate(ctx context.Context, db *sql.DB, summary RegimeWinRateSum
 	_, err := db.ExecContext(ctx, `
 		INSERT INTO stock_win_rate_by_regime
 			(symbol, source, rolling_window, regime, observations, hits, win_rate, wilson_lower, wilson_upper,
-			 confidence, calibration_status, net_cost_rate, avg_forward_return, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+			 confidence, calibration_status, net_cost_rate, avg_forward_return, break_even_cost_rate, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
 		ON CONFLICT(symbol, source, rolling_window, regime) DO UPDATE SET
 			observations = excluded.observations,
 			hits = excluded.hits,
@@ -148,6 +151,7 @@ func SaveRegimeWinRate(ctx context.Context, db *sql.DB, summary RegimeWinRateSum
 			calibration_status = excluded.calibration_status,
 			net_cost_rate = excluded.net_cost_rate,
 			avg_forward_return = excluded.avg_forward_return,
+			break_even_cost_rate = excluded.break_even_cost_rate,
 			updated_at = excluded.updated_at`,
 		summary.Symbol,
 		summary.Source,
@@ -162,6 +166,7 @@ func SaveRegimeWinRate(ctx context.Context, db *sql.DB, summary RegimeWinRateSum
 		string(summary.CalibrationStatus),
 		summary.NetCostRate,
 		summary.AvgForwardReturn,
+		summary.BreakEvenCostRate,
 		updatedAt,
 	)
 	if err != nil {
@@ -179,7 +184,7 @@ func LoadRegimeWinRate(ctx context.Context, db *sql.DB, symbol, source, window, 
 
 	err := db.QueryRowContext(ctx, `
 		SELECT symbol, source, rolling_window, regime, observations, hits, win_rate, wilson_lower, wilson_upper,
-		       confidence, calibration_status, net_cost_rate, avg_forward_return, updated_at
+		       confidence, calibration_status, net_cost_rate, avg_forward_return, break_even_cost_rate, updated_at
 		FROM stock_win_rate_by_regime
 		WHERE symbol = $1 AND source = $2 AND rolling_window = $3 AND regime = $4`,
 		symbol, source, window, regime,
@@ -197,6 +202,7 @@ func LoadRegimeWinRate(ctx context.Context, db *sql.DB, symbol, source, window, 
 		&status,
 		&summary.NetCostRate,
 		&summary.AvgForwardReturn,
+		&summary.BreakEvenCostRate,
 		&summary.UpdatedAt,
 	)
 	if err == sql.ErrNoRows {

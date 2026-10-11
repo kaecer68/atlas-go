@@ -25,7 +25,9 @@ type StockWinRateSummary struct {
 	CalibrationStatus CalibrationStatus `json:"calibration_status"`
 	NetCostRate       float64           `json:"net_cost_rate"`
 	AvgForwardReturn  float64           `json:"avg_forward_return"`
-	UpdatedAt         string            `json:"updated_at"` // ISO-8601
+	// BreakEvenCostRate 是 forward 中位數（Phase 4 輸出欄位）。
+	BreakEvenCostRate float64 `json:"break_even_cost_rate"`
+	UpdatedAt         string  `json:"updated_at"` // ISO-8601
 }
 
 // WinRateStore is a thin SQLite-backed wrapper around stock_win_rate.
@@ -73,8 +75,8 @@ func SaveWinRate(ctx context.Context, db *sql.DB, summary StockWinRateSummary) e
 	_, err := db.ExecContext(ctx, `
 		INSERT INTO stock_win_rate
 			(symbol, source, rolling_window, observations, hits, win_rate, wilson_lower, wilson_upper,
-			 confidence, calibration_status, net_cost_rate, avg_forward_return, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+			 confidence, calibration_status, net_cost_rate, avg_forward_return, break_even_cost_rate, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
 		ON CONFLICT(symbol, source, rolling_window) DO UPDATE SET
 			observations = excluded.observations,
 			hits = excluded.hits,
@@ -85,6 +87,7 @@ func SaveWinRate(ctx context.Context, db *sql.DB, summary StockWinRateSummary) e
 			calibration_status = excluded.calibration_status,
 			net_cost_rate = excluded.net_cost_rate,
 			avg_forward_return = excluded.avg_forward_return,
+			break_even_cost_rate = excluded.break_even_cost_rate,
 			updated_at = excluded.updated_at`,
 		summary.Symbol,
 		summary.Source,
@@ -98,6 +101,7 @@ func SaveWinRate(ctx context.Context, db *sql.DB, summary StockWinRateSummary) e
 		string(summary.CalibrationStatus),
 		summary.NetCostRate,
 		summary.AvgForwardReturn,
+		summary.BreakEvenCostRate,
 		updatedAt,
 	)
 	if err != nil {
@@ -115,7 +119,7 @@ func LoadWinRate(ctx context.Context, db *sql.DB, symbol, source, window string)
 
 	err := db.QueryRowContext(ctx, `
 		SELECT symbol, source, rolling_window, observations, hits, win_rate, wilson_lower, wilson_upper,
-		       confidence, calibration_status, net_cost_rate, avg_forward_return, updated_at
+		       confidence, calibration_status, net_cost_rate, avg_forward_return, break_even_cost_rate, updated_at
 		FROM stock_win_rate
 		WHERE symbol = $1 AND source = $2 AND rolling_window = $3`,
 		symbol, source, window,
@@ -132,6 +136,7 @@ func LoadWinRate(ctx context.Context, db *sql.DB, symbol, source, window string)
 		&status,
 		&summary.NetCostRate,
 		&summary.AvgForwardReturn,
+		&summary.BreakEvenCostRate,
 		&summary.UpdatedAt,
 	)
 	if err == sql.ErrNoRows {

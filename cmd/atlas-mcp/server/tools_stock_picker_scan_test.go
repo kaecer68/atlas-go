@@ -382,3 +382,31 @@ func TestHandleStockPickerScan_ShrunkRateSort(t *testing.T) {
 		t.Fatalf("small-sample perfect record must shrink down: shrunk=%v raw=%v", second.ShrunkRate, second.WinRate)
 	}
 }
+
+// TestHandleStockPickerScan_BreakEvenSurfaced 持久列的 break-even 透出到 candidate。
+func TestHandleStockPickerScan_BreakEvenSurfaced(t *testing.T) {
+	s, db := stockWinRateHarness(t)
+	ctx := context.Background()
+	winStore := stockpicker.NewWinRateStore(db)
+	summary := stockpicker.StockWinRateSummary{
+		Symbol: "2330", Source: retainedScanSource, Window: "120d",
+		Observations: 40, Hits: 26, WinRate: 0.65,
+		WilsonLower: 0.50, WilsonUpper: 0.78, Confidence: 0.95,
+		CalibrationStatus: stockpicker.CalibrationEligible, NetCostRate: 0.00585,
+		AvgForwardReturn: 0.015, BreakEvenCostRate: 0.012, UpdatedAt: "2026-10-11T00:00:00Z",
+	}
+	if err := winStore.SaveWinRate(ctx, summary); err != nil {
+		t.Fatalf("save: %v", err)
+	}
+	out, err := callStockPickerScan(s, stockPickerScanInput{ConditionID: retainedScanCond, MinObservations: 3})
+	if err != nil {
+		t.Fatalf("handler: %v", err)
+	}
+	if !out.Found || len(out.Candidates) == 0 {
+		t.Fatalf("found=%v candidates=%d, want true/≥1", out.Found, len(out.Candidates))
+	}
+	got := out.Candidates[0].BreakEvenCostRate
+	if got != 0.012 {
+		t.Fatalf("BreakEvenCostRate = %v, want 0.012: %+v", got, out.Candidates[0])
+	}
+}

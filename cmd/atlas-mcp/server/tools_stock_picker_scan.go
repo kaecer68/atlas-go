@@ -70,6 +70,9 @@ type stockPickerScanCandidate struct {
 	CalibrationStatus string  `json:"calibration_status"`
 	NetCostRate       float64 `json:"net_cost_rate"`
 	AvgForwardReturn  float64 `json:"avg_forward_return"`
+	// BreakEvenCostRate 是 forward 中位數（可承受最大來回成本上界）。
+	// 舊列（000028 遷移前聚合）為 0，不得解讀為無 edge。
+	BreakEvenCostRate float64 `json:"break_even_cost_rate"`
 	UpdatedAt         string  `json:"updated_at"`
 }
 
@@ -196,7 +199,7 @@ func (s *server) handleStockPickerScan(ctx context.Context, _ *mcp.CallToolReque
 func scanWinRateRows(ctx context.Context, db *sql.DB, window, conditionID string, minObs int, minWinRate float64, sortCol, direction string) ([]stockPickerScanCandidate, error) {
 	query := `SELECT symbol, source, rolling_window, observations, hits, win_rate,
 		wilson_lower, wilson_upper, confidence, calibration_status,
-		net_cost_rate, avg_forward_return, updated_at
+		net_cost_rate, avg_forward_return, break_even_cost_rate, updated_at
 	FROM stock_win_rate
 	WHERE rolling_window = ? AND source LIKE 'stockpicker-%'
 	  AND observations >= ? AND win_rate >= ?
@@ -239,7 +242,7 @@ func scanWinRateRows(ctx context.Context, db *sql.DB, window, conditionID string
 		if err := rows.Scan(
 			&c.Symbol, &c.Source, &c.RollingWindow, &c.Observations, &c.Hits, &c.WinRate,
 			&c.WilsonLower, &c.WilsonUpper, &c.Confidence, &status,
-			&c.NetCostRate, &c.AvgForwardReturn, &c.UpdatedAt,
+			&c.NetCostRate, &c.AvgForwardReturn, &c.BreakEvenCostRate, &c.UpdatedAt,
 		); err != nil {
 			return nil, err
 		}
