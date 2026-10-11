@@ -101,8 +101,14 @@ func TestDSRVerdict_RejectsLuckWhenHistoryVariesWildly(t *testing.T) {
 	if trials != 31 {
 		t.Fatalf("trials = %d, want 31 (30 history + current)", trials)
 	}
-	if !(dsr < 0.05) {
-		t.Fatalf("wild-history DSR = %v, want ≈0 (reject)", dsr)
+	// 口徑更正後（2026-10-11）：SR 與 V 皆年化，須先換算為逐期才符公式。
+	// 同一組資料在舊（錯）口徑下 DSR=0.0000，更正後為 0.2537 —— 但**判定不變**：
+	// 門檻 0.95 之下兩者皆為「拒絕」，故此處同時釘住數值與決策。
+	if !(dsr < DeflatedSharpeThreshold) {
+		t.Fatalf("wild-history DSR = %v, want < %.2f (reject)", dsr, DeflatedSharpeThreshold)
+	}
+	if math.Abs(dsr-0.2537) > 2e-3 {
+		t.Fatalf("wild-history DSR = %v, want ~0.2537 (per-period caliber)", dsr)
 	}
 
 	dsr, trials = dsrVerdict(returns, []float64{1.0, 1.2})
