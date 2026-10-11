@@ -286,3 +286,121 @@ func TestConditionWinRate_Empty(t *testing.T) {
 		t.Errorf("empty input must be zero calibrating summary, got %+v", s)
 	}
 }
+
+// TestShrunkRate_ShrinksSmallSamples 小樣本高勝率向母體先驗收縮，大樣本貼近原始勝率。
+func TestShrunkRate_ShrinksSmallSamples(t *testing.T) {
+	const priorHits, priorMisses = 50.0, 50.0 // 母體先驗勝率 0.5
+
+	small := ShrunkRate(4, 5, priorHits, priorMisses) // 原始 0.8
+	if want := 54.0 / 105.0; math.Abs(small-want) > 1e-9 {
+		t.Fatalf("ShrunkRate(4, 5, 50, 50) = %v, want %v", small, want)
+	}
+	if small >= 0.8 {
+		t.Fatalf("small-sample rate must shrink toward prior, got %v (raw 0.8)", small)
+	}
+
+	large := ShrunkRate(600, 1000, priorHits, priorMisses) // 原始 0.6
+	if want := 650.0 / 1100.0; math.Abs(large-want) > 1e-9 {
+		t.Fatalf("ShrunkRate(600, 1000, 50, 50) = %v, want %v", large, want)
+	}
+
+	// 排序意義：10 戰 9 勝的收縮值應低於 1000 戰 550 勝（小樣本證據不足）。
+	tiny := ShrunkRate(9, 10, priorHits, priorMisses)
+	big := ShrunkRate(550, 1000, priorHits, priorMisses)
+	if tiny >= big {
+		t.Fatalf("shrunk tiny-sample 0.9 (%v) must rank below large-sample 0.55 (%v)", tiny, big)
+	}
+}
+
+// TestShrunkRate_Boundary 零先驗退化為 WinRate；無效輸入回傳 0。
+func TestShrunkRate_Boundary(t *testing.T) {
+	if got := ShrunkRate(7, 10, 0, 0); got != WinRate(7, 10) {
+		t.Fatalf("zero prior must degenerate to WinRate: got %v, want %v", got, WinRate(7, 10))
+	}
+	for _, tc := range [][2]int{{-1, 10}, {11, 10}, {5, 0}, {5, -1}} {
+		if got := ShrunkRate(tc[0], tc[1], 50, 50); got != 0 {
+			t.Fatalf("ShrunkRate(%d, %d, 50, 50) = %v, want 0 (invalid input)", tc[0], tc[1], got)
+		}
+	}
+	if got := ShrunkRate(5, 10, -1, -1); got != WinRate(5, 10) {
+		t.Fatalf("negative prior must be treated as zero: got %v, want %v", got, WinRate(5, 10))
+	}
+}
+
+// TestBreakEvenCostRate_Median 損益兩平成本 = forward return 中位數。
+func TestBreakEvenCostRate_Median(t *testing.T) {
+	if got := BreakEvenCostRate([]float64{0.01, 0.03, 0.02}); got != 0.02 {
+		t.Fatalf("BreakEvenCostRate(odd) = %v, want 0.02 (median)", got)
+	}
+	if got := BreakEvenCostRate([]float64{0.04, 0.01, 0.03, 0.02}); got != 0.025 {
+		t.Fatalf("BreakEvenCostRate(even) = %v, want 0.025 (mean of middles)", got)
+	}
+	if got := BreakEvenCostRate(nil); got != 0 {
+		t.Fatalf("BreakEvenCostRate(nil) = %v, want 0", got)
+	}
+}
+
+// TestBreakEvenCostRate_Semantics 高於中位數的成本使勝率跌破 5 成；不改動輸入。
+func TestBreakEvenCostRate_Semantics(t *testing.T) {
+	returns := []float64{0.03, -0.02, 0.01}
+	be := BreakEvenCostRate(returns)
+	if be != 0.01 {
+		t.Fatalf("BreakEvenCostRate = %v, want 0.01", be)
+	}
+	if returns[0] != 0.03 || returns[1] != -0.02 || returns[2] != 0.01 {
+		t.Fatalf("BreakEvenCostRate must not mutate input: %v", returns)
+	}
+	hitAbove := 0
+	for _, r := range returns {
+		if NetHit(r, be+1e-9) {
+			hitAbove++
+		}
+	}
+	if float64(hitAbove)/float64(len(returns)) >= 0.5 {
+		t.Fatalf("cost above break-even must push win rate below 0.5, got %d/3 hits", hitAbove)
+	}
+}
+
+// TestRegimeFilteredWinRate_Stratum 同一切片按 regime 過濾後口徑與 SignalWinRate 一致。
+func TestRegimeFilteredWinRate_Stratum(t *testing.T) {
+	outcomes := []SignalOutcome{
+		{Symbol: "2330", TriggerDate: "2026-08-01", ForwardReturn: 0.03, Source: "stockpicker-x", Regime: "RISK_ON"},
+		{Symbol: "2330", TriggerDate: "2026-08-02", ForwardReturn: 0.02, Source: "stockpicker-x", Regime: "RISK_ON"},
+		{Symbol: "2330", TriggerDate: "2026-08-03", ForwardReturn: -0.01, Source: "stockpicker-x", Regime: "RISK_ON"},
+		{Symbol: "2330", TriggerDate: "2026-08-04", ForwardReturn: 0.05, Source: "stockpicker-x", Regime: "RISK_OFF"},
+		{Symbol: "2330", TriggerDate: "2026-08-05", ForwardReturn: 0.04, Source: "stockpicker-x"},
+	}
+	on, err := RegimeFilteredWinRate(outcomes, "RISK_ON", 0.00585, 30, 0.95)
+	if err != nil {
+		t.Fatalf("RegimeFilteredWinRate RISK_ON err: %v", err)
+	}
+	if on.Observations != 3 || on.Hits != 2 {
+		t.Fatalf("RISK_ON stratum = %+v, want obs=3 hits=2", on)
+	}
+	off, err := RegimeFilteredWinRate(outcomes, "RISK_OFF", 0.00585, 30, 0.95)
+	if err != nil {
+		t.Fatalf("RegimeFilteredWinRate RISK_OFF err: %v", err)
+	}
+	if off.Observations != 1 || off.Hits != 1 {
+		t.Fatalf("RISK_OFF stratum = %+v, want obs=1 hits=1", off)
+	}
+	// 空 regime 參數對應未標記列（UnknownRegime，永不回填）。
+	unknown, err := RegimeFilteredWinRate(outcomes, "", 0.00585, 30, 0.95)
+	if err != nil {
+		t.Fatalf("RegimeFilteredWinRate unknown err: %v", err)
+	}
+	if unknown.Observations != 1 || unknown.CalibrationStatus != CalibrationCalibrating {
+		t.Fatalf("unknown stratum = %+v, want obs=1 calibrating", unknown)
+	}
+}
+
+// TestRegimeFilteredWinRate_Empty 空輸入回傳 0 observations 且無 error。
+func TestRegimeFilteredWinRate_Empty(t *testing.T) {
+	s, err := RegimeFilteredWinRate(nil, "RISK_ON", 0.00585, 30, 0.95)
+	if err != nil {
+		t.Fatalf("empty input must not error, got %v", err)
+	}
+	if s.Observations != 0 || s.CalibrationStatus != CalibrationCalibrating {
+		t.Fatalf("empty input = %+v, want 0 obs calibrating", s)
+	}
+}

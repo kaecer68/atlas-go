@@ -1,14 +1,17 @@
 package server
 
 import (
+	"cmp"
 	"context"
 	"database/sql"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/kaecer68/atlas-go/internal/config"
+	"github.com/kaecer68/atlas-go/internal/stockpicker"
 )
 
 // Defaults for stock_picker_scan. The min_observations default mirrors the
@@ -19,6 +22,10 @@ const (
 	defaultScanMinWinRate      = 0.5
 	defaultScanTopN            = 10
 	maxScanTopN                = 200
+	// defaultScanShrinkStrength 是 sort_by=shrunk_rate 的先驗強度：母體先驗
+	// 權重等同 30 筆滿門檻樣本（calibration min_samples = 30）。觀察數 30
+	// 以下者排序主要由條件母體均值決定，滿 30 後實證逐漸主導。
+	defaultScanShrinkStrength = 30
 )
 
 // registerStockPickerScanTools registers the read-only multi-symbol win-rate
@@ -27,7 +34,7 @@ const (
 func registerStockPickerScanTools(mcpSrv *mcp.Server, s *server) {
 	countedAddTool(mcpSrv, &mcp.Tool{
 		Name:        "stock_picker_scan",
-		Description: autoDescOr("stock_picker_scan", "Scan persisted Phase-4 stock win-rate aggregates across symbols and return the best candidates (read-only; never recomputes). Data source: stockpicker backfill job output (stock_win_rate in the SQLite ledger configured via ATLAS_MCP_STOCKPICKER_DB). Input: optional condition_id, rolling_window, min_observations, min_win_rate, top_n (default 10), sort_by (wilson_lower default | win_rate), asof, direction. Candidates are filtered to observations >= min_observations, win_rate >= min_win_rate, calibration_status=eligible, then sorted and truncated to top_n. DEMOTED FAMILIES (2026-10-06): foreign-3d-net-buy and momentum-20d-positive lost their edge (5-day net-cost expectancy -0.517% / -0.987% after the 0.585% round-trip cost) and are excluded from ranking entirely — naming one in condition_id returns found=false with the reason, not candidates. Their persisted rows stay readable through stock_get_win_rate / stock_get_condition_winrate; only ranking is withheld. DIRECTION SEMANTICS: conditions are buy-side by default; condition price-volume-top-divergence (頂背離) is AVOID-semantics — a LOW forward win rate after trigger confirms the bearish signal, so for it pass direction=avoid to invert the filter (win_rate <= max_win_rate, default 0.5) and ordering (weakest forward performance first). Without direction=avoid the default buy filter hides exactly the rows where the avoid signal is strongest (k3 review F1). No stored data returns found=false with a clear message. Alternative: stock_get_win_rate for a single symbol."),
+		Description: autoDescOr("stock_picker_scan", "Scan persisted Phase-4 stock win-rate aggregates across symbols and return the best candidates (read-only; never recomputes). Data source: stockpicker backfill job output (stock_win_rate in the SQLite ledger configured via ATLAS_MCP_STOCKPICKER_DB). Input: optional condition_id, rolling_window, min_observations, min_win_rate, top_n (default 10), sort_by (wilson_lower default | win_rate | shrunk_rate), asof, direction. Candidates are filtered to observations >= min_observations, win_rate >= min_win_rate, calibration_status=eligible, then sorted and truncated to top_n. DEMOTED FAMILIES (2026-10-06): foreign-3d-net-buy and momentum-20d-positive lost their edge (5-day net-cost expectancy -0.517% / -0.987% after the 0.585% round-trip cost) and are excluded from ranking entirely — naming one in condition_id returns found=false with the reason, not candidates. Their persisted rows stay readable through stock_get_win_rate / stock_get_condition_winrate; only ranking is withheld. DIRECTION SEMANTICS: conditions are buy-side by default; condition price-volume-top-divergence (頂背離) is AVOID-semantics — a LOW forward win rate after trigger confirms the bearish signal, so for it pass direction=avoid to invert the filter (win_rate <= max_win_rate, default 0.5) and ordering (weakest forward performance first). Without direction=avoid the default buy filter hides exactly the rows where the avoid signal is strongest (k3 review F1). No stored data returns found=false with a clear message. Alternative: stock_get_win_rate for a single symbol."),
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: new(false)},
 	}, s.handleStockPickerScan)
 }
@@ -38,7 +45,7 @@ type stockPickerScanInput struct {
 	MinObservations int     `json:"min_observations,omitempty" jsonschema:"minimum stored observations (sample size) for a candidate; default 20"`
 	MinWinRate      float64 `json:"min_win_rate,omitempty" jsonschema:"minimum win_rate (0..1) for a candidate; default 0.5"`
 	TopN            int     `json:"top_n,omitempty" jsonschema:"maximum number of candidates to return; default 10, capped at 200"`
-	SortBy          string  `json:"sort_by,omitempty" jsonschema:"sort key: wilson_lower (default, sample-size weighted) or win_rate"`
+	SortBy          string  `json:"sort_by,omitempty" jsonschema:"sort key: wilson_lower (default, sample-size weighted), win_rate, or shrunk_rate (empirical-Bayes shrinkage toward the condition pooled rate)"`
 	AsOf            string  `json:"asof,omitempty" jsonschema:"as-of date YYYY-MM-DD (informational; stored aggregates are returned as-is, never recomputed)"`
 	Direction       string  `json:"direction,omitempty" jsonschema:"buy (default) or avoid; use avoid for avoid-semantics conditions such as price-volume-top-divergence — inverts the win-rate filter to win_rate <= min_win_rate and orders weakest forward performance first"`
 }
@@ -46,15 +53,19 @@ type stockPickerScanInput struct {
 // stockPickerScanCandidate is one persisted (symbol, source, window) summary
 // that passed the scan filters.
 type stockPickerScanCandidate struct {
-	Symbol            string  `json:"symbol"`
-	ConditionID       string  `json:"condition_id"`
-	Source            string  `json:"source"`
-	RollingWindow     string  `json:"rolling_window"`
-	Observations      int     `json:"observations"`
-	Hits              int     `json:"hits"`
-	WinRate           float64 `json:"win_rate"`
-	WilsonLower       float64 `json:"wilson_lower"`
-	WilsonUpper       float64 `json:"wilson_upper"`
+	Symbol        string  `json:"symbol"`
+	ConditionID   string  `json:"condition_id"`
+	Source        string  `json:"source"`
+	RollingWindow string  `json:"rolling_window"`
+	Observations  int     `json:"observations"`
+	Hits          int     `json:"hits"`
+	WinRate       float64 `json:"win_rate"`
+	WilsonLower   float64 `json:"wilson_lower"`
+	WilsonUpper   float64 `json:"wilson_upper"`
+	// ShrunkRate 是 stockpicker.ShrunkRate 收縮勝率（條件母體先驗，
+	// 強度 defaultScanShrinkStrength）。小樣本高勝率不再淹沒大樣本實證；
+	// 僅供排名/顯示，不改變 persisted 聚合。
+	ShrunkRate        float64 `json:"shrunk_rate"`
 	Confidence        float64 `json:"confidence"`
 	CalibrationStatus string  `json:"calibration_status"`
 	NetCostRate       float64 `json:"net_cost_rate"`
@@ -95,12 +106,16 @@ func (s *server) handleStockPickerScan(ctx context.Context, _ *mcp.CallToolReque
 		topN = maxScanTopN
 	}
 	sortCol := "wilson_lower"
+	sortByShrunk := false
 	switch in.SortBy {
 	case "", "wilson_lower":
 	case "win_rate":
 		sortCol = "win_rate"
+	case "shrunk_rate":
+		// 收縮值非持久欄位：SQL 仍按 wilson_lower 取全量，Go 側重排（見下）。
+		sortByShrunk = true
 	default:
-		return nil, stockPickerScanOutput{}, fmt.Errorf("stock_picker_scan: sort_by %q must be wilson_lower or win_rate", in.SortBy)
+		return nil, stockPickerScanOutput{}, fmt.Errorf("stock_picker_scan: sort_by %q must be wilson_lower, win_rate, or shrunk_rate", in.SortBy)
 	}
 
 	// direction (k3 review F1): avoid-semantics conditions (頂背離) are
@@ -149,6 +164,13 @@ func (s *server) handleStockPickerScan(ctx context.Context, _ *mcp.CallToolReque
 		if len(rows) == 0 {
 			out.Message = scanNoDataMessage(window, in.ConditionID, minObs, minWinRate)
 			return nil
+		}
+		if sortByShrunk {
+			priorHits, priorObs, err := scanPooledPrior(ctx, db, window, in.ConditionID)
+			if err != nil {
+				return fmt.Errorf("stock_picker_scan: query pooled prior: %w", err)
+			}
+			applyShrunkRank(rows, priorHits, priorObs, direction)
 		}
 
 		out.Found = true
@@ -237,6 +259,65 @@ func scanWinRateRows(ctx context.Context, db *sql.DB, window, conditionID string
 		out = append(out, c)
 	}
 	return out, rows.Err()
+}
+
+// scanPooledPrior 回傳先驗池的 (hits, observations)：同 window 下同條件
+// （conditionID 為空則跨條件）所有 eligible、非降級 rows 的合計，含被
+// min_observations / min_win_rate 濾掉的列 —— 先驗母體是「可比單位全體」
+// 而非過濾後的倖存者，否則犯選擇偏差。GROUP BY 後 Go 側排除降級家族
+// （與 scanWinRateRows 同模式，避免動態 SQL 拼接）。
+func scanPooledPrior(ctx context.Context, db *sql.DB, window, conditionID string) (hits, obs int, err error) {
+	query := `SELECT source, SUM(hits), SUM(observations) FROM stock_win_rate
+	WHERE rolling_window = ? AND source LIKE 'stockpicker-%'
+	  AND calibration_status = 'eligible'`
+	args := []any{window}
+	if conditionID != "" {
+		query += ` AND source = ?`
+		args = append(args, stockWinRateSourcePrefix+conditionID)
+	}
+	query += ` GROUP BY source`
+	rows, err := db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return 0, 0, err
+	}
+	defer func() { _ = rows.Close() }()
+	for rows.Next() {
+		var src string
+		var h, o int
+		if err := rows.Scan(&src, &h, &o); err != nil {
+			return 0, 0, err
+		}
+		if config.IsDemotedStockpickerSource(src) {
+			continue
+		}
+		hits += h
+		obs += o
+	}
+	return hits, obs, rows.Err()
+}
+
+// applyShrunkRank 逐列填入 ShrunkRate 並 Go 側重排：buy 按收縮值 DESC，
+// avoid 按 ASC（頂背離由低勝率確認，方向語義與 SQL 路徑一致）。
+// 先驗均值 = 先驗池命中率，強度 defaultScanShrinkStrength。
+func applyShrunkRank(rows []stockPickerScanCandidate, priorHits, priorObs int, direction string) {
+	var priorH, priorM float64
+	if priorObs > 0 {
+		rate := float64(priorHits) / float64(priorObs)
+		priorH = rate * defaultScanShrinkStrength
+		priorM = (1 - rate) * defaultScanShrinkStrength
+	}
+	for i := range rows {
+		rows[i].ShrunkRate = stockpicker.ShrunkRate(rows[i].Hits, rows[i].Observations, priorH, priorM)
+	}
+	slices.SortFunc(rows, func(a, b stockPickerScanCandidate) int {
+		if c := cmp.Compare(a.ShrunkRate, b.ShrunkRate); c != 0 {
+			if direction == "avoid" {
+				return c
+			}
+			return -c
+		}
+		return strings.Compare(a.Symbol, b.Symbol)
+	})
 }
 
 // scanNoDataMessage builds the clear no-data message for the scan tool.

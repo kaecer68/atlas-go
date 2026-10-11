@@ -345,3 +345,40 @@ func TestHandleStockPickerScan_InvalidDirection(t *testing.T) {
 		t.Fatal("expected error for invalid direction")
 	}
 }
+
+// TestHandleStockPickerScan_ShrunkRateSort: 3 戰 3 勝（raw 1.0）不得排在
+// 100 戰 60 勝（raw 0.6）之前 —— 收縮後排序應翻轉，且每列帶 shrunk_rate。
+func TestHandleStockPickerScan_ShrunkRateSort(t *testing.T) {
+	s, db := stockWinRateHarness(t)
+	ctx := context.Background()
+	winStore := stockpicker.NewWinRateStore(db)
+	seed := []stockpicker.StockWinRateSummary{
+		{Symbol: "2330", Source: retainedScanSource, Window: "120d", Observations: 100, Hits: 60, WinRate: 0.60, WilsonLower: 0.50, WilsonUpper: 0.69, Confidence: 0.95, CalibrationStatus: stockpicker.CalibrationEligible, NetCostRate: 0.00585, AvgForwardReturn: 0.01, UpdatedAt: "2026-08-27T12:00:00Z"},
+		{Symbol: "2317", Source: retainedScanSource, Window: "120d", Observations: 3, Hits: 3, WinRate: 1.0, WilsonLower: 0.44, WilsonUpper: 1.0, Confidence: 0.95, CalibrationStatus: stockpicker.CalibrationEligible, NetCostRate: 0.00585, AvgForwardReturn: 0.05, UpdatedAt: "2026-08-27T12:00:00Z"},
+		// 低勝率列不進排名（min_win_rate），但進先驗池，把母體均值往下拉。
+		{Symbol: "2357", Source: retainedScanSource, Window: "120d", Observations: 50, Hits: 10, WinRate: 0.20, WilsonLower: 0.11, WilsonUpper: 0.33, Confidence: 0.95, CalibrationStatus: stockpicker.CalibrationEligible, NetCostRate: 0.00585, AvgForwardReturn: -0.02, UpdatedAt: "2026-08-27T12:00:00Z"},
+	}
+	for _, sm := range seed {
+		if err := winStore.SaveWinRate(ctx, sm); err != nil {
+			t.Fatalf("save %s/%d: %v", sm.Symbol, sm.Observations, err)
+		}
+	}
+
+	out, err := callStockPickerScan(s, stockPickerScanInput{ConditionID: retainedScanCond, MinObservations: 3, SortBy: "shrunk_rate"})
+	if err != nil {
+		t.Fatalf("handler: %v", err)
+	}
+	if !out.Found || len(out.Candidates) != 2 {
+		t.Fatalf("found=%v candidates=%d, want true/2: %+v", out.Found, len(out.Candidates), out)
+	}
+	first, second := out.Candidates[0], out.Candidates[1]
+	if first.Symbol != "2330" || second.Symbol != "2317" {
+		t.Fatalf("shrunk order = [%s, %s], want [2330, 2317]", first.Symbol, second.Symbol)
+	}
+	if first.ShrunkRate <= 0 || second.ShrunkRate <= 0 {
+		t.Fatalf("candidates must carry shrunk_rate: %+v", out.Candidates)
+	}
+	if second.ShrunkRate >= second.WinRate {
+		t.Fatalf("small-sample perfect record must shrink down: shrunk=%v raw=%v", second.ShrunkRate, second.WinRate)
+	}
+}
