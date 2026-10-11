@@ -55,6 +55,19 @@ pre-push: ci-gate
 FRONTENDS := admin_web client_web
 GO_PKGS   := ./cmd/... ./internal/...
 
+# ---- node for the frontend builds -------------------------------------------
+# Why an explicit resolution instead of a bare `node`: on the deploy host
+# (Mac Mini) node comes from nvm, and `make` may run from a non-interactive
+# shell (launchd / cron / ssh command) whose PATH does NOT contain nvm's shim
+# dir ⇒ bare `node` dies with "command not found" *after* the Go build already
+# embedded the previous dist. Resolution order, first hit wins:
+#   1. `command -v node`             — whatever the caller's PATH provides
+#   2. /opt/homebrew/bin/node        — Homebrew (Apple Silicon) default prefix
+#   3. ~/.nvm/versions/node/*/bin/node — newest nvm install (by dir mtime)
+# An empty NODE_BIN is NOT "skip the frontend build": build-frontend fails
+# loudly (see below). Override with `make NODE_BIN=/path/to/node ...`.
+NODE_BIN ?= $(shell command -v node 2>/dev/null || { [ -x /opt/homebrew/bin/node ] && echo /opt/homebrew/bin/node; } || ls -1dt $$HOME/.nvm/versions/node/*/bin/node 2>/dev/null | head -1)
+
 # ---- 版本管理(VERSION 檔為 single source of truth)----
 # 用法:
 #   make version           印當前 VERSION
@@ -153,9 +166,10 @@ help:
 	@echo ""
 	@echo "前端管理:"
 	@echo "  install-frontend   安裝所有前端依賴 (admin_web / client_web)"
-	@echo "  build-frontend     編譯所有前端 (npm run build x2)"
+	@echo "  build-frontend     編譯所有前端 (client_web + admin_web 的 esbuild.config.mjs)"
 	@echo "  test-frontend      跑前端單元測試"
 	@echo "  watch-frontend     啟動 esbuild --watch 模式"
+	@echo "  check-frontend-dist 檢查 dist 是否比來源樹舊 (rebuild-all 末段自動跑)"
 	@echo ""
 	@echo "後端管理:"
 	@echo "  build-backend      編譯 Go backend (cmd/atlas)"
@@ -199,12 +213,38 @@ install-frontend:
 		(cd $$dir && npm ci) || exit 1; \
 	done
 
+# 前端建置（admin_web + client_web）。
+#
+# 直接呼叫 `node esbuild.config.mjs`（＝ 各前端 package.json 的 "build" script），
+# 刻意不經過 `npm run build`：npm 是 `#!/usr/bin/env node` 的 shim，就算用絕對
+# 路徑找到 npm，它仍需要 PATH 上有 node —— 正是非互動 shell 缺的東西。
+#
+# 這個 target 是部署路徑 `rebuild-all` 的第一步（必須早於任何 embed dist 的 Go
+# 建置）：client_web/dist + admin_web/dist 被 gitignore，而 Go 以
+# `//go:embed all:dist` 內嵌它們 ⇒ 少了這一步，部署出去的 binary 夾帶的是 build
+# 主機上殘留的舊 dist。2026-10-07 實證：Phase 0 已從原始碼移除「錢潮預測卡」，
+# 公開站 /client/js/home-*.js 卻仍含 home-predictions（下架未生效）。
 build-frontend:
-	@echo "🔨 Building frontend..."
-	@for dir in $(FRONTENDS); do \
+	@echo "🔨 Building frontend ($(FRONTENDS))..."
+	@node_bin="$(NODE_BIN)"; \
+	if [ -z "$$node_bin" ] || [ ! -x "$$node_bin" ]; then \
+		echo "❌ build-frontend: 找不到 node（PATH / /opt/homebrew/bin / ~/.nvm/versions/node/*/bin 都沒有）" >&2; \
+		echo "   dist 是 gitignore 的產物、由 go:embed 內嵌進 binary —— 沒有 node 就沒有新 dist，" >&2; \
+		echo "   部署出去的 binary 會夾帶舊 UI（2026-10-07 事故）。" >&2; \
+		echo "   修復：安裝 Node.js（brew install node，或 nvm install --lts），或明示指定 NODE_BIN。" >&2; \
+		exit 1; \
+	fi; \
+	ver=$$("$$node_bin" --version 2>/dev/null || echo unknown); \
+	echo "   node = $$node_bin ($$ver)"; \
+	for dir in $(FRONTENDS); do \
+		if [ ! -d "$$dir/node_modules/esbuild" ]; then \
+			echo "❌ build-frontend: $$dir/node_modules/esbuild 不存在 —— 先跑 make install-frontend" >&2; \
+			exit 1; \
+		fi; \
 		echo "  → $$dir"; \
-		(cd $$dir && npm run build) || exit 1; \
-	done
+		( cd "$$dir" && "$$node_bin" esbuild.config.mjs ) || { echo "❌ build-frontend: $$dir 建置失敗" >&2; exit 1; }; \
+	done; \
+	echo "✅ build-frontend: dist 已重建"
 
 test-frontend:
 	@echo "🧪 Testing frontend..."
@@ -722,7 +762,7 @@ status:
 # Every make rebuild-* target must be invoked during closing-time check if
 # check-binaries fails (see ~/.config/opencode/AGENTS.md "Binary freshness gate").
 
-.PHONY: rebuild-all rebuild-cron rebuild-atlas rebuild-host-bin check-binaries
+.PHONY: rebuild-all rebuild-cron rebuild-atlas rebuild-host-bin check-binaries check-frontend-dist
 
 HOST_GO       := $(shell which go 2>/dev/null || echo /opt/homebrew/bin/go)
 export ATLAS_GIT_COMMIT ?= $(GIT_COMMIT)
@@ -741,6 +781,27 @@ LDFLAGS_BF := -w -s -X github.com/kaecer68/atlas-go/internal/buildinfo.Version=d
 # Exit 0 = fresh, exit 1 = at least one stale.
 check-binaries:
 	@./scripts/check-binary-freshness.sh
+
+# Frontend dist freshness gate: each frontend's dist/ must not be older than the
+# newest file of the trees its esbuild config reads (<dir>/static +
+# shared_web/static). The script names the offending source file and the newest
+# dist file; it exits 1 on missing/placeholder-only dist (embed-dirs' `.keep`).
+#
+# Why a separate gate from check-binaries: check-binaries compares each deployed
+# binary's buildinfo.Commit to HEAD. It cannot see inside the binary, so a fresh
+# binary that embeds a STALE dist passes it. client_web/dist + admin_web/dist are
+# gitignored build products embedded via `//go:embed all:dist`
+# (cmd/atlas/main.go: fs.Sub(client_web.DistFS, "dist")) ⇒ nothing in git
+# records which sources they were built from. 2026-10-07: Phase 0 removed the
+# 錢潮預測卡 from the sources and the deployed /client/js/home-*.js still
+# contained home-predictions, because the deploy path `make rebuild-all` did not
+# rebuild the frontend and `git pull` cannot update a gitignored directory.
+#
+# Wired into `rebuild-all` right after check-binaries; also runnable standalone.
+# Fix = `make build-frontend`.
+.PHONY: check-frontend-dist
+check-frontend-dist:
+	@bash scripts/ci/check_frontend_dist.sh
 
 # test-makefile-imac-guard — 驗 iMac fail-closed 防線是否生效
 # 在 iMac 跑應看到:IMAC_DETECTED=1 + 模擬 rebuild-atlas 會 exit 1
@@ -869,9 +930,18 @@ rebuild-cron: rebuild-cron-bins
 # `✗ STALE bin/atlas` ⇒ build-backend rc≠0 for a perfectly updated tree.
 # Measured 2026-09-29 on a stale bin/atlas: check --host-only rc=1, after
 # rebuild-host-bin rc=1 (unchanged), after build-backend rc=0.
-rebuild-all: build-backend rebuild-host-bin rebuild-atlas rebuild-cron
+# Why build-frontend is FIRST (#2026-10-07 frontend-dist incident): every Go
+# prerequisite below embeds client_web/dist + admin_web/dist (`//go:embed
+# all:dist`). Those directories are gitignored ⇒ `git pull` never updates them,
+# so without this prerequisite the canonical deploy flow `git pull && make
+# rebuild-all` builds fresh Go code around whatever dist the host last produced
+# (or an embed-dirs `.keep` placeholder). Order matters: build-frontend must
+# complete before the first embedding Go build, and before the final
+# check-frontend-dist.
+rebuild-all: build-frontend build-backend rebuild-host-bin rebuild-atlas rebuild-cron
 	@echo "✓ rebuilt all binaries"
 	@$(MAKE) check-binaries
+	@$(MAKE) check-frontend-dist
 
 # ============================================================================
 # CI preflight / full suite（2026-07-26，解決 PR-CI 往返耗時問題）
