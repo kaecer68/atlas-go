@@ -8,6 +8,7 @@ package orchestrator
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -755,5 +756,100 @@ func TestStockpickerWinrateRecommendAvoidSourceRefused(t *testing.T) {
 	rec, ok := e.Recommend(stockpickerWinrateAgent(), stockpickerWinrateQuote(), "", domain.Regime(""), nil)
 	if ok {
 		t.Fatalf("avoid-semantics source must fail closed, got %+v", rec)
+	}
+}
+
+// ── Regime stratum gate (Phase 1) ─────────────────────────────────────
+
+// regimeGateTestDB builds an in-memory ledger with the pooled eligible row
+// plus one optional regime stratum row.
+func regimeGateTestDB(t *testing.T, stratum *stockpicker.RegimeWinRateSummary) *sql.DB {
+	t.Helper()
+	db, err := ledger.OpenSQLiteDB(":memory:")
+	if err != nil {
+		t.Fatalf("open sqlite: %v", err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+	if err := ledger.InitSchema(db); err != nil {
+		t.Fatalf("init schema: %v", err)
+	}
+	ctx := context.Background()
+	winStore := stockpicker.NewWinRateStore(db)
+	if err := winStore.SaveWinRate(ctx, eligibleWinRateSummary()); err != nil {
+		t.Fatalf("save pooled: %v", err)
+	}
+	if stratum != nil {
+		if err := winStore.SaveRegimeWinRate(ctx, *stratum); err != nil {
+			t.Fatalf("save stratum: %v", err)
+		}
+	}
+	return db
+}
+
+func eligibleRegimeStratum(regime string) stockpicker.RegimeWinRateSummary {
+	return stockpicker.RegimeWinRateSummary{
+		Symbol: "2330", Source: testRetainedSource, Window: "120d", Regime: regime,
+		Observations: 30, Hits: 20, WinRate: 20.0 / 30.0,
+		WilsonLower: 0.48, WilsonUpper: 0.82, Confidence: 0.95,
+		CalibrationStatus: stockpicker.CalibrationEligible, NetCostRate: 0.00585,
+		AvgForwardReturn: 0.012, UpdatedAt: "2026-10-11T00:00:00Z",
+	}
+}
+
+func regimeGateExecutor(db *sql.DB) StockpickerWinrateExecutor {
+	return StockpickerWinrateExecutor{
+		Source:     testRetainedSource,
+		OpenDB:     func(path string) (*sql.DB, error) { return db, nil },
+		FlowSource: mockFlowSource{net: 50000, ok: true},
+		Gateway:    testFlowGateway(),
+	}
+}
+
+func TestStockpickerWinrateRecommendRegimeStratumPass(t *testing.T) {
+	stratum := eligibleRegimeStratum("RISK_ON")
+	e := regimeGateExecutor(regimeGateTestDB(t, &stratum))
+	rec, ok := e.Recommend(stockpickerWinrateAgent(), stockpickerWinrateQuote(), "", domain.RegimeRiskOn, nil)
+	if !ok {
+		t.Fatal("eligible current-regime stratum must pass, got (_, false)")
+	}
+	if rec.Symbol != "2330.TW" {
+		t.Errorf("rec.Symbol = %q, want 2330.TW", rec.Symbol)
+	}
+}
+
+func TestStockpickerWinrateRecommendRegimeStratumWeak(t *testing.T) {
+	// calibrating stratum → fail closed.
+	calibrating := eligibleRegimeStratum("RISK_ON")
+	calibrating.CalibrationStatus = stockpicker.CalibrationCalibrating
+	e := regimeGateExecutor(regimeGateTestDB(t, &calibrating))
+	if _, ok := e.Recommend(stockpickerWinrateAgent(), stockpickerWinrateQuote(), "", domain.RegimeRiskOn, nil); ok {
+		t.Fatal("calibrating stratum must fail closed")
+	}
+
+	// below-threshold win rate → fail closed.
+	weak := eligibleRegimeStratum("RISK_ON")
+	weak.Hits = 12
+	weak.WinRate = 0.40
+	weak.WilsonLower = 0.24
+	e = regimeGateExecutor(regimeGateTestDB(t, &weak))
+	if _, ok := e.Recommend(stockpickerWinrateAgent(), stockpickerWinrateQuote(), "", domain.RegimeRiskOn, nil); ok {
+		t.Fatal("below-threshold stratum must fail closed")
+	}
+}
+
+func TestStockpickerWinrateRecommendRegimeStratumMissing(t *testing.T) {
+	// No stratum rows at all (e.g. before the first regime aggregation):
+	// fail-OPEN skip — the pooled gates still apply. Once strata exist,
+	// the gate enforces (see the weak test above).
+	e := regimeGateExecutor(regimeGateTestDB(t, nil))
+	if _, ok := e.Recommend(stockpickerWinrateAgent(), stockpickerWinrateQuote(), "", domain.RegimeRiskOn, nil); !ok {
+		t.Fatal("missing stratum must fail open (pooled gates decide)")
+	}
+
+	// Stratum exists only for another regime: same fail-open skip.
+	off := eligibleRegimeStratum("RISK_OFF")
+	e = regimeGateExecutor(regimeGateTestDB(t, &off))
+	if _, ok := e.Recommend(stockpickerWinrateAgent(), stockpickerWinrateQuote(), "", domain.RegimeRiskOn, nil); !ok {
+		t.Fatal("other-regime-only stratum must fail open for the current regime")
 	}
 }
