@@ -13,7 +13,9 @@ import (
 // ─── Deflated Sharpe Ratio（Bailey & López de Prado 2014）────────────────
 //
 // 對 K 次試驗選出的最優策略做多重檢定校正，並容忍非正態（偏態/峰度）。
-// 語義遵循 mlfinlab 實作：SR 年化、T 為報酬筆數、峰度為 Pearson（常態=3）。
+// 語義遵循 Bailey–López de Prado (2014) 原文：SR 與 T 必須**同頻率**（逐期，
+// 非年化）、T 為報酬筆數、峰度為 Pearson（常態=3）。平台內持久化的 Sharpe
+// 皆為年化口徑 ⇒ 進入本公式前必須去年度化（見 DeflatedSharpeRatioAnnualized）。
 //
 //   - K<2：無選擇偏差可校正（K=1 時 SR₀ 含 Φ⁻¹(0)=-∞，DSR 恆為 1），回 NaN，
 //     呼叫端視為「證據不足 skip」，不是拒絕。
@@ -21,6 +23,12 @@ import (
 
 // eulerGamma 是 Euler-Mascheroni 常數（SR₀ 公式權重）。
 const eulerGamma = 0.5772156649015329
+
+// annualizationPeriods 是 eval.SharpeRatio 的年化基數（日頻 ⇒ √252）。
+// DSR 公式要求 SR 與 T 同頻率；平台持久化的 Sharpe（eval.SharpeRatio、
+// PromptExperimentResult.EvalMetrics.Sharpe）皆為年化口徑 ⇒ 年化值進入
+// DeflatedSharpeRatio 前必須除以 √annualizationPeriods、變異數除以常數。
+const annualizationPeriods = 252.0
 
 // DeflatedSharpeThreshold 是 promote 的 DSR 門檻（0.95 = 5% 水準下通過
 // 多重檢定）。刻意用常數而非 ParameterMetadata：DSR 是統計判據而非
@@ -142,7 +150,9 @@ func ExpectedSharpeUnderNull(sharpeVar float64, numTrials int) float64 {
 }
 
 // DeflatedSharpeRatio 回傳 DSR = P(真實 Sharpe > 0 | 觀測)，已對 K 次試驗的
-// 選擇偏差與非常態校正。estimatedSR 年化、horizon 為報酬筆數、峰度 Pearson。
+// 選擇偏差與非常態校正。estimatedSR 為**逐期**（非年化）Sharpe、sharpeVar 為
+// 逐期 trial Sharpe 的截面變異數，兩者必須與 horizon（報酬筆數）**同頻率**；
+// 年化輸入請改用 DeflatedSharpeRatioAnnualized。峰度為 Pearson。
 // 證據不足（K<2、T<3、變異數為負、輸入 NaN、分母非正）回 NaN。
 func DeflatedSharpeRatio(estimatedSR, sharpeVar float64, numTrials, horizon int, skew, kurtosis float64) float64 {
 	if numTrials < 2 || horizon < 3 || sharpeVar < 0 ||
@@ -156,6 +166,23 @@ func DeflatedSharpeRatio(estimatedSR, sharpeVar float64, numTrials, horizon int,
 		return math.NaN()
 	}
 	return normalCDF((estimatedSR - sr0) * math.Sqrt(float64(horizon-1)) / denom)
+}
+
+// DeflatedSharpeRatioAnnualized 是年化口徑入口：接收**年化** Sharpe
+// （estimatedSR）與**年化** trial Sharpe 截面變異數（sharpeVar），內部換算為
+// 逐期後呼叫 DeflatedSharpeRatio（公式要求 SR 與 T 同頻率）。
+//
+// 為何需要本入口：若直接把年化 SR 餵給 DeflatedSharpeRatio，分母的非線性
+// 校正項（−skew·SR + (kurt−1)/4·SR²）會以年化尺度代入，算出的不是文獻定義的
+// DSR（分子被放大 √A 倍、分母卻以年化 SR 計），且**可能翻轉 promote 判定**
+// —— 實測（SR_逐期=0.15、trial SR 標準差=0.05、K=50、T=252、skew=−0.5、
+// kurt=6）：正確逐期 DSR=0.707（擋下）vs 誤用年化=0.999（放行）。
+func DeflatedSharpeRatioAnnualized(estimatedSR, sharpeVar float64, numTrials, horizon int, skew, kurtosis float64) float64 {
+	if math.IsNaN(estimatedSR) || math.IsNaN(sharpeVar) {
+		return math.NaN()
+	}
+	return DeflatedSharpeRatio(estimatedSR/math.Sqrt(annualizationPeriods),
+		sharpeVar/annualizationPeriods, numTrials, horizon, skew, kurtosis)
 }
 
 // TrialSharpeVariance 回傳 trial Sharpe 序列的樣本變異數（n-1）。不足 2 點
@@ -179,9 +206,12 @@ func TrialSharpeVariance(sharpes []float64) (variance float64, ok bool) {
 }
 
 // dsrVerdict 計算單一候選的 DSR  verdict。history 為同範圍歷史 trial
-// Sharpe（不含當前 trial）；當前 trial Sharpe 由 candidateReturns 經
-// eval.SharpeRatio 年化口徑估計。證據不足（報酬 <4 筆、歷史為空即 K<1、
-// 動差退化）回 dsr=NaN，呼叫端 skip 不拒絕。trials 含當前 trial。
+// Sharpe（不含當前 trial，**年化口徑**：ledger.TrialSharpe 取自
+// EvalMetrics.Sharpe）；當前 trial Sharpe 由 candidateReturns 經
+// eval.SharpeRatio（亦為年化口徑）估計。兩者同為年化 ⇒ 交由
+// DeflatedSharpeRatioAnnualized 去年度化，以符公式「SR 與 T 同頻率」要求。
+// 證據不足（報酬 <4 筆、歷史為空即 K<1、動差退化）回 dsr=NaN，
+// 呼叫端 skip 不拒絕。trials 含當前 trial。
 func dsrVerdict(candidateReturns []float64, history []float64) (dsr float64, trials int) {
 	trials = len(history) + 1
 	if len(candidateReturns) < 4 || len(history) < 1 {
@@ -197,7 +227,8 @@ func dsrVerdict(candidateReturns []float64, history []float64) (dsr float64, tri
 	}
 	skew := SampleSkew(candidateReturns)
 	kurt := SampleKurtosis(candidateReturns)
-	return DeflatedSharpeRatio(sr, v, len(all), len(candidateReturns), skew, kurt), len(all)
+	// sr 與 v（含 history）皆年化口徑 ⇒ 用年化入口，內部換算為逐期。
+	return DeflatedSharpeRatioAnnualized(sr, v, len(all), len(candidateReturns), skew, kurt), len(all)
 }
 
 // deflatedSharpeGate 在 passesAcceptance 內執行 DSR 多重檢定校正。
