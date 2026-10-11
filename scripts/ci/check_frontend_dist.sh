@@ -2,10 +2,19 @@
 # =============================================================================
 # check_frontend_dist.sh — frontend dist freshness gate (pre-push / CI)
 #
-# Verifies each frontend's dist/ exists and is not older than its sources.
+# Verifies each frontend's dist/ exists and no build input inside it is older
+# than the newest file in dist/.
 # The Go backend embeds admin_web/dist + client_web/dist via go:embed
 # (admin_web/embed.go, client_web/embed.go); a stale dist silently ships the
 # old UI into the binary, and a missing dist makes embedded assets empty.
+# 2026-10-07 (the incident this gate now also guards on the deploy path):
+# Phase 0 removed the 錢潮預測卡 from the sources, but the deployed binary still
+# served /client/js/home-*.js containing home-predictions — `make rebuild-all`
+# never rebuilt the frontend.
+#
+# Judged inputs = the trees <DIR>/esbuild.config.mjs actually reads:
+#   <DIR>/static + shared_web/static (see the comment above is_generated).
+# A dist holding only embed-dirs' `.keep` placeholder counts as NOT built.
 #
 # Usage:
 #   bash scripts/ci/check_frontend_dist.sh                     # check all frontends
@@ -13,10 +22,11 @@
 #   bash scripts/ci/check_frontend_dist.sh --diff origin/main...HEAD
 #       # check only frontends whose files changed in the git range;
 #       # no frontend files changed → exit 0 (pure Go/docs pushes skip)
+#   make check-frontend-dist                                   # same, from Makefile
 #
 # Exit 0 = all checked dists fresh (or nothing to check)
 # Exit 1 = at least one dist missing / stale
-# =============================================================================
+# ============================================================================
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -44,30 +54,64 @@ mtime_of() {
   fi
 }
 
-# newest_mtime DIR → epoch seconds of newest file under DIR (excluding
-# node_modules/dist), or empty if no files.
+# source trees — what esbuild actually reads (taken from <DIR>/esbuild.config.mjs,
+# not guessed):
+#   · entryPoints live in <DIR>/static/js + shared_web/static/js (+ the css
+#     entry in shared_web/static/css), and createSharedPlugin
+#     (shared_web/esbuild-shared-plugin.mjs) resolves missing relative imports
+#     across <DIR>/static <-> shared_web/static in BOTH directions
+#     ⇒ both trees are build inputs, for both frontends.
+#   · static/index.html is copied verbatim into dist by the copy-index-html
+#     plugin ⇒ also an input.
+# Everything else under <DIR>/ (tests/, smoke/, scripts/, playwright configs,
+# package.json) is NOT read by the build ⇒ editing it must not report staleness.
+SHARED_STATIC=shared_web/static
+
+# is_generated FILE → 0 when FILE is a cmd/gentags go:generate output.
 #
-# Excludes the two go:generate outputs (cmd/gentags): ci-gate runs
-# `go generate ./...` unconditionally before this check, and gentags
-# rewrites field_types.ts + valid_fields.json even when content is
-# identical → their mtime is ALWAYS newer than any dist build, which
-# would false-positive every frontend push as "dist 過期". Content drift
-# of these generated files is already caught by ci-gate's
-# `git diff --exit-code` (drift check), so excluding them is safe.
-newest_mtime() {
-  local dir=$1
-  find "$dir" -type f \
-    -not -path "$dir/node_modules/*" \
-    -not -path "$dir/dist/*" \
-    -not -path "$dir/static/js/shared/field_types.ts" \
-    -not -path "$dir/static/js/shared/valid_fields.json" \
-    -print0 2>/dev/null | while IFS= read -r -d '' f; do mtime_of "$f"; done | sort -nr | head -1
+# ci-gate runs `go generate ./...` unconditionally before this check, and
+# gentags rewrites field_types.ts + valid_fields.json even when the content is
+# identical → their mtime is ALWAYS newer than any dist build, which would
+# false-positive every frontend push as "dist 過期". Content drift of these
+# generated files is already caught by ci-gate's `git diff --exit-code` (drift
+# check), so excluding them is safe.
+is_generated() {
+  case "$1" in
+    */static/js/shared/field_types.ts | */static/js/shared/valid_fields.json) return 0 ;;
+    *) return 1 ;;
+  esac
 }
 
-# dist_newest_mtime DIR → epoch seconds of newest file inside DIR/dist, or empty.
-dist_newest_mtime() {
-  local d=$1
-  find "$d/dist" -type f -print0 2>/dev/null | while IFS= read -r -d '' f; do mtime_of "$f"; done | sort -nr | head -1
+# stamp FILE → "epoch<TAB>path" (split back into two fields by check_one).
+stamp() {
+  printf '%s\t%s\n' "$(mtime_of "$1")" "$1"
+}
+
+# newest_source_file DIR → "epoch<TAB>path" of the newest non-generated build
+# input of DIR, or empty when DIR has no source tree.
+newest_source_file() {
+  local dir=$1 roots=() t
+  for t in "$dir/static" "$SHARED_STATIC"; do
+    if [ -d "$t" ]; then roots+=("$t"); fi
+  done
+  if [ "${#roots[@]}" -eq 0 ]; then return 0; fi
+  find "${roots[@]}" -type f -not -path '*/node_modules/*' -print0 2>/dev/null \
+    | while IFS= read -r -d '' f; do
+        if ! is_generated "$f"; then stamp "$f"; fi
+      done \
+    | sort -k1,1nr -k2,2 | head -1
+}
+
+# newest_dist_file DIR → "epoch<TAB>path" of the newest real file in DIR/dist.
+# A bare `.keep` does NOT count: `make embed-dirs` creates that placeholder so
+# `//go:embed all:dist` always finds a directory in a fresh worktree — a dist
+# holding nothing but the placeholder has not been built.
+newest_dist_file() {
+  local dir=$1
+  if [ ! -d "$dir/dist" ]; then return 0; fi
+  find "$dir/dist" -type f -not -name '.keep' -print0 2>/dev/null \
+    | while IFS= read -r -d '' f; do stamp "$f"; done \
+    | sort -k1,1nr -k2,2 | head -1
 }
 
 check_one() {
@@ -76,23 +120,32 @@ check_one() {
     echo "  - $dir: not a frontend (no package.json) — skip"
     return 0
   fi
-  if [ ! -d "$dir/dist" ] || [ -z "$(ls -A "$dir/dist" 2>/dev/null)" ]; then
-    echo "  ❌ $dir: dist/ 不存在或為空 — 先跑 (cd $dir && npm ci && npm run build)"
+  if [ ! -d "$dir/dist" ]; then
+    echo "  ❌ $dir: dist/ 不存在 — 先跑 make build-frontend"
     return 1
   fi
-  local src_max dist_max
-  src_max=$(newest_mtime "$dir")
-  dist_max=$(dist_newest_mtime "$dir")  # uses $dir from check_one
-  if [ -z "$src_max" ] || [ -z "$dist_max" ]; then
-    echo "  ❌ $dir: 無法計算 dist 新鮮度 (src=$src_max dist=$dist_max)"
+  local src_line dist_line src_max src_path dist_max dist_path
+  src_line=$(newest_source_file "$dir" || true)
+  dist_line=$(newest_dist_file "$dir" || true)
+  if [ -z "$dist_line" ]; then
+    echo "  ❌ $dir: dist/ 內沒有建置產物（空目錄，或只有 embed-dirs 的 .keep 佔位）"
+    echo "     修復: make build-frontend"
     return 1
   fi
+  if [ -z "$src_line" ]; then
+    echo "  ❌ $dir: 找不到來源檔（$dir/static 或 \"$SHARED_STATIC\"）— 無法判斷 dist 新鮮度"
+    return 1
+  fi
+  IFS=$'\t' read -r src_max src_path <<<"$src_line"
+  IFS=$'\t' read -r dist_max dist_path <<<"$dist_line"
   if [ "$src_max" -gt "$dist_max" ]; then
-    echo "  ❌ $dir: dist 過期 — 有源碼比 dist 新 (src=$src_max > dist=$dist_max)"
-    echo "     修復: (cd $dir && npm ci && npm run build)"
+    echo "  ❌ $dir: dist 過期 — 下列來源檔比 dist 內任何檔案新"
+    echo "     來源: $src_path (mtime=$src_max)"
+    echo "     dist: $dist_path (mtime=$dist_max)"
+    echo "     修復: make build-frontend"
     return 1
   fi
-  echo "  ✓ $dir: dist 最新"
+  echo "  ✓ $dir: dist 最新 (來源最新=$src_path, dist 最新=$dist_path)"
   return 0
 }
 
@@ -150,5 +203,7 @@ if [ "$rc" -eq 0 ]; then
   echo "✅ check_frontend_dist: all dist fresh"
 else
   echo "❌ check_frontend_dist FAILED — dist 過期/缺失, 修復後再 push"
+  echo "   （部署路徑: make rebuild-all 已含 build-frontend，會先重建 dist）"
+  echo "   修復: make build-frontend"
 fi
 exit "$rc"
