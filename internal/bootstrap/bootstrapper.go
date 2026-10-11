@@ -2,6 +2,7 @@ package bootstrap
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -42,17 +43,59 @@ func InitDatabase(ctx context.Context, cfg Config, collector *monitoring.Metrics
 		return nil, nil
 	}
 	migrationsPath := filepath.Join(cfg.WorkDir, "sql/migrations")
-	if _, err := os.Stat(migrationsPath); err == nil {
-		pool, err := db.Init(context.Background(), dsn, migrationsPath)
-		if err != nil {
-			logging.Error("bootstrap", "db_init_failed", "err", err)
-			monitoring.RecordDBInitFailure(collector)
-			return nil, err
-		}
-		logging.Info("bootstrap", "db_connected_migrations_applied")
-		return pool, nil
+	if _, err := os.Stat(migrationsPath); err != nil {
+		// A DATABASE_URL with no migrations directory is a packaging/config
+		// bug, not a transient outage: nothing can be applied, so every
+		// PG-backed store would silently run against an unknown schema. This
+		// path used to return (nil, nil) — no error, no metric — so atlas kept
+		// running with no PostgreSQL at all without a single signal
+		// (2026-10-11 silent-degradation fix).
+		logging.Error("bootstrap", "migrations_dir_missing",
+			"path", migrationsPath, "err", err)
+		monitoring.RecordDBInitFailure(collector)
+		return nil, fmt.Errorf("migrations directory missing: %s: %w", migrationsPath, err)
 	}
-	return nil, nil
+	pool, err := db.Init(context.Background(), dsn, migrationsPath)
+	if err != nil {
+		logging.Error("bootstrap", "db_init_failed", "err", err)
+		monitoring.RecordDBInitFailure(collector)
+		return nil, err
+	}
+	checkSchemaVersionDrift(dsn, migrationsPath, collector)
+	logging.Info("bootstrap", "db_connected_migrations_applied")
+	return pool, nil
+}
+
+// checkSchemaVersionDrift compares the version recorded in schema_migrations
+// with the newest migration file the binary ships (see db.VerifySchemaVersion).
+//
+// Policy (2026-10-11): drift is never fatal. A lagging schema degrades features
+// but the process must still start — unlike a missing migrations directory,
+// where nothing at all was applied and InitDatabase now fails loudly. Drift is
+// reported as WARN + atlas_schema_version_drift_total so it is alertable;
+// "the check could not run" (unreachable DB, unreadable directory) is logged
+// separately and does not increment the drift counter.
+func checkSchemaVersionDrift(dsn, migrationsPath string, collector *monitoring.MetricsCollector) {
+	err := db.VerifySchemaVersion(dsn, migrationsPath)
+	if err == nil {
+		return
+	}
+	if db.IsSchemaVersionDrift(err) {
+		logging.Warn("bootstrap", "schema_version_drift", "err", err)
+		monitoring.RecordSchemaVersionDrift(collector, schemaDriftReason(err))
+		return
+	}
+	logging.Warn("bootstrap", "schema_version_check_failed", "err", err)
+}
+
+// schemaDriftReason extracts the bounded metric label (lagging / dirty /
+// lagging_dirty) from a *db.SchemaDrift, or "" when err is not drift.
+func schemaDriftReason(err error) string {
+	var drift *db.SchemaDrift
+	if errors.As(err, &drift) {
+		return drift.Reason()
+	}
+	return ""
 }
 
 type Stores struct {

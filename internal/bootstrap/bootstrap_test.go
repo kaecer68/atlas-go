@@ -2,6 +2,7 @@ package bootstrap
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -9,6 +10,7 @@ import (
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/config"
+	"github.com/kaecer68/atlas-go/internal/db"
 	"github.com/kaecer68/atlas-go/internal/monitoring"
 )
 
@@ -34,12 +36,105 @@ func TestInitDatabaseNoDSN(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
+	// Explicit empty DATABASE_URL: the integration CI job exports a real
+	// DATABASE_URL and t.TempDir() has no sql/migrations, so without this the
+	// test would exercise the missing-migrations-directory error instead of the
+	// no-DSN path (config.GetSecret reads the environment only).
+	t.Setenv("DATABASE_URL", "")
+
 	pool, err := InitDatabase(ctx, Config{WorkDir: t.TempDir()}, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if pool != nil {
 		t.Error("expected nil pool when no DATABASE_URL")
+	}
+}
+
+// TestInitDatabase_MissingMigrationsDir_ReturnsError locks the silent-degradation
+// fix: a DATABASE_URL without sql/migrations used to return (nil, nil) — no error
+// and no metric — so atlas started up with no PostgreSQL at all. It must now log
+// ERROR, record atlas_db_init_failures_total and return an explicit error naming
+// the missing directory.
+func TestInitDatabase_MissingMigrationsDir_ReturnsError(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	// t.TempDir() has no sql/migrations. The bogus DSN makes the test
+	// deterministic: the directory check must fire before any connection attempt.
+	t.Setenv("DATABASE_URL", "postgresql://invalid_user:invalid_pass@127.0.0.1:1/nonexistent?sslmode=disable&connect_timeout=1")
+
+	collector := monitoring.NewMetricsCollector()
+	workDir := t.TempDir()
+	pool, err := InitDatabase(ctx, Config{WorkDir: workDir}, collector)
+	if err == nil {
+		t.Fatal("expected error when sql/migrations is missing but DATABASE_URL is set")
+	}
+	if pool != nil {
+		t.Error("expected nil pool when the migrations directory is missing")
+	}
+	if !strings.Contains(err.Error(), "migrations directory missing") {
+		t.Errorf("error must name the missing migrations directory, got: %v", err)
+	}
+	if !strings.Contains(err.Error(), filepath.Join(workDir, "sql", "migrations")) {
+		t.Errorf("error must contain the resolved path, got: %v", err)
+	}
+
+	m, ok := collector.GetMetric(monitoring.MetricDBInitFailures, map[string]string{"phase": "startup"})
+	if !ok {
+		t.Fatal("expected atlas_db_init_failures_total to be recorded for a missing migrations directory")
+	}
+	if m.Value != 1 {
+		t.Errorf("expected value 1, got %v", m.Value)
+	}
+}
+
+// TestInitDatabase_MissingMigrationsDir_NilCollectorDoesNotPanic covers the
+// early-startup case where no metrics collector exists yet.
+func TestInitDatabase_MissingMigrationsDir_NilCollectorDoesNotPanic(t *testing.T) {
+	t.Setenv("DATABASE_URL", "postgresql://invalid:invalid@127.0.0.1:1/x?sslmode=disable&connect_timeout=1")
+
+	defer func() {
+		if r := recover(); r != nil {
+			t.Errorf("InitDatabase with nil collector panicked: %v", r)
+		}
+	}()
+	if _, err := InitDatabase(context.Background(), Config{WorkDir: t.TempDir()}, nil); err == nil {
+		t.Error("expected error for missing migrations directory")
+	}
+}
+
+// TestCheckSchemaVersionDrift_NeverFatal pins the task-2 policy: the drift
+// guardrail reports WARN + metric but must never abort startup. With a bogus DSN
+// and a directory that holds no migration file the check fails to run, which must
+// also stay non-fatal (and must not be counted as drift).
+func TestCheckSchemaVersionDrift_NeverFatal(t *testing.T) {
+	collector := monitoring.NewMetricsCollector()
+
+	defer func() {
+		if r := recover(); r != nil {
+			t.Fatalf("checkSchemaVersionDrift panicked: %v", r)
+		}
+	}()
+	checkSchemaVersionDrift("postgresql://invalid:invalid@127.0.0.1:1/x?sslmode=disable&connect_timeout=1", t.TempDir(), collector)
+
+	for _, m := range collector.GetAllMetrics() {
+		if m.Name == monitoring.MetricSchemaVersionDrift {
+			t.Errorf("an unrunnable check must not be counted as schema drift, got: %+v", m)
+		}
+	}
+
+	// nil collector must be safe too.
+	checkSchemaVersionDrift("postgresql://invalid:invalid@127.0.0.1:1/x?sslmode=disable&connect_timeout=1", t.TempDir(), nil)
+}
+
+func TestSchemaDriftReason(t *testing.T) {
+	driftErr := &db.SchemaDrift{Applied: 26, Latest: 28}
+	if got := schemaDriftReason(driftErr); got != "lagging" {
+		t.Errorf("schemaDriftReason(*SchemaDrift) = %q, want %q", got, "lagging")
+	}
+	if got := schemaDriftReason(errors.New("boom")); got != "" {
+		t.Errorf("schemaDriftReason(non-drift) = %q, want \"\"", got)
 	}
 }
 
