@@ -43,16 +43,29 @@ func Init(ctx context.Context, databaseURL, migrationsPath string) (*pgxpool.Poo
 }
 
 func runMigrations(databaseURL, migrationsPath string) error {
+	m, err := newMigrateInstance(databaseURL, migrationsPath)
+	if err != nil {
+		return err
+	}
+	defer func() { _, _ = m.Close() }()
+	if err := m.Up(); err != nil && !errors.Is(err, migrate.ErrNoChange) {
+		return fmt.Errorf("migrate up: %w", err)
+	}
+	return nil
+}
+
+// newMigrateInstance builds a golang-migrate instance for migrationsPath
+// (must be an absolute path; "file://" is prepended) and databaseURL.
+// The postgres:// scheme is rewritten to pgx5:// for the golang-migrate
+// driver (see doc.go). The caller owns the instance and must Close it.
+func newMigrateInstance(databaseURL, migrationsPath string) (*migrate.Migrate, error) {
 	driverURL := strings.Replace(databaseURL, "postgres://", "pgx5://", 1)
 	m, err := migrate.New(
 		"file://"+migrationsPath,
 		driverURL,
 	)
 	if err != nil {
-		return fmt.Errorf("create migrate instance: %w", err)
+		return nil, fmt.Errorf("create migrate instance: %w", err)
 	}
-	if err := m.Up(); err != nil && !errors.Is(err, migrate.ErrNoChange) {
-		return fmt.Errorf("migrate up: %w", err)
-	}
-	return nil
+	return m, nil
 }

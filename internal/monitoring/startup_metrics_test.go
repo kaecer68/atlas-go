@@ -70,6 +70,50 @@ func TestRecordDBInitFailure_AppearsInGetAllMetrics(t *testing.T) {
 	}
 }
 
+// TestRecordSchemaVersionDrift_IncrementsPerReason 驗證 drift counter 以 reason label 隔離，
+// 且值域是 bootstrap 實際會送出的三種（lagging / dirty / lagging_dirty）。
+func TestRecordSchemaVersionDrift_IncrementsPerReason(t *testing.T) {
+	c := NewMetricsCollector()
+	RecordSchemaVersionDrift(c, "lagging")
+	RecordSchemaVersionDrift(c, "lagging")
+	RecordSchemaVersionDrift(c, "dirty")
+
+	m, ok := c.GetMetric(MetricSchemaVersionDrift, map[string]string{"reason": "lagging"})
+	if !ok {
+		t.Fatalf("expected metric %q with reason=lagging", MetricSchemaVersionDrift)
+	}
+	if m.Value != 2 {
+		t.Errorf("expected lagging value 2, got %v", m.Value)
+	}
+	if m.Type != MetricTypeCounter {
+		t.Errorf("expected type counter, got %q", m.Type)
+	}
+
+	dirty, ok := c.GetMetric(MetricSchemaVersionDrift, map[string]string{"reason": "dirty"})
+	if !ok || dirty.Value != 1 {
+		t.Fatalf("expected dirty counter=1, got %+v ok=%v", dirty, ok)
+	}
+}
+
+// TestRecordSchemaVersionDrift_NilCollectorAndEmptyReason 驗證 nil collector 與空 reason 都安全
+// （空 reason 不寫入，避免 label="" 的孤立 entry）。
+func TestRecordSchemaVersionDrift_NilCollectorAndEmptyReason(t *testing.T) {
+	defer func() {
+		if r := recover(); r != nil {
+			t.Errorf("RecordSchemaVersionDrift(nil/empty) panicked: %v", r)
+		}
+	}()
+	RecordSchemaVersionDrift(nil, "lagging")
+
+	c := NewMetricsCollector()
+	RecordSchemaVersionDrift(c, "")
+	for _, m := range c.GetAllMetrics() {
+		if m.Name == MetricSchemaVersionDrift {
+			t.Errorf("expected no metric for empty reason, got: %+v", m)
+		}
+	}
+}
+
 // TestRecordChannelHealthError_IncrementsCounter 驗證單一 channel 會建立獨立 counter。
 func TestRecordChannelHealthError_IncrementsCounter(t *testing.T) {
 	c := NewMetricsCollector()
@@ -142,6 +186,7 @@ func TestMetricsNames_FollowPrometheusConvention(t *testing.T) {
 		want string
 	}{
 		{MetricDBInitFailures, "atlas_db_init_failures_total"},
+		{MetricSchemaVersionDrift, "atlas_schema_version_drift_total"},
 		{MetricChannelHealthErrors, "atlas_channel_health_errors_total"},
 		{MetricStage3TaskRuns, "atlas_stage3_task_runs_total"},
 		{MetricStage3AlertsFired, "atlas_stage3_alerts_fired_total"},

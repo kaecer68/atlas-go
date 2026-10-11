@@ -50,6 +50,13 @@ const MetricStage3LedgerRecords = "atlas_stage3_ledger_records"
 // kind ∈ {"quota","rate_limited","no_data","parse_error","transport","unknown"}，值域受限避免 cardinality 爆炸。
 const MetricDataAggregatorFailures = "atlas_data_aggregator_failures_total"
 
+// MetricSchemaVersionDrift 統計 bootstrap 階段偵測到 schema 版本漂移的次數。
+// 用途：偵測「binary 期望的 migrations 比 DB 實際 schema 新」或 schema_migrations 處於
+// dirty（遷移半套用）——兩種情況都會讓新程式碼跑在舊 schema 上而靜默失效（缺 column）。
+// Label reason 值域固定為 {"lagging","dirty","lagging_dirty"}，避免 cardinality 爆炸。
+// 注意：這是**告警**訊號、不是啟動失敗原因（bootstrap 只 log WARN，仍讓服務啟動）。
+const MetricSchemaVersionDrift = "atlas_schema_version_drift_total"
+
 // RecordDBInitFailure increment db_init failure counter。
 // nil collector 安全（bootstrap 早期 collector 可能尚未建立）。
 func RecordDBInitFailure(c *MetricsCollector) {
@@ -58,6 +65,18 @@ func RecordDBInitFailure(c *MetricsCollector) {
 	}
 	c.RecordCounter(MetricDBInitFailures, 1, map[string]string{
 		"phase": "startup",
+	})
+}
+
+// RecordSchemaVersionDrift increment schema 版本漂移 counter。
+// reason 值域固定為 {"lagging","dirty","lagging_dirty"}；空 reason 視為無效輸入不寫入
+// （避免建立 label="" 的孤立 entry）；nil collector 安全（bootstrap 早期可能尚未建立）。
+func RecordSchemaVersionDrift(c *MetricsCollector, reason string) {
+	if c == nil || reason == "" {
+		return
+	}
+	c.RecordCounter(MetricSchemaVersionDrift, 1, map[string]string{
+		"reason": reason,
 	})
 }
 
