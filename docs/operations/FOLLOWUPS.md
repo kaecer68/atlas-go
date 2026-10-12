@@ -2607,6 +2607,86 @@ PY
 - **最小處置**：①tick 結束 `defer pool.Close()`（或改用長生命週期共享 pool）②加「pool 建立／關閉次數」可觀測讀數。
 - **查法（可重現）**：`grep -n "pgxpool.New\|NewPool\|defer .*Close" internal/stockpicker/daily_update.go` ⇒ 確認建立與關閉**不對稱**。
 
+### FU-20261012-01 — `LoadRegimeHistoryAll(ctx,400)` 的 `LIMIT 400` 會**靜默截斷**最舊的 regime 標籤
+
+- **狀態**：`open`
+- **記錄日期**：2026-10-12
+- **來源**：regime gate 裁決調查（`atlas-notes/review-20261012/regime-gate-verdict.md`）
+- **事實**：`RegimeLoader` 以 `LoadRegimeHistoryAll(ctx, 400)` ＋ `ORDER BY date DESC LIMIT 400` 取歷史 ⇒ 目前 20 列無感，但**任何大規模回填（例如 639 天）都會被截斷到最新 400 天**，且**不會報錯**。
+- **風險**：回填後看似成功、實際最舊標籤消失 ⇒ 分層統計悄悄少一段（且與 `stock_signal_outcomes.regime` 對不上）。
+- **最小處置**：回填前先把上限改為參數化或移除 `LIMIT`，並補「回填筆數 = 讀回筆數」的斷言。
+- **查法**：`grep -rn "LoadRegimeHistoryAll" internal/ | head`。
+
+### FU-20261012-02 — `stock_signal_outcomes.regime` 是該表**唯一非 PIT** 欄位
+
+- **狀態**：`open`
+- **記錄日期**：2026-10-12
+- **來源**：同上調查（regime gate 裁決，§F）
+- **事實**：`regime(D)` 的快照擷取時間為 **D+1 02:59–07:55 TPE**（VIX/DXY/US10Y/JPY/GOLD/OIL 的時間戳皆落在 D+1 凌晨），但 outcome 的進場價是 **D 日 13:30 TPE 收盤**（`bars[i].Close`）⇒ 標籤含 **1 個美股 session 的未來資訊**。
+- **風險**：任何以該欄位做條件化／訓練的分析都帶 look-ahead bias（本次研究已用它產出分層勝率）。
+- **最小處置**：改記 `regime(D-1)`（或在 D 日盤前取樣），並在 spec 註明該欄位的 PIT 語意。
+- **查法**：`psql` 比對 `regime_history.captured_at` 與 `stock_signal_outcomes.trigger_date` 的時間差。
+
+### FU-20261012-03 — `regime_history` 有**兩個 writer、兩套公式**，對同一天給出**相反標籤**
+
+- **狀態**：`open`
+- **記錄日期**：2026-10-12
+- **來源**：同上調查（§1.2）
+- **事實**：live writer = `internal/monitoring/dashboard_api.go:858` → `narrative.TaiwanStressCalculator`（8 因子，參數來自 `configs/parameters.json` 的 `narrative.taiwan_stress_*`）；backfill writer = `cmd/backfill-period-history` → 只有 VIX/DXY/US10Y 的 legacy 公式。實測同一天 **2026-09-23：live 7.81 → RISK_ON；回填 36.68 → NEUTRAL**（相反）。
+- **風險**：同一張表的 `regime` 語意隨寫入者而變 ⇒ 分層／統計不可比；回填當閘門會直接錯。
+- **最小處置**：收斂為單一 writer（或明確標記 `source` 並讓消費端只認一種）。
+- **查法**：`grep -rn "persistRegimeHistory\|backfill-period-history" internal/ cmd/ | head`。
+
+### FU-20261012-04 — `WalkForwardFolds` 的標籤窗緩衝在**長連假邊界 purge 不足**；三個 embargo 實作三種單位
+
+- **狀態**：`open`
+- **記錄日期**：2026-10-12
+- **來源**：同上調查（§F）
+- **事實**：`internal/stockpicker/walkforward.go` 以 `forwardDays + weekendBufferDays`（= forwardDays+2）估標籤窗；實測 **2026-02-26 的 5 交易日標籤窗實際跨 8 個日曆天**（農曆年假），緩衝只有 7 ⇒ purge 不足、訓練集與驗證集標籤重疊。另 `ml.PurgedKFoldSplitter` 無 production caller，且三處 embargo 實作使用三種不同單位。
+- **風險**：walk-forward 績效虛高（正是該 splitter 要防的洩漏）。
+- **最小處置**：改用交易日曆計窗（`stockpicker.newestTriggerDate(asOf, forwardDays)` 已正確，`daily_update.go:397-408`），並統一 embargo 單位。
+- **查法**：`go test ./internal/stockpicker/ -run WalkForward -v`；或以假日曆核算長連假窗。
+
+### FU-20261012-05 — JSONL ledger **無上限成長**：`archiver` 從未接線
+
+- **狀態**：`open`
+- **記錄日期**：2026-10-12
+- **來源**：Q2「為何不能全上 PG」調查
+- **事實**：`internal/ledger/archiver.go` 的 rotation **從未上線**（`NewArchiver` 除自身檔與測試外**零呼叫者**）⇒ 實測 **1,035 檔／1,572,908 行**持續成長且無上限。
+- **風險**：磁碟與掃描成本線性成長；`Load*` 的延遲與記憶體隨之上升。
+- **最小處置**：接線 archiver，或明確記錄「不歸檔」的理由與容量上限。
+- **查法**：`grep -rn "NewArchiver" --include='*.go' . | grep -v _test`。
+
+### FU-20261012-06 — 三道「PG-first」治理機制**本身無效**（引用不存在的條文／規格自相矛盾／檢查恆不紅燈）
+
+- **狀態**：`open`
+- **記錄日期**：2026-10-12
+- **來源**：同上調查（§3.3／§3.4，含子代理 C 的設計意圖比對）
+- **事實**：① `docs/specs/store-backend-decision-spec.md:6` 以 `docs/reference/constitution.md` 當「Postgres-first」依據，但該檔對 postgres/sqlite **0 命中**（引用不存在的條文）。② `docs/specs/repository-dual-write-spec.md:7` 仍寫「JSONL 為 source of truth」，與 **2026-08-23 PG-SSoT 裁決**衝突。③ `cmd/check-persistence-format/main.go:31-80` 印出 FAIL 後**恆 `return nil`** ⇒ `.github/workflows/ci-cd.yml:72` 這道檢查**永不紅燈**。
+- **風險**：護欄說有、實際沒有 ⇒ 漂移持續發生（本次 P0 即為同族）。
+- **最小處置**：①改引用真實條文或刪除該依據 ②更正或廢止衝突規格 ③讓該檢查回傳非零並補契約測試（餵壞輸入必須紅）。
+- **查法**：`grep -n "constitution" docs/specs/store-backend-decision-spec.md`；`grep -n "return nil" cmd/check-persistence-format/main.go`。
+
+### FU-20261012-07 — 同一張表有**兩份 schema**（PG migrations／SQLite `CREATE IF NOT EXISTS` ＋ 手寫清單）⇒ 每次新增欄位都可能只改一邊
+
+- **狀態**：`open`
+- **記錄日期**：2026-10-12
+- **來源**：2026-10-12 生產 P0（`/api/stock/win_rate` 503）根因
+- **事實**：`#2213` 在 `sql/migrations/000028` 補了 PG 的 `break_even_cost_rate`，但 SQLite 側的 `internal/ledger/sqlite_core.go`（`CREATE TABLE IF NOT EXISTS` ＋ `additiveMigrations` 清單 `:377-383`）未登記 ⇒ 生產 503（已由 #2218 修）。另全 24 張同名表**有 4 張欄位不一致**，其中 `outcomes` 在 PG 甚至不存在。
+- **風險**：只要第二個 DB 活著，這類事故會**重複發生**（維護成本 × 2，且失敗模式是「上線後才炸」）。
+- **最小處置**：①先加**schema 分歧守門**（比對 PG migrations 與 SQLite DDL／additive 清單，共同表不一致即紅，附合法差異 allowlist）②依 Q2 報告的 C1→C7 收斂到單一 PG。
+- **查法**：`grep -n "CREATE TABLE IF NOT EXISTS stock_win_rate" -A14 internal/ledger/sqlite_core.go` 與 `cat sql/migrations/0000*stock_win_rate*.up.sql`。
+
+### FU-20261012-08 — `data/state/atlas.db` **不在每日備份內**，且唯一還原點 schema 已舊
+
+- **狀態**：`open`
+- **記錄日期**：2026-10-12
+- **來源**：Q2 調查 ＋ 2026-10-12 P0（該檔是 MCP 與 `/api/stock/*` 的唯一讀取路徑）
+- **事實**：`~/.config/atlas-backup.sh:61` 明文 `--exclude '*.db'`（2026-09-29 刻意）；目前唯一副本是 **2026-09-30 的手工檔（schema 已舊）**。該檔 20,336,640 bytes，WAL 未 checkpoint（實測 4,120,032 bytes）。
+- **風險**：該檔損毀即失去 stockpicker 勝率／訊號結果鏈的唯一讀取來源（PG 雖同步，但讀取端尚未切換）。
+- **最小處置**：納入每日備份，**必須用 `sqlite3 .backup`（不可 `cp`，WAL 未 checkpoint）**；並在 MCP 與 `/api/stock/*` 切到 PG 後才考慮停寫。
+- **查法**：`grep -n "exclude" ~/.config/atlas-backup.sh`；`ls -l ~/workspace/atlas/data/state/atlas.db*`。
+
 ## 相關文件
 
 - [universe-scoring-ranked-zero-20260925.md](universe-scoring-ranked-zero-20260925.md)
