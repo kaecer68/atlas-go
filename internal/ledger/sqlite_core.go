@@ -379,6 +379,7 @@ func InitSchema(db *sql.DB) error {
 		addOutcomesEvaluationColumns,   // BL-06 (outcomes 評估欄位持久化)
 		addOutcomePeriodColumns,        // capital-flow Phase 2 PR-2a (market_period join)
 		addPeriodDetectorVersionColumn, // capital-flow Phase 3 PR-3b (detector semantics stamp)
+		addStockWinRateBreakEvenColumn, // Phase 4 PR #2213 (break-even cost, 2026-10-12 P0)
 	}
 	for _, m := range additiveMigrations {
 		if err := m(db); err != nil {
@@ -503,6 +504,29 @@ func addPeriodDetectorVersionColumn(db *sql.DB) error {
 	const table = "period_history"
 	if err := addColumnIfMissing(db, table, "detector_version", "TEXT NOT NULL DEFAULT 'v1'"); err != nil {
 		return fmt.Errorf("migrate %s.detector_version: %w", table, err)
+	}
+	return nil
+}
+
+// addStockWinRateBreakEvenColumn adds break_even_cost_rate to the two win-rate
+// tables (Phase 4, PR #2213). Nullable REAL: rows written before the migration
+// keep NULL until the next stockpicker daily update recomputes them.
+//
+// Why this migration is mandatory (2026-10-12 production P0): the PG branch of
+// the same change shipped as sql/migrations/000028_break_even_cost_rate.up.sql
+// (ALTER TABLE), but the SQLite tables are created with CREATE TABLE IF NOT
+// EXISTS — and that does NOT add columns to an already-existing database. The
+// deployed binary therefore ran `SELECT ... break_even_cost_rate FROM
+// stock_win_rate` against a legacy file ⇒ HTTP 503
+// "no such column: break_even_cost_rate" on /api/stock/win_rate, and the same
+// query in the MCP tools stock_get_win_rate / stock_picker_scan, because the
+// SQLite file is the only read path for those (ATLAS_MCP_STOCKPICKER_DB).
+// CREATE TABLE IF NOT EXISTS cannot heal that; only an ALTER can.
+func addStockWinRateBreakEvenColumn(db *sql.DB) error {
+	for _, table := range []string{"stock_win_rate", "stock_win_rate_by_regime"} {
+		if err := addColumnIfMissing(db, table, "break_even_cost_rate", "REAL"); err != nil {
+			return fmt.Errorf("migrate %s.break_even_cost_rate: %w", table, err)
+		}
 	}
 	return nil
 }
