@@ -805,6 +805,9 @@ func regimeGateExecutor(db *sql.DB) StockpickerWinrateExecutor {
 	}
 }
 
+// TestStockpickerWinrateRecommendRegimeStratumPass: since 2026-10-12 decision ④
+// the regime stratum is a MEASUREMENT, not a gate — this candidate passes
+// because the pooled gates pass, regardless of what the stratum says.
 func TestStockpickerWinrateRecommendRegimeStratumPass(t *testing.T) {
 	stratum := eligibleRegimeStratum("RISK_ON")
 	e := regimeGateExecutor(regimeGateTestDB(t, &stratum))
@@ -817,23 +820,34 @@ func TestStockpickerWinrateRecommendRegimeStratumPass(t *testing.T) {
 	}
 }
 
-func TestStockpickerWinrateRecommendRegimeStratumWeak(t *testing.T) {
-	// calibrating stratum → fail closed.
+// TestStockpickerWinrateRecommend_RegimeStratumNeverGates pins the 2026-10-12
+// decision ④: Stage 2b was REMOVED from the decision path, so a weak or
+// still-calibrating stratum must no longer block. It previously failed CLOSED
+// on a present-but-weak stratum, which hard-blocked 17 of the 58 candidates
+// that had already passed the pooled gates — with no regime-based reason,
+// because the regime variable is near-constant (RISK_OFF 0 days in the only
+// reconstructible window) and the strata carry observations<=6.
+//
+// If a future change makes the regime strata gate again, this test must be
+// replaced deliberately — together with the four re-certification conditions
+// recorded in stockpicker_winrate_executor.go.
+func TestStockpickerWinrateRecommend_RegimeStratumNeverGates(t *testing.T) {
+	// calibrating stratum → must NOT block (measurement only).
 	calibrating := eligibleRegimeStratum("RISK_ON")
 	calibrating.CalibrationStatus = stockpicker.CalibrationCalibrating
 	e := regimeGateExecutor(regimeGateTestDB(t, &calibrating))
-	if _, ok := e.Recommend(stockpickerWinrateAgent(), stockpickerWinrateQuote(), "", domain.RegimeRiskOn, nil); ok {
-		t.Fatal("calibrating stratum must fail closed")
+	if _, ok := e.Recommend(stockpickerWinrateAgent(), stockpickerWinrateQuote(), "", domain.RegimeRiskOn, nil); !ok {
+		t.Fatal("calibrating stratum must not gate: the regime strata are measurements, not a decision input (2026-10-12 decision ④)")
 	}
 
-	// below-threshold win rate → fail closed.
+	// below-threshold stratum → must NOT block.
 	weak := eligibleRegimeStratum("RISK_ON")
 	weak.Hits = 12
 	weak.WinRate = 0.40
 	weak.WilsonLower = 0.24
 	e = regimeGateExecutor(regimeGateTestDB(t, &weak))
-	if _, ok := e.Recommend(stockpickerWinrateAgent(), stockpickerWinrateQuote(), "", domain.RegimeRiskOn, nil); ok {
-		t.Fatal("below-threshold stratum must fail closed")
+	if _, ok := e.Recommend(stockpickerWinrateAgent(), stockpickerWinrateQuote(), "", domain.RegimeRiskOn, nil); !ok {
+		t.Fatal("below-threshold stratum must not gate: the regime strata are measurements, not a decision input (2026-10-12 decision ④)")
 	}
 }
 

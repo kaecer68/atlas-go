@@ -329,54 +329,55 @@ func (e StockpickerWinrateExecutor) Recommend(agent domain.AgentSpec, quote doma
 		return domain.Recommendation{}, false
 	}
 
-	// Stage 2b: regime-stratum gate (Phase 1 regime-conditional calibration).
-	// The pooled gates above prove the condition is measurable; the stratum
-	// proves edge IN THE CURRENT REGIME (RISK_ON-trained parameters failing
-	// in RISK_OFF is the exact failure this blocks).
+	// ── Stage 2b (regime-stratum gate) REMOVED — 2026-10-12, decision ④ ──
 	//
-	// Missing stratum (or a store without stratum reads) fails OPEN with a
-	// logged skip — the pooled gates still decide. Rationale: the strata
-	// table starts empty on deploy day; failing closed on "no evidence yet"
-	// would silence every stockpicker recommendation until the first regime
-	// aggregation runs (precedent: the #1737 market-report fail-open
-	// fallback). A PRESENT but weak stratum fails CLOSED below.
-	if regimeReader, ok := store.(RegimeWinRateReader); ok {
-		stratum, found, err := regimeReader.LoadRegimeWinRate(ctx, symbol, src, e.window(), string(regime))
-		if err != nil || !found {
-			logging.Debug("stockpicker_winrate", "skip",
-				logging.Symbol(quote.Symbol), "stage", "regime_stratum_missing",
-				"regime", string(regime), "found", found, "err", err)
-		} else {
-			if stratum.CalibrationStatus != stockpicker.CalibrationEligible {
-				logging.Debug("stockpicker_winrate", "skip",
-					logging.Symbol(quote.Symbol), "stage", "regime_stratum",
-					"regime", string(regime),
-					"status", string(stratum.CalibrationStatus))
-				return domain.Recommendation{}, false
-			}
-			if stratum.Observations < minObs {
-				logging.Debug("stockpicker_winrate", "skip",
-					logging.Symbol(quote.Symbol), "stage", "regime_stratum_observations",
-					"regime", string(regime),
-					"observations", stratum.Observations, "min", minObs)
-				return domain.Recommendation{}, false
-			}
-			if stratum.WinRate < minWR {
-				logging.Debug("stockpicker_winrate", "skip",
-					logging.Symbol(quote.Symbol), "stage", "regime_stratum",
-					"regime", string(regime),
-					"win_rate", stratum.WinRate, "min", minWR)
-				return domain.Recommendation{}, false
-			}
-			if stratum.WilsonLower < minWL {
-				logging.Debug("stockpicker_winrate", "skip",
-					logging.Symbol(quote.Symbol), "stage", "regime_stratum",
-					"regime", string(regime),
-					"wilson_lower", stratum.WilsonLower, "min", minWL)
-				return domain.Recommendation{}, false
-			}
-		}
-	}
+	// What it was: a regime-conditional gate requiring an eligible
+	// (symbol, source, window, CURRENT-regime) stratum with observations>=minObs
+	// plus win-rate/Wilson floors. It failed OPEN when no stratum existed and
+	// CLOSED when a stratum existed but was weak.
+	//
+	// Why it was removed (all four points measured on 2026-10-12):
+	//   1. The regime variable cannot discriminate. Reconstructing the live
+	//      stress formula over the only window whose inputs exist
+	//      (2026-06-01..2026-10-12, 134 days) gives RISK_ON 113-129 /
+	//      NEUTRAL 5-21 / RISK_OFF 0 ⇒ conditioning on it reproduces the
+	//      pooled gate and its only real effect is blocking.
+	//   2. Its live effect was harmful, not neutral: of the 58 (symbol,source)
+	//      pairs that passed the pooled gates, 17 were hard-blocked with no
+	//      regime-based reason (strata present but observations<=6).
+	//   3. It was unreachable in production anyway — Stage 0b (the 2026-10-06
+	//      demotion of stockpicker-foreign-3d-net-buy) removes the only wired
+	//      source and recommendation_outcomes holds 0 stockpicker rows — so
+	//      removing it changes no observed behavior.
+	//   4. Every alternative is worse: backfilled regimes are unusable as a
+	//      gate (regime_history is written by TWO formulas that disagree —
+	//      2026-09-23: live 7.81 RISK_ON vs backfill 36.68 NEUTRAL — and a
+	//      large backfill is silently truncated by LoadRegimeHistoryAll's
+	//      LIMIT 400); waiting is unbounded (what is missing is regime
+	//      VARIANCE, not time); lowering the thresholds cannot help (the
+	//      binding constraint is variance, not n).
+	//
+	// The measurement chain stays intact: the daily update still writes
+	// stock_win_rate_by_regime, and SaveRegimeWinRate / LoadRegimeWinRate
+	// remain the write/read seam for it.
+	//
+	// Re-certification conditions — ALL FOUR must hold before any
+	// regime-conditional gate returns to the decision path:
+	//   1. ONE writer for regime_history (today two formulas produce opposite
+	//      labels for the same day).
+	//   2. PIT fix: an outcome's regime label is currently the ONLY non-PIT
+	//      column in that table — regime(D) is captured at D+1 02:59-07:55 TPE
+	//      while the entry price is D 13:30 TPE, i.e. the label carries one US
+	//      session of future information. It must be recorded as regime(D-1).
+	//   3. The LIMIT 400 truncation in LoadRegimeHistoryAll must go before any
+	//      historical backfill.
+	//   4. Demonstrated variance: enough RISK_OFF days (and NEUTRAL strata
+	//      above the observation floor) for the strata to differ from the
+	//      pooled rate by more than noise.
+	//
+	// `regime` remains in the signature because callers supply the current
+	// regime and the measurement chain records it; it no longer gates.
+	_ = regime
 
 	// Stage 3: capital-flow gateway — fail closed when the per-symbol
 	// foreign flow is missing (never fabricate backing).
