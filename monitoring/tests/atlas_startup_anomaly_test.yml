@@ -1,0 +1,103 @@
+# monitoring/tests/atlas_startup_anomaly_test.yml
+# promtool unit tests（`promtool test rules`）for monitoring/rules/atlas_startup_anomaly_alerts.yml
+# 針對 2026-10-11 新增的 AtlasSchemaVersionDrift（#2214 的護欄）:
+#   check rules 只驗語法；本檔驗「該 firing 的會 firing」「不該 firing 的沉默」以及
+#   label/annotation 逐字比對（reason 標籤必須正確傳遞）。
+# 執行（CI: quality.yml monitoring-config；版本須與生產一致）:
+#   promtool test rules monitoring/tests/atlas_startup_anomaly_test.yml
+
+rule_files:
+- ../rules/atlas_startup_anomaly_alerts.yml
+evaluation_interval: 1m
+tests:
+- name: A drift(lagging) ⇒ AtlasSchemaVersionDrift firing；同檔的 AtlasDBInitFailure 沉默
+  interval: 1m
+  input_series:
+  - series: atlas_schema_version_drift_total{reason="lagging"}
+    values: 0 1x9
+  alert_rule_test:
+  - eval_time: 3m
+    alertname: AtlasSchemaVersionDrift
+    exp_alerts:
+    - exp_labels:
+        severity: warning
+        service: atlas-monitoring
+        component: bootstrap
+        wave: '9.1'
+        enabled: 'true'
+        alertname: AtlasSchemaVersionDrift
+        reason: lagging
+      exp_annotations:
+        summary: atlas-go 啟動時偵測到 DB schema 版本漂移
+        description: 'atlas-go 啟動時發現 DB schema 與 binary 期望的 migrations 不一致（reason=lagging）。
+
+          lagging = DB 落後程式碼；dirty = 遷移半套用。兩者都會讓新程式碼跑在舊 schema 上而不報錯
+
+          （缺 column 的查詢失敗會被上層忽略）⇒ 這是唯一的通知途徑：bootstrap 只 log WARN、服務照常啟動。
+
+          立即檢查：
+
+          1. docker exec atlas-postgres psql -U atlas -d atlas -Atc "select max(version), dirty from schema_migrations;"
+
+          2. 容器內 /app/sql/migrations 是否包含程式碼期望的最新版號
+
+          3. 若 DB 落後 ⇒ 補跑 migration；若 DB 領先 ⇒ 是 binary rollback，屬預期、不需處理
+
+          '
+        runbook_url: https://github.com/kaecer68/atlas-go/blob/main/docs/operations/local-deploy.md
+  - eval_time: 3m
+    alertname: AtlasDBInitFailure
+    exp_alerts: []
+- name: B drift(dirty) ⇒ reason 標籤正確傳遞（遷移半套用）
+  interval: 1m
+  input_series:
+  - series: atlas_schema_version_drift_total{reason="dirty"}
+    values: 0 1x9
+  alert_rule_test:
+  - eval_time: 3m
+    alertname: AtlasSchemaVersionDrift
+    exp_alerts:
+    - exp_labels:
+        severity: warning
+        service: atlas-monitoring
+        component: bootstrap
+        wave: '9.1'
+        enabled: 'true'
+        alertname: AtlasSchemaVersionDrift
+        reason: dirty
+      exp_annotations:
+        summary: atlas-go 啟動時偵測到 DB schema 版本漂移
+        description: 'atlas-go 啟動時發現 DB schema 與 binary 期望的 migrations 不一致（reason=dirty）。
+
+          lagging = DB 落後程式碼；dirty = 遷移半套用。兩者都會讓新程式碼跑在舊 schema 上而不報錯
+
+          （缺 column 的查詢失敗會被上層忽略）⇒ 這是唯一的通知途徑：bootstrap 只 log WARN、服務照常啟動。
+
+          立即檢查：
+
+          1. docker exec atlas-postgres psql -U atlas -d atlas -Atc "select max(version), dirty from schema_migrations;"
+
+          2. 容器內 /app/sql/migrations 是否包含程式碼期望的最新版號
+
+          3. 若 DB 落後 ⇒ 補跑 migration；若 DB 領先 ⇒ 是 binary rollback，屬預期、不需處理
+
+          '
+        runbook_url: https://github.com/kaecer68/atlas-go/blob/main/docs/operations/local-deploy.md
+- name: C 序列缺席（無漂移事件）⇒ 沉默（負向對照）
+  interval: 1m
+  input_series:
+  - series: atlas_schema_version_drift_total{reason="lagging"}
+    values: '0x10'
+  alert_rule_test:
+  - eval_time: 3m
+    alertname: AtlasSchemaVersionDrift
+    exp_alerts: []
+- name: D 計數有值但未增加（increase=0）⇒ 沉默（負向對照）
+  interval: 1m
+  input_series:
+  - series: atlas_schema_version_drift_total{reason="lagging"}
+    values: 5x10
+  alert_rule_test:
+  - eval_time: 3m
+    alertname: AtlasSchemaVersionDrift
+    exp_alerts: []

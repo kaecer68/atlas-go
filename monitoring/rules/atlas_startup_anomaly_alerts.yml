@@ -40,6 +40,27 @@ groups:
           # 在 atlas-go 內不存在（跨 repo blob 連結會是新的死鏈）。
           runbook_url: "https://github.com/kaecer68/atlas-go/blob/main/docs/operations/local-deploy.md"
 
+      - alert: AtlasSchemaVersionDrift
+        expr: increase(atlas_schema_version_drift_total[10m]) > 0
+        for: 1m
+        labels:
+          severity: warning
+          service: atlas-monitoring
+          component: bootstrap
+          wave: "9.1"
+          enabled: "true"
+        annotations:
+          summary: "atlas-go 啟動時偵測到 DB schema 版本漂移"
+          description: |
+            atlas-go 啟動時發現 DB schema 與 binary 期望的 migrations 不一致（reason={{ $labels.reason }}）。
+            lagging = DB 落後程式碼；dirty = 遷移半套用。兩者都會讓新程式碼跑在舊 schema 上而不報錯
+            （缺 column 的查詢失敗會被上層忽略）⇒ 這是唯一的通知途徑：bootstrap 只 log WARN、服務照常啟動。
+            立即檢查：
+            1. docker exec atlas-postgres psql -U atlas -d atlas -Atc "select max(version), dirty from schema_migrations;"
+            2. 容器內 /app/sql/migrations 是否包含程式碼期望的最新版號
+            3. 若 DB 落後 ⇒ 補跑 migration；若 DB 領先 ⇒ 是 binary rollback，屬預期、不需處理
+          runbook_url: "https://github.com/kaecer68/atlas-go/blob/main/docs/operations/local-deploy.md"
+
       - alert: AtlasChannelUsYahooErrorSustained
         expr: rate(atlas_channel_health_errors_total{channel="us_yahoo"}[15m]) > 0.05
         for: 30m
