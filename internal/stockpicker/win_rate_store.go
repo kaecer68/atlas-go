@@ -117,9 +117,21 @@ func LoadWinRate(ctx context.Context, db *sql.DB, symbol, source, window string)
 	var summary StockWinRateSummary
 	var status string
 
+	// The three cost/return columns are NULLABLE by design (net_cost_rate and
+	// avg_forward_return predate this query; break_even_cost_rate arrived with
+	// the Phase 4 additive migration, so every legacy row is NULL until the
+	// next stockpicker daily update recomputes it). Scanning a NULL into a
+	// bare float64 is a runtime error, not a zero: on 2026-10-12 production
+	// answered HTTP 503 with
+	//   `Scan error on column index 12, name "break_even_cost_rate":
+	//    converting NULL to float64 is unsupported`
+	// for all 3,055 legacy rows. COALESCE keeps the struct and gives the
+	// documented "not computed yet" value (0) instead of failing the request.
 	err := db.QueryRowContext(ctx, `
 		SELECT symbol, source, rolling_window, observations, hits, win_rate, wilson_lower, wilson_upper,
-		       confidence, calibration_status, net_cost_rate, avg_forward_return, break_even_cost_rate, updated_at
+		       confidence, calibration_status,
+		       COALESCE(net_cost_rate, 0), COALESCE(avg_forward_return, 0),
+		       COALESCE(break_even_cost_rate, 0), updated_at
 		FROM stock_win_rate
 		WHERE symbol = $1 AND source = $2 AND rolling_window = $3`,
 		symbol, source, window,

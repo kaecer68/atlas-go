@@ -197,9 +197,14 @@ func (s *server) handleStockPickerScan(ctx context.Context, _ *mcp.CallToolReque
 // It reads stock_win_rate directly — the same persisted aggregates
 // stock_get_win_rate reads — and never recomputes.
 func scanWinRateRows(ctx context.Context, db *sql.DB, window, conditionID string, minObs int, minWinRate float64, sortCol, direction string) ([]stockPickerScanCandidate, error) {
+	// COALESCE on the three nullable numeric columns: break_even_cost_rate was
+	// added by the Phase 4 additive migration, so legacy rows are NULL, and
+	// scanning NULL into float64 fails the whole tool (same defect class as the
+	// 2026-10-12 /api/stock/win_rate HTTP 503).
 	query := `SELECT symbol, source, rolling_window, observations, hits, win_rate,
 		wilson_lower, wilson_upper, confidence, calibration_status,
-		net_cost_rate, avg_forward_return, break_even_cost_rate, updated_at
+		COALESCE(net_cost_rate, 0), COALESCE(avg_forward_return, 0),
+		COALESCE(break_even_cost_rate, 0), updated_at
 	FROM stock_win_rate
 	WHERE rolling_window = ? AND source LIKE 'stockpicker-%'
 	  AND observations >= ? AND win_rate >= ?
