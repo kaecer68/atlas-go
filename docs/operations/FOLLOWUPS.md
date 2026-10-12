@@ -2551,6 +2551,7 @@ PY
 - **事實（皆已實查）**：
   1. **既有 spec 自述**（`docs/specs/dashboard-metrics-ssot-spec.md`）：**「PG 是已裁決的 SSOT，但只有 `RegisterPerformanceRoutes` 走 backend-aware factory（`NewReportOutcomeStore`）；其餘 **6 處 handler** 直接 `os.ReadDir(ledgerDir/sessions)` 或 `ledger.NewStore(ledgerDir)` **硬讀 JSONL**」**＋違規點清單（全在 `internal/monitoring/`）
   2. **stockpicker 訊號結果鏈**以 **SQLite ＋ JSON 快照**落地（`internal/stockpicker/signal_outcome_store.go:49`「thin SQLite-backed wrapper」／`aggregate.go:5`）⇒ 生產 `data/state/atlas.db` **非空殼**（`stock_signal_outcomes` **73,401 列**／`stock_win_rate` **3,051 列**，2026-09-30 實測），而其 **PG 同名表為 0**
+     - ★ **2026-10-11 更正（現況已變）**：PG **不再是 0**，兩邊**逐表同步**——`stock_signal_outcomes` SQLite **74,073** = PG **74,073**、`stock_win_rate` SQLite **3,055** = PG **3,055**（生產 `ATLAS_STORE_BACKEND=postgres`、PG `schema_migrations`=28）。⇒ 本條的③「讀錯 store 的誤判風險」**仍在**（查資料前必須確認該 store 的後端），但「PG 為 0」這個**具體形狀已不成立**；①「6 處 handler 硬讀 JSONL」與②「`atlas.db` 未納入備份」**仍為 open**。
   3. ★ **誤判風險已實際發生一次**：同日本 session 依 PG 的 0 列一度判「結算鏈沒在寫」 ✗ ⇒ 實為**讀錯 store**
   4. ★ **備份未涵蓋**：`scripts/ops/*` 與 `docs/operations/local-deploy.md` **未見** `atlas.db` 的備份處理（該檔是該鏈的**唯一事實來源**）⇒ 資料遺失風險
   5. 遷移工具**已存在**：`cmd/migrate-data`（SQLite→PG；含 `SQLiteOutcomeStore.RecordOutcomes` 的鏡射註解）＋ `cmd/migrate-jsonl-to-sqlite`

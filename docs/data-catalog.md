@@ -426,7 +426,7 @@
 | **Tables** | `outcomes`, `screening_rejects`, `experiments`, `session_summaries`, `human_interventions`, `quotes` |
 | **生產者** | `cmd/migrate-jsonl-to-sqlite/main.go` |
 | **消費者** | `internal/config/config.go`（路徑參考） |
-| **狀態** | 本機 dev artifact；`ATLAS_STORE_BACKEND=sqlite` 時使用。prod 上 `ATLAS_STORE_BACKEND=postgres` 時，**跟隨後端決策的 store 不寫此檔**；但**既有例外**（如 stockpicker 訊號結果鏈）仍以 SQLite 落地 ⇒ 生產此檔**非空殼**（2026-09-30 實測 `stock_signal_outcomes` 73,401 列／`stock_win_rate` 3,051 列），其 PG 同名表為空屬**預期**。 |
+| **狀態** | 本機 dev artifact；`ATLAS_STORE_BACKEND=sqlite` 時使用。prod 上 `ATLAS_STORE_BACKEND=postgres` 時，**跟隨後端決策的 store 不寫此檔**；但**既有例外**（如 stockpicker 訊號結果鏈）仍以 SQLite 落地 ⇒ 生產此檔**非空殼**（2026-10-11 實測 `stock_signal_outcomes` 74,073 列／`stock_win_rate` 3,055 列）。⚠️ **該例外在 PG 同樣有落地且逐表同步**：同日實測 PG `stock_signal_outcomes` 74,073 列、`stock_win_rate` 3,055 列，兩邊完全相同 ⇒ 舊敘述「其 PG 同名表為空屬**預期**」**為錯、已作廢**（2026-10-11 更正）。查資料前仍須先確認該 store 的後端。 |
 | **注意** | 禁止把此路徑當成 production 資料來源；CLI/job 讀資料必須走 `store_factory` backend-aware 路徑。 |
 
 ### PostgreSQL `atlas` database
