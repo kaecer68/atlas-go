@@ -423,6 +423,73 @@ func (s *Store) LoadHumanInterventions() ([]domain.HumanIntervention, error) {
 	return records, scanner.Err()
 }
 
+// LoadTrialSharpes reads every persisted PromptExperimentResult that carries
+// EvalMetrics and returns its Sharpe, newest first (by file mtime, mirroring
+// SQLiteStore's ORDER BY id DESC). Blobs without EvalMetrics are skipped —
+// never back-filled with a guess.
+//
+// Why this exists (2026-10-12): the DSR gate in internal/experiment looks the
+// loader up with a type assertion on the Judge's store, and the production
+// Judge is built from THIS store (`cmd/atlas/main.go`:
+// `ledger.NewStore(cfg.LedgerDir).(ledger.ExperimentStore)`). Only the SQLite
+// and Postgres stores implemented TrialSharpeLoader, so the assertion failed
+// on every candidate and deflatedSharpeGate returned "skip" for its whole
+// life — the anti-luck gate never ran in production while 282 real trials
+// (10 (agent,mutation) groups, all K>=2, max K=56) sat unread in
+// <baseDir>/experiments/*.json. Fail-open here was a wiring hole, not a
+// design choice.
+func (s *Store) LoadTrialSharpes() ([]TrialSharpe, error) {
+	dir := filepath.Join(s.baseDir, "experiments")
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil // no experiments recorded yet: K<2, gate skips
+		}
+		return nil, fmt.Errorf("read experiment dir: %w", err)
+	}
+
+	type dated struct {
+		ts    TrialSharpe
+		mtime int64
+	}
+	var found []dated
+	for _, e := range entries {
+		if e.IsDir() || !strings.HasSuffix(e.Name(), ".json") {
+			continue
+		}
+		full := filepath.Join(dir, e.Name())
+		blob, err := os.ReadFile(full)
+		if err != nil {
+			return nil, fmt.Errorf("read %s: %w", e.Name(), err)
+		}
+		ts, ok := trialSharpeFromResult(string(blob))
+		if !ok {
+			continue
+		}
+		var mt int64
+		if info, err := e.Info(); err == nil {
+			mt = info.ModTime().UnixNano()
+		}
+		found = append(found, dated{ts: ts, mtime: mt})
+	}
+
+	// newest first, deterministic on ties by experiment id
+	slices.SortFunc(found, func(a, b dated) int {
+		if a.mtime != b.mtime {
+			if a.mtime > b.mtime {
+				return -1
+			}
+			return 1
+		}
+		return strings.Compare(b.ts.ExperimentID, a.ts.ExperimentID)
+	})
+	out := make([]TrialSharpe, 0, len(found))
+	for _, d := range found {
+		out = append(out, d.ts)
+	}
+	return out, nil
+}
+
 func (s *Store) RecordPromptExperimentResult(experimentID string, result domain.PromptExperimentResult) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()

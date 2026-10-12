@@ -476,9 +476,20 @@ check-production-host:
 # 的 daily-maintenance-contract job 以 hermetic（不連網）方式覆蓋 ⇒ 此處跳過是**有覆蓋**的跳過。
 ci: check-production-host
 	@echo "🛡️  Running quick CI checks (slow scripts in 'make ci-slow')..."
+	# check_frontend_dist.sh is scoped to the branch diff here, NOT run by the
+	# glob below (2026-10-12 defect). Why: client_web/dist + admin_web/dist are
+	# gitignored BUILD products, so in any fresh worktree/clone they are absent
+	# by construction — the script's no-arg mode is deliberately strict (it is
+	# what `make check-frontend-dist` / `rebuild-all` must run on a build host
+	# after `build-frontend`), so running it unnscoped here turns every fresh
+	# checkout red with "dist 內沒有建置產物". pre-push already runs it with
+	# `--diff origin/main...HEAD`; `ci` mirrors that scope so the gate means
+	# "did THIS branch forget to rebuild a dist it changed", which is the only
+	# question a pre-push CI can answer.
+	@bash scripts/ci/check_frontend_dist.sh --diff origin/main...HEAD
 	@failed=0; passed=0; skipped=0; \
 	for script in scripts/ci/check_*.sh; do \
-		case "$$script" in *data_naming*|*layer3_*|*markdown_links*|*critical_tasks*|*finmind_quota*|*task_liveness*) continue;; esac; \
+		case "$$script" in *data_naming*|*layer3_*|*markdown_links*|*critical_tasks*|*finmind_quota*|*task_liveness*|*frontend_dist*) continue;; esac; \
 		if [ ! -f "$$script" ]; then continue; fi; \
 		echo "  → $$script"; \
 		if timeout 30 bash "$$script" > /dev/null 2>&1; then \
