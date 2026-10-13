@@ -2609,7 +2609,8 @@ PY
 
 ### FU-20261012-01 — `LoadRegimeHistoryAll(ctx,400)` 的 `LIMIT 400` 會**靜默截斷**最舊的 regime 標籤
 
-- **狀態**：`open`
+- **狀態**：`done`
+- **結案（2026-10-13）**：新增 `ledger.RegimeHistoryUnlimited`（負值＝無 LIMIT）並把 `cmd/atlas` 的 RegimeLoader 改用它；測試含 120 列未截斷 ＋ `0` 仍為舊預設 90 的相容性驗證。
 - **記錄日期**：2026-10-12
 - **來源**：regime gate 裁決調查（`atlas-notes/review-20261012/regime-gate-verdict.md`）
 - **事實**：`RegimeLoader` 以 `LoadRegimeHistoryAll(ctx, 400)` ＋ `ORDER BY date DESC LIMIT 400` 取歷史 ⇒ 目前 20 列無感，但**任何大規模回填（例如 639 天）都會被截斷到最新 400 天**，且**不會報錯**。
@@ -2639,7 +2640,8 @@ PY
 
 ### FU-20261012-04 — `WalkForwardFolds` 的標籤窗緩衝在**長連假邊界 purge 不足**；三個 embargo 實作三種單位
 
-- **狀態**：`open`
+- **狀態**：`done`
+- **結案（2026-10-13）**：#2222 已以**交易日曆**（`taiwanholidays.IsTradingDay`）修 purge，並附長連假回歸測試（2026-02-26 5 交易日 = 03-06）。**仍未處理**：三個 embargo 實作的單位統一（`internal/portfolio/window_splitter.go` 的 `EmbargoDays` 文件寫 trading days、程式按列索引）。
 - **記錄日期**：2026-10-12
 - **來源**：同上調查（§F）
 - **事實**：`internal/stockpicker/walkforward.go` 以 `forwardDays + weekendBufferDays`（= forwardDays+2）估標籤窗；實測 **2026-02-26 的 5 交易日標籤窗實際跨 8 個日曆天**（農曆年假），緩衝只有 7 ⇒ purge 不足、訓練集與驗證集標籤重疊。另 `ml.PurgedKFoldSplitter` 無 production caller，且三處 embargo 實作使用三種不同單位。
@@ -2659,7 +2661,8 @@ PY
 
 ### FU-20261012-06 — 三道「PG-first」治理機制**本身無效**（引用不存在的條文／規格自相矛盾／檢查恆不紅燈）
 
-- **狀態**：`open`
+- **狀態**：`done`
+- **結案（2026-10-13）**：#2221 已修：①改引真實裁決文件（原引用的 `docs/reference/constitution.md` 對 postgres/sqlite 0 命中）②更正 `repository-dual-write-spec.md` 與 08-23 PG-SSoT 衝突的敘述 ③`check-persistence-format` 有 FAIL 即回非零（附負向證明測試）。
 - **記錄日期**：2026-10-12
 - **來源**：同上調查（§3.3／§3.4，含子代理 C 的設計意圖比對）
 - **事實**：① `docs/specs/store-backend-decision-spec.md:6` 以 `docs/reference/constitution.md` 當「Postgres-first」依據，但該檔對 postgres/sqlite **0 命中**（引用不存在的條文）。② `docs/specs/repository-dual-write-spec.md:7` 仍寫「JSONL 為 source of truth」，與 **2026-08-23 PG-SSoT 裁決**衝突。③ `cmd/check-persistence-format/main.go:31-80` 印出 FAIL 後**恆 `return nil`** ⇒ `.github/workflows/ci-cd.yml:72` 這道檢查**永不紅燈**。
@@ -2679,7 +2682,8 @@ PY
 
 ### FU-20261012-08 — `data/state/atlas.db` **不在每日備份內**，且唯一還原點 schema 已舊
 
-- **狀態**：`open`
+- **狀態**：`done`
+- **結案（2026-10-13）**：已納入每日備份（`sqlite3 .backup`，腳本第 67-71 行）；實測產物 21,405,696 B、`stock_win_rate` 3,058 列、`pragma integrity_check = ok`。
 - **記錄日期**：2026-10-12
 - **來源**：Q2 調查 ＋ 2026-10-12 P0（該檔是 MCP 與 `/api/stock/*` 的唯一讀取路徑）
 - **事實**：`~/.config/atlas-backup.sh:61` 明文 `--exclude '*.db'`（2026-09-29 刻意）；目前唯一副本是 **2026-09-30 的手工檔（schema 已舊）**。該檔 20,336,640 bytes，WAL 未 checkpoint（實測 4,120,032 bytes）。
