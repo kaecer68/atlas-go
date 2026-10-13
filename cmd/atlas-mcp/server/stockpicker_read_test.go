@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"database/sql/driver"
-	"encoding/json"
 	"errors"
 	"io"
 	"regexp"
@@ -443,7 +442,7 @@ func (r *winRateQueryRecorder) executed() []string {
 
 type recordingDriver struct{ rec *winRateQueryRecorder }
 
-func (d recordingDriver) Open(string) (driver.Conn, error) { return recordingConn{rec: d.rec}, nil }
+func (d recordingDriver) Open(string) (driver.Conn, error) { return recordingConn(d), nil }
 
 type recordingConn struct{ rec *winRateQueryRecorder }
 
@@ -511,17 +510,6 @@ func (r *recordingRows) Next(dest []driver.Value) error {
 	copy(dest, r.rows[r.next])
 	r.next++
 	return nil
-}
-
-// jsonOf marshals an output for whole-struct comparisons (used by the
-// PostgreSQL integration parity test).
-func jsonOf(t *testing.T, v any) string {
-	t.Helper()
-	b, err := json.Marshal(v)
-	if err != nil {
-		t.Fatalf("marshal: %v", err)
-	}
-	return string(b)
 }
 
 // --- audit provenance --------------------------------------------------------

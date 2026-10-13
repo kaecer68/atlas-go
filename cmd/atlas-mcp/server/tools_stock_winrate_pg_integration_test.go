@@ -5,6 +5,7 @@ package server
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"strings"
 	"testing"
 
@@ -288,4 +289,15 @@ func conditionByID(t *testing.T, out stockWinRateOutput, conditionID string) sto
 	}
 	t.Fatalf("condition %q missing from %+v", conditionID, out.Conditions)
 	return stockWinRateCondition{}
+}
+
+// jsonOf marshals a tool output so whole-struct comparisons (the parity
+// assertion) do not depend on hand-picked fields.
+func jsonOf(t *testing.T, v any) string {
+	t.Helper()
+	b, err := json.Marshal(v)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	return string(b)
 }
