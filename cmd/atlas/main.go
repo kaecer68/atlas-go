@@ -1713,7 +1713,13 @@ func run(args []string, deps appDeps) error {
 					if historicalStore == nil {
 						return nil
 					}
-					rows, err := historicalStore.LoadRegimeHistoryAll(ctx, ledger.RegimeHistoryUnlimited)
+					// Live-only on purpose (FU-20261012-03): the table has two
+					// writers and the backfill's legacy formula contradicts the
+					// live one for the same day. Only live snapshots may label
+					// an outcome; backfilled rows stay for period analysis.
+					// RegimeHistoryUnlimited (FU-20261012-01) so the oldest
+					// labels are not silently truncated either.
+					rows, err := historicalStore.LoadRegimeHistory(ctx, ledger.RegimeHistoryUnlimited)
 					if err != nil || len(rows) == 0 {
 						return nil
 					}

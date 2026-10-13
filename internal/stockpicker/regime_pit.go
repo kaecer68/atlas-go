@@ -44,6 +44,16 @@ func PITRegimeBySession(rows []ledger.RegimeRow) map[string]string {
 		if row.Regime == "" || row.CapturedAt.IsZero() {
 			continue
 		}
+		// 只採 live 快照（is_synthetic = 0）。回填列
+		// （cmd/backfill-period-history）不得標註任何 session，理由有兩個且互相獨立：
+		//   1. 它用**另一套公式**（legacy VIX/DXY/US10Y）⇒ 同一天可能給出與 live
+		//      相反的標籤（2026-09-23：live 7.81 RISK_ON vs 回填 36.68 NEUTRAL）。
+		//   2. 它的 CapturedAt 是**回填執行當下**，不是該日的事實時間 ⇒ 對過去的
+		//      session 而言天生非 PIT。
+		// 回填列仍留在表內供 period 分析；這裡只是不讓它們當 outcome 標籤。
+		if row.IsSynthetic != 0 {
+			continue
+		}
 		captured := row.CapturedAt.In(tpe)
 		day := time.Date(captured.Year(), captured.Month(), captured.Day(), 0, 0, 0, 0, tpe)
 		closeToday := time.Date(day.Year(), day.Month(), day.Day(), twseCloseHour, twseCloseMinute, 0, 0, tpe)

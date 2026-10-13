@@ -106,3 +106,32 @@ func TestPITRegimeBySession_SkipsIncompleteRows(t *testing.T) {
 		t.Fatalf("不完整列必須略過（不回填推測），got %v", got)
 	}
 }
+
+// TestPITRegimeBySession_IgnoresBackfilledRows pins the FU-20261012-03 policy:
+// regime_history has TWO writers and the backfill (cmd/backfill-period-history)
+// uses a different formula that contradicts the live one for the same day
+// (production 2026-09-23: live 7.81 RISK_ON vs backfill 36.68 NEUTRAL), and its
+// CapturedAt is the backfill RUN time rather than the fact time. Only live
+// snapshots (is_synthetic = 0) may label an outcome; a day with nothing but
+// backfilled rows must stay unlabelled (unknown) rather than carry a label that
+// contradicts the decision path.
+func TestPITRegimeBySession_IgnoresBackfilledRows(t *testing.T) {
+	tpe := taipeiZone()
+	live := time.Date(2026, 9, 23, 10, 0, 0, 0, tpe)     // before the 13:30 close → labels 09-23
+	backfill := time.Date(2026, 9, 23, 11, 0, 0, 0, tpe) // LATER capture: would win without the filter
+
+	got := PITRegimeBySession([]ledger.RegimeRow{
+		{Date: "2026-09-23", Regime: "RISK_ON", CapturedAt: live.UTC(), IsSynthetic: 0},
+		{Date: "2026-09-23", Regime: "NEUTRAL", CapturedAt: backfill.UTC(), IsSynthetic: 1},
+	})
+	if got["2026-09-23"] != "RISK_ON" {
+		t.Fatalf("must label with the LIVE snapshot, got %q — a backfilled row must never label an outcome", got["2026-09-23"])
+	}
+
+	only := PITRegimeBySession([]ledger.RegimeRow{
+		{Date: "2026-09-22", Regime: "NEUTRAL", CapturedAt: time.Date(2026, 9, 22, 10, 0, 0, 0, tpe).UTC(), IsSynthetic: 1},
+	})
+	if len(only) != 0 {
+		t.Fatalf("a synthetic-only day must stay unlabelled (unknown), got %v", only)
+	}
+}
