@@ -500,6 +500,10 @@ func TestStockpickerWinrateNilDependenciesDefaultBehavior(t *testing.T) {
 	// a developer's ATLAS_MCP_STOCKPICKER_DB / ATLAS_WORK_DIR.
 	t.Setenv("ATLAS_MCP_STOCKPICKER_DB", "")
 	t.Setenv("ATLAS_WORK_DIR", "")
+	// C6c: these tests exercise the SQLite read path, so the backend decision
+	// must not pick up a developer's DATABASE_URL / ATLAS_STORE_BACKEND.
+	t.Setenv("DATABASE_URL", "")
+	t.Setenv("ATLAS_STORE_BACKEND", "")
 
 	// Decision clock on the fixture's flow date: the default file FlowSource
 	// read the newest flow point (flowFixtureDate) as fresh, which is the
@@ -530,6 +534,10 @@ func TestStockpickerWinrateNilDependenciesMissingLedger(t *testing.T) {
 	tmp := t.TempDir() // no data/state/atlas.db
 	t.Setenv("ATLAS_MCP_STOCKPICKER_DB", "")
 	t.Setenv("ATLAS_WORK_DIR", "")
+	// C6c: these tests exercise the SQLite read path, so the backend decision
+	// must not pick up a developer's DATABASE_URL / ATLAS_STORE_BACKEND.
+	t.Setenv("DATABASE_URL", "")
+	t.Setenv("ATLAS_STORE_BACKEND", "")
 
 	e := StockpickerWinrateExecutor{
 		Source: testRetainedSource, WorkDir: tmp}
@@ -551,6 +559,10 @@ func TestStockpickerWinrateStaleFlowFailsClosed(t *testing.T) {
 
 	t.Setenv("ATLAS_MCP_STOCKPICKER_DB", "")
 	t.Setenv("ATLAS_WORK_DIR", "")
+	// C6c: these tests exercise the SQLite read path, so the backend decision
+	// must not pick up a developer's DATABASE_URL / ATLAS_STORE_BACKEND.
+	t.Setenv("DATABASE_URL", "")
+	t.Setenv("ATLAS_STORE_BACKEND", "")
 
 	e := StockpickerWinrateExecutor{
 		Source:  testRetainedSource,
@@ -584,6 +596,10 @@ func TestStockpickerWinrateFreshnessMaxAgeOverride(t *testing.T) {
 
 	t.Setenv("ATLAS_MCP_STOCKPICKER_DB", "")
 	t.Setenv("ATLAS_WORK_DIR", "")
+	// C6c: these tests exercise the SQLite read path, so the backend decision
+	// must not pick up a developer's DATABASE_URL / ATLAS_STORE_BACKEND.
+	t.Setenv("DATABASE_URL", "")
+	t.Setenv("ATLAS_STORE_BACKEND", "")
 
 	now := func() time.Time { return time.Date(2026, 9, 2, 12, 0, 0, 0, time.UTC) } // 7 days after the flow point
 	if _, ok := (StockpickerWinrateExecutor{

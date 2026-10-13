@@ -34,10 +34,18 @@
 // Injection (all fields nil → production defaults, so the zero value
 // `StockpickerWinrateExecutor{}` is the wiring-free default):
 //
-//   - WinRateStore: a WinRateStoreReader; nil opens the read-only ledger
-//     at DBPath (default ATLAS_MCP_STOCKPICKER_DB, else
-//     data/state/atlas.db under WorkDir) with OpenDB (default
-//     stocktools.OpenWinRateDB, mode=ro).
+//   - WinRateStore: a WinRateStoreReader; nil (and no OpenDB) resolves the
+//     read backend (C6c, see winRateStore) and reads PostgreSQL when the
+//     deployment declares it, else the read-only SQLite ledger at DBPath
+//     (default ATLAS_MCP_STOCKPICKER_DB, else data/state/atlas.db under
+//     WorkDir).
+//   - OpenDB: an explicitly injected opener for the read-only SQLite ledger
+//     at DBPath (mode=ro, stocktools.OpenWinRateDB); it wins over the
+//     backend decision below, which is what keeps existing test/external
+//     wiring semantics unchanged.
+//   - PGURL/StoreBackend: the PostgreSQL DSN and the declared store backend
+//     used by the C6c decision. Empty → DATABASE_URL / ATLAS_STORE_BACKEND,
+//     exactly the pair cmd/atlas already holds in config after config.Load.
 //   - FlowSource: supplies the latest per-symbol foreign net flow
 //     (FlowPoint.ForeignNet units, 千股) plus its session date; nil reads
 //     the flow file. MaxFlowAgeDays/Now bound how old that point may be
@@ -173,13 +181,30 @@ func (s fileFlowSource) LatestForeignNet(symbol string) (float64, string, bool) 
 // handle is opened with mode=ro (stocktools.OpenWinRateDB) and flows are
 // plain file reads. The zero value is the fully-default production wiring.
 type StockpickerWinrateExecutor struct {
-	// WinRateStore reads persisted win-rate summaries. nil → the executor
-	// opens the read-only ledger (DBPath or the default) via OpenDB and
-	// wraps it in stockpicker.WinRateStore.
+	// WinRateStore reads persisted win-rate summaries. nil → OpenDB when it
+	// is wired, else the backend-resolving source (C6c).
 	WinRateStore WinRateStoreReader
-	// OpenDB opens the read-only stockpicker ledger at path. nil →
-	// stocktools.OpenWinRateDB (mode=ro).
+	// OpenDB opens the read-only SQLite stockpicker ledger at path. When it
+	// is wired it is used as-is — an injected handle wins over the C6c
+	// backend decision, so existing test/external wiring keeps its
+	// semantics. nil → the backend-resolving source (C6c) reads PostgreSQL
+	// when the deployment declares it, and the read-only SQLite ledger at
+	// DBPath (stocktools.OpenWinRateDB, mode=ro) otherwise.
 	OpenDB func(path string) (*sql.DB, error)
+	// PGURL is the PostgreSQL DSN the win-rate read uses when the declared
+	// store backend is postgres. Empty → DATABASE_URL.
+	PGURL string
+	// StoreBackend is the declared store backend (ATLAS_STORE_BACKEND, the
+	// same value the writers follow). Empty → ATLAS_STORE_BACKEND, else
+	// "jsonl" (the repository's config default, which has no win-rate read
+	// implementation and therefore maps to the SQLite ledger). A declared
+	// value no backend implements is an error — see winRateStore.
+	StoreBackend string
+	// OpenSource builds the backend-resolving win-rate source (C6c). nil →
+	// stocktools.OpenWinRateSource, the C6b implementation this read path
+	// reuses as is (PostgreSQL first with a read-only session, per-call
+	// probe, SQLite fallback).
+	OpenSource func(pgURL, declaredBackend, sqlitePath string) *stocktools.WinRateSource
 	// DBPath overrides the ledger path. Empty → ATLAS_MCP_STOCKPICKER_DB,
 	// else data/state/atlas.db under WorkDir.
 	DBPath string
@@ -437,23 +462,69 @@ func (e StockpickerWinrateExecutor) Recommend(agent domain.AgentSpec, quote doma
 }
 
 // winRateStore returns the win-rate reader plus a closer for the handle it
-// owns. An injected store returns a no-op closer; the default path opens
-// the read-only ledger per call and releases it after the read (the
+// owns. An injected store returns a no-op closer; the default path resolves
+// the read backend per call and releases what it opened after the read (the
 // executor stays stateless and value-type safe — the registry holds
 // executor values, so instance caching would not survive interface copies).
+//
+// Decision order (C6c), first match wins:
+//
+//  1. WinRateStore — an injected reader replaces the whole read path.
+//  2. OpenDB — an explicitly injected read-only SQLite opener. Kept ahead of
+//     the backend decision so existing test/external wiring is unchanged.
+//  3. PostgreSQL — ATLAS_STORE_BACKEND (or StoreBackend) normalizes to
+//     postgres AND a DSN is present (PGURL, else DATABASE_URL). The handle is
+//     the C6b read-only one (default_transaction_read_only=on) and an
+//     unreachable PostgreSQL falls back to the SQLite ledger per read, so a
+//     database outage degrades instead of freezing recommendations.
+//  4. SQLite — every other declaration (jsonl/sqlite/unset, or postgres
+//     without a DSN) reads the read-only SQLite ledger at DBPath, the
+//     pre-C6c behavior.
+//
+// A declared backend that no backend implements is an error, not a silent
+// fallback: reading a different store than the deployment declared is the
+// failure this change exists to remove, and the executor's contract turns the
+// error into (zero, false) with a debug log (fail closed) rather than a
+// recommendation backed by an unexpected store.
 func (e StockpickerWinrateExecutor) winRateStore() (WinRateStoreReader, func(), error) {
 	if e.WinRateStore != nil {
 		return e.WinRateStore, func() {}, nil
 	}
-	opener := e.OpenDB
-	if opener == nil {
-		opener = stocktools.OpenWinRateDB
+	if e.OpenDB != nil {
+		db, err := e.OpenDB(e.dbPath())
+		if err != nil {
+			return nil, func() {}, err
+		}
+		return stockpicker.NewWinRateStore(db), func() { _ = db.Close() }, nil
 	}
-	db, err := opener(e.dbPath())
+	src, err := e.winRateSource()
 	if err != nil {
 		return nil, func() {}, err
 	}
-	return stockpicker.NewWinRateStore(db), func() { _ = db.Close() }, nil
+	return stocktools.NewWinRateDBProvider(src), func() { _ = src.Close() }, nil
+}
+
+// winRateSource resolves the backend-aware win-rate source (step 3/4 of
+// winRateStore). The declaration is normalized through the repository's single
+// rule (stocktools.ResolveWinRateBackend → ledger.ResolveStoreBackend) before
+// the source is built, so an unknown value is reported here; the raw declared
+// value is what OpenWinRateSource logs, so an operator sees their own
+// ATLAS_STORE_BACKEND in the read-path line.
+//
+// Wiring never dials: OpenWinRateSource returns a lazily-dialing source, and
+// the per-call probe plus SQLite fallback decide at read time. A PostgreSQL
+// that is down therefore never makes the executor fail — it reads SQLite and
+// logs the fallback, and it re-probes on the next read.
+func (e StockpickerWinrateExecutor) winRateSource() (*stocktools.WinRateSource, error) {
+	declared := e.storeBackend()
+	if _, err := stocktools.ResolveWinRateBackend(declared); err != nil {
+		return nil, err
+	}
+	open := e.OpenSource
+	if open == nil {
+		open = stocktools.OpenWinRateSource
+	}
+	return open(e.pgURL(), declared, e.dbPath()), nil
 }
 
 // flowSource returns the injected FlowSource or the default file reader.
@@ -525,6 +596,32 @@ func (e StockpickerWinrateExecutor) conditionID() string {
 		return e.ConditionID
 	}
 	return stockpickerWinrateDefaultConditionID
+}
+
+// pgURL returns the PostgreSQL DSN for the win-rate read: the injected
+// override, else DATABASE_URL (the same environment variable the store
+// factory, the MCP server and the HTTP endpoints read).
+func (e StockpickerWinrateExecutor) pgURL() string {
+	if e.PGURL != "" {
+		return e.PGURL
+	}
+	return os.Getenv("DATABASE_URL")
+}
+
+// storeBackend returns the declared store backend: the injected override, else
+// ATLAS_STORE_BACKEND, else "jsonl" — the repository's config default
+// (config.Load: envOr("ATLAS_STORE_BACKEND", "jsonl")). Defaulting to the
+// config value rather than to "" keeps the resolution free of the
+// "empty store backend" warning ledger.ResolveStoreBackend emits for "", and
+// both values normalize to the same SQLite read path anyway.
+func (e StockpickerWinrateExecutor) storeBackend() string {
+	if e.StoreBackend != "" {
+		return e.StoreBackend
+	}
+	if v := os.Getenv("ATLAS_STORE_BACKEND"); v != "" {
+		return v
+	}
+	return "jsonl"
 }
 
 func (e StockpickerWinrateExecutor) dbPath() string {
