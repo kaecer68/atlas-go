@@ -2620,7 +2620,8 @@ PY
 
 ### FU-20261012-02 — `stock_signal_outcomes.regime` 是該表**唯一非 PIT** 欄位
 
-- **狀態**：`open`
+- **狀態**：`done`
+- **結案（2026-10-13）**：新增 `stockpicker.PITRegimeBySession`（快照對應到「**第一個收盤時間嚴格晚於 capturedAt 的交易日**」，13:30 Asia/Taipei；非交易日前滾、同 session 取最新擷取），`cmd/atlas` 的 RegimeLoader 改用它。五個測試含生產實際錨點（2026-09-23 快照擷取於 09-24 07:50 TPE **不得**標註 09-23）＋負向證明（還原舊 keying ⇒ 紅）。**注意**：既有 74,073 列仍帶舊（非 PIT）標籤，此修正只影響**新的**寫入 ⇒ 分層統計跨新舊分界時語意不純（regime 閘門要放回前的四條件②）。
 - **記錄日期**：2026-10-12
 - **來源**：同上調查（regime gate 裁決，§F）
 - **事實**：`regime(D)` 的快照擷取時間為 **D+1 02:59–07:55 TPE**（VIX/DXY/US10Y/JPY/GOLD/OIL 的時間戳皆落在 D+1 凌晨），但 outcome 的進場價是 **D 日 13:30 TPE 收盤**（`bars[i].Close`）⇒ 標籤含 **1 個美股 session 的未來資訊**。
