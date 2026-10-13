@@ -458,6 +458,11 @@ jobs:
             # C6b：HTTP win-rate 四端點的 PG 讀取路徑在 2026-10-13 同 PR 附上
             # internal/stocktools/win_rate_pg_integration_test.go（PG/SQLite 逐位元組一致 + 唯讀釘子）。
             - 'internal/stocktools/**'
+            # C7：stockpicker 每日更新的「主寫入」改為 PG（SQLite 改為 opt-in 鏡射）時，
+            # 同 PR 附上 internal/stockpicker/pg_primary_integration_test.go（真 PG：PG 有列／
+            # atlas.db 未建立／同日重跑 skip／乾跑不寫）。此前該套件的 integration 測試
+            # （dual_write_integration_test.go）不在過濾器內 ⇒ 從未被執行。
+            - 'internal/stockpicker/**'
             # 只在該 cmd 已有 PG integration 測試時才加進來（否則只是空跑 13 分鐘）；新增測試後同 PR 一併補上。
             # cmd/atlas-mcp：C6 的 win-rate PG 讀取路徑在 2026-10-13 同 PR 附上
             # tools_stock_winrate_pg_integration_test.go（PG/SQLite 逐列一致 + 唯讀釘子）。

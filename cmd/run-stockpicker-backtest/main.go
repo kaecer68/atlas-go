@@ -16,12 +16,15 @@
 //     ON CONFLICT DO NOTHING), then aggregates per (symbol, source) into
 //     stock_win_rate and data/state/stock_win_rate.json.
 //
-// Outcomes and win-rate rows always land in a job-local SQLite artifact
-// (data/state/atlas.db), never in the postgres target; quotes are
-// backend-aware (sqlite | postgres). When the postgres backend is used the
-// job prints current_database + inet_server_port at startup and aborts
-// before running migrations unless -expect-db matches the actual database
-// (M12 target guard).
+// Outcomes and win-rate rows land in PostgreSQL (the PRIMARY destination)
+// when -backend=postgres, and in the job-local SQLite artifact
+// (data/state/atlas.db) otherwise (C7, 2026-10-13); -sqlite-mirror also
+// copies the PG-primary rows into that artifact (default off, in which case
+// the file is neither opened nor created). Quotes are backend-aware
+// (sqlite | postgres). When the postgres backend is used the job prints
+// current_database + inet_server_port at startup and aborts before running
+// migrations unless -expect-db matches the actual database (M12 target
+// guard).
 //
 // Same-day rerun skips unless -force is given. The pipeline itself lives in
 // internal/stockpicker.RunDailyUpdate and is shared with the
@@ -67,7 +70,8 @@ func runWithPanel(args []string, panel stockpicker.PanelSource) error {
 	universe := fs.String("universe", "", "comma-separated symbols to scan (default: all symbols present in quotes)")
 	backendFlag := fs.String("backend", "", "quote backend: sqlite | postgres (default: ATLAS_STORE_BACKEND env, then job-local sqlite)")
 	expectDB := fs.String("expect-db", "", "assert the postgres database name before migrations (e.g. atlas); aborts with the actual current_database on mismatch")
-	dualWrite := fs.Bool("dual-write", true, "mirror outcome/win-rate rows into PostgreSQL when -backend=postgres (SSOT→PG batch B; set false to roll back to SQLite-only writes)")
+	dualWrite := fs.Bool("dual-write", true, "write outcome/win-rate rows to PostgreSQL when -backend=postgres (SSOT→PG batch B, PG is primary; set false to roll back to SQLite-only writes)")
+	sqliteMirror := fs.Bool("sqlite-mirror", false, "additionally mirror the PostgreSQL-primary writes into the job-local SQLite artifact (data/state/atlas.db); off (default) means the artifact is neither opened nor created (C7)")
 	conditionsFlag := fs.String("conditions", "", "comma-separated condition IDs to run (default: foreign-3d-net-buy,momentum-20d-positive)")
 	listConditions := fs.Bool("list-conditions", false, "print the registered conditions and exit")
 	if err := fs.Parse(args); err != nil {
@@ -111,18 +115,19 @@ func runWithPanel(args []string, panel stockpicker.PanelSource) error {
 	}
 
 	res, err := stockpicker.RunDailyUpdate(ctx, stockpicker.RunDailyOptions{
-		WorkDir:     *workDir,
-		Backend:     *backendFlag,
-		ExpectDB:    *expectDB,
-		DualWrite:   *dualWrite,
-		Idempotency: idem,
-		DryRun:      *dryRun,
-		Universe:    *universe,
-		Conditions:  *conditionsFlag,
-		AsOf:        asOf,
-		Start:       start,
-		End:         end,
-		Panel:       panel,
+		WorkDir:      *workDir,
+		Backend:      *backendFlag,
+		ExpectDB:     *expectDB,
+		DualWrite:    *dualWrite,
+		SQLiteMirror: *sqliteMirror,
+		Idempotency:  idem,
+		DryRun:       *dryRun,
+		Universe:     *universe,
+		Conditions:   *conditionsFlag,
+		AsOf:         asOf,
+		Start:        start,
+		End:          end,
+		Panel:        panel,
 	})
 	if err != nil {
 		return err
@@ -136,12 +141,13 @@ func runWithPanel(args []string, panel stockpicker.PanelSource) error {
 	fmt.Printf("conditions: %s\n", strings.Join(res.Conditions, ", "))
 
 	if *dryRun {
-		log.Printf("dry-run: nothing persisted; a real run would write outcomes to job-local SQLite %s (non-prod artifact), not to the postgres target",
-			filepath.Join(*workDir, "data", "state", "atlas.db"))
+		log.Printf("dry-run: nothing persisted; a real run would write outcomes to the %s primary destination (sqlite mirror %v, artifact %s)",
+			res.Primary, res.SQLiteMirror, filepath.Join(*workDir, "data", "state", "atlas.db"))
 		return nil
 	}
 
-	fmt.Printf("recorded %d outcomes into stock_signal_outcomes\n", res.Outcomes)
+	fmt.Printf("recorded %d outcomes into stock_signal_outcomes (%s primary, sqlite mirror %v)\n",
+		res.Outcomes, res.Primary, res.SQLiteMirror)
 	fmt.Printf("aggregated %d keys into stock_win_rate (%d eligible) -> %s\n", res.Keys, res.Eligible, res.StatePath)
 	return nil
 }

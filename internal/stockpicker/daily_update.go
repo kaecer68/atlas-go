@@ -7,13 +7,15 @@
 // aggregate per (symbol, source) into stock_win_rate and
 // data/state/stock_win_rate.json.
 //
-// Outcomes land in the job-local SQLite artifact (data/state/atlas.db) and,
-// since SSOT→PG batch B (2026-09-30), are mirrored into PostgreSQL when
-// DualWrite is set on the postgres backend (or an explicit PGOutcomesDB is
-// injected); either side failing fails the run, never a silent skip. Quotes
-// are backend-aware (sqlite | postgres) via the shared ledger resolver (WP4).
-// The postgres path requires ExpectDB (M12 target guard) and fails loudly
-// otherwise (B1).
+// Outcomes land in PostgreSQL — the primary destination on the postgres
+// backend (SSOT→PG batch B, 2026-09-30; PG-primary write path C7,
+// 2026-10-13) — and in the job-local SQLite artifact (data/state/atlas.db)
+// on every other backend. On a PG-primary run the SQLite artifact is written
+// only when the SQLiteMirror option is on (default off), so it is no longer
+// a data source for those runs. Either destination failing fails the run,
+// never a silent skip. Quotes are backend-aware (sqlite | postgres) via the
+// shared ledger resolver (WP4). The postgres path requires ExpectDB (M12
+// target guard) and fails loudly otherwise (B1).
 package stockpicker
 
 import (
@@ -79,13 +81,25 @@ type RunDailyOptions struct {
 	Start       time.Time   // first trigger date (zero → AsOf-120d)
 	End         time.Time   // last trigger date (zero → AsOf)
 	Panel       PanelSource // nil → real panel built from WorkDir
-	// DualWrite mirrors the outcome + win-rate rows into PostgreSQL
-	// (SSOT→PG batch B, 2026-09-30: PG is the adjudicated SSOT). Effective
-	// only when Backend resolves to postgres; the destination handle is
+	// DualWrite selects PostgreSQL as the run's primary destination on the
+	// postgres backend (SSOT→PG batch B, 2026-09-30: PG is the adjudicated
+	// SSOT; C7, 2026-10-13: PG is also the primary writer). The handle is
 	// derived from the shared pool opened for the quote store
-	// (stdlib.OpenDBFromPool). Kill switch: set false to roll back to
-	// SQLite-only writes. Ignored when PGOutcomesDB is injected.
+	// (stdlib.OpenDBFromPool). Effective only when Backend resolves to
+	// postgres, which keeps its original meaning: kill switch. Set false to
+	// roll back to the pre-batch-B behavior — SQLite is primary again, the
+	// SQLite→PG mirror is off, and no PG connection is attempted. Ignored
+	// when PGOutcomesDB is injected (an explicit PG handle always wins).
 	DualWrite bool
+	// SQLiteMirror additionally mirrors the PostgreSQL-primary outcome +
+	// win-rate writes into the job-local SQLite artifact (data/state/
+	// atlas.db). Default false (ATLAS_STOCKPICKER_SQLITE_MIRROR): on a
+	// PG-primary run the artifact is neither opened nor created, so it stops
+	// being a data source (C7); set true only as the recoverable
+	// rollback/observation path — PG stays authoritative either way. Has no
+	// effect while SQLite is primary (sqlite/jsonl backend, or the DualWrite
+	// kill switch off), where SQLite is written regardless.
+	SQLiteMirror bool
 	// PGOutcomesDB is an explicit dual-write destination — a *sql.DB over
 	// PostgreSQL (e.g. stdlib.OpenDBFromPool(pool)). When non-nil it wins
 	// over DualWrite/Backend resolution (explicit caller intent; used by
@@ -101,16 +115,21 @@ type RunDailyOptions struct {
 
 // RunDailyResult reports what a run did (or why it skipped).
 type RunDailyResult struct {
-	Skipped    bool
-	Backend    string
-	AsOf       time.Time
-	Existing   int            // outcome rows found by the idempotency check
-	Conditions []string       // condition IDs evaluated
-	Outcomes   int            // SignalOutcome rows produced (and, unless dry-run, recorded)
-	Keys       int            // win-rate keys aggregated
-	Eligible   int            // calibration-eligible keys
-	StatePath  string         // written stock_win_rate.json path
-	Coverage   CoverageReport // per-condition sample counts
+	Skipped bool
+	Backend string
+	// Primary is the write destination this run resolved: "postgres" or
+	// "sqlite" (C7). SQLiteMirror reports whether the SQLite artifact was
+	// written as a mirror of the PG-primary rows.
+	Primary      string
+	SQLiteMirror bool
+	AsOf         time.Time
+	Existing     int            // outcome rows found by the idempotency check
+	Conditions   []string       // condition IDs evaluated
+	Outcomes     int            // SignalOutcome rows produced (and, unless dry-run, recorded)
+	Keys         int            // win-rate keys aggregated
+	Eligible     int            // calibration-eligible keys
+	StatePath    string         // written stock_win_rate.json path
+	Coverage     CoverageReport // per-condition sample counts
 }
 
 // RunDailyUpdate executes the stockpicker daily win-rate update pipeline.
@@ -146,12 +165,12 @@ func RunDailyUpdate(ctx context.Context, opts RunDailyOptions) (RunDailyResult, 
 	// opt-in guard leaves the M12 failure mode reachable via a stray
 	// DATABASE_URL.
 	if opts.ExpectDB != "" && backend != "postgres" {
-		return res, fmt.Errorf("-expect-db %q requires the postgres backend (resolved %s); outcomes are job-local sqlite and need no db guard", opts.ExpectDB, backend)
+		return res, fmt.Errorf("-expect-db %q requires the postgres backend (resolved %s); no db guard is needed for a sqlite-primary run", opts.ExpectDB, backend)
 	}
-	if backend == "postgres" && opts.ExpectDB == "" {
-		return res, fmt.Errorf("postgres backend requires -expect-db <dbname> to assert the migration target (e.g. -expect-db atlas); re-run with -expect-db to proceed")
-	}
-	if backend == "postgres" {
+	if backend == "postgres" && postgresTargetGuardNeeded(opts) {
+		if opts.ExpectDB == "" {
+			return res, fmt.Errorf("postgres backend requires -expect-db <dbname> to assert the migration target (e.g. -expect-db atlas); re-run with -expect-db to proceed")
+		}
 		guardCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 		defer cancel()
 		if err := guardDatabaseTarget(guardCtx, os.Getenv("DATABASE_URL"), opts.ExpectDB); err != nil {
@@ -179,18 +198,9 @@ func RunDailyUpdate(ctx context.Context, opts RunDailyOptions) (RunDailyResult, 
 	}
 	res.Conditions = conditionIDs(conds)
 
-	outcomeDB, err := openOutcomeDB(opts.WorkDir)
-	if err != nil {
-		return res, err
-	}
-	defer func() { _ = outcomeDB.Close() }()
-
-	outStore := NewSignalOutcomeStore(outcomeDB)
-	winStore := NewWinRateStore(outcomeDB)
-
-	// Resolve the dual-write destination BEFORE the idempotency gate: the
-	// gate below must reflect every enabled destination (P1 fix, see the
-	// idempotency block).
+	// Resolve the PostgreSQL destination BEFORE opening anything else: the
+	// idempotency gate below must reflect every enabled destination (P1 fix),
+	// and the SQLite artifact must stay unopened on a PG-primary run (C7).
 	pgOutcomesDB, pgPool, err := resolvePGDest(ctx, opts, backend, opts.Panel != nil)
 	if err != nil {
 		return res, err
@@ -201,55 +211,121 @@ func RunDailyUpdate(ctx context.Context, opts RunDailyOptions) (RunDailyResult, 
 		defer func() { _ = pgOutcomesDB.Close() }()
 	}
 
+	// Write plan (C7). Where do this run's rows land?
+	//
+	//   - postgres backend with the DualWrite switch on (or an injected PG
+	//     handle) ⇒ PostgreSQL is PRIMARY; the SQLite artifact is written
+	//     only when SQLiteMirror is on, and is never even opened otherwise.
+	//   - everything else (sqlite/jsonl backend, or the DualWrite kill
+	//     switch off) ⇒ SQLite is primary, exactly as before C7; PG is only
+	//     the legacy dual-write mirror (an injected handle).
+	pgPrimary := pgPrimaryDestination(backend, opts)
+	primaryLabel, mirrorLabel := " (postgres)", " (sqlite)"
+	if !pgPrimary {
+		primaryLabel, mirrorLabel = "", " (postgres)"
+	}
+	res.Primary = "sqlite"
+	if pgPrimary {
+		res.Primary = "postgres"
+	}
+
+	// SQLite is opened only when it has a role in this run: primary, or an
+	// opted-in mirror of the PG-primary rows. A dry run never opens the
+	// mirror (nothing is written on any destination).
+	openSQLite := !pgPrimary || (opts.SQLiteMirror && !opts.DryRun)
+	var sqliteDB *sql.DB
+	if openSQLite {
+		sqliteDB, err = openOutcomeDB(opts.WorkDir)
+		if err != nil {
+			return res, err
+		}
+		defer func() { _ = sqliteDB.Close() }()
+	} else {
+		// C7: on a PG-primary run with the mirror off the artifact must not
+		// be opened nor created — an absent (or emptied) data/state/atlas.db
+		// must never be recreated by the daily job.
+		logging.Info("stockpicker_daily_update", "sqlite_artifact_not_opened",
+			"path", filepath.Join(opts.WorkDir, "data", "state", "atlas.db"),
+			"primary", "postgres",
+			"sqlite_mirror", opts.SQLiteMirror,
+			"dry_run", opts.DryRun)
+	}
+
+	// Primary and mirror handles. primaryDB is nil on a dry run only:
+	// resolvePGDest deliberately opens no PG handle there, and the writes
+	// below are never reached.
+	var primaryDB, mirrorDB *sql.DB
+	if pgPrimary {
+		primaryDB = pgOutcomesDB
+		if openSQLite {
+			mirrorDB = sqliteDB
+		}
+	} else {
+		primaryDB = sqliteDB
+		mirrorDB = pgOutcomesDB
+	}
+	var outStore *SignalOutcomeStore
+	var winStore *WinRateStore
+	if primaryDB != nil {
+		outStore = NewSignalOutcomeStore(primaryDB)
+		winStore = NewWinRateStore(primaryDB)
+	}
+	res.SQLiteMirror = pgPrimary && mirrorDB != nil
+	logging.Info("stockpicker_daily_update", "write_plan",
+		"backend", backend,
+		"primary", res.Primary,
+		"sqlite_mirror", res.SQLiteMirror,
+		"pg_mirror", !pgPrimary && mirrorDB != nil,
+		"dual_write", opts.DualWrite,
+		"dry_run", opts.DryRun)
+
 	// Idempotency: skip when this run's contribution is already recorded in
-	// EVERY enabled destination. With dual-write, the SQLite count alone
-	// would skip the rerun that should heal a PG-side gap, leaving that day
-	// permanently missing from PG (independent-review P1, 2026-09-30).
+	// EVERY enabled destination. The primary count alone would skip the
+	// rerun that should heal a mirror-side gap, leaving that day permanently
+	// missing from the mirror (independent-review P1, 2026-09-30 — the same
+	// rule now covers the SQLite mirror of a PG-primary run). Semantics are
+	// unchanged: the gate reads every destination the run writes to.
 	if opts.Idempotency != IdempotencyNone && !opts.DryRun {
 		var newest time.Time
-		var sqliteN int
-		switch opts.Idempotency {
-		case IdempotencyDay:
+		if opts.Idempotency == IdempotencyDay {
 			newest = newestTriggerDate(opts.AsOf, DefaultForwardDays)
-			sqliteN, err = countOutcomesForTriggerDate(ctx, outcomeDB, newest)
-		default: // IdempotencyRange
-			sqliteN, err = countExistingOutcomes(ctx, outcomeDB, opts.Start, opts.End)
 		}
+		countOutcomes := func(db *sql.DB) (int, error) {
+			if opts.Idempotency == IdempotencyDay {
+				return countOutcomesForTriggerDate(ctx, db, newest)
+			}
+			return countExistingOutcomes(ctx, db, opts.Start, opts.End)
+		}
+		primaryN, err := countOutcomes(primaryDB)
 		if err != nil {
-			return res, fmt.Errorf("idempotency check: %w", err)
+			return res, fmt.Errorf("idempotency check%s: %w", primaryLabel, err)
 		}
-		recorded := sqliteN > 0
-		if recorded && pgOutcomesDB != nil {
-			// The gate counts the PG side too: a day/range missing there is
-			// "not yet recorded" and must rerun to heal it. A PG COUNT
-			// failure is a hard error naming the postgres side — never
-			// silently read as "0 rows" (that would misjudge a failed count
-			// as "not yet run" and fire a doomed rerun).
-			var pgN int
-			switch opts.Idempotency {
-			case IdempotencyDay:
-				pgN, err = countOutcomesForTriggerDate(ctx, pgOutcomesDB, newest)
-			default:
-				pgN, err = countExistingOutcomes(ctx, pgOutcomesDB, opts.Start, opts.End)
-			}
+		recorded := primaryN > 0
+		if recorded && mirrorDB != nil {
+			// The gate counts the mirror side too: a day/range missing there
+			// is "not yet recorded" and must rerun to heal it. A mirror COUNT
+			// failure is a hard error naming that side — never silently read
+			// as "0 rows" (that would misjudge a failed count as "not yet
+			// run" and fire a doomed rerun).
+			mirrorN, err := countOutcomes(mirrorDB)
 			if err != nil {
-				return res, fmt.Errorf("idempotency check (postgres): %w", err)
+				return res, fmt.Errorf("idempotency check%s: %w", mirrorLabel, err)
 			}
-			recorded = pgN > 0
+			recorded = mirrorN > 0
 		}
 		if recorded {
 			if opts.Idempotency == IdempotencyDay {
 				logging.Info("stockpicker_daily_update", "skip_day_done",
 					"asof", opts.AsOf.Format("2006-01-02"),
 					"newest_trigger", newest.Format("2006-01-02"),
-					"existing", sqliteN)
+					"existing", primaryN)
 			}
-			res.Existing = sqliteN
+			res.Existing = primaryN
 			res.Skipped = true
 			return res, nil
 		}
 		if opts.Idempotency == IdempotencyRange {
-			res.Existing = sqliteN
+			res.Existing = primaryN
 		}
 	}
 
@@ -287,12 +363,14 @@ func RunDailyUpdate(ctx context.Context, opts RunDailyOptions) (RunDailyResult, 
 	// Regime dimension (issue #1863): outcomes carry the market regime of
 	// their trigger date. Injected map wins (production: backend-aware
 	// historical store — regime_history lives in Postgres on prod);
-	// fallback: job-local SQLite (dev/CLI). regime_history rows are
-	// recorded ON their date, so the map is PIT-safe. Missing data → nil
-	// map → Regime stays "" (pre-#1863 behavior), never a hard failure.
+	// fallback: the run's primary destination (C7: PG on a PG-primary run,
+	// the job-local SQLite artifact otherwise — dev/CLI). regime_history
+	// rows are recorded ON their date, so the map is PIT-safe. Missing data
+	// → nil map → Regime stays "" (pre-#1863 behavior), never a hard
+	// failure.
 	regimes := opts.Regimes
 	if regimes == nil {
-		regimes = loadRegimeMap(ctx, outcomeDB)
+		regimes = loadRegimeMap(ctx, primaryDB)
 	}
 
 	cfg := BacktestConfig{
@@ -315,50 +393,57 @@ func RunDailyUpdate(ctx context.Context, opts RunDailyOptions) (RunDailyResult, 
 	if opts.DryRun {
 		logging.Info("stockpicker_daily_update", "dry_run",
 			"asof", opts.AsOf.Format("2006-01-02"),
-			"outcomes", len(outcomes))
+			"outcomes", len(outcomes),
+			"primary", res.Primary,
+			"sqlite_mirror", res.SQLiteMirror)
 		return res, nil
 	}
 
-	if err := outStore.RecordOutcomes(ctx, outcomes); err != nil {
-		return res, fmt.Errorf("record outcomes: %w", err)
+	if outStore == nil || winStore == nil {
+		// Unreachable by construction: the only path that leaves the primary
+		// handle nil is the dry-run return above. Guarded anyway — a nil
+		// dereference in the scheduled job would be silent data loss.
+		return res, fmt.Errorf("stockpicker daily update: no primary write destination resolved (backend=%s)", backend)
 	}
-	// Dual-write (SSOT→PG batch B): mirror the just-committed SQLite batch
-	// into PG. A PG failure fails the whole run — the scheduler records the
-	// failure, and the NEXT tick's idempotency gate re-runs the day because
-	// it counts every enabled destination (a PG-side gap reads as "not yet
-	// recorded"); ON CONFLICT DO NOTHING / upsert then make the healing
-	// rewrite idempotent. The already-committed SQLite rows are never rolled
-	// back (compensating deletes on the hot path are riskier than an
-	// idempotent rewrite).
-	if pgOutcomesDB != nil {
-		if err := RecordOutcomes(ctx, pgOutcomesDB, outcomes); err != nil {
-			return res, fmt.Errorf("record outcomes (postgres): %w", err)
+
+	// Write the batch to the primary destination first, then to the mirror
+	// (when one is configured). Either failure fails the whole run — the
+	// scheduler records the failure, and the NEXT tick's idempotency gate
+	// re-runs the day because it counts every enabled destination (a gap
+	// there reads as "not yet recorded"); ON CONFLICT DO NOTHING / upsert
+	// then make the healing rewrite idempotent. Already-committed rows are
+	// never rolled back (compensating deletes on the hot path are riskier
+	// than an idempotent rewrite).
+	if err := outStore.RecordOutcomes(ctx, outcomes); err != nil {
+		return res, fmt.Errorf("record outcomes%s: %w", primaryLabel, err)
+	}
+	if mirrorDB != nil {
+		if err := RecordOutcomes(ctx, mirrorDB, outcomes); err != nil {
+			return res, fmt.Errorf("record outcomes%s: %w", mirrorLabel, err)
 		}
 	}
 
+	// Aggregation reads the PRIMARY destination, so a PG-primary run
+	// aggregates the PG rows (the mirror is a copy, never an input).
 	summaries, err := AggregateFromStore(ctx, outStore, winStore, aggregationWindow, costRate, minSamples, confidenceLevel, opts.AsOf)
 	if err != nil {
 		return res, fmt.Errorf("aggregate: %w", err)
 	}
-	if pgOutcomesDB != nil {
-		for _, summary := range summaries {
-			if err := SaveWinRate(ctx, pgOutcomesDB, summary); err != nil {
-				return res, fmt.Errorf("save win rate (postgres) %s/%s: %w", summary.Symbol, summary.Source, err)
-			}
+	if mirrorDB != nil {
+		if err := mirrorWinRateRows(ctx, mirrorDB, summaries, mirrorLabel); err != nil {
+			return res, err
 		}
 	}
 	// Regime strata (Phase 1 regime-conditional gate): same outcomes,
 	// grouped by (symbol, source, regime) into stock_win_rate_by_regime,
-	// with the same PG dual-write mirror as the pooled summaries above.
+	// with the same mirror as the pooled summaries above.
 	regimeSummaries, err := AggregateRegimeFromStore(ctx, outStore, winStore, aggregationWindow, costRate, minSamples, confidenceLevel, opts.AsOf)
 	if err != nil {
 		return res, fmt.Errorf("aggregate by regime: %w", err)
 	}
-	if pgOutcomesDB != nil {
-		for _, summary := range regimeSummaries {
-			if err := SaveRegimeWinRate(ctx, pgOutcomesDB, summary); err != nil {
-				return res, fmt.Errorf("save regime win rate (postgres) %s/%s/%s: %w", summary.Symbol, summary.Source, summary.Regime, err)
-			}
+	if mirrorDB != nil {
+		if err := mirrorRegimeWinRateRows(ctx, mirrorDB, regimeSummaries, mirrorLabel); err != nil {
+			return res, err
 		}
 	}
 	statePath := filepath.Join(opts.WorkDir, "data", "state", "stock_win_rate.json")
@@ -436,9 +521,11 @@ func conditionIDs(conds []Condition) []string {
 }
 
 // openOutcomeDB opens the job-local SQLite ledger holding backtest outcomes
-// and win-rate rows. Outcomes are a job-local SQLite artifact
-// (data/state/atlas.db); since batch B they are additionally mirrored into PG
-// when dual-write is active (see RunDailyOptions.DualWrite).
+// and win-rate rows (data/state/atlas.db). It is called only when SQLite has
+// a role in the run: the primary destination on sqlite/jsonl backends (and
+// on the DualWrite=false rollback), or the opt-in mirror of a PG-primary run
+// (RunDailyOptions.SQLiteMirror). A PG-primary run with the mirror off never
+// calls it, so the artifact is neither read nor created (C7).
 func openOutcomeDB(workDir string) (*sql.DB, error) {
 	dbPath := filepath.Join(workDir, "data", "state", "atlas.db")
 	if err := os.MkdirAll(filepath.Dir(dbPath), 0o755); err != nil {
@@ -457,14 +544,60 @@ func openOutcomeDB(workDir string) (*sql.DB, error) {
 	return db, nil
 }
 
-// resolvePGDest picks the dual-write destination for this run.
+// postgresTargetGuardNeeded reports whether the M12 migration-target guard
+// (DATABASE_URL identity check) must run for this postgres-backend run.
+//
+// The guard protects the migration target: it prints current_database and
+// aborts when it is not the expected one, BEFORE any migration can touch it.
+// It is therefore required exactly when the run can open a DATABASE_URL
+// connection:
+//
+//   - no injected PG handle ⇒ resolvePGDest opens the pool (migrations) on
+//     the dual-write path, or the panel build opens it — guard required.
+//   - injected PG handle but no injected panel ⇒ the panel build opens the
+//     DATABASE_URL pool — guard required.
+//   - injected PG handle AND injected panel ⇒ nothing in this run reaches
+//     DATABASE_URL (no pool, no migration). This is the in-process test seam,
+//     so the guard — which would otherwise need a live server — is not run.
+//     Production never injects either handle.
+func postgresTargetGuardNeeded(opts RunDailyOptions) bool {
+	return opts.PGOutcomesDB == nil || opts.Panel == nil
+}
+
+// pgPrimaryDestination reports whether PostgreSQL is this run's PRIMARY
+// write destination (C7). It is a pure function of the resolved backend and
+// the options, so the decision can be pinned without a database.
+//
+// Rules:
+//   - non-postgres backend ⇒ false (SQLite primary; no PG is ever touched).
+//   - postgres backend with an injected PG handle ⇒ true (explicit caller
+//     intent — resolvePGDest gives that handle precedence).
+//   - postgres backend otherwise ⇒ the DualWrite value: true selects PG as
+//     primary, false is the original kill switch, which rolls the whole run
+//     back to SQLite-primary writes (pre-batch-B behavior, zero PG writes).
+func pgPrimaryDestination(backend string, opts RunDailyOptions) bool {
+	if backend != "postgres" {
+		return false
+	}
+	if opts.PGOutcomesDB != nil {
+		return true
+	}
+	return opts.DualWrite
+}
+
+// resolvePGDest picks the PostgreSQL destination for this run.
 //
 // Resolution order: an injected PGOutcomesDB wins (explicit caller intent —
 // the test seam); otherwise the postgres backend derives a handle from the
 // migration-target pool opened for the quote store, but ONLY when the
 // DualWrite kill switch is ON and the run is not a dry-run. Every other
-// combination yields nil = SQLite-only, the pre-batch-B behavior (no PG
-// connection is ever attempted on non-postgres backends).
+// combination yields nil = no PG destination, the pre-batch-B behavior (no
+// PG connection is ever attempted on non-postgres backends).
+//
+// The handle plays two roles (C7): the PRIMARY destination when
+// pgPrimaryDestination is true, else the legacy SQLite→PG dual-write mirror.
+// A dry run never opens a PG handle (nothing is written anywhere), which is
+// why the derived path returns nil there.
 //
 // The returned pool is non-nil only when this helper opened it (derived
 // path); the panel build reuses it instead of opening a second connection.
@@ -607,13 +740,18 @@ func countOutcomesForTriggerDate(ctx context.Context, db *sql.DB, triggerDate ti
 	return n, nil
 }
 
-// loadRegimeMap builds the trigger-date → regime map from regime_history
-// (same job-local SQLite ledger as stock_signal_outcomes; table created by
-// ledger.InitSchema). When multiple rows exist per date, the latest
+// loadRegimeMap builds the trigger-date → regime map from regime_history in
+// the given primary ledger (SQLite: table created by ledger.InitSchema; PG:
+// migration 000011 — both expose date/regime/captured_at, and the same $N
+// text runs on either driver). When multiple rows exist per date, the latest
 // captured_at wins (ORDER BY ... captured_at ASC + map overwrite). Returns
-// nil on any error or when the table is absent — regime tagging is an
-// optional enrichment, never a run blocker (issue #1863).
+// nil on any error, on a nil handle (dry run), or when the table is absent —
+// regime tagging is an optional enrichment, never a run blocker (issue
+// #1863).
 func loadRegimeMap(ctx context.Context, db *sql.DB) map[string]string {
+	if db == nil {
+		return nil
+	}
 	rows, err := db.QueryContext(ctx,
 		`SELECT date, regime FROM regime_history ORDER BY date ASC, captured_at ASC`)
 	if err != nil {
@@ -633,4 +771,29 @@ func loadRegimeMap(ctx context.Context, db *sql.DB) map[string]string {
 		return nil
 	}
 	return out
+}
+
+// mirrorWinRateRows writes the aggregated pooled summaries into the run's
+// secondary destination (the SQLite artifact mirroring a PG-primary run, or
+// the legacy PG dual-write mirror). label names that destination in errors
+// (" (postgres)" / " (sqlite)"). The primary destination is written by
+// AggregateFromStore itself; this only copies the same rows across.
+func mirrorWinRateRows(ctx context.Context, db *sql.DB, summaries []StockWinRateSummary, label string) error {
+	for _, summary := range summaries {
+		if err := SaveWinRate(ctx, db, summary); err != nil {
+			return fmt.Errorf("save win rate%s %s/%s: %w", label, summary.Symbol, summary.Source, err)
+		}
+	}
+	return nil
+}
+
+// mirrorRegimeWinRateRows mirrors the per-regime strata, same contract as
+// mirrorWinRateRows.
+func mirrorRegimeWinRateRows(ctx context.Context, db *sql.DB, summaries []RegimeWinRateSummary, label string) error {
+	for _, summary := range summaries {
+		if err := SaveRegimeWinRate(ctx, db, summary); err != nil {
+			return fmt.Errorf("save regime win rate%s %s/%s/%s: %w", label, summary.Symbol, summary.Source, summary.Regime, err)
+		}
+	}
+	return nil
 }

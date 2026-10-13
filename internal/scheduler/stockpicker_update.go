@@ -15,16 +15,18 @@
 //   - 冪等（IdempotencyDay）：該 run 會產出的「最新 trigger date」
 //     （= AsOf 往前數 DefaultForwardDays 個交易日的日期）已有 outcomes →
 //     skip。閘門以「所有已啟用目的地」為準（SSOT→PG batch B P1 修復）：
-//     dual-write 啟用時 PG 側缺該日 ⇒ 視為未完成 ⇒ 重跑補齊（ON CONFLICT
-//     冪等）；PG 計數失敗 ⇒ 整個 tick fail loud，不靜默。BTM 記錄
+//     主目的地有該日但鏡射目的地缺 ⇒ 視為未完成 ⇒ 重跑補齊（ON CONFLICT
+//     冪等）；任一目的地計數失敗 ⇒ 整個 tick fail loud，不靜默。BTM 記錄
 //     consecutive_failures 供監控。
 //
 //   - enabled 預設 true：對齊本模組既有任務（narrative_weight_update /
 //     template_detector_scan / daily_report_generate 皆 Enabled: true），
-//     且本任務有「交易日 + 時段 + 目的地感知冪等 + row-level upsert」多重保護；
-//     資料寫 job-local SQLite artifact，dual-write 啟用時（ATLAS_STORE_BACKEND
-//     =postgres 且 ATLAS_STOCKPICKER_DUAL_WRITE 預設 ON）同時鏡射進 postgres
-//     target（該路徑有 M12 ExpectDB guard；kill switch 關閉則維持純 SQLite）。
+//     且本任務有「交易日 + 時段 + 目的地感知冪等 + row-level upsert」多重保護。
+//     C7（2026-10-13）後寫入方向為：ATLAS_STORE_BACKEND=postgres ⇒ postgres
+//     是**主寫入**目的地（該路徑有 M12 ExpectDB guard），job-local SQLite
+//     artifact 改為 opt-in 鏡射（ATLAS_STOCKPICKER_SQLITE_MIRROR，預設
+//     false；關閉時 atlas.db 既不開啟也不建立）；ATLAS_STOCKPICKER_DUAL_WRITE
+//     kill switch 關閉則整條 run 退回 SQLite 主寫入、零 PG 寫入（pre-batch-B）。
 package scheduler
 
 import (
@@ -50,16 +52,17 @@ const stockpickerUpdateRunHour = 18
 // WorkDir is required; everything else has a safe default (see
 // StockpickerUpdateTaskFunc).
 type StockpickerUpdateDeps struct {
-	WorkDir    string                                                                                          // atlas repo root; data/state lives under it
-	TimeZone   *time.Location                                                                                  // nil → Asia/Taipei (fallback UTC+8)
-	Backend    string                                                                                          // "" → ATLAS_STORE_BACKEND env → job-local sqlite
-	ExpectDB   string                                                                                          // postgres migration-target guard (M12); "" default
-	DualWrite  bool                                                                                            // mirror outcomes/win-rates into PG on the postgres backend (SSOT→PG batch B kill switch); false default
-	Universe   string                                                                                          // comma-separated symbols (default: all quote symbols)
-	Conditions string                                                                                          // comma-separated condition IDs (default: parameters.json defaults)
-	DryRun     bool                                                                                            // compute coverage without persisting (observability/debug)
-	Runner     func(ctx context.Context, opts stockpicker.RunDailyOptions) (stockpicker.RunDailyResult, error) // test seam
-	Now        func() time.Time                                                                                // test seam; nil → time.Now
+	WorkDir      string                                                                                          // atlas repo root; data/state lives under it
+	TimeZone     *time.Location                                                                                  // nil → Asia/Taipei (fallback UTC+8)
+	Backend      string                                                                                          // "" → ATLAS_STORE_BACKEND env → job-local sqlite
+	ExpectDB     string                                                                                          // postgres migration-target guard (M12); "" default
+	DualWrite    bool                                                                                            // PG is the run's primary destination on the postgres backend (SSOT→PG batch B); kill switch: false rolls back to SQLite-primary writes
+	SQLiteMirror bool                                                                                            // additionally mirror the PG-primary writes into the job-local SQLite artifact (ATLAS_STOCKPICKER_SQLITE_MIRROR, C7); false default
+	Universe     string                                                                                          // comma-separated symbols (default: all quote symbols)
+	Conditions   string                                                                                          // comma-separated condition IDs (default: parameters.json defaults)
+	DryRun       bool                                                                                            // compute coverage without persisting (observability/debug)
+	Runner       func(ctx context.Context, opts stockpicker.RunDailyOptions) (stockpicker.RunDailyResult, error) // test seam
+	Now          func() time.Time                                                                                // test seam; nil → time.Now
 	// RegimeLoader supplies the trigger-date → regime map for outcome
 	// tagging (issue #1863). nil → the runner falls back to the job-local
 	// SQLite regime_history (dev). Production wires the backend-aware
@@ -129,16 +132,17 @@ func StockpickerUpdateTaskFunc(deps StockpickerUpdateDeps) func(context.Context)
 			regimes = deps.RegimeLoader(ctx)
 		}
 		res, err := runner(ctx, stockpicker.RunDailyOptions{
-			WorkDir:     deps.WorkDir,
-			Backend:     deps.Backend,
-			ExpectDB:    deps.ExpectDB,
-			DualWrite:   deps.DualWrite,
-			Idempotency: stockpicker.IdempotencyDay,
-			DryRun:      deps.DryRun,
-			Universe:    deps.Universe,
-			Conditions:  deps.Conditions,
-			AsOf:        stockpicker.DateOnlyUTC(now),
-			Regimes:     regimes,
+			WorkDir:      deps.WorkDir,
+			Backend:      deps.Backend,
+			ExpectDB:     deps.ExpectDB,
+			DualWrite:    deps.DualWrite,
+			SQLiteMirror: deps.SQLiteMirror,
+			Idempotency:  stockpicker.IdempotencyDay,
+			DryRun:       deps.DryRun,
+			Universe:     deps.Universe,
+			Conditions:   deps.Conditions,
+			AsOf:         stockpicker.DateOnlyUTC(now),
+			Regimes:      regimes,
 		})
 		if err != nil {
 			return fmt.Errorf("stockpicker update: %w", err)

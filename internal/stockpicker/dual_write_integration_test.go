@@ -34,8 +34,14 @@ const (
 )
 
 // stockpickerPGTestDB connects to the dev PG (testdb policy) and applies the
-// two stockpicker migration files, so the test runs against the real checked
-// in DDL without requiring the timescaledb-dependent full migration set.
+// stockpicker migration files the daily update needs, so the test runs against
+// the real checked in DDL without requiring the timescaledb-dependent full
+// migration set.
+//
+// All four are applied by this package itself (000027 = regime strata, 000028
+// = break-even column) so the tests do not depend on another package having
+// migrated the shared CI database first: `go test -tags=integration
+// ./internal/stockpicker/` alone must be green.
 func stockpickerPGTestDB(t *testing.T) *pgxpool.Pool {
 	t.Helper()
 	pool := testdb.Connect(t, testdb.URL(t))
@@ -43,6 +49,8 @@ func stockpickerPGTestDB(t *testing.T) *pgxpool.Pool {
 	for _, file := range []string{
 		"000018_stock_signal_outcomes.up.sql",
 		"000019_stock_win_rate.up.sql",
+		"000027_stock_win_rate_by_regime.up.sql",
+		"000028_break_even_cost_rate.up.sql",
 	} {
 		raw, err := os.ReadFile(filepath.Join("..", "..", "sql", "migrations", file))
 		if err != nil {

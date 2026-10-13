@@ -117,6 +117,46 @@ func TestStockpickerTask_ExpectDBPassedThrough(t *testing.T) {
 	}
 }
 
+// TestStockpickerTask_WriteDirectionPassedThrough (C7, 2026-10-13) pins the
+// write-direction plumbing: DualWrite (PG-primary switch / kill switch) and
+// SQLiteMirror (opt-in artifact mirror, default false) must both reach
+// RunDailyUpdate. A dropped SQLiteMirror wire silently reverts production to
+// writing data/state/atlas.db without any code review signal.
+func TestStockpickerTask_WriteDirectionPassedThrough(t *testing.T) {
+	cases := []struct {
+		name         string
+		dualWrite    bool
+		sqliteMirror bool
+	}{
+		{"C7 default: PG primary, mirror off", true, false},
+		{"mirror on (rollback/observation path)", true, true},
+		{"kill switch: SQLite primary, zero PG writes", false, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var got stockpicker.RunDailyOptions
+			canned := stockpicker.RunDailyResult{AsOf: time.Date(2026, 3, 16, 0, 0, 0, 0, time.UTC)}
+			deps := StockpickerUpdateDeps{
+				WorkDir:      "/tmp/x",
+				DualWrite:    tc.dualWrite,
+				SQLiteMirror: tc.sqliteMirror,
+				Now:          fixedNow("2026-03-16 18:30"),
+				TimeZone:     tzAsia,
+				Runner:       fakeRunner(&got, &canned),
+			}
+			if err := StockpickerUpdateTaskFunc(deps)(context.Background()); err != nil {
+				t.Fatalf("err = %v, want nil", err)
+			}
+			if got.DualWrite != tc.dualWrite {
+				t.Errorf("runner DualWrite = %v, want %v", got.DualWrite, tc.dualWrite)
+			}
+			if got.SQLiteMirror != tc.sqliteMirror {
+				t.Errorf("runner SQLiteMirror = %v, want %v", got.SQLiteMirror, tc.sqliteMirror)
+			}
+		})
+	}
+}
+
 func TestStockpickerTask_SkipDayReturnsErrTaskSkipped(t *testing.T) {
 	var got stockpicker.RunDailyOptions
 	skipped := stockpicker.RunDailyResult{Skipped: true}

@@ -393,6 +393,32 @@ func TestLoad_StockpickerDualWrite_Knob(t *testing.T) {
 	}
 }
 
+// TestLoad_StockpickerSQLiteMirror_Knob pins the C7 mirror knob: default OFF
+// (opt-in), and — unlike the DualWrite kill switch — an unparseable value
+// stays OFF. Both directions are safe here, but the default must be off, or
+// deploying C7 would silently keep writing data/state/atlas.db while operators
+// believe the artifact is retired.
+func TestLoad_StockpickerSQLiteMirror_Knob(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("ATLAS_STOCKPICKER_SQLITE_MIRROR", "")
+	if cfg := Load(); cfg.StockpickerSQLiteMirror {
+		t.Error("StockpickerSQLiteMirror = true, want default false (opt-in knob)")
+	}
+	for _, v := range []string{"true", "1", "yes", "on", "TRUE"} {
+		t.Setenv("ATLAS_STOCKPICKER_SQLITE_MIRROR", v)
+		if cfg := Load(); !cfg.StockpickerSQLiteMirror {
+			t.Errorf("StockpickerSQLiteMirror = false, want true (env %q)", v)
+		}
+	}
+	for _, v := range []string{"flase", "maybe"} {
+		t.Setenv("ATLAS_STOCKPICKER_SQLITE_MIRROR", v)
+		if cfg := Load(); cfg.StockpickerSQLiteMirror {
+			t.Errorf("StockpickerSQLiteMirror = true on unparseable value %q, want false (fail-safe OFF)", v)
+		}
+	}
+}
+
 func TestLoad_EnvFileDoesNotOverrideExisting(t *testing.T) {
 	dir := t.TempDir()
 	t.Chdir(dir)

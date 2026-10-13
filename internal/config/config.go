@@ -30,7 +30,8 @@ type Config struct {
 	LedgerDir                  string
 	StoreBackend               string // "jsonl" (default), "sqlite", or "postgres" — ATLAS_STORE_BACKEND
 	StockpickerExpectDB        string // postgres migration-target guard for the daily-update scheduler (M12) — ATLAS_STOCKPICKER_EXPECT_DB
-	StockpickerDualWrite       bool   // mirror stockpicker outcomes/win-rates into PG on the postgres backend (SSOT→PG batch B; kill switch) — ATLAS_STOCKPICKER_DUAL_WRITE, default true
+	StockpickerDualWrite       bool   // PG is the primary stockpicker write destination on the postgres backend (SSOT→PG batch B); kill switch: false rolls back to SQLite-primary, zero PG writes — ATLAS_STOCKPICKER_DUAL_WRITE, default true
+	StockpickerSQLiteMirror    bool   // additionally mirror the PG-primary stockpicker writes into the job-local SQLite artifact (data/state/atlas.db); off ⇒ the artifact is not opened nor created (C7) — ATLAS_STOCKPICKER_SQLITE_MIRROR, default false
 	SQLitePath                 string // path to SQLite database file — ATLAS_SQLITE_PATH
 	ReplayDataPath             string
 	ReplaySessionDate          string
@@ -115,6 +116,7 @@ func Load() Config {
 		StoreBackend:               envOr("ATLAS_STORE_BACKEND", "jsonl"),
 		StockpickerExpectDB:        envOr("ATLAS_STOCKPICKER_EXPECT_DB", ""),
 		StockpickerDualWrite:       envBoolDefaultTrue("ATLAS_STOCKPICKER_DUAL_WRITE"),
+		StockpickerSQLiteMirror:    envOrBool("ATLAS_STOCKPICKER_SQLITE_MIRROR", false),
 		SQLitePath:                 envOr("ATLAS_SQLITE_PATH", "data/state/atlas.db"),
 		ReplayDataPath:             envOr("ATLAS_REPLAY_DATA_PATH", "samples/replay/twse_stock_day_all_sample.csv"),
 		ReplaySessionDate:          envOr("ATLAS_REPLAY_SESSION_DATE", ""),
