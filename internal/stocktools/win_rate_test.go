@@ -108,7 +108,7 @@ func TestHandleWinRate_HappyPath(t *testing.T) {
 	db := openWinRateTestDB(t)
 	seedWinRate(t, db, sampleWinRateSummary("2330", "stockpicker-foreign-3d-net-buy", "120d"))
 
-	rec, out := getWinRate(t, Deps{WinRate: NewSQLiteWinRateProvider(db)}, "/api/stock/win_rate?symbol=2330")
+	rec, out := getWinRate(t, Deps{WinRate: NewWinRateDBProviderForHandle(db)}, "/api/stock/win_rate?symbol=2330")
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
 	}
@@ -155,7 +155,7 @@ func TestHandleWinRate_BreakEvenSurfaced(t *testing.T) {
 	summary.BreakEvenCostRate = 0.0115
 	seedWinRate(t, db, summary)
 
-	rec, out := getWinRate(t, Deps{WinRate: NewSQLiteWinRateProvider(db)}, "/api/stock/win_rate?symbol=2330")
+	rec, out := getWinRate(t, Deps{WinRate: NewWinRateDBProviderForHandle(db)}, "/api/stock/win_rate?symbol=2330")
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
 	}
@@ -174,7 +174,7 @@ func TestHandleWinRate_LegacyRowZeroBreakEven(t *testing.T) {
 	db := openWinRateTestDB(t)
 	seedWinRate(t, db, sampleWinRateSummary("2330", "stockpicker-foreign-3d-net-buy", "120d"))
 
-	_, out := getWinRate(t, Deps{WinRate: NewSQLiteWinRateProvider(db)}, "/api/stock/win_rate?symbol=2330")
+	_, out := getWinRate(t, Deps{WinRate: NewWinRateDBProviderForHandle(db)}, "/api/stock/win_rate?symbol=2330")
 	if len(out.Conditions) != 1 {
 		t.Fatalf("expected 1 condition, got %d", len(out.Conditions))
 	}
@@ -190,7 +190,7 @@ func TestHandleWinRate_MultipleConditions(t *testing.T) {
 	seedWinRate(t, db, sampleWinRateSummary("2330", "stockpicker-foreign-3d-net-buy", "120d"))
 	seedWinRate(t, db, sampleWinRateSummary("2330", "stockpicker-momentum-20d-positive", "120d"))
 
-	_, out := getWinRate(t, Deps{WinRate: NewSQLiteWinRateProvider(db)}, "/api/stock/win_rate?symbol=2330")
+	_, out := getWinRate(t, Deps{WinRate: NewWinRateDBProviderForHandle(db)}, "/api/stock/win_rate?symbol=2330")
 	if !out.Found || len(out.Conditions) != 2 {
 		t.Fatalf("expected 2 conditions, found=%v conditions=%d", out.Found, len(out.Conditions))
 	}
@@ -206,7 +206,7 @@ func TestHandleWinRate_ConditionFilter(t *testing.T) {
 	seedWinRate(t, db, sampleWinRateSummary("2330", "stockpicker-foreign-3d-net-buy", "120d"))
 	seedWinRate(t, db, sampleWinRateSummary("2330", "stockpicker-momentum-20d-positive", "120d"))
 
-	_, out := getWinRate(t, Deps{WinRate: NewSQLiteWinRateProvider(db)},
+	_, out := getWinRate(t, Deps{WinRate: NewWinRateDBProviderForHandle(db)},
 		"/api/stock/win_rate?symbol=2330&condition_id=momentum-20d-positive")
 	if !out.Found || len(out.Conditions) != 1 {
 		t.Fatalf("expected 1 filtered condition, got %+v", out)
@@ -215,7 +215,7 @@ func TestHandleWinRate_ConditionFilter(t *testing.T) {
 		t.Errorf("condition_id = %q, want momentum-20d-positive", out.Conditions[0].ConditionID)
 	}
 
-	rec, out := getWinRate(t, Deps{WinRate: NewSQLiteWinRateProvider(db)},
+	rec, out := getWinRate(t, Deps{WinRate: NewWinRateDBProviderForHandle(db)},
 		"/api/stock/win_rate?symbol=2330&condition_id=no-such-condition")
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200 (found=false), got %d", rec.Code)
@@ -235,14 +235,14 @@ func TestHandleWinRate_RollingWindow(t *testing.T) {
 	seedWinRate(t, db, sampleWinRateSummary("2330", "stockpicker-foreign-3d-net-buy", "60d"))
 
 	// Explicit window finds the row.
-	_, out := getWinRate(t, Deps{WinRate: NewSQLiteWinRateProvider(db)},
+	_, out := getWinRate(t, Deps{WinRate: NewWinRateDBProviderForHandle(db)},
 		"/api/stock/win_rate?symbol=2330&rolling_window=60d")
 	if !out.Found || out.RollingWindow != "60d" {
 		t.Fatalf("60d window not found: %+v", out)
 	}
 
 	// Default window (120d) has no row → found=false.
-	rec, out := getWinRate(t, Deps{WinRate: NewSQLiteWinRateProvider(db)}, "/api/stock/win_rate?symbol=2330")
+	rec, out := getWinRate(t, Deps{WinRate: NewWinRateDBProviderForHandle(db)}, "/api/stock/win_rate?symbol=2330")
 	if rec.Code != http.StatusOK || out.Found {
 		t.Fatalf("default window: code=%d found=%v, want 200/false", rec.Code, out.Found)
 	}
@@ -255,7 +255,7 @@ func TestHandleWinRate_RollingWindow(t *testing.T) {
 // symbol has no stored data at all.
 func TestHandleWinRate_NoData(t *testing.T) {
 	db := openWinRateTestDB(t)
-	rec, out := getWinRate(t, Deps{WinRate: NewSQLiteWinRateProvider(db)}, "/api/stock/win_rate?symbol=9999")
+	rec, out := getWinRate(t, Deps{WinRate: NewWinRateDBProviderForHandle(db)}, "/api/stock/win_rate?symbol=9999")
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200 (found=false), got %d: %s", rec.Code, rec.Body.String())
 	}
@@ -270,7 +270,7 @@ func TestHandleWinRate_NoData(t *testing.T) {
 // TestHandleWinRate_RejectsEmptySymbol verifies 400 on missing symbol.
 func TestHandleWinRate_RejectsEmptySymbol(t *testing.T) {
 	db := openWinRateTestDB(t)
-	rec, _ := getWinRate(t, Deps{WinRate: NewSQLiteWinRateProvider(db)}, "/api/stock/win_rate")
+	rec, _ := getWinRate(t, Deps{WinRate: NewWinRateDBProviderForHandle(db)}, "/api/stock/win_rate")
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400, got %d: %s", rec.Code, rec.Body.String())
 	}
@@ -291,7 +291,7 @@ func TestHandleWinRate_SymbolSuffixStripped(t *testing.T) {
 	db := openWinRateTestDB(t)
 	seedWinRate(t, db, sampleWinRateSummary("2330", "stockpicker-foreign-3d-net-buy", "120d"))
 
-	_, out := getWinRate(t, Deps{WinRate: NewSQLiteWinRateProvider(db)}, "/api/stock/win_rate?symbol=2330.TW")
+	_, out := getWinRate(t, Deps{WinRate: NewWinRateDBProviderForHandle(db)}, "/api/stock/win_rate?symbol=2330.TW")
 	if !out.Found || out.Symbol != "2330" {
 		t.Fatalf(".TW suffix not normalized: %+v", out)
 	}
@@ -386,7 +386,7 @@ func TestHandleConditionWinRate_HappyPath(t *testing.T) {
 	seedWinRate(t, db, sampleWinRateSummary("2454", "stockpicker-momentum-20d-positive", "120d"))
 
 	mux := http.NewServeMux()
-	RegisterRoutes(mux, Deps{ConditionWinRate: NewSQLiteWinRateProvider(db)})
+	RegisterRoutes(mux, Deps{ConditionWinRate: NewWinRateDBProviderForHandle(db)})
 	req := httptest.NewRequest(http.MethodGet, "/api/stock/condition_winrate?condition_id=momentum-20d-positive", nil)
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
@@ -429,7 +429,7 @@ func TestHandleConditionWinRate_AvoidDirection(t *testing.T) {
 	seedWinRate(t, db, sampleWinRateSummary("2330", "stockpicker-price-volume-top-divergence", "120d"))
 
 	mux := http.NewServeMux()
-	RegisterRoutes(mux, Deps{ConditionWinRate: NewSQLiteWinRateProvider(db)})
+	RegisterRoutes(mux, Deps{ConditionWinRate: NewWinRateDBProviderForHandle(db)})
 	req := httptest.NewRequest(http.MethodGet, "/api/stock/condition_winrate?condition_id=price-volume-top-divergence", nil)
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
@@ -449,7 +449,7 @@ func TestHandleConditionWinRate_AvoidDirection(t *testing.T) {
 func TestHandleConditionWinRate_NotFound(t *testing.T) {
 	db := openWinRateTestDB(t)
 	mux := http.NewServeMux()
-	RegisterRoutes(mux, Deps{ConditionWinRate: NewSQLiteWinRateProvider(db)})
+	RegisterRoutes(mux, Deps{ConditionWinRate: NewWinRateDBProviderForHandle(db)})
 	req := httptest.NewRequest(http.MethodGet, "/api/stock/condition_winrate?condition_id=nonexistent", nil)
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
@@ -471,7 +471,7 @@ func TestHandleConditionWinRate_NotFound(t *testing.T) {
 
 func TestHandleConditionWinRate_MissingConditionID(t *testing.T) {
 	mux := http.NewServeMux()
-	RegisterRoutes(mux, Deps{ConditionWinRate: NewSQLiteWinRateProvider(openWinRateTestDB(t))})
+	RegisterRoutes(mux, Deps{ConditionWinRate: NewWinRateDBProviderForHandle(openWinRateTestDB(t))})
 	req := httptest.NewRequest(http.MethodGet, "/api/stock/condition_winrate", nil)
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
@@ -508,7 +508,7 @@ func TestHandleConditionWinRate_RegimeFilter(t *testing.T) {
 	}
 
 	mux := http.NewServeMux()
-	RegisterRoutes(mux, Deps{ConditionWinRate: NewSQLiteWinRateProvider(db)})
+	RegisterRoutes(mux, Deps{ConditionWinRate: NewWinRateDBProviderForHandle(db)})
 
 	// Unfiltered: 4 obs, 50% win rate.
 	req := httptest.NewRequest(http.MethodGet, "/api/stock/condition_winrate?condition_id=momentum-20d-positive", nil)

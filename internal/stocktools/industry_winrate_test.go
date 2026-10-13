@@ -70,7 +70,7 @@ func TestHandleIndustryWinRate_HappyPath(t *testing.T) {
 		{Symbol: "9999", TriggerDate: dates[2], Source: source, ForwardReturn: 0.05, CostRate: 0.00585},
 	})
 
-	rec, out := getIndustryWinRate(t, Deps{IndustryWinRate: NewSQLiteWinRateProvider(db)},
+	rec, out := getIndustryWinRate(t, Deps{IndustryWinRate: NewWinRateDBProviderForHandle(db)},
 		"/api/stock/industry_winrate?condition_id=momentum-20d-positive")
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
@@ -121,7 +121,7 @@ func TestHandleIndustryWinRate_IndustryFilter(t *testing.T) {
 	})
 
 	for _, query := range []string{"industry_id=semiconductor", "industry_id=半導體"} {
-		rec, out := getIndustryWinRate(t, Deps{IndustryWinRate: NewSQLiteWinRateProvider(db)},
+		rec, out := getIndustryWinRate(t, Deps{IndustryWinRate: NewWinRateDBProviderForHandle(db)},
 			"/api/stock/industry_winrate?condition_id=momentum-20d-positive&"+query)
 		if rec.Code != http.StatusOK {
 			t.Fatalf("%s: expected 200, got %d: %s", query, rec.Code, rec.Body.String())
@@ -147,7 +147,7 @@ func TestHandleIndustryWinRate_FilterNoRow(t *testing.T) {
 		{Symbol: "9999", TriggerDate: dates[1], Source: source, ForwardReturn: 0.02, CostRate: 0.00585},
 	})
 
-	rec, out := getIndustryWinRate(t, Deps{IndustryWinRate: NewSQLiteWinRateProvider(db)},
+	rec, out := getIndustryWinRate(t, Deps{IndustryWinRate: NewWinRateDBProviderForHandle(db)},
 		"/api/stock/industry_winrate?condition_id=momentum-20d-positive&industry_id=steel")
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
@@ -173,7 +173,7 @@ func TestHandleIndustryWinRate_InvalidIndustryID(t *testing.T) {
 	})
 
 	for _, bad := range []string{"not-a-sector", "robotics"} {
-		rec, _ := getIndustryWinRate(t, Deps{IndustryWinRate: NewSQLiteWinRateProvider(db)},
+		rec, _ := getIndustryWinRate(t, Deps{IndustryWinRate: NewWinRateDBProviderForHandle(db)},
 			"/api/stock/industry_winrate?condition_id=momentum-20d-positive&industry_id="+bad)
 		if rec.Code != http.StatusBadRequest {
 			t.Errorf("industry_id=%s: expected 400, got %d", bad, rec.Code)
@@ -183,7 +183,7 @@ func TestHandleIndustryWinRate_InvalidIndustryID(t *testing.T) {
 
 // TestHandleIndustryWinRate_RequiresConditionID: conditions are never pooled.
 func TestHandleIndustryWinRate_RequiresConditionID(t *testing.T) {
-	rec, _ := getIndustryWinRate(t, Deps{IndustryWinRate: NewSQLiteWinRateProvider(openWinRateTestDB(t))},
+	rec, _ := getIndustryWinRate(t, Deps{IndustryWinRate: NewWinRateDBProviderForHandle(openWinRateTestDB(t))},
 		"/api/stock/industry_winrate")
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400, got %d", rec.Code)
@@ -200,7 +200,7 @@ func TestHandleIndustryWinRate_NoProvider(t *testing.T) {
 
 // TestHandleIndustryWinRate_NoData: an empty ledger answers 200 + found=false.
 func TestHandleIndustryWinRate_NoData(t *testing.T) {
-	rec, out := getIndustryWinRate(t, Deps{IndustryWinRate: NewSQLiteWinRateProvider(openWinRateTestDB(t))},
+	rec, out := getIndustryWinRate(t, Deps{IndustryWinRate: NewWinRateDBProviderForHandle(openWinRateTestDB(t))},
 		"/api/stock/industry_winrate?condition_id=nonexistent")
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", rec.Code)
@@ -221,7 +221,7 @@ func TestHandleIndustryWinRate_RegimeFilter(t *testing.T) {
 		{Symbol: "2454", TriggerDate: dates[1], Source: source, ForwardReturn: -0.02, CostRate: 0.00585, Regime: "RISK_OFF"},
 	})
 
-	rec, out := getIndustryWinRate(t, Deps{IndustryWinRate: NewSQLiteWinRateProvider(db)},
+	rec, out := getIndustryWinRate(t, Deps{IndustryWinRate: NewWinRateDBProviderForHandle(db)},
 		"/api/stock/industry_winrate?condition_id=momentum-20d-positive&regime=RISK_ON")
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
@@ -277,7 +277,7 @@ func TestHandleIndustryWinRate_RegimeStratumEmpty(t *testing.T) {
 		{Symbol: "2454", TriggerDate: dates[1], Source: source, ForwardReturn: -0.02, CostRate: 0.00585, Regime: "RISK_OFF"},
 	})
 
-	rec, out := getIndustryWinRate(t, Deps{IndustryWinRate: NewSQLiteWinRateProvider(db)},
+	rec, out := getIndustryWinRate(t, Deps{IndustryWinRate: NewWinRateDBProviderForHandle(db)},
 		"/api/stock/industry_winrate?condition_id=momentum-20d-positive&regime=RISK_ON")
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
@@ -306,7 +306,7 @@ func TestHandleIndustryWinRate_RegimeStratumEmpty(t *testing.T) {
 // TestHandleIndustryWinRate_EmptyLedgerJSONTypes (review E5): the no-data path
 // must not emit null collections either.
 func TestHandleIndustryWinRate_EmptyLedgerJSONTypes(t *testing.T) {
-	rec, out := getIndustryWinRate(t, Deps{IndustryWinRate: NewSQLiteWinRateProvider(openWinRateTestDB(t))},
+	rec, out := getIndustryWinRate(t, Deps{IndustryWinRate: NewWinRateDBProviderForHandle(openWinRateTestDB(t))},
 		"/api/stock/industry_winrate?condition_id=momentum-20d-positive")
 	if rec.Code != http.StatusOK || out.Found {
 		t.Fatalf("expected 200 + found=false, got %d %+v", rec.Code, out)
@@ -334,7 +334,7 @@ func TestHandleIndustryWinRate_AvoidSemanticsAndNetReturn(t *testing.T) {
 		{Symbol: "9998", TriggerDate: dates[2], Source: source, ForwardReturn: 0.5, CostRate: 0.00585},
 	})
 
-	rec, out := getIndustryWinRate(t, Deps{IndustryWinRate: NewSQLiteWinRateProvider(db)},
+	rec, out := getIndustryWinRate(t, Deps{IndustryWinRate: NewWinRateDBProviderForHandle(db)},
 		"/api/stock/industry_winrate?condition_id=price-volume-top-divergence")
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
@@ -376,7 +376,7 @@ func TestHandleIndustryWinRate_InvalidWindow(t *testing.T) {
 	seedIndustryOutcomes(t, db, []stockpicker.SignalOutcome{
 		{Symbol: "2330", TriggerDate: industryTestDates()[0], Source: "stockpicker-momentum-20d-positive", ForwardReturn: 0.02, CostRate: 0.00585},
 	})
-	rec, _ := getIndustryWinRate(t, Deps{IndustryWinRate: NewSQLiteWinRateProvider(db)},
+	rec, _ := getIndustryWinRate(t, Deps{IndustryWinRate: NewWinRateDBProviderForHandle(db)},
 		"/api/stock/industry_winrate?condition_id=momentum-20d-positive&rolling_window=abc")
 	if rec.Code != http.StatusServiceUnavailable {
 		t.Fatalf("expected 503, got %d: %s", rec.Code, rec.Body.String())
@@ -390,7 +390,7 @@ func TestHandleIndustryWinRate_LedgerUnavailable(t *testing.T) {
 	if err := db.Close(); err != nil {
 		t.Fatalf("close db: %v", err)
 	}
-	rec, _ := getIndustryWinRate(t, Deps{IndustryWinRate: NewSQLiteWinRateProvider(db)},
+	rec, _ := getIndustryWinRate(t, Deps{IndustryWinRate: NewWinRateDBProviderForHandle(db)},
 		"/api/stock/industry_winrate?condition_id=momentum-20d-positive")
 	if rec.Code != http.StatusServiceUnavailable {
 		t.Fatalf("expected 503, got %d: %s", rec.Code, rec.Body.String())

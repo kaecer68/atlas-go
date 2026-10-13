@@ -16,7 +16,7 @@ import (
 // does not have to import stockpicker (stockpicker -> ledger -> portfolio ->
 // sectorallocation). This adapter is the production binding: it wraps the
 // read-only canonical aggregate served by /api/stock/industry_winrate
-// (SQLiteWinRateProvider) and maps its rows onto the consumption shape.
+// (WinRateDBProvider) and maps its rows onto the consumption shape.
 //
 // The chain is config-gated and off by default
 // (sector_allocation.industry_hit_rate_consume_enabled), so this binding is

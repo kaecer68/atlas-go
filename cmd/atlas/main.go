@@ -1036,43 +1036,46 @@ func run(args []string, deps appDeps) error {
 		if cfg.FinMindAPIKey != "" {
 			stockDeps.Revenue = marketdata.NewTSMCRevenueProviderWithStorage(cfg.FinMindAPIKey, filepath.Join(cfg.WorkDir, "data/state/tsmc_revenue"))
 		}
-		// Win-rate endpoint (GET /api/stock/win_rate, PR 3c) — read-only
-		// view over the job-local stockpicker SQLite ledger
-		// (data/state/atlas.db by default; ATLAS_MCP_STOCKPICKER_DB
-		// overrides, the same env the MCP server reads). The ledger is
-		// written by the stockpicker daily update (scheduler
-		// stockpicker_daily_update / cmd/run-stockpicker-backtest).
-		// Missing/unopenable ledger → the endpoint 503s with a clear
-		// message instead of crashing the server.
+		// Win-rate endpoints (GET /api/stock/win_rate — PR 3c;
+		// /api/stock/condition_winrate — #1865; /api/stock/industry_winrate —
+		// #1942; /api/stock/family-expectancy) — read-only views over the
+		// stockpicker win-rate stores.
+		//
+		// C6b (2026-10-13): PostgreSQL first when the deployment declares
+		// ATLAS_STORE_BACKEND=postgres and DATABASE_URL is set, exactly like
+		// the MCP tools after C6; otherwise the job-local stockpicker SQLite
+		// ledger (data/state/atlas.db by default; ATLAS_MCP_STOCKPICKER_DB
+		// overrides, the same env the MCP server reads), which the stockpicker
+		// daily update writes (scheduler stockpicker_daily_update /
+		// cmd/run-stockpicker-backtest).
+		//
+		// The SQLite handle is opened lazily on first use, not here: a
+		// deployment that reads PostgreSQL must not fail to serve the
+		// endpoints (or log a misleading "store unavailable") just because the
+		// fallback file is absent. A missing/unopenable store therefore
+		// answers 503 per request instead of crashing the server.
 		winRateDBPath := os.Getenv("ATLAS_MCP_STOCKPICKER_DB")
 		if winRateDBPath == "" {
 			winRateDBPath = filepath.Join(cfg.WorkDir, "data", "state", "atlas.db")
 		}
-		if winRateDB, err := stocktools.OpenWinRateDB(winRateDBPath); err != nil {
-			// The error from OpenWinRateDB wraps the absolute path, so the
-			// log.Printf below does print the path (server-side log of a
-			// local path — acceptable; gosec G706 is satisfied because the
-			// path is never interpolated into a format string, only passed
-			// through %v inside the wrapped error).
-			log.Printf("[StockTools] win-rate store unavailable: %v (GET /api/stock/win_rate and /api/stock/family-expectancy will 503)", err)
-		} else {
-			winRateProvider := stocktools.NewSQLiteWinRateProvider(winRateDB)
-			stockDeps.WinRate = winRateProvider
-			// Condition-level (cross-symbol) aggregate read (issue #1865) —
-			// same read-only ledger handle implements all three providers.
-			stockDeps.ConditionWinRate = winRateProvider
-			// Industry-level (canonical L1) aggregate read (issue #1942).
-			stockDeps.IndustryWinRate = winRateProvider
-			// Family-level (per-source) net-expectancy + regime instrument
-			// (read-only, additive: one row per signal family).
-			stockDeps.FamilyExpectancy = winRateProvider
-			// Bind the same read-only aggregate to the industry hit-rate
-			// consumption chain (issues #1942/#1948). Inert by default: the
-			// chain checks sector_allocation.industry_hit_rate_consume_enabled
-			// (false) before every read.
-			sectorallocation.RegisterIndustryHitRateProvider(
-				stocktools.NewSectorAllocationHitRateProvider(winRateProvider))
-		}
+		winRateSource := stocktools.OpenWinRateSource(cfg.DatabaseURL, cfg.StoreBackend, winRateDBPath)
+		defer func() { _ = winRateSource.Close() }()
+		winRateProvider := stocktools.NewWinRateDBProvider(winRateSource)
+		stockDeps.WinRate = winRateProvider
+		// Condition-level (cross-symbol) aggregate read (issue #1865) —
+		// the same backend-resolving provider implements all four.
+		stockDeps.ConditionWinRate = winRateProvider
+		// Industry-level (canonical L1) aggregate read (issue #1942).
+		stockDeps.IndustryWinRate = winRateProvider
+		// Family-level (per-source) net-expectancy + regime instrument
+		// (read-only, additive: one row per signal family).
+		stockDeps.FamilyExpectancy = winRateProvider
+		// Bind the same read-only aggregate to the industry hit-rate
+		// consumption chain (issues #1942/#1948). Inert by default: the
+		// chain checks sector_allocation.industry_hit_rate_consume_enabled
+		// (false) before every read.
+		sectorallocation.RegisterIndustryHitRateProvider(
+			stocktools.NewSectorAllocationHitRateProvider(winRateProvider))
 		stocktools.RegisterRoutes(mux, stockDeps)
 		log.Printf("[StockTools] registered /api/stock/* routes")
 

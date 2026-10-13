@@ -1,17 +1,23 @@
 // Package stocktools — win-rate REST endpoint (PR 3c, Part 1).
 //
 // GET /api/stock/win_rate exposes the Phase-4 stockpicker win-rate
-// aggregates (stock_win_rate + stock_signal_outcomes in the job-local
-// SQLite ledger) as a read-only HTTP endpoint, mirroring the MCP tool
-// stock_get_win_rate (cmd/atlas-mcp/server/tools_stock_winrate.go) so the
-// client_web stock-quote page and the MCP channel answer the same question
-// with the same semantics (200 + found=false when no data exists, never a
-// recomputation).
+// aggregates (stock_win_rate + stock_signal_outcomes) as a read-only HTTP
+// endpoint, mirroring the MCP tool stock_get_win_rate
+// (cmd/atlas-mcp/server/tools_stock_winrate.go) so the client_web stock-quote
+// page and the MCP channel answer the same question with the same semantics
+// (200 + found=false when no data exists, never a recomputation).
+//
+// C6b (2026-10-13): the four win-rate endpoints read PostgreSQL when the
+// deployment declares the postgres store backend (same rule as the MCP tools
+// after C6), and fall back to the read-only SQLite ledger otherwise; see
+// win_rate_backend.go. Every query below is written with $N placeholders so one
+// SQL text runs on both backends.
 package stocktools
 
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -86,26 +92,74 @@ type WinRateProvider interface {
 	OutcomeDateRange(ctx context.Context, symbol, source string) (start, end string, ok bool)
 }
 
-// SQLiteWinRateProvider is the production WinRateProvider backed by the
-// job-local stockpicker SQLite ledger (data/state/atlas.db or
-// ATLAS_MCP_STOCKPICKER_DB). Read-only by construction: the handle is
-// opened with mode=ro, so any accidental write fails at the driver level.
-type SQLiteWinRateProvider struct {
-	db *sql.DB
+// WinRateDBProvider is the production WinRateProvider (and, since it reads
+// through one handle, ConditionWinRateProvider, IndustryWinRateProvider and
+// FamilyExpectancyProvider as well).
+//
+// It reads through exactly one of two handles:
+//
+//   - a backend-resolving WinRateSource (NewWinRateDBProvider): production
+//     wiring — PostgreSQL when the deployment declares it and it is reachable,
+//     the read-only SQLite ledger otherwise (C6b);
+//   - a fixed *sql.DB (NewWinRateDBProviderForHandle): one already-open
+//     read-only ledger handle, used by tests and by single-backend callers.
+//
+// Read-only is a property of the handles, not of this type: the SQLite handle
+// is opened with mode=ro and the PostgreSQL session with
+// default_transaction_read_only=on, so any accidental write fails at the driver
+// level on either backend.
+type WinRateDBProvider struct {
+	db  *sql.DB
+	src *WinRateSource
 }
 
-// NewSQLiteWinRateProvider wraps an open read-only ledger handle.
-func NewSQLiteWinRateProvider(db *sql.DB) *SQLiteWinRateProvider {
-	return &SQLiteWinRateProvider{db: db}
+// NewWinRateDBProvider builds the backend-resolving provider used by
+// cmd/atlas: every read asks src which store to use (PostgreSQL first, SQLite
+// fallback), so a PostgreSQL outage degrades to the SQLite ledger and a
+// PostgreSQL that comes back is picked up without a restart.
+func NewWinRateDBProvider(src *WinRateSource) *WinRateDBProvider {
+	return &WinRateDBProvider{src: src}
+}
+
+// NewWinRateDBProviderForHandle wraps an already-open read-only ledger handle,
+// without backend resolution.
+func NewWinRateDBProviderForHandle(db *sql.DB) *WinRateDBProvider {
+	return &WinRateDBProvider{db: db}
+}
+
+// handle returns the database this call must read. Resolution failures are
+// reported as errors (and answered as 503 by the handlers) instead of silently
+// reading a different store.
+func (p *WinRateDBProvider) handle(ctx context.Context) (*sql.DB, error) {
+	switch {
+	case p.src != nil:
+		h, err := p.src.Handle(ctx)
+		if err != nil {
+			return nil, err
+		}
+		return h.db, nil
+	case p.db != nil:
+		return p.db, nil
+	default:
+		return nil, errors.New("stocktools: win-rate provider has no database handle")
+	}
 }
 
 // Sources implements WinRateProvider.
-func (p *SQLiteWinRateProvider) Sources(ctx context.Context, symbol, window string) ([]string, error) {
+//
+// $N placeholders: the same text runs on both backends (see
+// winRateReadHandle) — positional binding on the SQLite driver maps arguments
+// to the parameters in order of appearance.
+func (p *WinRateDBProvider) Sources(ctx context.Context, symbol, window string) ([]string, error) {
+	db, err := p.handle(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("stocktools: list win-rate sources %s/%s: %w", symbol, window, err)
+	}
 	const q = `SELECT DISTINCT source FROM stock_win_rate
-		WHERE symbol = ? AND rolling_window = ?
+		WHERE symbol = $1 AND rolling_window = $2
 		  AND source LIKE 'stockpicker-%'
 		ORDER BY source`
-	rows, err := p.db.QueryContext(ctx, q, symbol, window)
+	rows, err := db.QueryContext(ctx, q, symbol, window)
 	if err != nil {
 		return nil, fmt.Errorf("stocktools: list win-rate sources %s/%s: %w", symbol, window, err)
 	}
@@ -122,14 +176,27 @@ func (p *SQLiteWinRateProvider) Sources(ctx context.Context, symbol, window stri
 }
 
 // LoadWinRate implements WinRateProvider.
-func (p *SQLiteWinRateProvider) LoadWinRate(ctx context.Context, symbol, source, window string) (stockpicker.StockWinRateSummary, bool, error) {
-	return stockpicker.LoadWinRate(ctx, p.db, symbol, source, window)
+func (p *WinRateDBProvider) LoadWinRate(ctx context.Context, symbol, source, window string) (stockpicker.StockWinRateSummary, bool, error) {
+	db, err := p.handle(ctx)
+	if err != nil {
+		return stockpicker.StockWinRateSummary{}, false, err
+	}
+	return stockpicker.LoadWinRate(ctx, db, symbol, source, window)
 }
 
 // OutcomeDateRange implements WinRateProvider. It reads raw rows
 // (window=""), never aggregates.
-func (p *SQLiteWinRateProvider) OutcomeDateRange(ctx context.Context, symbol, source string) (start, end string, ok bool) {
-	outcomes, err := stockpicker.LoadOutcomes(ctx, p.db, symbol, source, "")
+//
+// A resolution failure is reported as ok=false, exactly like a read failure:
+// the interface has no error to carry (the handler omits data_start/data_end),
+// and the failure is already surfaced by Sources or LoadWinRate earlier in the
+// same request.
+func (p *WinRateDBProvider) OutcomeDateRange(ctx context.Context, symbol, source string) (start, end string, ok bool) {
+	db, err := p.handle(ctx)
+	if err != nil {
+		return "", "", false
+	}
+	outcomes, err := stockpicker.LoadOutcomes(ctx, db, symbol, source, "")
 	if err != nil || len(outcomes) == 0 {
 		return "", "", false
 	}
@@ -188,8 +255,12 @@ type ConditionWinRateProvider interface {
 // shares WinRate/WilsonScoreInterval/CalibrationStatusFor with
 // SignalWinRate). Cost rate and min-samples come from the live parameters
 // config, same as the daily aggregation job.
-func (p *SQLiteWinRateProvider) LoadConditionWinRate(ctx context.Context, source, window, regime string) (stockpicker.ConditionWinRateSummary, bool, error) {
-	outcomes, err := stockpicker.LoadOutcomes(ctx, p.db, "", source, window)
+func (p *WinRateDBProvider) LoadConditionWinRate(ctx context.Context, source, window, regime string) (stockpicker.ConditionWinRateSummary, bool, error) {
+	db, err := p.handle(ctx)
+	if err != nil {
+		return stockpicker.ConditionWinRateSummary{}, false, err
+	}
+	outcomes, err := stockpicker.LoadOutcomes(ctx, db, "", source, window)
 	if err != nil {
 		return stockpicker.ConditionWinRateSummary{}, false, fmt.Errorf("stocktools: load condition outcomes %s: %w", source, err)
 	}

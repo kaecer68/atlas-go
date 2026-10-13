@@ -51,8 +51,12 @@ type IndustryWinRateProvider interface {
 // Cost rate and min-samples come from the live parameters config, the same
 // values the daily aggregation job uses, so industry numbers are comparable
 // with the per-symbol and condition-level ones.
-func (p *SQLiteWinRateProvider) LoadIndustryWinRate(ctx context.Context, source, window, regime string) (stockpicker.IndustryWinRateReport, bool, error) {
-	all, err := stockpicker.LoadOutcomes(ctx, p.db, "", source, window)
+func (p *WinRateDBProvider) LoadIndustryWinRate(ctx context.Context, source, window, regime string) (stockpicker.IndustryWinRateReport, bool, error) {
+	db, err := p.handle(ctx)
+	if err != nil {
+		return stockpicker.IndustryWinRateReport{}, false, err
+	}
+	all, err := stockpicker.LoadOutcomes(ctx, db, "", source, window)
 	if err != nil {
 		return stockpicker.IndustryWinRateReport{}, false, fmt.Errorf("stocktools: load industry outcomes %s: %w", source, err)
 	}
