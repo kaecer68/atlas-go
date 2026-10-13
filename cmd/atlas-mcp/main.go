@@ -35,7 +35,9 @@
 //	ATLAS_MCP_STOCKPICKER_DB        SQLite ledger with stockpicker win-rate
 //	                                aggregates (stock_win_rate +
 //	                                stock_signal_outcomes); empty = stock_get_win_rate
-//	                                reports "no data configured"
+//	                                reports "no data configured". Used only when
+//	                                DATABASE_URL is unset or ATLAS_STORE_BACKEND
+//	                                does not declare postgres (C6).
 //	ATLAS_MCP_ROOTS_ALLOWED         comma-separated file:// roots allowed when client declares none
 //	ATLAS_MCP_ROOTS_READ_SIZE_CAP   max bytes per roots file read (default 1048576)
 package main
@@ -127,9 +129,83 @@ func main() {
 		}
 	}
 
+	// C6: the two stockpicker win-rate tools read PostgreSQL when the
+	// deployment declares the postgres store backend. Wired after the main
+	// pool so a deployment whose DSN is broken still starts (the win-rate
+	// tools then probe PG per call and fall back to the SQLite ledger).
+	wireStockpickerWinRatePG(&cfg, os.Getenv("DATABASE_URL"), os.Getenv("ATLAS_STORE_BACKEND"))
+	if winRateDB := cfg.WinRatePGDB; winRateDB != nil {
+		defer func() { _ = winRateDB.Close() }()
+	}
+
 	if err := server.Run(context.Background(), cfg); err != nil {
 		log.Fatalf("atlas-mcp: %v", err)
 	}
+}
+
+// wireStockpickerWinRatePG wires the read-only PostgreSQL handle used by the
+// stockpicker win-rate tools (C6) into cfg, or logs why the SQLite ledger
+// stays the read path.
+//
+// Both switches are read from the process environment, the same way the
+// DATABASE_URL read above does: the MCP server deliberately does not call
+// config.Load(), which would load .env files INTO this process's environment
+// as a side effect. The declared backend value is still normalized through the
+// repository's single rule (server.ResolveWinRateBackend, which delegates to
+// ledger.ResolveStoreBackend), so the read path cannot disagree with the
+// writers about what "declared postgres" means.
+//
+// Every branch logs, because a deployment that believes it reads PostgreSQL
+// while actually reading a stale SQLite file is the failure mode this change
+// exists to remove; the alternative - silently leaving cfg.WinRatePGDB nil -
+// would reintroduce it in the opposite direction.
+func wireStockpickerWinRatePG(cfg *server.Config, pgURL, declaredBackend string) {
+	if pgURL == "" {
+		log.Printf("atlas-mcp: stockpicker win-rate reads: SQLite ledger (DATABASE_URL not set)")
+		return
+	}
+	backend, err := server.ResolveWinRateBackend(declaredBackend)
+	if err != nil {
+		//nolint:gosec // G706: the value is whitelisted by loggableBackendValue (enum-shaped, length-capped) and printed with %q; gosec's taint analysis does not model the helper.
+		log.Printf("atlas-mcp: stockpicker win-rate reads: SQLite ledger (ATLAS_STORE_BACKEND=%q is not a known backend)", loggableBackendValue(declaredBackend))
+		return
+	}
+	if backend != server.WinRateBackendPostgres {
+		//nolint:gosec // G706: same as above — whitelisted, length-capped, %q-quoted; the value is an operator-set env var in this process.
+		log.Printf("atlas-mcp: stockpicker win-rate reads: SQLite ledger (ATLAS_STORE_BACKEND=%q does not declare postgres)", loggableBackendValue(declaredBackend))
+		return
+	}
+	handle, err := server.OpenReadOnlyWinRatePGDB(pgURL)
+	if err != nil {
+		log.Printf("atlas-mcp: stockpicker win-rate reads: SQLite ledger (postgres handle: %v)", err)
+		return
+	}
+	cfg.WinRatePGDB = handle
+	log.Printf("atlas-mcp: stockpicker win-rate reads: PostgreSQL (read-only session)")
+}
+
+// loggableBackendValue renders an operator-supplied ATLAS_STORE_BACKEND value
+// for the startup log. The value reaches a log line, so it is reduced to the
+// characters a store backend name can contain before it is printed: an
+// environment variable must not be able to forge log structure (gosec G706,
+// log injection). Anything outside that set is reported as a marker instead of
+// being echoed.
+func loggableBackendValue(v string) string {
+	if v == "" {
+		return "(unset)"
+	}
+	if len(v) > 32 {
+		return "(too long)"
+	}
+	for _, r := range v {
+		switch {
+		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9':
+		case r == '_', r == '-', r == '.':
+		default:
+			return "(contains characters outside [A-Za-z0-9_.-])"
+		}
+	}
+	return v
 }
 
 func envOr(key, def string) string {

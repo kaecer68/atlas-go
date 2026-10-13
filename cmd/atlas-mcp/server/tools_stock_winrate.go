@@ -4,12 +4,9 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
-	_ "modernc.org/sqlite" // driver for the read-only stockpicker SQLite handle
 
 	"github.com/kaecer68/atlas-go/internal/stockpicker"
 )
@@ -27,7 +24,7 @@ const stockWinRateSourcePrefix = "stockpicker-"
 func registerStockWinRateTools(mcpSrv *mcp.Server, s *server) {
 	countedAddTool(mcpSrv, &mcp.Tool{
 		Name:        "stock_get_win_rate",
-		Description: autoDescOr("stock_get_win_rate", "Return the persisted Phase-4 stock win-rate aggregate for a Taiwan stock symbol (read-only; never recomputes). Data source: stockpicker backfill job output (stock_win_rate + stock_signal_outcomes in the SQLite ledger configured via ATLAS_MCP_STOCKPICKER_DB). Input: symbol (+ optional condition_id, rolling_window, asof). Known condition_ids: foreign-3d-net-buy, momentum-20d-positive, price-volume-top-divergence, price-volume-bottom-divergence. DIRECTION SEMANTICS: price-volume-top-divergence (頂背離) is AVOID-semantics — a LOW win_rate / negative avg_forward_return after trigger CONFIRMS the bearish avoid signal, do not read it as a bad condition. No stored data for the symbol returns found=false with a clear message. Alternative: stock_get_quote, stock_get_technical."),
+		Description: autoDescOr("stock_get_win_rate", "Return the persisted Phase-4 stock win-rate aggregate for a Taiwan stock symbol (read-only; never recomputes). Data source: stockpicker backfill job output (stock_win_rate + stock_signal_outcomes), read-only from PostgreSQL when DATABASE_URL is set and ATLAS_STORE_BACKEND declares postgres, otherwise read-only from the SQLite ledger configured via ATLAS_MCP_STOCKPICKER_DB (both paths run the same SQL; the PostgreSQL handle is opened default_transaction_read_only=on and the SQLite handle mode=ro, so neither can write). Input: symbol (+ optional condition_id, rolling_window, asof). Known condition_ids: foreign-3d-net-buy, momentum-20d-positive, price-volume-top-divergence, price-volume-bottom-divergence. DIRECTION SEMANTICS: price-volume-top-divergence (頂背離) is AVOID-semantics — a LOW win_rate / negative avg_forward_return after trigger CONFIRMS the bearish avoid signal, do not read it as a bad condition. No stored data for the symbol returns found=false with a clear message. Alternative: stock_get_quote, stock_get_technical."),
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: new(false)},
 	}, s.handleStockGetWinRate)
 }
@@ -84,16 +81,26 @@ func (s *server) handleStockGetWinRate(ctx context.Context, _ *mcp.CallToolReque
 		Conditions:    []stockWinRateCondition{},
 	}
 
-	err := s.withAudit(ctx, "stock_get_win_rate", []string{"symbol", "condition_id", "rolling_window", "asof"}, func() error {
-		db, err := s.stockpickerDB(ctx)
+	// winRateBackend records which ledger actually answered this call, so the
+	// audit log says where a number came from (PostgreSQL, the SQLite
+	// fallback, or nobody). "none" only happens when neither backend could be
+	// opened, which is also when the handler answers no-data.
+	winRateBackend := "none"
+	extraFn := func() map[string]any {
+		return map[string]any{"win_rate_backend": winRateBackend}
+	}
+
+	err := s.withAuditExtra(ctx, "stock_get_win_rate", []string{"symbol", "condition_id", "rolling_window", "asof"}, extraFn, func() error {
+		h, err := s.winRateHandle(ctx)
 		if err != nil {
 			out.Message = fmt.Sprintf("no stockpicker win-rate data available for %s: %v", in.Symbol, err)
 			return nil
 		}
-		winStore := stockpicker.NewWinRateStore(db)
-		outcomeStore := stockpicker.NewSignalOutcomeStore(db)
+		winRateBackend = h.backend
+		winStore := stockpicker.NewWinRateStore(h.db)
+		outcomeStore := stockpicker.NewSignalOutcomeStore(h.db)
 
-		sources, err := winRateSources(ctx, db, in.Symbol, window, in.ConditionID)
+		sources, err := winRateSources(ctx, h.db, in.Symbol, window, in.ConditionID)
 		if err != nil {
 			return fmt.Errorf("stock_get_win_rate: list sources: %w", err)
 		}
@@ -150,8 +157,10 @@ func winRateSources(ctx context.Context, db *sql.DB, symbol, window, conditionID
 	if conditionID != "" {
 		return []string{stockWinRateSourcePrefix + conditionID}, nil
 	}
+	// $N placeholders (not ?): the same statement runs on both backends, see
+	// winRateReadHandle for why SQLite accepts PostgreSQL-style placeholders.
 	const q = `SELECT DISTINCT source FROM stock_win_rate
-		WHERE symbol = ? AND rolling_window = ?
+		WHERE symbol = $1 AND rolling_window = $2
 		  AND source LIKE 'stockpicker-%'
 		ORDER BY source`
 	rows, err := db.QueryContext(ctx, q, symbol, window)
@@ -188,39 +197,4 @@ func winRateOutcomeDateRange(ctx context.Context, store *stockpicker.SignalOutco
 		}
 	}
 	return start, end, true
-}
-
-// stockpickerDB returns the cached read-only SQLite handle backing the
-// stockpicker win-rate stores, opening it lazily from
-// Config.StockpickerDBPath on first use. Read-only mode (mode=ro) makes the
-// no-write contract structural: any accidental write fails at the driver
-// level. A nil/empty path or a missing file is reported as a descriptive
-// error so the handler can answer "no data" instead of panicking.
-func (s *server) stockpickerDB(ctx context.Context) (*sql.DB, error) {
-	s.winRateMu.Lock()
-	defer s.winRateMu.Unlock()
-	if s.winRateDB != nil {
-		return s.winRateDB, nil
-	}
-	path := s.cfg.StockpickerDBPath
-	if path == "" {
-		return nil, fmt.Errorf("stockpicker DB not configured (set ATLAS_MCP_STOCKPICKER_DB)")
-	}
-	abs, err := filepath.Abs(path)
-	if err != nil {
-		return nil, fmt.Errorf("stockpicker DB path %s: %w", path, err)
-	}
-	if _, err := os.Stat(abs); err != nil {
-		return nil, fmt.Errorf("stockpicker DB %s: %w", abs, err)
-	}
-	db, err := sql.Open("sqlite", "file:"+filepath.ToSlash(abs)+"?mode=ro&_pragma=busy_timeout(5000)")
-	if err != nil {
-		return nil, fmt.Errorf("open stockpicker DB %s: %w", abs, err)
-	}
-	if err := db.PingContext(ctx); err != nil {
-		_ = db.Close()
-		return nil, fmt.Errorf("open stockpicker DB %s: %w", abs, err)
-	}
-	s.winRateDB = db
-	return db, nil
 }

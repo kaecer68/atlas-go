@@ -85,7 +85,7 @@ writer 卻以為寫成功。
 | `internal/calibration/predictor_calibrator.go` | `prediction_backtest`（7 日校準） | **應 backend-aware 的資料 store**（reader 曾用 opens-or-creates） | 本 PR：改為 `mode=ro` 唯讀開既有檔、**絕不建檔**（`openSQLiteReadOnly`）。**未修**：reader 仍讀 job-local sqlite，而 writer 已在 PG ⇒ 生產恆為 no-op；改讀 `HistoricalStore` 會改變生產校準結果，需另行核准（見 PR 說明）。 |
 | `internal/subscription/store.go` | `users` / `subscription_events`（`users.db`） | 應 backend-aware，但**套件內零 postgres 實作**、`Store` 是具體 struct | **不在本 PR 修**（非最小修法）。#2109 另案：`users.db` 建在容器可寫層。 |
 | `internal/stocktools/win_rate.go` | `stock_win_rate`（讀） | 刻意的地方性 store（stockpicker job-local 語意，套件 doc 明言 "never in the postgres target"） | **不改**；已 `mode=ro`、不建檔（`TestOpenWinRateDB_ReadOnly` 釘住）。 |
-| `cmd/atlas-mcp/server/tools_stock_winrate.go` | 同上（MCP 讀取端） | 同上（唯讀、`Stat` 後才開） | **不改**。 |
+| `cmd/atlas-mcp/server/tools_stock_winrate.go` | 同上（MCP 讀取端） | 同上（唯讀、`Stat` 後才開） | **2026-10-13（C6）改為 PG 優先**：`DATABASE_URL` 有值且宣告 `postgres` ⇒ 兩個 win-rate tool（`stock_get_win_rate`、`stock_picker_scan`）讀 PG（`default_transaction_read_only=on`、`stdlib.OpenDB`、惰性連線），PG 不可用才回退這條 SQLite 讀取路徑；兩條路徑執行同一份 `$N` SQL。**未改**：`internal/stocktools/win_rate.go`（HTTP `/api/stock/win_rate` 仍 SQLite-only）⇒ 生產（宣告 postgres）下 HTTP 與 MCP 可能不同步，列為後續項。 |
 | `internal/channelsecrets/store.go` | `channel_secrets` | 應 backend-aware 的資料 store；缺陷是**靜默降級**（`postgres && pool != nil` 條件） | 本 PR：pool 為 nil 時改為明確 error（與其他 ledger factory 同形狀）。呼叫端 `initChannelKeyManager` 已是 fail-open（log ＋ 回 nil ⇒ 管理端點 503），不會拖垮啟動。 |
 | `internal/symbolindustry/store.go` | `symbol_industry` | **正確範例**（已 backend-aware） | 不動。 |
 

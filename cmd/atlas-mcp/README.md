@@ -183,7 +183,8 @@ streamable-HTTP / SSE 模式 bind `ATLAS_MCP_ADDR`（預設 `127.0.0.1:9090`）�
 
 | 變數 | 預設值 | 用途 |
 |------|--------|------|
-| `ATLAS_MCP_STOCKPICKER_DB` | （未設） | 含 stockpicker win-rate 聚合（`stock_win_rate` + `stock_signal_outcomes`）的 SQLite ledger 路徑（read-only 開啟；未設或檔案不存在時 `stock_get_win_rate` 回覆明確「無資料」訊息） |
+| `ATLAS_MCP_STOCKPICKER_DB` | （未設） | 含 stockpicker win-rate 聚合（`stock_win_rate` + `stock_signal_outcomes`）的 SQLite ledger 路徑（read-only 開啟；未設或檔案不存在時 `stock_get_win_rate` 回覆明確「無資料」訊息）。**僅在 PG 讀取路徑未啟用時使用**：`DATABASE_URL` 有值且 `ATLAS_STORE_BACKEND=postgres` 時，兩個 win-rate tool 改讀 PostgreSQL（唯讀 session），此變數成為 PostgreSQL 不可用時的回退 |
+| `ATLAS_STORE_BACKEND` | （未設 = `jsonl`） | 宣告儲存後端（`jsonl` / `sqlite` / `postgres`）。值為 `postgres`（且 `DATABASE_URL` 已設）時，`stock_get_win_rate` / `stock_picker_scan` 讀 PostgreSQL；啟動時會 log 實際選用的讀取後端 |
 
 > **stdio 安全模型**：stdio 模式預設不強制 Bearer token（process isolation 是本機單用戶場景的安全邊界），但仍接受 token 標頭作為多租戶 routing。**若 atlas-mcp 被多個 agent / 多個使用者共用，或運行在共享主機上，請務必設定 `ATLAS_MCP_TOKEN`**，否則任何能啟動 process 的程式都能呼叫全部 110+ 個 tool。SSE / streamable-HTTP 模式 `Authorization: Bearer <token>` **必填**，未帶或錯誤回傳 401。
 
