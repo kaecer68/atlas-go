@@ -2620,7 +2620,8 @@ PY
 
 ### FU-20261012-02 — `stock_signal_outcomes.regime` 是該表**唯一非 PIT** 欄位
 
-- **狀態**：`open`
+- **狀態**：`done`
+- **結案（2026-10-13）**：新增 `stockpicker.PITRegimeBySession`（快照對應到「**第一個收盤時間嚴格晚於 capturedAt 的交易日**」，13:30 Asia/Taipei；非交易日前滾、同 session 取最新擷取），`cmd/atlas` 的 RegimeLoader 改用它。五個測試含生產實際錨點（2026-09-23 快照擷取於 09-24 07:50 TPE **不得**標註 09-23）＋負向證明（還原舊 keying ⇒ 紅）。**注意**：既有 74,073 列仍帶舊（非 PIT）標籤，此修正只影響**新的**寫入 ⇒ 分層統計跨新舊分界時語意不純（regime 閘門要放回前的四條件②）。
 - **記錄日期**：2026-10-12
 - **來源**：同上調查（regime gate 裁決，§F）
 - **事實**：`regime(D)` 的快照擷取時間為 **D+1 02:59–07:55 TPE**（VIX/DXY/US10Y/JPY/GOLD/OIL 的時間戳皆落在 D+1 凌晨），但 outcome 的進場價是 **D 日 13:30 TPE 收盤**（`bars[i].Close`）⇒ 標籤含 **1 個美股 session 的未來資訊**。
@@ -2630,7 +2631,8 @@ PY
 
 ### FU-20261012-03 — `regime_history` 有**兩個 writer、兩套公式**，對同一天給出**相反標籤**
 
-- **狀態**：`open`
+- **狀態**：`done`（**標籤路徑**層面；表內仍保留兩個 writer，見下）
+- **結案（2026-10-13）**：`stockpicker.PITRegimeBySession` 只採 **live**（`is_synthetic = 0`），`cmd/atlas` 的 RegimeLoader 亦改用 `LoadRegimeHistory`（FilterSynthetic）＝防禦縱深。理由兩個且獨立：①回填用**另一套公式**（legacy VIX/DXY/US10Y）⇒ 對同一天可給出相反標籤（實測 2026-09-23：live 7.81 RISK_ON vs 回填 36.68 NEUTRAL）；②回填列的 `CapturedAt` 是**回填執行當下**，不是該日事實時間 ⇒ 對過去 session 天生非 PIT。**未做**：把 `regime_history` 收成單一 writer（回填列仍供 period 分析使用）⇒ regime 閘門重新認證條件①只在**標籤路徑**上滿足。測試 `TestPITRegimeBySession_IgnoresBackfilledRows`（回填列擷取時間刻意較晚 ⇒ 舊碼會讓它勝出）。
 - **記錄日期**：2026-10-12
 - **來源**：同上調查（§1.2）
 - **事實**：live writer = `internal/monitoring/dashboard_api.go:858` → `narrative.TaiwanStressCalculator`（8 因子，參數來自 `configs/parameters.json` 的 `narrative.taiwan_stress_*`）；backfill writer = `cmd/backfill-period-history` → 只有 VIX/DXY/US10Y 的 legacy 公式。實測同一天 **2026-09-23：live 7.81 → RISK_ON；回填 36.68 → NEUTRAL**（相反）。

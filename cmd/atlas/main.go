@@ -77,6 +77,7 @@ import (
 	"github.com/kaecer68/atlas-go/internal/scheduler"
 	"github.com/kaecer68/atlas-go/internal/sectorallocation"
 	"github.com/kaecer68/atlas-go/internal/startup"
+	"github.com/kaecer68/atlas-go/internal/stockpicker"
 	"github.com/kaecer68/atlas-go/internal/stocktools"
 	"github.com/kaecer68/atlas-go/internal/storage"
 	strategyRanker "github.com/kaecer68/atlas-go/internal/strategy_ranker"
@@ -1712,20 +1713,25 @@ func run(args []string, deps appDeps) error {
 					if historicalStore == nil {
 						return nil
 					}
-					rows, err := historicalStore.LoadRegimeHistoryAll(ctx, ledger.RegimeHistoryUnlimited)
+					// Live-only on purpose (FU-20261012-03): the table has two
+					// writers and the backfill's legacy formula contradicts the
+					// live one for the same day. Only live snapshots may label
+					// an outcome; backfilled rows stay for period analysis.
+					// RegimeHistoryUnlimited (FU-20261012-01) so the oldest
+					// labels are not silently truncated either.
+					rows, err := historicalStore.LoadRegimeHistory(ctx, ledger.RegimeHistoryUnlimited)
 					if err != nil || len(rows) == 0 {
 						return nil
 					}
-					m := make(map[string]string, len(rows))
-					best := make(map[string]time.Time, len(rows))
-					for _, row := range rows {
-						if ts, ok := best[row.Date]; ok && row.CapturedAt.Before(ts) {
-							continue
-						}
-						best[row.Date] = row.CapturedAt
-						m[row.Date] = row.Regime
-					}
-					return m
+					// PIT mapping (FU-20261012-02): key each snapshot by the
+					// session it was actually USABLE for — the first session
+					// whose 13:30 TPE close is strictly after capturedAt — not
+					// by its own date. The snapshot for a session is captured
+					// after that session's close (a US session of data lands in
+					// the small hours of the next Taipei day), so keying by
+					// date handed the outcome label one session of future
+					// information relative to its own entry price.
+					return stockpicker.PITRegimeBySession(rows)
 				},
 			})
 			// fix/20260731-govflow-cadence: shared in-memory CAPTCHA
