@@ -39,7 +39,16 @@ type Config struct {
 	// win-rate aggregates (stock_win_rate + stock_signal_outcomes), e.g.
 	// /Users/kk/workspace/atlas/data/state/atlas.db. Read-only; empty means
 	// stock_get_win_rate answers "no data configured" (ATLAS_MCP_STOCKPICKER_DB).
+	// It is the win-rate read path unless WinRatePGDB is wired (C6).
 	StockpickerDBPath string
+
+	// WinRatePGDB is the read-only PostgreSQL handle holding the same
+	// stockpicker win-rate aggregates. main wires it when DATABASE_URL is set
+	// AND the declared store backend is postgres (ATLAS_STORE_BACKEND); when
+	// non-nil the win-rate tools read PostgreSQL and use the SQLite ledger
+	// only as the fallback for an unreachable PostgreSQL. Nil = SQLite only,
+	// the pre-C6 behavior. The handle is owned by the caller (main).
+	WinRatePGDB *sql.DB
 
 	// Phase 4 transport wiring. Empty Transport defaults to "stdio" for
 	// backwards compatibility with existing deployments (Claude Desktop,
@@ -254,7 +263,12 @@ type server struct {
 	rootsCache   []string
 	anomalyStore anomaly.AnomalyStore
 	winRateMu    sync.Mutex
-	winRateDB    *sql.DB // lazily-opened read-only stockpicker ledger (stock_get_win_rate)
+	// winRateSQLiteDB is the lazily-opened read-only stockpicker SQLite ledger
+	// (the win-rate read fallback). winRateResolved caches the resolved
+	// PostgreSQL handle once it answers a probe; it stays nil while PostgreSQL
+	// is unreachable so the next call probes again.
+	winRateSQLiteDB *sql.DB
+	winRateResolved *winRateReadHandle
 }
 
 func (s *server) cachedRoots() []string {

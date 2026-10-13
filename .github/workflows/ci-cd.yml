@@ -456,6 +456,9 @@ jobs:
             - 'internal/testdb/**'
             - 'internal/config/**'
             # 只在該 cmd 已有 PG integration 測試時才加進來（否則只是空跑 13 分鐘）；新增測試後同 PR 一併補上。
+            # cmd/atlas-mcp：C6 的 win-rate PG 讀取路徑在 2026-10-13 同 PR 附上
+            # tools_stock_winrate_pg_integration_test.go（PG/SQLite 逐列一致 + 唯讀釘子）。
+            - 'cmd/atlas-mcp/**'
             - 'cmd/migrate-data/**'
             - 'cmd/run-stockpicker-backtest/**'
             - 'cmd/backfill-futures-bars/**'

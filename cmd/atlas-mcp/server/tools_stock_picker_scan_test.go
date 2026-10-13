@@ -187,7 +187,7 @@ func TestHandleStockPickerScan_Filters(t *testing.T) {
 	}
 }
 
-// TestHandleStockPickerScan_DBUnconfigured: no winRateDB wired → found=false.
+// TestHandleStockPickerScan_DBUnconfigured: no win-rate handle wired → found=false.
 func TestHandleStockPickerScan_DBUnconfigured(t *testing.T) {
 	s, _, done := newTestHarness(t)
 	t.Cleanup(done)

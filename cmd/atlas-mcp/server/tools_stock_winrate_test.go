@@ -63,14 +63,16 @@ func openStockWinRateTestDB(t *testing.T) (*sql.DB, []string) {
 	return db, sources
 }
 
-// stockWinRateHarness builds a server with winRateDB pre-wired so the
-// handler reads the in-memory ledger without touching the filesystem.
+// stockWinRateHarness builds a server with the SQLite win-rate handle
+// pre-wired so the handler reads the in-memory ledger without touching the
+// filesystem. Config.WinRatePGDB stays nil (main wires it only for a
+// postgres deployment), so the SQLite path is the one under test.
 func stockWinRateHarness(t *testing.T) (*server, *sql.DB) {
 	t.Helper()
 	s, _, done := newTestHarness(t)
 	t.Cleanup(done)
 	db, _ := openStockWinRateTestDB(t)
-	s.winRateDB = db
+	s.winRateSQLiteDB = db
 	return s, db
 }
 
@@ -217,7 +219,7 @@ func TestHandleStockGetWinRate_MissingSymbol(t *testing.T) {
 func TestHandleStockGetWinRate_DBUnconfigured(t *testing.T) {
 	s, _, done := newTestHarness(t)
 	defer done()
-	// winRateDB nil and StockpickerDBPath empty → handler must answer a
+	// No SQLite handle and StockpickerDBPath empty → handler must answer a
 	// clear no-data message, not a hard error.
 	out, err := callStockWinRate(s, stockWinRateInput{Symbol: "2330"})
 	if err != nil {

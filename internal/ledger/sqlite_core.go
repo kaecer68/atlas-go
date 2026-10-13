@@ -520,7 +520,11 @@ func addPeriodDetectorVersionColumn(db *sql.DB) error {
 // stock_win_rate` against a legacy file ⇒ HTTP 503
 // "no such column: break_even_cost_rate" on /api/stock/win_rate, and the same
 // query in the MCP tools stock_get_win_rate / stock_picker_scan, because the
-// SQLite file is the only read path for those (ATLAS_MCP_STOCKPICKER_DB).
+// SQLite file was then the only read path for those (ATLAS_MCP_STOCKPICKER_DB).
+// C6 (2026-10-13) made those two MCP tools read PostgreSQL when the deployment
+// declares the postgres backend, with the SQLite file as the fallback — which
+// makes this migration no less mandatory: the fallback is still reachable, and
+// /api/stock/win_rate is still SQLite-only.
 // CREATE TABLE IF NOT EXISTS cannot heal that; only an ALTER can.
 func addStockWinRateBreakEvenColumn(db *sql.DB) error {
 	for _, table := range []string{"stock_win_rate", "stock_win_rate_by_regime"} {

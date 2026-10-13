@@ -34,7 +34,7 @@ const (
 func registerStockPickerScanTools(mcpSrv *mcp.Server, s *server) {
 	countedAddTool(mcpSrv, &mcp.Tool{
 		Name:        "stock_picker_scan",
-		Description: autoDescOr("stock_picker_scan", "Scan persisted Phase-4 stock win-rate aggregates across symbols and return the best candidates (read-only; never recomputes). Data source: stockpicker backfill job output (stock_win_rate in the SQLite ledger configured via ATLAS_MCP_STOCKPICKER_DB). Input: optional condition_id, rolling_window, min_observations, min_win_rate, top_n (default 10), sort_by (wilson_lower default | win_rate | shrunk_rate), asof, direction. Candidates are filtered to observations >= min_observations, win_rate >= min_win_rate, calibration_status=eligible, then sorted and truncated to top_n. DEMOTED FAMILIES (2026-10-06): foreign-3d-net-buy and momentum-20d-positive lost their edge (5-day net-cost expectancy -0.517% / -0.987% after the 0.585% round-trip cost) and are excluded from ranking entirely — naming one in condition_id returns found=false with the reason, not candidates. Their persisted rows stay readable through stock_get_win_rate / stock_get_condition_winrate; only ranking is withheld. DIRECTION SEMANTICS: conditions are buy-side by default; condition price-volume-top-divergence (頂背離) is AVOID-semantics — a LOW forward win rate after trigger confirms the bearish signal, so for it pass direction=avoid to invert the filter (win_rate <= max_win_rate, default 0.5) and ordering (weakest forward performance first). Without direction=avoid the default buy filter hides exactly the rows where the avoid signal is strongest (k3 review F1). No stored data returns found=false with a clear message. Alternative: stock_get_win_rate for a single symbol."),
+		Description: autoDescOr("stock_picker_scan", "Scan persisted Phase-4 stock win-rate aggregates across symbols and return the best candidates (read-only; never recomputes). Data source: stockpicker backfill job output (stock_win_rate), read-only from PostgreSQL when DATABASE_URL is set and ATLAS_STORE_BACKEND declares postgres, otherwise read-only from the SQLite ledger configured via ATLAS_MCP_STOCKPICKER_DB (both paths run the same SQL; the PostgreSQL handle is opened default_transaction_read_only=on and the SQLite handle mode=ro, so neither can write). Input: optional condition_id, rolling_window, min_observations, min_win_rate, top_n (default 10), sort_by (wilson_lower default | win_rate | shrunk_rate), asof, direction. Candidates are filtered to observations >= min_observations, win_rate >= min_win_rate, calibration_status=eligible, then sorted and truncated to top_n. DEMOTED FAMILIES (2026-10-06): foreign-3d-net-buy and momentum-20d-positive lost their edge (5-day net-cost expectancy -0.517% / -0.987% after the 0.585% round-trip cost) and are excluded from ranking entirely — naming one in condition_id returns found=false with the reason, not candidates. Their persisted rows stay readable through stock_get_win_rate / stock_get_condition_winrate; only ranking is withheld. DIRECTION SEMANTICS: conditions are buy-side by default; condition price-volume-top-divergence (頂背離) is AVOID-semantics — a LOW forward win rate after trigger confirms the bearish signal, so for it pass direction=avoid to invert the filter (win_rate <= max_win_rate, default 0.5) and ordering (weakest forward performance first). Without direction=avoid the default buy filter hides exactly the rows where the avoid signal is strongest (k3 review F1). No stored data returns found=false with a clear message. Alternative: stock_get_win_rate for a single symbol."),
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: new(false)},
 	}, s.handleStockPickerScan)
 }
@@ -154,13 +154,13 @@ func (s *server) handleStockPickerScan(ctx context.Context, _ *mcp.CallToolReque
 	}
 
 	err := s.withAudit(ctx, "stock_picker_scan", []string{"condition_id", "rolling_window", "min_observations", "min_win_rate", "top_n", "sort_by", "asof"}, func() error {
-		db, err := s.stockpickerDB(ctx)
+		h, err := s.winRateHandle(ctx)
 		if err != nil {
 			out.Message = fmt.Sprintf("no stockpicker win-rate data available for scan: %v", err)
 			return nil
 		}
 
-		rows, err := scanWinRateRows(ctx, db, window, in.ConditionID, minObs, minWinRate, sortCol, direction)
+		rows, err := scanWinRateRows(ctx, h.db, window, in.ConditionID, minObs, minWinRate, sortCol, direction)
 		if err != nil {
 			return fmt.Errorf("stock_picker_scan: query win rates: %w", err)
 		}
@@ -169,7 +169,7 @@ func (s *server) handleStockPickerScan(ctx context.Context, _ *mcp.CallToolReque
 			return nil
 		}
 		if sortByShrunk {
-			priorHits, priorObs, err := scanPooledPrior(ctx, db, window, in.ConditionID)
+			priorHits, priorObs, err := scanPooledPrior(ctx, h.db, window, in.ConditionID)
 			if err != nil {
 				return fmt.Errorf("stock_picker_scan: query pooled prior: %w", err)
 			}
@@ -201,17 +201,31 @@ func scanWinRateRows(ctx context.Context, db *sql.DB, window, conditionID string
 	// added by the Phase 4 additive migration, so legacy rows are NULL, and
 	// scanning NULL into float64 fails the whole tool (same defect class as the
 	// 2026-10-12 /api/stock/win_rate HTTP 503).
+	// The win-rate comparison is the buy/avoid switch. It is selected from a
+	// fixed constant pair rather than rewritten in the SQL text: a textual
+	// replace silently stops matching the day a placeholder is added, which
+	// would leave the avoid scan running the buy filter.
+	winRateCmp := "win_rate >= $3"
+	if direction == "avoid" {
+		// Avoid semantics (頂背離): the strongest signals are the LOWEST
+		// forward win rates. The buy-side floor becomes a ceiling and the
+		// ranking inverts, so the most confidently-bad rows (lowest
+		// wilson_upper / win_rate) come first.
+		winRateCmp = "win_rate <= $3"
+	}
+	// $N placeholders (not ?): the same statement runs on both backends, see
+	// winRateReadHandle for why SQLite accepts PostgreSQL-style placeholders.
 	query := `SELECT symbol, source, rolling_window, observations, hits, win_rate,
 		wilson_lower, wilson_upper, confidence, calibration_status,
 		COALESCE(net_cost_rate, 0), COALESCE(avg_forward_return, 0),
 		COALESCE(break_even_cost_rate, 0), updated_at
 	FROM stock_win_rate
-	WHERE rolling_window = ? AND source LIKE 'stockpicker-%'
-	  AND observations >= ? AND win_rate >= ?
+	WHERE rolling_window = $1 AND source LIKE 'stockpicker-%'
+	  AND observations >= $2 AND ` + winRateCmp + `
 	  AND calibration_status = 'eligible'`
 	args := []any{window, minObs, minWinRate}
 	if conditionID != "" {
-		query += ` AND source = ?`
+		query += ` AND source = $4`
 		args = append(args, stockWinRateSourcePrefix+conditionID)
 	}
 	// sortCol is whitelisted by the handler (wilson_lower | win_rate); select
@@ -222,11 +236,6 @@ func scanWinRateRows(ctx context.Context, db *sql.DB, window, conditionID string
 		orderBy = "win_rate DESC, symbol ASC"
 	}
 	if direction == "avoid" {
-		// Avoid semantics (頂背離): the strongest signals are the LOWEST
-		// forward win rates. win_rate >= ? above is the buy-side floor;
-		// replace it with a ceiling and invert the ranking so the most
-		// confidently-bad rows (lowest wilson_upper / win_rate) come first.
-		query = strings.Replace(query, "win_rate >= ?", "win_rate <= ?", 1)
 		orderBy = "wilson_upper ASC, symbol ASC"
 		if sortCol == "win_rate" {
 			orderBy = "win_rate ASC, symbol ASC"
@@ -275,12 +284,14 @@ func scanWinRateRows(ctx context.Context, db *sql.DB, window, conditionID string
 // 而非過濾後的倖存者，否則犯選擇偏差。GROUP BY 後 Go 側排除降級家族
 // （與 scanWinRateRows 同模式，避免動態 SQL 拼接）。
 func scanPooledPrior(ctx context.Context, db *sql.DB, window, conditionID string) (hits, obs int, err error) {
+	// $N placeholders (not ?): the same statement runs on both backends, see
+	// winRateReadHandle for why SQLite accepts PostgreSQL-style placeholders.
 	query := `SELECT source, SUM(hits), SUM(observations) FROM stock_win_rate
-	WHERE rolling_window = ? AND source LIKE 'stockpicker-%'
+	WHERE rolling_window = $1 AND source LIKE 'stockpicker-%'
 	  AND calibration_status = 'eligible'`
 	args := []any{window}
 	if conditionID != "" {
-		query += ` AND source = ?`
+		query += ` AND source = $2`
 		args = append(args, stockWinRateSourcePrefix+conditionID)
 	}
 	query += ` GROUP BY source`
