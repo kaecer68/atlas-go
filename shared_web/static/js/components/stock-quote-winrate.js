@@ -42,6 +42,39 @@ function formatSignedPct(v) {
   return `${sign}${(v * 100).toFixed(2)}%`;
 }
 
+// breakEvenRow renders the 可承受成本 row: the break-even cost rate (the
+// forward-return median, i.e. the round-trip cost at which the net win rate
+// would fall below 50%). Source of truth: stockpicker.BreakEvenCostRate,
+// persisted since migration 000028 and surfaced by GET /api/stock/win_rate.
+//
+// Two rules that must not drift:
+//   - 0 or missing ⇒ "—". Rows aggregated before 000028 carry no measurement;
+//     a zero median is NOT "no edge" and must never read as one.
+//   - when the break-even is BELOW the actual net cost rate, say so plainly —
+//     that is the edge test in one glance (the 2026-10-06 demotions failed
+//     exactly here).
+function breakEvenRow(cond) {
+  const be = cond.break_even_cost_rate;
+  if (!isValidNumber(be) || be === 0) {
+    return `<div class="sq-tech-row">
+      <div class="sq-tech-row__label">可承受成本</div>
+      <div class="sq-tech-row__value">—</div>
+      <div class="sq-tech-row__hint sq-price-neutral">尚未量測</div>
+    </div>`;
+  }
+  const actual = cond.net_cost_rate;
+  const below = isValidNumber(actual) && be < actual;
+  const hint = below
+    ? `不足以覆蓋交易成本 ${formatPct(actual, 2)}`
+    : (isValidNumber(actual) ? `實際成本 ${formatPct(actual, 2)}` : '勝率跌破 5 成的成本');
+  const cls = below ? 'sq-price-down' : 'sq-price-up';
+  return `<div class="sq-tech-row">
+    <div class="sq-tech-row__label">可承受成本</div>
+    <div class="sq-tech-row__value ${cls}">${formatPct(be, 2)}</div>
+    <div class="sq-tech-row__hint sq-price-neutral">${hint}</div>
+  </div>`;
+}
+
 function statusBadge(status) {
   switch (status) {
     case 'eligible':
@@ -131,6 +164,7 @@ function renderCondition(cond) {
           : (cond.avg_forward_return > 0 ? 'sq-price-up' : cond.avg_forward_return < 0 ? 'sq-price-down' : 'sq-price-neutral')}">${formatSignedPct(cond.avg_forward_return)}</div>
         <div class="sq-tech-row__hint sq-price-neutral">${range}${isAvoid ? ' · 反向語義' : ''}</div>
       </div>
+      ${breakEvenRow(cond)}
     </div>
     ${observeNote}
     ${avoidNote}

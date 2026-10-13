@@ -49,6 +49,10 @@ type WinRateCondition struct {
 	CalibrationStatus string  `json:"calibration_status"`
 	NetCostRate       float64 `json:"net_cost_rate"`
 	AvgForwardReturn  float64 `json:"avg_forward_return"`
+	// BreakEvenCostRate 是 forward 回報中位數：勝率跌破 5 成的來回成本上界。
+	// 0 = 該列在 migration 000028 之前聚合（尚無此量測），**不得**解讀為
+	// 「無 edge」——對照 NetCostRate 判讀。
+	BreakEvenCostRate float64 `json:"break_even_cost_rate"`
 	UpdatedAt         string  `json:"updated_at"` // ISO-8601
 	DataStart         string  `json:"data_start,omitempty"`
 	DataEnd           string  `json:"data_end,omitempty"`

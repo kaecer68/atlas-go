@@ -146,6 +146,43 @@ func TestHandleWinRate_HappyPath(t *testing.T) {
 	}
 }
 
+// TestHandleWinRate_BreakEvenSurfaced: the break-even cost rate persisted
+// since migration 000028 must reach GET /api/stock/win_rate so the frontend
+// card can render it (2026-10-13 penetration).
+func TestHandleWinRate_BreakEvenSurfaced(t *testing.T) {
+	db := openWinRateTestDB(t)
+	summary := sampleWinRateSummary("2330", "stockpicker-price-volume-bottom-divergence", "120d")
+	summary.BreakEvenCostRate = 0.0115
+	seedWinRate(t, db, summary)
+
+	rec, out := getWinRate(t, Deps{WinRate: NewSQLiteWinRateProvider(db)}, "/api/stock/win_rate?symbol=2330")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if len(out.Conditions) != 1 {
+		t.Fatalf("expected 1 condition, got %d", len(out.Conditions))
+	}
+	if got := out.Conditions[0].BreakEvenCostRate; got != 0.0115 {
+		t.Errorf("break_even_cost_rate = %v, want 0.0115", got)
+	}
+}
+
+// TestHandleWinRate_LegacyRowZeroBreakEven: rows aggregated before migration
+// 000028 carry 0; the API must surface it as 0 (the frontend renders "—").
+// 0 must NOT be silently turned into a negative/derived value.
+func TestHandleWinRate_LegacyRowZeroBreakEven(t *testing.T) {
+	db := openWinRateTestDB(t)
+	seedWinRate(t, db, sampleWinRateSummary("2330", "stockpicker-foreign-3d-net-buy", "120d"))
+
+	_, out := getWinRate(t, Deps{WinRate: NewSQLiteWinRateProvider(db)}, "/api/stock/win_rate?symbol=2330")
+	if len(out.Conditions) != 1 {
+		t.Fatalf("expected 1 condition, got %d", len(out.Conditions))
+	}
+	if got := out.Conditions[0].BreakEvenCostRate; got != 0 {
+		t.Errorf("break_even_cost_rate = %v, want 0 for a pre-000028 row", got)
+	}
+}
+
 // TestHandleWinRate_MultipleConditions verifies all persisted stockpicker
 // sources for a symbol are returned, ordered by source.
 func TestHandleWinRate_MultipleConditions(t *testing.T) {
