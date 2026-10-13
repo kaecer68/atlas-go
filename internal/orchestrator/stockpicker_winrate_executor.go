@@ -363,8 +363,11 @@ func (e StockpickerWinrateExecutor) Recommend(agent domain.AgentSpec, quote doma
 	//
 	// Re-certification conditions — ALL FOUR must hold before any
 	// regime-conditional gate returns to the decision path:
-	//   1. ONE writer for regime_history (today two formulas produce opposite
-	//      labels for the same day).
+	//   1. ONE writer for regime_history. PARTIAL 2026-10-13: the LABEL path now
+	//      uses live snapshots only (stockpicker.PITRegimeBySession skips
+	//      is_synthetic rows; the loader reads FilterSynthetic), so no label can
+	//      carry the backfill's contradictory formula. The table itself still has
+	//      two writers (the backfill feeds period analysis).
 	//   2. PIT fix: DONE 2026-10-13 — stockpicker.PITRegimeBySession now keys
 	//      each snapshot by the first session whose 13:30 TPE close is strictly
 	//      after capturedAt, so a label can never describe a session that had
