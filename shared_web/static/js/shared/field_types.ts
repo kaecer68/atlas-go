@@ -4905,6 +4905,7 @@ export interface WinRateCondition {
   calibration_status: string;
   net_cost_rate: number;
   avg_forward_return: number;
+  break_even_cost_rate: number;
   updated_at: string;
   data_start?: string;
   data_end?: string;

@@ -95,3 +95,56 @@ func TestHitRateDistribution(t *testing.T) {
 		t.Fatalf("empty distribution = %+v, want N=0", empty)
 	}
 }
+
+// TestLabelEndDate_TradingCalendar 標籤窗以**交易日曆**推進：2026-02-26 的
+// 5 交易日窗到 2026-03-06（跨 8 個日曆天；農曆年假 02-27/28 休市）。
+// 舊的 forwardDays+2 近似只到 03-05 ⇒ purge 不足（FU-20261012-04）。
+func TestLabelEndDate_TradingCalendar(t *testing.T) {
+	got := labelEndDate("2026-02-26", 5)
+	if got != "2026-03-06" {
+		t.Fatalf("labelEndDate(2026-02-26, 5) = %s, want 2026-03-06", got)
+	}
+	// 普通週：2026-02-23(一) 起 5 交易日 → 02-24,25,26,03-02,03-03。
+	if got := labelEndDate("2026-02-23", 5); got != "2026-03-03" {
+		t.Fatalf("labelEndDate(2026-02-23, 5) = %s, want 2026-03-03", got)
+	}
+}
+
+// TestWalkForwardFolds_PurgesAcrossLongHoliday 長連假邊界 purge 回歸
+// （FU-20261012-04）：驗證塊自 2026-03-06 起，則 02-26 的訓練候選（真實
+// 標籤窗到 03-06）必須被 purge。舊的「forwardDays+2 個日曆天」近似把它算成
+// 03-05 < 03-06 ⇒ 殘留重疊（正是該 splitter 要防的洩漏）。
+func TestWalkForwardFolds_PurgesAcrossLongHoliday(t *testing.T) {
+	outcomes := []SignalOutcome{
+		{Symbol: "2330", TriggerDate: "2026-02-23", ForwardReturn: 0.01, Source: "stockpicker-x"},
+		{Symbol: "2330", TriggerDate: "2026-02-24", ForwardReturn: 0.01, Source: "stockpicker-x"},
+		{Symbol: "2330", TriggerDate: "2026-02-25", ForwardReturn: 0.01, Source: "stockpicker-x"},
+		{Symbol: "2330", TriggerDate: "2026-02-26", ForwardReturn: 0.01, Source: "stockpicker-x"},
+		{Symbol: "2330", TriggerDate: "2026-03-06", ForwardReturn: 0.01, Source: "stockpicker-x"},
+		{Symbol: "2330", TriggerDate: "2026-03-09", ForwardReturn: 0.01, Source: "stockpicker-x"},
+		{Symbol: "2330", TriggerDate: "2026-03-10", ForwardReturn: 0.01, Source: "stockpicker-x"},
+		{Symbol: "2330", TriggerDate: "2026-03-11", ForwardReturn: 0.01, Source: "stockpicker-x"},
+	}
+	// n=8, folds=1 → block=4, val = indices 4..7 ⇒ valFirst = 2026-03-06。
+	folds := WalkForwardFolds(outcomes, 1, 1, 5)
+	if len(folds) != 1 {
+		t.Fatalf("folds = %d, want 1: %+v", len(folds), folds)
+	}
+	fold := folds[0]
+	if fold.Val[0].TriggerDate != "2026-03-06" {
+		t.Fatalf("val start = %s, want 2026-03-06", fold.Val[0].TriggerDate)
+	}
+	for _, o := range fold.Train {
+		if o.TriggerDate == "2026-02-26" {
+			t.Fatalf("02-26 label window ends 2026-03-06 and must be purged, train=%v",
+				fold.Train)
+		}
+	}
+	// 整體不變式：任何訓練樣本的標籤窗都必須早於驗證首日。
+	valStart := fold.Val[0].TriggerDate
+	for _, o := range fold.Train {
+		if end := labelEndDate(o.TriggerDate, 5); end >= valStart {
+			t.Errorf("train %s label ends %s overlapping val start %s", o.TriggerDate, end, valStart)
+		}
+	}
+}

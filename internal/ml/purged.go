@@ -99,12 +99,36 @@ func (s *WalkForwardSplitter) Split(nSamples int) [][2][]int {
 
 // SplitTimes 以真實時間軸切分。times 必須升冪。
 func (s *WalkForwardSplitter) SplitTimes(times []int64) [][2][]int {
+	h := max(int64(s.HorizonDays), 0)
+	ends := make([]int64, len(times))
+	for i, t := range times {
+		ends[i] = t + h
+	}
+	return s.SplitTimesLabeled(times, ends)
+}
+
+// SplitTimesLabeled 是 SplitTimes 的 label-interval 變體：每個樣本自帶標籤
+// 窗 [starts[i], ends[i]]，訓練樣本須在驗證開始前**整窗結束**。
+//
+// 當標籤窗長度不一致時必須用它（以交易日曆計窗時：5 交易日的窗在長連假可跨
+// 8 個日曆天，用單一 HorizonDays 近似會 purge 不足——見 FU-20261012-04）。
+// ends[i] < starts[i] 視為未標註，退化為 starts[i]。
+func (s *WalkForwardSplitter) SplitTimesLabeled(starts, ends []int64) [][2][]int {
+	times := starts
+	if len(ends) != len(starts) {
+		ends = starts
+	}
+	labelEnd := func(i int) int64 {
+		if ends[i] < starts[i] {
+			return starts[i]
+		}
+		return ends[i]
+	}
 	n := len(times)
 	f := s.Folds
 	if f <= 0 || n == 0 {
 		return nil
 	}
-	h := max(int64(s.HorizonDays), 0)
 	block := n / (f + 1)
 	if block <= 0 {
 		return nil
@@ -123,10 +147,12 @@ func (s *WalkForwardSplitter) SplitTimes(times []int64) [][2][]int {
 		for idx := vStart; idx < vEnd; idx++ {
 			val = append(val, idx)
 		}
-		cutoff := times[vStart] - h // 訓練標籤窗必須在此之前結束
+		// 訓練樣本須在驗證首日之前**整窗結束**（用各樣本自己的標籤窗，
+		// 不是單一 horizon 近似——長連假會讓近似不足）。
+		valFirst := times[vStart]
 		var train []int
 		for idx := 0; idx < vStart; idx++ {
-			if times[idx] < cutoff {
+			if labelEnd(idx) < valFirst {
 				train = append(train, idx)
 			}
 		}

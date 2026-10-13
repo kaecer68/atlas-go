@@ -702,6 +702,7 @@ func (h *Handler) HandleWinRate(r *http.Request) (int, any) {
 			CalibrationStatus: string(summary.CalibrationStatus),
 			NetCostRate:       summary.NetCostRate,
 			AvgForwardReturn:  summary.AvgForwardReturn,
+			BreakEvenCostRate: summary.BreakEvenCostRate,
 			UpdatedAt:         summary.UpdatedAt,
 		}
 		if start, end, ok := h.deps.WinRate.OutcomeDateRange(r.Context(), symbol, source); ok {

@@ -245,6 +245,7 @@
   "bottom_quartile_multiplier",
   "boundary_denom_factor",
   "boundary_fallback",
+  "break_even_cost_rate",
   "breakdown",
   "breaker_open",
   "brief",
