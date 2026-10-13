@@ -916,3 +916,55 @@ func TestSQLiteHistoricalStore_UpsertRegime_RoundTripSource(t *testing.T) {
 		t.Errorf("2026-06-03 source = %q, want synthetic (empty→default substitution)", byDate["2026-06-03"])
 	}
 }
+
+// TestSQLiteHistoricalStore_LoadRegimeHistory_Unlimited is the regression test
+// for FU-20261012-01. Before this change the signature could only express
+// "at most limit rows", with limit<=0 silently meaning the legacy default of 90
+// — so there was NO way to ask for the whole history. The outcomes' regime
+// loader (cmd/atlas/main.go) passed 400 and silently dropped the OLDEST labels
+// once the history grew past that window, while cmd/migrate-data passed 100000
+// as a workaround. Negative now means "no LIMIT clause"; 0 keeps the legacy
+// default, and a positive value still truncates.
+func TestSQLiteHistoricalStore_LoadRegimeHistory_Unlimited(t *testing.T) {
+	store, _, _, done := mustOpenStore(t)
+	defer done()
+
+	const n = 120 // deliberately above the 90 default
+	base := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	for i := range n {
+		if err := store.UpsertRegime(context.Background(), RegimeRow{
+			Date:        base.AddDate(0, 0, i).Format("2006-01-02"),
+			Regime:      "NEUTRAL",
+			CapturedAt:  time.Date(2026, 7, 14, 1, 0, 0, 0, time.UTC),
+			IsSynthetic: 1,
+		}); err != nil {
+			t.Fatalf("upsert %d: %v", i, err)
+		}
+	}
+
+	all, err := store.LoadRegimeHistoryAll(context.Background(), RegimeHistoryUnlimited)
+	if err != nil {
+		t.Fatalf("unlimited load: %v", err)
+	}
+	if len(all) != n {
+		t.Fatalf("RegimeHistoryUnlimited returned %d rows, want %d — the oldest labels must not be silently truncated", len(all), n)
+	}
+
+	// 0 keeps the legacy default (backward compatible).
+	def, err := store.LoadRegimeHistoryAll(context.Background(), 0)
+	if err != nil {
+		t.Fatalf("default load: %v", err)
+	}
+	if len(def) != 90 {
+		t.Fatalf("limit 0 returned %d rows, want the legacy default 90", len(def))
+	}
+
+	// A positive limit still truncates.
+	ten, err := store.LoadRegimeHistoryAll(context.Background(), 10)
+	if err != nil {
+		t.Fatalf("limit 10: %v", err)
+	}
+	if len(ten) != 10 {
+		t.Fatalf("limit 10 returned %d rows, want 10", len(ten))
+	}
+}

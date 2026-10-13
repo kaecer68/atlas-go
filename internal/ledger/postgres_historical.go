@@ -115,16 +115,23 @@ func (s *PostgresHistoricalStore) LoadRegimeHistoryAll(ctx context.Context, limi
 }
 
 func (s *PostgresHistoricalStore) loadRegimeHistory(ctx context.Context, limit int, filterSynthetic bool) ([]RegimeRow, error) {
-	if limit <= 0 {
+	// Same limit semantics as the SQLite store (FU-20261012-01).
+	if limit == 0 {
 		limit = 90
 	}
 	filter := ""
 	if filterSynthetic {
 		filter = " WHERE is_synthetic = 0"
 	}
-	rows, err := s.pool.Query(ctx, `
+	query := `
 		SELECT date, regime, source_session_id, source, recorded_at, captured_at, is_synthetic
-		FROM regime_history`+filter+` ORDER BY date DESC LIMIT $1`, limit)
+		FROM regime_history` + filter + ` ORDER BY date DESC`
+	args := []any{}
+	if limit > 0 {
+		query += ` LIMIT $1`
+		args = append(args, limit)
+	}
+	rows, err := s.pool.Query(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("load regime history: %w", err)
 	}

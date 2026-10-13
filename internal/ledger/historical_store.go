@@ -255,21 +255,41 @@ func (s *SQLiteHistoricalStore) LoadRegimeHistory(ctx context.Context, limit int
 	return s.loadRegimeHistory(ctx, limit, FilterSynthetic)
 }
 
+// RegimeHistoryUnlimited asks LoadRegimeHistoryAll for every row.
+//
+// Why this sentinel exists (FU-20261012-01): the signature used to express only
+// "at most limit rows" with `limit <= 0` silently meaning the legacy default of
+// 90, so there was NO way to request the whole history. The outcomes' regime
+// loader (cmd/atlas/main.go) builds a date -> regime map for every stored
+// outcome and passed 400, which silently drops the OLDEST labels once the
+// history grows past that window; cmd/migrate-data passed 100000 as a
+// workaround. Negative now means "no LIMIT clause"; 0 keeps the legacy default
+// so existing callers are unaffected.
+const RegimeHistoryUnlimited = -1
+
 func (s *SQLiteHistoricalStore) LoadRegimeHistoryAll(ctx context.Context, limit int) ([]RegimeRow, error) {
 	return s.loadRegimeHistory(ctx, limit, IncludeSynthetic)
 }
 
 func (s *SQLiteHistoricalStore) loadRegimeHistory(ctx context.Context, limit int, filterSynthetic bool) ([]RegimeRow, error) {
-	if limit <= 0 {
+	// limit: >0 → at most that many rows; 0 → legacy default (90);
+	// <0 (RegimeHistoryUnlimited) → no LIMIT clause (FU-20261012-01).
+	if limit == 0 {
 		limit = 90
 	}
 	filter := ""
 	if filterSynthetic {
 		filter = " WHERE is_synthetic = 0"
 	}
-	rows, err := s.db.QueryContext(ctx, `
+	query := `
 		SELECT date, regime, source_session_id, source, recorded_at, captured_at, is_synthetic
-		FROM regime_history`+filter+` ORDER BY date DESC LIMIT ?`, limit)
+		FROM regime_history` + filter + ` ORDER BY date DESC`
+	args := []any{}
+	if limit > 0 {
+		query += ` LIMIT ?`
+		args = append(args, limit)
+	}
+	rows, err := s.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("load regime history: %w", err)
 	}

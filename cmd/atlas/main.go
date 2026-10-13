@@ -1712,7 +1712,7 @@ func run(args []string, deps appDeps) error {
 					if historicalStore == nil {
 						return nil
 					}
-					rows, err := historicalStore.LoadRegimeHistoryAll(ctx, 400)
+					rows, err := historicalStore.LoadRegimeHistoryAll(ctx, ledger.RegimeHistoryUnlimited)
 					if err != nil || len(rows) == 0 {
 						return nil
 					}
