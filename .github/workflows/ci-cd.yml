@@ -455,6 +455,9 @@ jobs:
             - 'internal/liveness/**'
             - 'internal/testdb/**'
             - 'internal/config/**'
+            # C6b：HTTP win-rate 四端點的 PG 讀取路徑在 2026-10-13 同 PR 附上
+            # internal/stocktools/win_rate_pg_integration_test.go（PG/SQLite 逐位元組一致 + 唯讀釘子）。
+            - 'internal/stocktools/**'
             # 只在該 cmd 已有 PG integration 測試時才加進來（否則只是空跑 13 分鐘）；新增測試後同 PR 一併補上。
             # cmd/atlas-mcp：C6 的 win-rate PG 讀取路徑在 2026-10-13 同 PR 附上
             # tools_stock_winrate_pg_integration_test.go（PG/SQLite 逐列一致 + 唯讀釘子）。

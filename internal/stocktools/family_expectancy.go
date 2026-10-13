@@ -43,8 +43,12 @@ type FamilyExpectancyProvider interface {
 // Cost rate and min-samples come from the live parameters config — the same
 // values the daily aggregation job and the sibling endpoints use — so family
 // numbers stay comparable with the per-symbol, condition and industry views.
-func (p *SQLiteWinRateProvider) LoadFamilyExpectancy(ctx context.Context, trailingDays int, generatedAt string) (stockpicker.FamilyExpectancyReport, bool, error) {
-	all, err := stockpicker.LoadOutcomes(ctx, p.db, "", "", "")
+func (p *WinRateDBProvider) LoadFamilyExpectancy(ctx context.Context, trailingDays int, generatedAt string) (stockpicker.FamilyExpectancyReport, bool, error) {
+	db, err := p.handle(ctx)
+	if err != nil {
+		return stockpicker.FamilyExpectancyReport{}, false, err
+	}
+	all, err := stockpicker.LoadOutcomes(ctx, db, "", "", "")
 	if err != nil {
 		return stockpicker.FamilyExpectancyReport{}, false, fmt.Errorf("stocktools: load family outcomes: %w", err)
 	}

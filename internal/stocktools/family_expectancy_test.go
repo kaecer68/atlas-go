@@ -61,7 +61,7 @@ func TestHandleFamilyExpectancy_HappyPath(t *testing.T) {
 	db := openWinRateTestDB(t)
 	familyExpectancyFixture(t, db)
 
-	rec, out := getFamilyExpectancy(t, Deps{FamilyExpectancy: NewSQLiteWinRateProvider(db)},
+	rec, out := getFamilyExpectancy(t, Deps{FamilyExpectancy: NewWinRateDBProviderForHandle(db)},
 		"/api/stock/family-expectancy")
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
@@ -122,7 +122,7 @@ func TestHandleFamilyExpectancy_TrailingDaysOverride(t *testing.T) {
 	db := openWinRateTestDB(t)
 	familyExpectancyFixture(t, db)
 
-	rec, out := getFamilyExpectancy(t, Deps{FamilyExpectancy: NewSQLiteWinRateProvider(db)},
+	rec, out := getFamilyExpectancy(t, Deps{FamilyExpectancy: NewWinRateDBProviderForHandle(db)},
 		"/api/stock/family-expectancy?trailing_days=1")
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
@@ -149,7 +149,7 @@ func TestHandleFamilyExpectancy_InvalidTrailingDays(t *testing.T) {
 	familyExpectancyFixture(t, db)
 
 	for _, bad := range []string{"abc", "0", "-5", "1.5"} {
-		rec, _ := getFamilyExpectancy(t, Deps{FamilyExpectancy: NewSQLiteWinRateProvider(db)},
+		rec, _ := getFamilyExpectancy(t, Deps{FamilyExpectancy: NewWinRateDBProviderForHandle(db)},
 			"/api/stock/family-expectancy?trailing_days="+bad)
 		if rec.Code != http.StatusBadRequest {
 			t.Errorf("trailing_days=%s: expected 400, got %d (%s)", bad, rec.Code, rec.Body.String())
@@ -167,7 +167,7 @@ func TestHandleFamilyExpectancy_NoProvider(t *testing.T) {
 
 // TestHandleFamilyExpectancy_NoData: an empty ledger answers 200 + found=false.
 func TestHandleFamilyExpectancy_NoData(t *testing.T) {
-	rec, out := getFamilyExpectancy(t, Deps{FamilyExpectancy: NewSQLiteWinRateProvider(openWinRateTestDB(t))},
+	rec, out := getFamilyExpectancy(t, Deps{FamilyExpectancy: NewWinRateDBProviderForHandle(openWinRateTestDB(t))},
 		"/api/stock/family-expectancy")
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", rec.Code)
@@ -234,7 +234,7 @@ func TestStockRoutes_AdditiveRegistration(t *testing.T) {
 // existing /api/stock/* responses.
 func TestHandleFamilyExpectancy_DoesNotChangeExistingResponses(t *testing.T) {
 	db := openWinRateTestDB(t)
-	provider := NewSQLiteWinRateProvider(db)
+	provider := NewWinRateDBProviderForHandle(db)
 	seedWinRate(t, db, sampleWinRateSummary("2330", "stockpicker-momentum-20d-positive", defaultWinRateWindow))
 	familyExpectancyFixture(t, db)
 

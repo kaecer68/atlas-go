@@ -54,25 +54,27 @@ type Deps struct {
 	Revenue MonthlyRevenueProvider
 	// WinRate is the read-only stockpicker win-rate store provider
 	// (PR 3c). Optional — when nil, GET /api/stock/win_rate returns 503.
-	// Production injects *SQLiteWinRateProvider backed by the job-local
-	// stockpicker ledger (data/state/atlas.db or ATLAS_MCP_STOCKPICKER_DB,
-	// opened read-only); tests may inject a fake to exercise error paths
-	// without opening SQLite.
+	// Production injects *WinRateDBProvider over a WinRateSource: PostgreSQL
+	// when the deployment declares ATLAS_STORE_BACKEND=postgres and
+	// DATABASE_URL is set, otherwise the job-local stockpicker ledger
+	// (data/state/atlas.db or ATLAS_MCP_STOCKPICKER_DB), both opened
+	// read-only (C6b). Tests may inject a fake to exercise error paths
+	// without opening a database.
 	WinRate WinRateProvider
 	// ConditionWinRate is the read-only condition-level (cross-symbol)
 	// win-rate provider (issue #1865). Optional — when nil,
 	// GET /api/stock/condition_winrate returns 503. Production injects the
-	// same *SQLiteWinRateProvider as WinRate (it implements both).
+	// same *WinRateDBProvider as WinRate (it implements both).
 	ConditionWinRate ConditionWinRateProvider
 	// IndustryWinRate is the read-only INDUSTRY-level win-rate provider
 	// (issue #1942). Optional — when nil,
 	// GET /api/stock/industry_winrate returns 503. Production injects the
-	// same *SQLiteWinRateProvider as WinRate (it implements all three).
+	// same *WinRateDBProvider as WinRate (it implements all three).
 	IndustryWinRate IndustryWinRateProvider
 	// FamilyExpectancy is the read-only FAMILY-level (per-source) expectancy
 	// instrument. Optional — when nil,
 	// GET /api/stock/family-expectancy returns 503. Production injects the
-	// same *SQLiteWinRateProvider as WinRate (it implements all four).
+	// same *WinRateDBProvider as WinRate (it implements all four).
 	FamilyExpectancy FamilyExpectancyProvider
 }
 
