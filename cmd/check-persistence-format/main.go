@@ -57,6 +57,7 @@ func run(args []string, stdout io.Writer) error {
 	_, _ = fmt.Fprintln(stdout, "--------------------------")
 
 	checked := 0
+	failed := 0
 	for _, item := range items {
 		if !strings.Contains(item.Path, "recommendation_outcomes.jsonl") {
 			continue
@@ -66,6 +67,7 @@ func run(args []string, stdout io.Writer) error {
 		if len(issues) == 0 {
 			_, _ = fmt.Fprintf(stdout, "OK   %s\n", item.Path)
 		} else {
+			failed++
 			_, _ = fmt.Fprintf(stdout, "FAIL %s\n", item.Path)
 			for _, issue := range issues {
 				_, _ = fmt.Fprintf(stdout, "     - %s\n", issue)
@@ -77,6 +79,14 @@ func run(args []string, stdout io.Writer) error {
 		_, _ = fmt.Fprintln(stdout, "No recommendation_outcomes.jsonl files found.")
 	}
 
+	// 2026-10-12: this function used to `return nil` unconditionally, so a FAIL
+	// row was printed to stdout while the process exited 0 — the ci-cd.yml step
+	// that runs this tool could never go red. The check existed, printed failure
+	// text, and alarmed nobody (same family as the silent-column-mismatch P0
+	// fixed the same day). A printed FAIL must now fail the process.
+	if failed > 0 {
+		return fmt.Errorf("persistence-format: %d artifact(s) failed writer-consistency checks", failed)
+	}
 	return nil
 }
 

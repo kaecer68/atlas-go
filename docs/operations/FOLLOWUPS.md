@@ -2687,6 +2687,20 @@ PY
 - **最小處置**：納入每日備份，**必須用 `sqlite3 .backup`（不可 `cp`，WAL 未 checkpoint）**；並在 MCP 與 `/api/stock/*` 切到 PG 後才考慮停寫。
 - **查法**：`grep -n "exclude" ~/.config/atlas-backup.sh`；`ls -l ~/workspace/atlas/data/state/atlas.db*`。
 
+### FU-20261012-09 — 3 張共同表在 PG 與 SQLite 是**不同 schema**（合計 44 個欄位不一致）
+
+- **狀態**：`open`
+- **記錄日期**：2026-10-12
+- **來源**：新增的 schema parity 守門（`internal/ledger/schema_parity_test.go`）首次把全表比對跑出來
+- **事實**（實測；守門的 allowlist 內含逐表數字）：
+  - `human_interventions`：PG-only 10 欄（`intervention_id`／`operator`／`target_agent_id`／`target_model_id`／`target_sector`／`target_symbol`／`time`／`type`／`value`／`reason`）／SQLite-only 4 欄（`action`／`agent_id`／`symbol`／`timestamp`）
+  - `screening_rejects`：PG-only 8 欄／SQLite-only 3 欄（`factor_scores_json`／`reason`／`timestamp`）
+  - `session_summaries`：PG-only 15 欄（`approval_id`／`tax_snapshots`／`guard_outcomes`／`regime`／`portfolio_value`…）／SQLite-only 4 欄（`passed_guards`／`rejected`／`timestamp`／`total_recs`）
+  - 另有 **18 張 PG-only 表**（`alerts`／`metrics`／`recommendation_outcomes`／`symbol_industry`／`users`／`workspaces`… 屬其他子系統的 store，SQLite ledger 從未有）
+- **風險**：以「PG 形狀」寫的查詢一旦某天改走 SQLite（或反之）就會 503 或讀到舊欄位 —— 與 2026-10-12 的 `break_even_cost_rate` P0 同族。
+- **最小處置**：隨 Q2 的「單一 PG」收斂（C1→C7）一併對齊；在那之前守門以 allowlist **明文列出並在每次測試輸出**，避免這些分歧被默默當成「已同意」。
+- **查法**：`go test ./internal/ledger/ -run SchemaParity -v`（輸出會逐條列出 allowlisted divergence）。
+
 ## 相關文件
 
 - [universe-scoring-ranked-zero-20260925.md](universe-scoring-ranked-zero-20260925.md)
