@@ -166,11 +166,13 @@ func wireStockpickerWinRatePG(cfg *server.Config, pgURL, declaredBackend string)
 	}
 	backend, err := server.ResolveWinRateBackend(declaredBackend)
 	if err != nil {
-		log.Printf("atlas-mcp: stockpicker win-rate reads: SQLite ledger (ATLAS_STORE_BACKEND=%q: %v)", declaredBackend, err)
+		//nolint:gosec // G706: the value is whitelisted by loggableBackendValue (enum-shaped, length-capped) and printed with %q; gosec's taint analysis does not model the helper.
+		log.Printf("atlas-mcp: stockpicker win-rate reads: SQLite ledger (ATLAS_STORE_BACKEND=%q is not a known backend)", loggableBackendValue(declaredBackend))
 		return
 	}
 	if backend != server.WinRateBackendPostgres {
-		log.Printf("atlas-mcp: stockpicker win-rate reads: SQLite ledger (ATLAS_STORE_BACKEND=%q does not declare postgres)", declaredBackend)
+		//nolint:gosec // G706: same as above — whitelisted, length-capped, %q-quoted; the value is an operator-set env var in this process.
+		log.Printf("atlas-mcp: stockpicker win-rate reads: SQLite ledger (ATLAS_STORE_BACKEND=%q does not declare postgres)", loggableBackendValue(declaredBackend))
 		return
 	}
 	handle, err := server.OpenReadOnlyWinRatePGDB(pgURL)
@@ -180,6 +182,30 @@ func wireStockpickerWinRatePG(cfg *server.Config, pgURL, declaredBackend string)
 	}
 	cfg.WinRatePGDB = handle
 	log.Printf("atlas-mcp: stockpicker win-rate reads: PostgreSQL (read-only session)")
+}
+
+// loggableBackendValue renders an operator-supplied ATLAS_STORE_BACKEND value
+// for the startup log. The value reaches a log line, so it is reduced to the
+// characters a store backend name can contain before it is printed: an
+// environment variable must not be able to forge log structure (gosec G706,
+// log injection). Anything outside that set is reported as a marker instead of
+// being echoed.
+func loggableBackendValue(v string) string {
+	if v == "" {
+		return "(unset)"
+	}
+	if len(v) > 32 {
+		return "(too long)"
+	}
+	for _, r := range v {
+		switch {
+		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9':
+		case r == '_', r == '-', r == '.':
+		default:
+			return "(contains characters outside [A-Za-z0-9_.-])"
+		}
+	}
+	return v
 }
 
 func envOr(key, def string) string {

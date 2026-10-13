@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/kaecer68/atlas-go/cmd/atlas-mcp/server"
@@ -60,5 +61,25 @@ func TestWireStockpickerWinRatePG(t *testing.T) {
 				t.Fatalf("WinRatePGDB wired for pgURL=%q backend=%q, want the SQLite read path", tc.pgURL, tc.declared)
 			}
 		})
+	}
+}
+
+// TestLoggableBackendValue: the startup log prints ATLAS_STORE_BACKEND, so the
+// value is reduced to an enum-shaped token first — an environment variable must
+// not be able to write arbitrary text into the log.
+func TestLoggableBackendValue(t *testing.T) {
+	cases := []struct{ in, want string }{
+		{in: "", want: "(unset)"},
+		{in: "postgres", want: "postgres"},
+		{in: "sqlite", want: "sqlite"},
+		{in: "some_backend-2.0", want: "some_backend-2.0"},
+		{in: "postgres\nlevel=ERROR forged", want: "(contains characters outside [A-Za-z0-9_.-])"},
+		{in: "postgres%0a", want: "(contains characters outside [A-Za-z0-9_.-])"},
+		{in: strings.Repeat("a", 33), want: "(too long)"},
+	}
+	for _, tc := range cases {
+		if got := loggableBackendValue(tc.in); got != tc.want {
+			t.Errorf("loggableBackendValue(%q) = %q, want %q", tc.in, got, tc.want)
+		}
 	}
 }
