@@ -12,6 +12,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/jackc/pgx/v5/stdlib"
 
@@ -521,4 +522,58 @@ func jsonOf(t *testing.T, v any) string {
 		t.Fatalf("marshal: %v", err)
 	}
 	return string(b)
+}
+
+// --- audit provenance --------------------------------------------------------
+
+// TestWinRateToolsAuditTheBackendThatServedTheCall pins the audit provenance
+// added with C6: each win-rate call records which ledger answered it, because
+// "which backend produced this number?" is the first question asked when the
+// two ledgers are suspected of drifting apart.
+func TestWinRateToolsAuditTheBackendThatServedTheCall(t *testing.T) {
+	cases := []struct {
+		name     string
+		wirePG   bool
+		wireSQL  bool
+		wantBack string
+	}{
+		{name: "postgres", wirePG: true, wireSQL: true, wantBack: WinRateBackendPostgres},
+		{name: "sqlite fallback", wireSQL: true, wantBack: WinRateBackendSQLite},
+		{name: "no backend at all", wantBack: "none"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			s := newWinRateReadServer(t)
+			if tc.wireSQL {
+				s.winRateSQLiteDB = openWinRateLedger(t)
+			}
+			if tc.wirePG {
+				_, handle := newRecordingPGHandle(t)
+				s.cfg.WinRatePGDB = handle
+			}
+
+			if _, err := callStockWinRate(s, stockWinRateInput{Symbol: "2330"}); err != nil {
+				t.Fatalf("stock_get_win_rate: %v", err)
+			}
+			if _, err := callStockPickerScan(s, stockPickerScanInput{MinObservations: 3}); err != nil {
+				t.Fatalf("stock_picker_scan: %v", err)
+			}
+
+			entries, err := ReadAuditEntries(s.audit.path, 0, time.Now())
+			if err != nil {
+				t.Fatalf("read audit entries: %v", err)
+			}
+			if len(entries) != 2 {
+				t.Fatalf("audit entries = %d, want 2 (one per tool call)", len(entries))
+			}
+			for _, entry := range entries {
+				if entry.Extra == nil {
+					t.Fatalf("audit entry %q has no extra fields; the backend that served it is not recorded", entry.Tool)
+				}
+				if got := entry.Extra["win_rate_backend"]; got != tc.wantBack {
+					t.Fatalf("audit entry %q reports win_rate_backend=%v, want %q", entry.Tool, got, tc.wantBack)
+				}
+			}
+		})
+	}
 }

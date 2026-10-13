@@ -81,12 +81,22 @@ func (s *server) handleStockGetWinRate(ctx context.Context, _ *mcp.CallToolReque
 		Conditions:    []stockWinRateCondition{},
 	}
 
-	err := s.withAudit(ctx, "stock_get_win_rate", []string{"symbol", "condition_id", "rolling_window", "asof"}, func() error {
+	// winRateBackend records which ledger actually answered this call, so the
+	// audit log says where a number came from (PostgreSQL, the SQLite
+	// fallback, or nobody). "none" only happens when neither backend could be
+	// opened, which is also when the handler answers no-data.
+	winRateBackend := "none"
+	extraFn := func() map[string]any {
+		return map[string]any{"win_rate_backend": winRateBackend}
+	}
+
+	err := s.withAuditExtra(ctx, "stock_get_win_rate", []string{"symbol", "condition_id", "rolling_window", "asof"}, extraFn, func() error {
 		h, err := s.winRateHandle(ctx)
 		if err != nil {
 			out.Message = fmt.Sprintf("no stockpicker win-rate data available for %s: %v", in.Symbol, err)
 			return nil
 		}
+		winRateBackend = h.backend
 		winStore := stockpicker.NewWinRateStore(h.db)
 		outcomeStore := stockpicker.NewSignalOutcomeStore(h.db)
 

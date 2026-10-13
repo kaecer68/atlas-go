@@ -153,12 +153,21 @@ func (s *server) handleStockPickerScan(ctx context.Context, _ *mcp.CallToolReque
 		return nil, out, nil
 	}
 
-	err := s.withAudit(ctx, "stock_picker_scan", []string{"condition_id", "rolling_window", "min_observations", "min_win_rate", "top_n", "sort_by", "asof"}, func() error {
+	// winRateBackend records which ledger answered the scan, so the audit log
+	// says where the ranking came from (see the same pattern in
+	// handleStockGetWinRate).
+	winRateBackend := "none"
+	extraFn := func() map[string]any {
+		return map[string]any{"win_rate_backend": winRateBackend}
+	}
+
+	err := s.withAuditExtra(ctx, "stock_picker_scan", []string{"condition_id", "rolling_window", "min_observations", "min_win_rate", "top_n", "sort_by", "asof"}, extraFn, func() error {
 		h, err := s.winRateHandle(ctx)
 		if err != nil {
 			out.Message = fmt.Sprintf("no stockpicker win-rate data available for scan: %v", err)
 			return nil
 		}
+		winRateBackend = h.backend
 
 		rows, err := scanWinRateRows(ctx, h.db, window, in.ConditionID, minObs, minWinRate, sortCol, direction)
 		if err != nil {
