@@ -4,7 +4,11 @@
 > **取代對象**：原 internal/repository/AGENTS.md（已遷移至此）。
 
 **成熟度**: stable  
-**模組職責**: PostgreSQL + JSONL 雙寫持久化，PG 為首選讀取路徑，JSONL 為 source of truth。
+**模組職責**: PostgreSQL + JSONL 雙寫持久化；**PostgreSQL 為單一真相（SSOT）**（2026-08-23 PG-SSoT 裁決），JSONL 為**過渡期相容層**。
+
+> ⚠️ **更正（2026-10-12）**：原文寫「PG 為首選讀取路徑，**JSONL 為 source of truth**」—— 這與 2026-08-23 的
+> PG-SSoT 裁決**直接衝突**，且雙寫自己的程式註解已自述其定位是過渡（`internal/repository/dual_write.go:20`
+> 寫的是 `during migration`）。已改為上句。
 
 ---
 

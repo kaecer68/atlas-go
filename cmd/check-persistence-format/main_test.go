@@ -548,3 +548,39 @@ func TestClassifyArtifactEmptyWithSiblingSummary(t *testing.T) {
 		t.Fatalf("expected classification 'empty' for zero-byte outcomes file, got %q", result)
 	}
 }
+
+// TestRunFailsOnPascalCaseOutcome is the negative proof for the 2026-10-12 fix:
+// before it, run() printed "FAIL <path>" and still returned nil, so the
+// ci-cd.yml step using this tool could never fail. A writer-inconsistent
+// artifact must now make run() return an error.
+func TestRunFailsOnPascalCaseOutcome(t *testing.T) {
+	dir := t.TempDir()
+	legacyLine := `{"AgentID":"agent-1","Skill":"test","Symbol":"2330.TW","Side":"BUY","Hit":true}` + "\n"
+	if err := os.WriteFile(filepath.Join(dir, "recommendation_outcomes.jsonl"), []byte(legacyLine), 0o644); err != nil {
+		t.Fatalf("write legacy artifact: %v", err)
+	}
+
+	var stdout bytes.Buffer
+	err := run([]string{"-dir", dir}, &stdout)
+	if err == nil {
+		t.Fatalf("run() must return an error for a FAIL artifact; output:\n%s", stdout.String())
+	}
+	if !strings.Contains(stdout.String(), "FAIL") {
+		t.Fatalf("expected FAIL in output, got:\n%s", stdout.String())
+	}
+}
+
+// TestRunReturnsNilOnCleanOutcome: a snake_case artifact is consistent, so the
+// command must still succeed (the fix must not turn everything red).
+func TestRunReturnsNilOnCleanOutcome(t *testing.T) {
+	dir := t.TempDir()
+	clean := `{"agent_id":"agent-1","skill":"test","symbol":"2330.TW","side":"buy","hit":true}` + "\n"
+	if err := os.WriteFile(filepath.Join(dir, "recommendation_outcomes.jsonl"), []byte(clean), 0o644); err != nil {
+		t.Fatalf("write clean artifact: %v", err)
+	}
+
+	var stdout bytes.Buffer
+	if err := run([]string{"-dir", dir}, &stdout); err != nil {
+		t.Fatalf("run() must succeed for a consistent artifact, got %v; output:\n%s", err, stdout.String())
+	}
+}

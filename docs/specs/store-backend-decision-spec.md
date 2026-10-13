@@ -3,7 +3,11 @@
 > **文件角色**：atlas-go 所有 CLI／背景 job 決定「資料寫去哪個儲存後端」的**單一規則來源**。
 > 適用範圍：`cmd/**` CLI、`internal/**` 中會自行開 store 的元件（calibration、channelsecrets、symbolindustry…）。
 > 相關：`docs/reference/traps.md`（Storage backend 列）、`docs/specs/futures-bars-firstparty-spec.md` §5、
-> `docs/reference/constitution.md`（Postgres-first）。
+> `docs/decisions/2026-08-23-performance-report-ssot.md`（**PG 為單一真相的裁決**，2026-08-23）。
+>
+> ⚠️ **引用更正（2026-10-12）**：本行原引用 `docs/reference/constitution.md` 當「Postgres-first」的依據，
+> 但該檔案對 `postgres`／`sqlite` **0 命中**（實測）—— 那是一條**不存在的條文**。真實依據是上面那份
+> 2026-08-23 裁決（其 §20-22 已把「多後端 schema 與語意不統一」列為共同根因）。
 
 ## 1. 事故形狀（為什麼有這份規格）
 
