@@ -91,6 +91,14 @@ type LiveService struct {
 	// trade_count KPI). Superseded by History in production wiring
 	// (RegisterLiveRoutes); kept for direct-injection callers/tests.
 	TradeStore ledger.OutcomeStore
+
+	// SummaryStore backs every L-cold session-summary read (equity curve /
+	// portfolio history), replaced fallback-by-fallback by the backend-aware
+	// factory (PostgreSQL first, JSONL fallback) in Q2 batch 2 unit 2. When
+	// nil the previous resolution stands: the SSoT History provider when
+	// wired, the legacy JSONL ledger otherwise (tests/legacy) — so this seam
+	// is additive.
+	SummaryStore ledger.OutcomeStore
 }
 
 // NewLiveService creates a new LiveService.
@@ -115,9 +123,21 @@ func (s *LiveService) WithTradeStore(store ledger.OutcomeStore) *LiveService {
 	return s
 }
 
-// summariesStore resolves the store used for L-cold summary reads: the SSoT
-// provider when wired, the JSONL ledger otherwise.
+// WithSummaryStore wires the backend-aware ledger store used for L-cold
+// session-summary reads (equity curve / portfolio history). When nil, the
+// previous resolution stands (SSoT History provider, else the JSONL ledger).
+func (s *LiveService) WithSummaryStore(store ledger.OutcomeStore) *LiveService {
+	s.SummaryStore = store
+	return s
+}
+
+// summariesStore resolves the store used for L-cold summary reads: the
+// injected backend-aware store when wired (PostgreSQL first, JSONL fallback on
+// production), the SSoT History provider, the JSONL ledger otherwise.
 func (s *LiveService) summariesStore() ledger.OutcomeStore {
+	if s.SummaryStore != nil {
+		return s.SummaryStore
+	}
 	if s.History != nil && s.History.Store() != nil {
 		return s.History.Store()
 	}
@@ -145,8 +165,13 @@ func (s *LiveService) HistoryPoints() []HistoryPoint {
 }
 
 // HistorySource reports the backend that served the most recent L-cold read
-// ("postgres" / "jsonl" / ""). Handlers surface it as `source` (P1-3).
+// ("postgres" / "jsonl" / ""). Handlers surface it as `source` (P1-3). It
+// follows the same precedence as summariesStore: the injected store answers
+// the summary reads when wired, so it labels them.
 func (s *LiveService) HistorySource() string {
+	if s.SummaryStore != nil {
+		return storeSourceBackend(s.SummaryStore)
+	}
 	if s.History != nil {
 		return s.History.Source()
 	}
@@ -156,8 +181,31 @@ func (s *LiveService) HistorySource() string {
 // HistoryDegraded reports whether the most recent L-cold read fell back to
 // JSONL because the SSoT backend was unavailable (P1-3).
 func (s *LiveService) HistoryDegraded() bool {
+	if s.SummaryStore != nil {
+		return storeDegraded(s.SummaryStore)
+	}
 	if s.History != nil {
 		return s.History.Degraded()
+	}
+	return false
+}
+
+// storeSourceBackend reports which backend a store served its most recent read
+// from ("postgres" / "jsonl"), or "" for stores that do not track it (and for
+// a nil store, i.e. the legacy file path).
+func storeSourceBackend(store ledger.OutcomeStore) string {
+	if s, ok := store.(interface{ SourceBackend() string }); ok {
+		return s.SourceBackend()
+	}
+	return ""
+}
+
+// storeDegraded reports whether a store's most recent read fell back to JSONL
+// because the SSoT backend was unavailable. False for stores that do not track
+// degradation (and for a nil store).
+func storeDegraded(store ledger.OutcomeStore) bool {
+	if d, ok := store.(interface{ Degraded() bool }); ok {
+		return d.Degraded()
 	}
 	return false
 }
