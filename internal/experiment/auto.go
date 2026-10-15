@@ -140,7 +140,25 @@ func runExperimentForCandidate(_ context.Context, cfg AutoExperimentConfig, cand
 	baseDir := filepath.Dir(filepath.Dir(expPath))
 	windowPath := filepath.Join(baseDir, "windows", windowID+".json")
 	if _, statErr := os.Stat(windowPath); os.IsNotExist(statErr) {
-		btRunner := backtest.NewRunner(cfg.Config, ledger.NewStore(baseDir))
+		// Explicit JSONL backend, deliberately not the deployment's declared
+		// backend: this summary is an experiments-internal artifact that
+		// experiment.Judge reads back BY FILE PATH (judge.go windowSummaryPath
+		// → loadWindowSummary), so it must be written into the directory the
+		// judge looks in. Naming the backend (instead of relying on the
+		// ledger.NewStore default) keeps a postgres deployment from silently
+		// writing the window somewhere the judge cannot see — the same
+		// convention as autobacktest.NewSignalEngineFromDir. Converging this
+		// sibling onto the backend-aware window store requires moving the
+		// judge's read too, which belongs to the experiments-writer decision
+		// (Q2 batch 2, T3).
+		windowStore, storeErr := ledger.NewFullStore(config.Config{
+			StoreBackend: "jsonl",
+			LedgerDir:    baseDir,
+		})
+		if storeErr != nil {
+			return fmt.Errorf("experiment window store: %w", storeErr)
+		}
+		btRunner := backtest.NewRunner(cfg.Config, windowStore)
 		summary, btErr := btRunner.Run(windowStart, windowEnd)
 		if btErr != nil {
 			return fmt.Errorf("materialize window summary %s: %w", windowID, btErr)
