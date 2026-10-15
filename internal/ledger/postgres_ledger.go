@@ -699,6 +699,16 @@ func (s *PostgresLedgerStore) RecordExperiment(record domain.ExperimentRecord) e
 }
 
 // RecordSessionExperiment writes an experiment record for a specific session.
+//
+// FU-20261016-03 (2026-10-16): this used to be a bare INSERT with no ON
+// CONFLICT, while RecordExperiment above writes the same experiment_id first
+// with ON CONFLICT DO NOTHING. The second write therefore hit the UNIQUE index
+// on experiment_id on EVERY candidate selection, and the error was discarded by
+// the caller, so production ended up with 894/894 rows whose session_id was
+// NULL. The write is now a targeted upsert: the existing value wins, and
+// session_id is only filled when the stored row still has none
+// (COALESCE(existing, proposed)). A later write can therefore never re-label an
+// experiment that is already attributed to a session.
 func (s *PostgresLedgerStore) RecordSessionExperiment(session domain.ReplaySession, record domain.ExperimentRecord) error {
 	briefJSON, err := json.Marshal(record)
 	if err != nil {
@@ -708,9 +718,12 @@ func (s *PostgresLedgerStore) RecordSessionExperiment(session domain.ReplaySessi
 	_, err = s.pool.Exec(ctx, `
 		INSERT INTO experiments (experiment_id, session_id, mutation_brief_json, accepted, timestamp)
 		VALUES ($1, $2, $3, $4, $5)
+		ON CONFLICT (experiment_id) DO UPDATE
+			SET session_id = COALESCE(experiments.session_id, EXCLUDED.session_id)
 	`, record.ID, session.ID, string(briefJSON), boolToInt(record.Status == domain.ExperimentAccepted),
 		record.WindowStart.Format("2006-01-02T15:04:05Z07:00"))
 	if err != nil {
+		sessionExperimentLinkErrorTotal.Add(1)
 		return fmt.Errorf("insert session experiment: %w", err)
 	}
 	return nil
