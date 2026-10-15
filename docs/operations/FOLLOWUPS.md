@@ -2791,6 +2791,19 @@ PY
   並把 allowlist 縮到 0（此時 `make ledger-seam-check` 應報 `0 個裸 ledger.NewStore`）。
 - **查法**：`make ledger-seam-check`；`python3 scripts/ci/check_ledger_seam.py --json`。
 
+### FU-20261016-02 — bootstrap 的 config 載體**缺欄位**（`ReplayDataPath`／`BaselinePolicyPath`）⇒ `run-experiment` 的 baseline 載入會失敗（目前零行使，潛伏）
+
+- **狀態**：`open`
+- **記錄日期**：2026-10-16
+- **來源**：T1 修復（PR #2234）的實作過程中發現；該 PR 只補了 `LedgerDir`（見下）
+- **事實（實測／讀碼）**：
+  - `internal/bootstrap/bootstrapper.go` 建構 `taskRunnerConfig`（`config.Config{...}`）時**只帶了 `WorkDir`**；PR #2234 補上 `LedgerDir` 後，仍**沒有** `ReplayDataPath` 與 `BaselinePolicyPath`（**該載體型別本身也沒有這兩個欄位**）。
+  - 下游 `internal/taskexec/runners.go` 的 `run-experiment` runner 會把它們傳成空字串 ⇒ `baseline.Load("")` 失敗 ⇒ 任務註冊了但**跑不起來**。
+  - **目前零行使**：`task_executions` = **0 列**、`/app/sessions` 不存在 ⇒ 尚未外顯（潛伏）。
+- **風險**：一旦有人啟用 `run-experiment`／`judge-experiment`／`backtest-window` 這三個 runner，會以「空路徑」失敗，且症狀（找不到檔）不指向「載體漏欄位」這個真因。
+- **最小處置**：①補上 `ReplayDataPath`／`BaselinePolicyPath`（載體與建構處一併）②**加一個 reflection 欄位對等測試**（比對「載體有的欄位」與「runner 實際需要的欄位」，缺一即紅）—— 同型測試 PR #2234 已在 `bootstrap_test.go` 為 `LedgerDir` 做過，可沿用③檢查其餘 runner 是否還有其他必填欄位未帶。
+- **查法**：`grep -n 'taskRunnerConfig' -A15 internal/bootstrap/bootstrapper.go`；`grep -n 'ReplayDataPath\|BaselinePolicyPath' internal/bootstrap/bootstrapper.go internal/taskexec/runners.go`；`psql -Atc 'select count(*) from task_executions'`（生產目前為 0）。
+
 ## 相關文件
 
 - [universe-scoring-ranked-zero-20260925.md](universe-scoring-ranked-zero-20260925.md)
