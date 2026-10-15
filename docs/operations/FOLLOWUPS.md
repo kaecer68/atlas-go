@@ -2902,6 +2902,25 @@ PY
 - **最小處置**：①為 `mutation_briefs` 加 unique 鍵（如 `(window_id)` 或 `(window_id, ...)`，需先清理既有重複）②把 `RecordMutationBrief` 改為與 `window_summaries` 一致的 upsert ③驗收：`SELECT window_id, count(*) FROM mutation_briefs GROUP BY window_id HAVING count(*) > 1` 必須 **0 列**（PR #2238 的回填驗收已含此查詢）。
 - **查法**：`psql -Atc "select indexdef from pg_indexes where tablename='mutation_briefs'"`；`psql -Atc "select window_id, count(*) from mutation_briefs group by window_id having count(*) > 1"`。
 
+### FU-20261016-08 — `PGFirstOutcomeStore` 的 `LoadOutcomes`／`LoadOutcomesFromSessions` **沒有 JSONL 降級**（與 summary 讀取不對稱）
+
+- **狀態**：`open`
+- **記錄日期**：2026-10-16
+- **來源**：Q2 第二批 unit B+C 遷移站點 3（`internal/calibration/calibrate.go` 的 darwinian 校準改讀 backend-aware store）時盤查
+  `internal/ledger/pg_first_store.go` 發現；該 PR 以「呼叫端自備降級」繞過，未改 store 語意
+- **事實**：`PGFirstOutcomeStore` 對 `LoadSessionSummaries`／`LoadSessionOutcomes` 是 PG-first ＋ PG **錯誤**才降級
+  JSONL 並 `markDegraded`；但 `LoadOutcomes`／`LoadOutcomesFromSessions` 直接 delegate 到 PG
+  （`internal/ledger/pg_first_store.go:146-152`），PG 不可用時直接回錯，**既不降級也不標 degraded**。
+  同檔該區塊的註解自稱 “the rest of OutcomeStore delegates to PG (write paths)”，但這兩者是**讀取**方法。
+- **風險**：任何以 `ledger.NewReportOutcomeStore(cfg)`（postgres）讀 `LoadOutcomesFromSessions()` 的呼叫端，
+  在 PG 短暫不可用時是**硬失敗**；而同一個 store 的 summary 讀取卻安靜降級並標 degraded
+  ⇒ 同一個 store 兩種可用性語意，呼叫端從介面看不出差別。本單元的 calibration seam 因此必須再自備一層
+  「store 讀取失敗 ⇒ fallback flat JSONL 鏡射」（見 `internal/calibration/calibrate.go` 的 `darwinianOutcomes`）。
+- **最小處置**：①把這兩個方法改成與 `LoadSessionSummaries` 同構（PG-first、只有 PG 錯誤才降級、`markDegraded`），
+  並補 hermetic 測試（PG 錯誤 ⇒ 降級＋degraded；PG 成功回空 ⇒ 權威、不降級）；②或在 doc comment 明確寫
+  「這兩個方法不降級，呼叫端自負」並以測試釘住該契約。
+- **查法**：`grep -n -A6 'func (s \*PGFirstOutcomeStore) Load' internal/ledger/pg_first_store.go`
+
 ## 相關文件
 
 - [universe-scoring-ranked-zero-20260925.md](universe-scoring-ranked-zero-20260925.md)
