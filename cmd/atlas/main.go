@@ -1354,12 +1354,17 @@ func run(args []string, deps appDeps) error {
 			EventPredictor:   recommenderEventPredictor,
 		})
 
+		// Q2 batch 2, unit B+C (site 1): the regime provider used to read the
+		// flat JSONL ledger (ledger.NewStore(cfg.LedgerDir)). On a postgres
+		// deployment the daily sim writes session summaries to PG and the flat
+		// ledger is only a 12h reconcile mirror (registerSessionSummaryReconcile
+		// in reconcile_task.go), so the report regime could lag a day behind.
+		// Read through the same backend-aware store as the other summary
+		// readers (PG-first, mirror only when PG errors); a store that cannot
+		// be built leaves the historical disk behavior untouched (nil store).
+		regimeStore := newRegimeStore(cfg)
 		dailyRptGen.SetRegimeProvider(func() domain.Regime {
-			summary, _ := monitoringservice.FindLatestSessionSummary(ledger.NewStore(cfg.LedgerDir), cfg.LedgerDir)
-			if summary != nil {
-				return summary.Regime
-			}
-			return domain.RegimeNeutral
+			return latestSessionRegime(regimeStore, cfg.LedgerDir)
 		})
 		dailyRptGen.SetPeriodProvider(func() *dailyreport.PeriodInfo {
 			if macroProvider == nil {
@@ -3601,4 +3606,38 @@ func initChannelKeyManager(cfg *config.Config, pool *pgxpool.Pool) *channelsecre
 		cfg.FugleAPIKey = k
 	}
 	return mgr
+}
+
+// newRegimeStore resolves the ledger store the daily report's regime provider
+// reads session summaries through (Q2 batch 2, unit B+C — site 1).
+//
+// The provider used to hold a raw JSONL store (ledger.NewStore(cfg.LedgerDir)).
+// On a postgres deployment the daily sim writes session summaries to PG and the
+// flat ledger is only a 12h reconcile mirror (see registerSessionSummaryReconcile
+// in reconcile_task.go), so the regime could be picked off a mirror that lags a
+// day behind. The backend-aware report store reads PG first and degrades to the
+// mirror (marked degraded) only when PG errors.
+//
+// A store that cannot be built returns nil on purpose: FindLatestSessionSummary
+// then keeps the historical flat-ledger disk scan (the pre-migration behavior)
+// instead of failing the report.
+func newRegimeStore(cfg config.Config) ledger.OutcomeStore {
+	store, err := ledger.NewReportOutcomeStore(cfg)
+	if err != nil {
+		logging.Warn("daily_report", "regime_store_init_failed", logging.Err(err))
+		return nil
+	}
+	logging.Info("daily_report", "regime_store_resolved", logging.FStr("store", fmt.Sprintf("%T", store)))
+	return store
+}
+
+// latestSessionRegime returns the regime of the newest session summary. It reads
+// through store when one is available (backend-aware); store == nil keeps the
+// historical flat-ledger disk scan done by FindLatestSessionSummary.
+func latestSessionRegime(store ledger.OutcomeStore, ledgerDir string) domain.Regime {
+	summary, _ := monitoringservice.FindLatestSessionSummary(store, ledgerDir)
+	if summary != nil {
+		return summary.Regime
+	}
+	return domain.RegimeNeutral
 }

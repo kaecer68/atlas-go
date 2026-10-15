@@ -31,13 +31,7 @@
       },
       {
         "file": "cmd/atlas/main.go",
-        "line": 1358,
-        "snippet": "summary, _ := monitoringservice.FindLatestSessionSummary(ledger.NewStore(cfg.LedgerDir), cfg.LedgerDir)",
-        "reason": "cmd/atlas 啟動期以 FindLatestSessionSummary 掃 JSONL 找最後 session 摘要；不在本 PR（T1）範圍"
-      },
-      {
-        "file": "cmd/atlas/main.go",
-        "line": 2082,
+        "line": 2087,
         "snippet": "store := ledger.NewStore(cfg.LedgerDir)",
         "reason": "cmd/atlas 的 auto_propose 背景任務以 LedgerDir 直建 JSONL store 記錄 ExperimentRecord（實驗提案，屬 experiments 家族，唯一寫者待 T3 裁決）；同檔的 window_backtest 任務已於 Q2b2 T2 改走 ledger.NewFullStore(cfg)"
       },
@@ -46,12 +40,6 @@
         "line": 94,
         "snippet": "fileStore := ledger.NewStore(d.Cfg.LedgerDir)",
         "reason": "reconcile_task 以 LedgerDir 直建 JSONL store 做對帳；不在本 PR（T1）範圍"
-      },
-      {
-        "file": "cmd/atlas/stage3_tasks.go",
-        "line": 57,
-        "snippet": "pipelineSvc := monitoringservice.NewPipelineService(d.cfg.WorkDir, d.cfg.LedgerDir, ledger.NewStore(d.cfg.LedgerDir)).",
-        "reason": "stage3 pipeline 服務：把 JSONL store 直接注入 monitoringservice.NewPipelineService；不在本 PR（T1）範圍"
       },
       {
         "file": "cmd/backtest-window/main.go",
