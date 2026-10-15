@@ -1841,6 +1841,19 @@ func (a *DashboardAPI) RegisterLiveRoutes(mux *http.ServeMux) {
 		Classifier:    a.industryService.Classifier,
 		AgentLayerMap: apilive.BuildAgentLayerMap(a.workDir),
 	}
+	// SSOT (Q2 batch 2): the P&L attribution and risk-exposure outcome reads
+	// go through the same backend-aware factory as the performance report
+	// (PG-first with JSONL fallback on production, degraded logged). They
+	// previously opened LedgerDir/sessions/*/recommendation_outcomes.jsonl
+	// directly, which does not exist when ATLAS_STORE_BACKEND=postgres
+	// (outcomes live in the PG recommendation_outcomes table) ⇒ attribution
+	// and sector/factor exposure came back empty on production. Same DI
+	// pattern as RegisterPerformanceRoutes / RegisterRiskMetrics.
+	if store, err := ledger.NewReportOutcomeStore(config.Normalize(config.Load())); err == nil {
+		handlers.WithStore(store)
+	} else {
+		logging.Warn("dashboard", "live_outcomes_store_init_failed", logging.Err(err))
+	}
 	a.liveHandlers = handlers
 	handlers.RegisterRoutes(mux)
 }
