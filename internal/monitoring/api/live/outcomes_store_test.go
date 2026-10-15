@@ -396,3 +396,88 @@ func TestHandlers_OutcomeReadsFallBackToJSONLWhenPostgresUnavailable(t *testing.
 		t.Errorf("SourceBackend() = %q, want %q", src, "jsonl")
 	}
 }
+
+// TestHandlers_LatestSessionComesFromSummaries pins the deliberate split in the
+// "latest session" resolution that independent review of this unit found
+// (2026-10-15): the store path takes the newest session SUMMARY, the legacy
+// file path the newest session DIRECTORY. The fixture is a half-written tree —
+// the newest directory holds outcomes but never got its summary.json, the older
+// one is complete:
+//
+//   - file path  ⇒ the newest directory's orphan outcomes (historical rule);
+//   - store path ⇒ the newest recorded session, i.e. the older one (the SSoT
+//     backend defines a session by its summary row; outcomes whose session was
+//     never summarized belong to no session).
+//
+// The endpoint-level assertions make the consequence visible: risk-exposure has
+// no session_id in its payload, so on such a tree the two data sources report
+// different factor exposure with nothing in the response naming the session.
+// This is the documented boundary of the parity contract — on the well-formed
+// fixture TestHandlers_StoreAndFilePathsAgreeOnOutcomes requires equality.
+func TestHandlers_LatestSessionComesFromSummaries(t *testing.T) {
+	tmpDir := t.TempDir()
+	dir := filepath.Join(tmpDir, "ledger")
+	sessionsDir := filepath.Join(dir, "sessions")
+
+	withMomentum := func(symbol string, forwardReturn, momentum float64) domain.RecommendationOutcome {
+		oc := q2b1Outcomes(symbol, forwardReturn)[0]
+		oc.FactorScores = domainshared.FactorScores{Momentum: momentum, Total: momentum}
+		return oc
+	}
+	writeOutcomes := func(sessionID string, rows []domain.RecommendationOutcome) {
+		t.Helper()
+		sessionDir := filepath.Join(sessionsDir, sessionID)
+		if err := os.MkdirAll(sessionDir, 0o755); err != nil {
+			t.Fatalf("os.MkdirAll: %v", err)
+		}
+		var lines []string
+		for _, oc := range rows {
+			b, err := json.Marshal(oc)
+			if err != nil {
+				t.Fatalf("marshal outcome: %v", err)
+			}
+			lines = append(lines, string(b))
+		}
+		if err := os.WriteFile(filepath.Join(sessionDir, "recommendation_outcomes.jsonl"), []byte(strings.Join(lines, "\n")+"\n"), 0o644); err != nil {
+			t.Fatalf("write outcomes: %v", err)
+		}
+	}
+
+	// Newest directory: outcomes only — no summary.json.
+	writeOutcomes(q2b1SessionNew, []domain.RecommendationOutcome{withMomentum("2311", 0.01, 0.9)})
+	// Older directory: a complete session.
+	writeOutcomes(q2b1SessionOld, []domain.RecommendationOutcome{withMomentum("2881", 0.02, 0.6)})
+	summary := q2b1Summaries()[0] // SessionID == q2b1SessionOld
+	b, err := json.Marshal(summary)
+	if err != nil {
+		t.Fatalf("marshal summary: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(sessionsDir, q2b1SessionOld, "summary.json"), b, 0o644); err != nil {
+		t.Fatalf("write summary.json: %v", err)
+	}
+
+	fileH := &Handlers{LedgerDir: dir, WorkDir: tmpDir}
+	storeH := (&Handlers{LedgerDir: dir, WorkDir: tmpDir}).WithStore(ledger.NewStore(dir))
+
+	fileOutcomes, err := fileH.recommendationOutcomes("")
+	if err != nil {
+		t.Fatalf("file recommendationOutcomes(\"\"): %v", err)
+	}
+	storeOutcomes, err := storeH.recommendationOutcomes("")
+	if err != nil {
+		t.Fatalf("store recommendationOutcomes(\"\"): %v", err)
+	}
+	q2b1AssertOutcomesEqual(t, "file path (newest directory)", []domain.RecommendationOutcome{withMomentum("2311", 0.01, 0.9)}, fileOutcomes)
+	q2b1AssertOutcomesEqual(t, "store path (newest summary)", []domain.RecommendationOutcome{withMomentum("2881", 0.02, 0.6)}, storeOutcomes)
+
+	// Endpoint level: the same split reaches risk-exposure, whose payload names
+	// no session and therefore cannot show which one it attributed.
+	fileRisk := q2b1GetRisk(t, fileH)
+	storeRisk := q2b1GetRisk(t, storeH)
+	if fileRisk.FactorExposure.Momentum != 0.9 {
+		t.Errorf("file path factor_exposure.momentum = %v, want 0.9 (newest directory's outcomes)", fileRisk.FactorExposure.Momentum)
+	}
+	if storeRisk.FactorExposure.Momentum != 0.6 {
+		t.Errorf("store path factor_exposure.momentum = %v, want 0.6 (newest recorded session's outcomes)", storeRisk.FactorExposure.Momentum)
+	}
+}

@@ -597,11 +597,25 @@ func loadSessionSummariesFromDir(sessionsDir string) ([]domain.SessionSummary, e
 
 // recommendationOutcomes returns the recommendation outcomes of sessionID,
 // through the injected backend-aware store when present (PostgreSQL first,
-// JSONL fallback) and through the legacy direct file read otherwise. An empty
-// sessionID means "the latest session": the file path resolves it from the
-// session directory names, the store path from the session summaries the
-// backend reports. The two agree whenever a session directory carries the
-// summary.json that created it.
+// JSONL fallback) and through the legacy direct file read otherwise.
+//
+// An empty sessionID means "the latest session". Both paths resolve it from
+// "the session that exists", but they read that from different places, so they
+// disagree on a half-written tree (pinned by
+// TestHandlers_LatestSessionComesFromSummaries):
+//
+//   - the store path (production) takes the newest SessionID among the session
+//     summaries the backend reports — PostgreSQL session_summaries;
+//   - the file path keeps its historical rule: the newest directory under
+//     LedgerDir/sessions, even when that directory has no summary.json.
+//
+// They agree whenever every session directory carries the summary.json that
+// created it, which every producer writes (TestHandlers_StoreAndFilePathsAgreeOnOutcomes
+// requires field-by-field equality on that well-formed fixture). Where they
+// differ, the store path answers with the newest recorded session and the file
+// path with the newest directory's orphan outcomes: outcomes whose session was
+// never summarized belong to no session, matching the SSoT backend, which
+// defines sessions by their summary rows.
 func (h *Handlers) recommendationOutcomes(sessionID string) ([]domain.RecommendationOutcome, error) {
 	if h.store == nil {
 		return loadRecommendationOutcomes(h.LedgerDir, sessionID)
