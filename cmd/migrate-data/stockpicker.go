@@ -28,6 +28,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -60,16 +61,32 @@ type stockpickerReport struct {
 	DigestMismatches []string
 }
 
-// requireStockpickerTargetAssertion enforces the fail-closed rule for the
-// stockpicker backfill (independent-review P1): it writes production data, so
-// it refuses to run without an explicit -expect-db target assertion. A
-// forgotten flag must abort the run — never backfill whatever DATABASE_URL
-// happens to point at.
-func requireStockpickerTargetAssertion(stockpicker bool, expectDB string) error {
-	if stockpicker && expectDB == "" {
-		return fmt.Errorf("-stockpicker requires -expect-db=<name> (refusing to write without a target assertion)")
+// requireMigrateTargetAssertion is the fail-closed gate for every migration
+// mode that writes production data (independent-review P1; generalized when
+// -windows joined the family). Such a mode refuses to run without an explicit
+// -expect-db target assertion: a forgotten flag must abort the run — never
+// backfill whatever DATABASE_URL happens to point at. Modes that only read, or
+// that shipped before the guard existed, keep the legacy behavior (the guard
+// applies only when -expect-db is provided).
+func requireMigrateTargetAssertion(stockpicker, windows bool, expectDB string) error {
+	var flags []string
+	if stockpicker {
+		flags = append(flags, "-stockpicker")
 	}
-	return nil
+	if windows {
+		flags = append(flags, "-windows")
+	}
+	if len(flags) == 0 || expectDB != "" {
+		return nil
+	}
+	return fmt.Errorf("%s requires -expect-db=<name> (refusing to write without a target assertion)",
+		strings.Join(flags, " and "))
+}
+
+// requireStockpickerTargetAssertion keeps the original single-flag entry point
+// for the stockpicker backfill (call sites and tests predate -windows).
+func requireStockpickerTargetAssertion(stockpicker bool, expectDB string) error {
+	return requireMigrateTargetAssertion(stockpicker, false, expectDB)
 }
 
 // guardMigrateTarget reports the postgres connection target and, when expectDB
