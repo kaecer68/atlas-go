@@ -2719,6 +2719,40 @@ PY
 - **風險**：這些目錄的 integration 契約（真實 PG／外部依賴）沒有任何 CI 保護 ⇒ 回歸可長期潛伏（與「檢查存在但不在生效路徑上」同族）。
 - **最小處置**：把上述目錄補進過濾器；並加一個**契約測試**：掃 `*_integration_test.go`／`//go:build integration` 的所在目錄，斷言每個目錄都被 integration 過濾器涵蓋（避免日後又漏）。
 - **查法**：`grep -rn 'go:build integration' --include='*.go' . | sed 's#/.*##' | sort -u` 對照 `.github/workflows/ci-cd.yml` 的 filters 清單。
+### FU-20261015-02 — CI 出現**偶發性 flaky 測試**（本 session 兩起，皆與變更無關）
+
+- **狀態**：`open`
+- **記錄日期**：2026-10-15
+- **來源**：本批 PR 的實作／審查過程中實測
+- **事實（兩起，皆有隔離重跑證據）**：
+  1. **#2229**（對方 agent 的 MCP 工具）：`build` job 紅在 `--- FAIL: TestGapDetector_DetectGaps_DeduplicatesStored`（`internal/spawning`，其 diff **未觸及**該套件）。我隔離重跑 **3/3 PASS**、整個 `internal/spawning` 套件 PASS；**重跑 CI 後轉綠**。
+  2. **#2230**（Q2b2-1）：`make ci-full` 於 head `c9b8941a3` **第一次 rc=2**，紅在 `cmd/atlas` 的 `TestWithTimeout_BacktestWhitelistedLongTimeout`（`status = 503, want 202`）。該測試隔離 **3/3 PASS**、`cmd/atlas` 套件重跑 PASS；前一顆 commit 的 ci-full 為綠；失敗當時同機同時跑 ci-full＋GitHub CI 監看＋docker PG（**負載誘發**）。
+- **風險**：綠紅不定的閘門會誘導「無條件重跑」而掩蓋真缺陷；反向也會讓無關 PR 被卡（本 session 兩次都差點卡住）。
+- **最小處置**：①對上述兩支加「隔離重跑即通過」的註記，並在其測試檔寫明已知的相依（共享狀態／負載敏感）②考慮 CI 對這兩支加**單獨重試一次**（retry-on-failure）或把它們標為非同步 flaky 監控 ③若再現第三次，改為修根因（隔離狀態或降低對 wall-clock／負載的敏感度）。
+- **查法**：`gh run view <run> --log-failed | grep -E '--- FAIL:|^FAIL'`；再 `go test -count=3 -run <test> <pkg>` 判是否隔離通過。
+
+### FU-20261015-03 — 「半寫入 session」下的歸因盲點：store 路徑歸因前一場次，且**回應無 `session_id` 可察覺**
+
+- **狀態**：`open`
+- **記錄日期**：2026-10-15
+- **來源**：Q2b2-1（PR #2230）的**獨立查核**（kimi-for-coding 版；原 M3.1 驗證者 429 無產出）實測
+- **事實**：`latest session` 的解析在兩條路徑來源不同 —— **store 路徑取後端回報的最新 summary**；**檔案路徑取最新目錄名**。在「最新目錄有 outcomes 但**無** summary.json（半寫入）」時兩者**不等價**，實測 `risk-exposure` 端點輸出分歧（file `factor.Momentum=0.9` vs store `0.6`），且**該回應不含 `session_id`** ⇒ 呼叫端無法察覺用到哪一場次。已由 `TestHandlers_LatestSessionComesFromSummaries`（單元＋端點兩層）釘住，程式註解寫明 SSoT 判定（**未被 summary 的 outcomes 不屬於任何 session**，與 PG 以 summary 定義 session 一致）。
+- **界定（不可誇大）**：**改前**該情境回**空**，現在歸因前一場次 ⇒ 是「空 → 有值（較舊）」，**不是**把「正確」變成「過期」。
+- **最小處置**：①在 `risk-exposure`／`pnl-attribution` 回應**加上實際使用的 `session_id`**（可觀測性）②或對半寫入狀態加明確警示（log／欄位）。
+- **查法**：`go test ./internal/monitoring/api/live/ -run LatestSession -v`；或造一個「最新目錄有 outcomes 無 summary.json」的 fixture 比對兩路徑。
+
+### FU-20261015-04 — 主機 `.env` 的 `DATABASE_URL` 是**第二份 DB 憑證**：輪替時可能漂移，且失敗訊息不會指向真正原因
+
+- **狀態**：`open`
+- **記錄日期**：2026-10-16
+- **來源**：root 追查「主機端 dry-run 為何 auth 失敗」時查清機制（**原判為「DSN 過期」是誤判，已改正**）
+- **事實（實測）**：
+  - **目前是同步的**：主機 `.env` 的 DSN 密碼、`atlas-go` 容器的 `DATABASE_URL` 密碼、`atlas-postgres` 的 `POSTGRES_PASSWORD` —— 三者 **sha256 前 12 完全相同** ✓；檔案值長度 60、無尾隨空白／註解 ✓；以該 DSN 跑 CLI dry-run ⇒ **RC=0**，`write_plan primary=postgres`、`sqlite_artifact_not_opened` ✓。
+  - **但憑證有兩份來源**：容器端由 `docker-compose.yml` 的 `${DB_PASSWORD:-atlas}` 產生（`DATABASE_URL=postgres://atlas:${DB_PASSWORD:-atlas}@postgres:5432/...`）；**主機端 `.env` 則另存一份完整 DSN**（`localhost:55432`）。**輪替密碼時若只改一處**，主機端 CLI（回溯／backfill／dry-run）就會以舊憑證連線 ✗。
+  - **失敗訊息不指向真因**：屆時只會看到 `FATAL: password authentication failed for user "atlas"`（容器日誌亦然）⇒ 容易被誤判為 PG 故障或「整個 DSN 過期」，而非「兩份憑證不同步」。（本次調查即一度如此誤判。）
+- **最小處置（三選一或並用）**：①**去重**：主機端 CLI 改讀 compose 的 `${DB_PASSWORD}`（或共用一份檔）而非第二份 DSN；②**守門**：CLI 在 `-backend postgres` 首次連線失敗且為 auth 錯誤時，明確提示「DSN 可能與 DB 憑證不同步（輪替後只改了一處）」；③**文件化**：在部署 runbook 的「輪替 DB 密碼」步驟明列**兩個位置**（compose `.env` 與主機 `~/.config/atlas-go/.env`）。
+- **查法**：`grep -m1 '^DATABASE_URL=' ~/.config/atlas-go/.env | sed 's#://[^:]*:[^@]*@#://USER:PASS@#'` 對照 `docker inspect atlas-postgres` 的 `POSTGRES_PASSWORD`（只比 hash）；再以該 DSN 跑 `go run ./cmd/run-stockpicker-backtest -dry-run -backend postgres -expect-db atlas`。
+
 ## 相關文件
 
 - [universe-scoring-ranked-zero-20260925.md](universe-scoring-ranked-zero-20260925.md)
