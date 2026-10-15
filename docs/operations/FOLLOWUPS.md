@@ -2882,6 +2882,26 @@ PY
   （`.github/workflows/ci-cd.yml:554`），故不影響 CI；僅本地並行跑時需注意。
 - **查法**：`grep -n 'window_summaries' sql/migrations/000015_ledger_experiments.up.sql`；
   `bash scripts/ci/check_ledger_seam.sh`；`grep -n 'FU-20261016-05' docs/operations/FOLLOWUPS.md`。
+### FU-20261016-06 — `repository.DualWriteRepository` 的兩個 Record* 同樣**吞錯且不寫 PG 側**（休眠路徑，與 FU-20261016-03 同型）
+
+- **狀態**：`open`
+- **記錄日期**：2026-10-16
+- **來源**：FU-20261016-03 的修復（PR #2237）實作時，子代理主動盤點同型問題後發現；該 PR **刻意未修**（不同 seam、非本 PR 範圍）
+- **事實**：`internal/repository/dual_write.go` 的 `DualWriteRepository.RecordSessionExperiment`／`RecordExperiment` 也是 `_ = ...`（吞掉錯誤），且在該路徑下**不會**寫入 PG 側；已查證 **production 的 `cmd/` 無呼叫端**（僅測試使用）⇒ **休眠路徑**。
+- **風險**：一旦有人啟用該 seam（或測試把它當成正式路徑），會重現 FU-20261016-03 的形狀（靜默失敗、資料只落一半）。休眠不代表安全，只代表**還沒被行使**。
+- **最小處置**：①與 PR #2237 對齊（錯誤不再吞、必要時加 log／metric）②若該 seam 仍要保留，補上 PG 側寫入或明確標注「僅測試用」③加一個測試釘住「非測試程式碼不得呼叫」或「呼叫時不得靜默」。
+- **查法**：`grep -n -A6 'func (r \*DualWriteRepository) Record' internal/repository/dual_write.go`；`grep -rn 'DualWriteRepository{' --include='*.go' cmd/ | head`（應無 production 呼叫）。
+
+### FU-20261016-07 — `mutation_briefs` **沒有 unique 鍵** ⇒ 重複執行會多列（回填目前以 DELETE+INSERT 規避）
+
+- **狀態**：`open`
+- **記錄日期**：2026-10-16
+- **來源**：Q2b2 T2（PR #2238）實作時發現，該 PR 以「先 DELETE 該 window_id 再 INSERT」使**回填**冪等，但未改 schema（建議另案）
+- **事實**：`mutation_briefs`（migration `000015`）**沒有 unique 約束** ⇒ `RecordMutationBrief` 仍是純 `INSERT` ⇒ 同一窗口重跑會**累積重複列**（`window_summaries` 側已有 `window_id` UNIQUE 並改 upsert ✓，兩邊語意不對稱）。
+- **風險**：重複的 brief 列會讓以「brief 列數」為分母或逐列聚合的統計偏高；且回填與日常寫入的冪等性靠**呼叫端**維持，不是 schema 保證。
+- **最小處置**：①為 `mutation_briefs` 加 unique 鍵（如 `(window_id)` 或 `(window_id, ...)`，需先清理既有重複）②把 `RecordMutationBrief` 改為與 `window_summaries` 一致的 upsert ③驗收：`SELECT window_id, count(*) FROM mutation_briefs GROUP BY window_id HAVING count(*) > 1` 必須 **0 列**（PR #2238 的回填驗收已含此查詢）。
+- **查法**：`psql -Atc "select indexdef from pg_indexes where tablename='mutation_briefs'"`；`psql -Atc "select window_id, count(*) from mutation_briefs group by window_id having count(*) > 1"`。
+
 ## 相關文件
 
 - [universe-scoring-ranked-zero-20260925.md](universe-scoring-ranked-zero-20260925.md)
