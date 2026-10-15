@@ -573,9 +573,11 @@ inert-check-update:
 	@echo "   → 請編輯 scripts/ci/inert-baseline.json 填寫 reason（TODO 開頭會讓檢查變紅）"
 
 # ---- ledger store seam 守門（T1/S1，2026-10-16）----
-# 目的：攔下**新增**的裸 `ledger.NewStore(dir)`。backend-aware factory 是 opt-in，直建 JSONL store
-#       的站點在生產（ATLAS_STORE_BACKEND=postgres）會安靜地讀錯後端：JSONL 對缺檔回 (nil, nil)
-#       ⇒ GET /api/backtest/signals 回 200 全 0、err 為 nil ⇒ CIRCUIT_BREAKER 永不觸發。
+# 目的：攔下**新增**的裸 `ledger.NewStore(dir)` **與**「未注入就落到 JSONL」的間接建構子
+#       （service.NewLiveService／NewBacktestService、risk/system.NewHandlers、autobacktest.New*FromDir）。
+#       backend-aware factory 是 opt-in，直建／未注入的站點在生產（ATLAS_STORE_BACKEND=postgres）
+#       會安靜地讀錯後端：JSONL 對缺檔回 (nil, nil) ⇒ GET /api/backtest/signals 回 200 全 0、
+#       err 為 nil ⇒ CIRCUIT_BREAKER 永不觸發。
 #       allowlist：scripts/ci/ledger-seam-allowlist.json（每筆 reason 必填）
 #       規格：scripts/ci/check_ledger_seam.py 的 docstring
 #   make ledger-seam-check      檢查 + hermetic 契約測試（~5s）
