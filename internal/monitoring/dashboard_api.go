@@ -1446,6 +1446,18 @@ func (a *DashboardAPI) RegisterRoutes(mux *http.ServeMux) {
 	} else {
 		logging.Warn("dashboard", "system_history_provider_init_failed", logging.Err(err))
 	}
+	// SSOT (Q2 batch 2 unit 2): the capital-phase history fallback used to open
+	// LedgerDir/sessions/*/summary.json directly, which on production
+	// (ATLAS_STORE_BACKEND=postgres) is an import source with no sessions —
+	// so a provider that failed to build silently produced an empty capital
+	// series. Inject the same backend-aware factory the performance report
+	// uses, so the fallback follows the declared backend too. Same DI pattern
+	// as RegisterPerformanceRoutes / RegisterRiskRoutes / RegisterLiveRoutes.
+	if store, err := ledger.NewReportOutcomeStore(config.Normalize(config.Load())); err == nil {
+		systemHandlers.WithStore(store)
+	} else {
+		logging.Warn("dashboard", "system_summaries_store_init_failed", logging.Err(err))
+	}
 	if a.dataFetcher != nil {
 		systemHandlers.DayTradingFetcher = apisystem.DayTradingFetcher(
 			NewDayTradingFetcher(a.dataFetcher),
@@ -1819,6 +1831,15 @@ func (a *DashboardAPI) GetCrossMarketService() *service.CrossMarketService {
 
 func (a *DashboardAPI) RegisterLiveRoutes(mux *http.ServeMux) {
 	svc := service.NewLiveService(a.workDir, a.ledgerDir)
+	// SSOT (Q2 batch 2 unit 2): the service's L-cold summary reads
+	// (equity curve / portfolio state) fell back to a hardcoded JSONL store
+	// when no provider was wired. Inject the backend-aware factory so the
+	// fallback follows the declared backend too.
+	if store, err := ledger.NewReportOutcomeStore(config.Normalize(config.Load())); err == nil {
+		svc = svc.WithSummaryStore(store)
+	} else {
+		logging.Warn("dashboard", "live_summaries_store_init_failed", logging.Err(err))
+	}
 	// SSOT (P1-1): every L-cold read of the live handlers (equity curve,
 	// trade history) goes through the shared SessionHistoryProvider, which
 	// wraps NewReportOutcomeStore (PG-first with JSONL fallback + degraded on
@@ -1872,6 +1893,18 @@ func (a *DashboardAPI) RegisterBacktestRoutes(mux *http.ServeMux) {
 	svc := service.NewBacktestService(cfg)
 	if a.eventBus != nil {
 		svc.WithEventBus(a.eventBus)
+	}
+	// SSOT (Q2 batch 2 unit 2): the backtest runner's session-summary read was
+	// hardcoded to the JSONL ledger (ledger.NewStore(cfg.LedgerDir)) — the only
+	// one of the four monitoring summary reads with no backend-aware path at
+	// all, so on production (ATLAS_STORE_BACKEND=postgres) the run window was
+	// derived from an import source that has no sessions. Inject the same
+	// factory as the performance report, falling back to the JSONL ledger on
+	// init failure (same shape as RegisterPerformanceRoutes).
+	if store, err := ledger.NewReportOutcomeStore(cfg); err == nil {
+		svc.WithStore(store)
+	} else {
+		logging.Warn("dashboard", "backtest_summaries_store_init_failed", logging.Err(err))
 	}
 	handlers := apibacktest.NewHandlers(svc, a.ledgerDir)
 	// SSOT (T1 fix, 2026-10-16): the signal endpoint evaluated a hardcoded JSONL

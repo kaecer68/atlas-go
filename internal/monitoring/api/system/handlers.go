@@ -50,8 +50,24 @@ type Handlers struct {
 	ETFFetcher              ETFFetcher
 	GeopoliticalRiskFetcher GeopoliticalRiskFetcher
 	// History is the shared SSoT session-history provider (P1-1/P1-2). When
-	// nil, HandleCapitalPhase falls back to the JSONL ledger store.
+	// nil, HandleCapitalPhase falls back to the ledger store.
 	History *service.SessionHistoryProvider
+
+	// store backs the capital-phase session-history fallback used when no
+	// History provider is wired (Q2 batch 2 unit 2), through the same
+	// backend-aware factory as the performance report (PostgreSQL first,
+	// JSONL fallback, degraded tracked). When nil the handler keeps the
+	// legacy direct JSONL read over Svc.LedgerDir (tests/legacy), so this
+	// seam is additive.
+	store ledger.OutcomeStore
+}
+
+// WithStore wires the backend-aware ledger store used by the capital-phase
+// history fallback (PG first, JSONL fallback). When nil, the handler keeps the
+// legacy JSONL ledger read (tests/legacy).
+func (h *Handlers) WithStore(store ledger.OutcomeStore) *Handlers {
+	h.store = store
+	return h
 }
 
 func NewHandlers(svc *service.SystemService) *Handlers {
@@ -80,7 +96,10 @@ func (h *Handlers) WithHistory(provider *service.SessionHistoryProvider) *Handle
 }
 
 // capitalHistory resolves the session history for capital-phase: the SSoT
-// provider when wired, the JSONL ledger store otherwise (tests/legacy).
+// provider when wired, the injected backend-aware store when one is wired
+// (Q2 batch 2 unit 2), and the legacy JSONL ledger store otherwise
+// (tests/legacy). Unreadable summaries yield no history, exactly like the
+// file read this replaced.
 func (h *Handlers) capitalHistory() []service.HistoryPoint {
 	if h.History != nil {
 		points, err := h.History.HistoryPoints()
@@ -88,23 +107,54 @@ func (h *Handlers) capitalHistory() []service.HistoryPoint {
 			return points
 		}
 	}
-	if h.Svc == nil {
+	store := h.summariesStore()
+	if store == nil {
 		return nil
 	}
-	summaries, err := ledger.NewStore(h.Svc.LedgerDir).LoadSessionSummaries()
+	summaries, err := store.LoadSessionSummaries()
 	if err != nil {
 		logging.Warn("system_handler", "capital_phase_history_unreadable", logging.Err(err))
 		return nil
 	}
+	h.logReadSource("capital_phase_history_read")
 	return service.BuildHistoryPoints(summaries)
 }
 
-// historySource reports the backend that served the capital-phase history.
+// summariesStore resolves the store used for the capital-phase history
+// fallback: the injected backend-aware store when present (PostgreSQL first,
+// JSONL fallback on production), otherwise the legacy JSONL ledger under
+// Svc.LedgerDir. It returns nil when neither is available (no history).
+func (h *Handlers) summariesStore() ledger.OutcomeStore {
+	if h.store != nil {
+		return h.store
+	}
+	if h.Svc == nil {
+		return nil
+	}
+	return ledger.NewStore(h.Svc.LedgerDir)
+}
+
+// logReadSource records which backend actually served a store-backed read
+// (SourceBackend()/Degraded() of the PG-first store). The capital-phase
+// payload shape is frozen, so a JSONL fallback is surfaced in the log instead
+// of the body — same convention as the live handlers (Q2 batch 2 unit 1).
+func (h *Handlers) logReadSource(event string) {
+	if h.store == nil {
+		return
+	}
+	logging.Info("system_handler", event,
+		logging.FStr("source", storeSourceBackend(h.store)),
+		logging.FBool("degraded", storeDegraded(h.store)))
+}
+
+// historySource reports the backend that served the capital-phase history: the
+// SSoT provider when wired, otherwise the injected store ("" for the legacy
+// file path, which has no backend to report).
 func (h *Handlers) historySource() string {
 	if h.History != nil {
 		return h.History.Source()
 	}
-	return ""
+	return storeSourceBackend(h.store)
 }
 
 // historyDegraded reports whether the capital-phase history fell back to
@@ -112,6 +162,26 @@ func (h *Handlers) historySource() string {
 func (h *Handlers) historyDegraded() bool {
 	if h.History != nil {
 		return h.History.Degraded()
+	}
+	return storeDegraded(h.store)
+}
+
+// storeSourceBackend reports which backend a store served its most recent read
+// from ("postgres" / "jsonl"), or "" for stores that do not track it (and for
+// a nil store, i.e. the legacy file path).
+func storeSourceBackend(store ledger.OutcomeStore) string {
+	if s, ok := store.(interface{ SourceBackend() string }); ok {
+		return s.SourceBackend()
+	}
+	return ""
+}
+
+// storeDegraded reports whether a store's most recent read fell back to JSONL
+// because the SSoT backend was unavailable. False for stores that do not track
+// degradation (and for a nil store).
+func storeDegraded(store ledger.OutcomeStore) bool {
+	if d, ok := store.(interface{ Degraded() bool }); ok {
+		return d.Degraded()
 	}
 	return false
 }
