@@ -8,9 +8,20 @@ import (
 	"github.com/kaecer68/atlas-go/internal/ledger"
 )
 
+// newTestComparator builds the directory-based comparator (explicit JSONL),
+// the form the pre-2026-10 NewComparator(dir) constructor provided.
+func newTestComparator(t *testing.T, ledgerDir string) *Comparator {
+	t.Helper()
+	cmp, err := NewComparatorFromDir(ledgerDir)
+	if err != nil {
+		t.Fatalf("NewComparatorFromDir: %v", err)
+	}
+	return cmp
+}
+
 func TestComparatorComparePortfolioNoData(t *testing.T) {
 	dir := t.TempDir()
-	cmp := NewComparator(dir)
+	cmp := newTestComparator(t, dir)
 
 	comp, err := cmp.ComparePortfolio()
 	if err != nil {
@@ -40,7 +51,7 @@ func TestComparatorComparePortfolio(t *testing.T) {
 		}
 	}
 
-	cmp := NewComparator(dir)
+	cmp := newTestComparator(t, dir)
 	comp, err := cmp.ComparePortfolio()
 	if err != nil {
 		t.Fatalf("ComparePortfolio: %v", err)
@@ -62,7 +73,7 @@ func TestComparatorComparePortfolio(t *testing.T) {
 
 func TestComparatorCompareSharpeNoData(t *testing.T) {
 	dir := t.TempDir()
-	cmp := NewComparator(dir)
+	cmp := newTestComparator(t, dir)
 
 	comp, err := cmp.CompareSharpe()
 	if err != nil {
@@ -97,7 +108,7 @@ func TestComparatorCompareSharpe(t *testing.T) {
 		}
 	}
 
-	cmp := NewComparator(dir)
+	cmp := newTestComparator(t, dir)
 	comp, err := cmp.CompareSharpe()
 	if err != nil {
 		t.Fatalf("CompareSharpe: %v", err)
@@ -127,7 +138,7 @@ func TestComparatorRecentRegimes(t *testing.T) {
 		}
 	}
 
-	cmp := NewComparator(dir)
+	cmp := newTestComparator(t, dir)
 	recent, err := cmp.RecentRegimes()
 	if err != nil {
 		t.Fatalf("RecentRegimes: %v", err)
@@ -139,7 +150,7 @@ func TestComparatorRecentRegimes(t *testing.T) {
 
 func TestComparatorRecentRegimesEmpty(t *testing.T) {
 	dir := t.TempDir()
-	cmp := NewComparator(dir)
+	cmp := newTestComparator(t, dir)
 
 	recent, err := cmp.RecentRegimes()
 	if err != nil {

@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"sync"
 	"testing"
+
+	"github.com/kaecer68/atlas-go/internal/ledger"
 )
 
 // fakeOpener records every channel it was asked to force-open so the test
@@ -35,11 +37,22 @@ func (f *fakeOpener) snapshot() []string {
 	return out
 }
 
+// jsonlTestStore builds the explicit-JSONL store the pre-2026-10 directory
+// based call sites used.
+func jsonlTestStore(t *testing.T, ledgerDir string) ledger.FullStore {
+	t.Helper()
+	store, ok := ledger.NewStore(ledgerDir).(ledger.FullStore)
+	if !ok {
+		t.Fatalf("JSONL store does not implement ledger.FullStore")
+	}
+	return store
+}
+
 // TestSignalApply_NilGatewayIsSafe verifies the production wiring can pass
 // nil (older call sites) without crashing.
 func TestSignalApply_NilGatewayIsSafe(t *testing.T) {
 	dir := t.TempDir()
-	if err := SignalApply(context.Background(), dir, nil); err != nil {
+	if err := SignalApplyWithStore(context.Background(), jsonlTestStore(t, dir), nil); err != nil {
 		t.Errorf("nil gateway should be silent: %v", err)
 	}
 }
@@ -53,7 +66,7 @@ func TestSignalApply_NoRealOutcomesNoOp(t *testing.T) {
 	// NewSignalEngine requires a FullStore ledger; constructing with an
 	// empty dir will fail to load outcomes. Either way the consumer must
 	// never touch the gateway.
-	if err := SignalApply(context.Background(), dir, opener); err != nil {
+	if err := SignalApplyWithStore(context.Background(), jsonlTestStore(t, dir), opener); err != nil {
 		// Acceptable: an error from missing outcomes is fine.
 	}
 	if got := opener.snapshot(); len(got) != 0 {
@@ -68,7 +81,7 @@ func TestSignalApply_PropagatesBadLedger(t *testing.T) {
 	opener := &fakeOpener{}
 	// Either NewSignalEngine fails (preferred) or Evaluate fails; in either
 	// case the opener must NOT be touched.
-	_ = SignalApply(context.Background(), dir, opener)
+	_ = SignalApplyWithStore(context.Background(), jsonlTestStore(t, dir), opener)
 	if got := opener.snapshot(); len(got) != 0 {
 		t.Errorf("opener touched despite bad ledger: %v", got)
 	}

@@ -1,8 +1,10 @@
 package autobacktest
 
 import (
+	"fmt"
 	"sort"
 
+	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/ledger"
 )
@@ -23,8 +25,33 @@ type Comparator struct {
 	store ledger.FullStore
 }
 
-func NewComparator(ledgerDir string) *Comparator {
-	return &Comparator{store: ledger.NewStore(ledgerDir).(ledger.FullStore)}
+// NewComparator builds the comparator on the backend-aware ledger store
+// (PG-first under ATLAS_STORE_BACKEND=postgres). It shares NewFullStore with
+// NewSignalEngine so both backtest readers see the same backend — the raw
+// ledger.NewStore(dir) form is JSONL-only and is guarded by
+// scripts/ci/check_ledger_seam.py.
+func NewComparator(cfg config.Config) (*Comparator, error) {
+	store, err := ledger.NewFullStore(cfg)
+	if err != nil {
+		return nil, fmt.Errorf("autobacktest comparator: %w", err)
+	}
+	return NewComparatorWithStore(store), nil
+}
+
+// NewComparatorWithStore injects an already-constructed store (DI path for
+// production wiring and tests). store must be non-nil.
+func NewComparatorWithStore(store ledger.FullStore) *Comparator {
+	return &Comparator{store: store}
+}
+
+// NewComparatorFromDir keeps the pre-2026-10 directory-based call sites
+// (tests, CLI helpers) working with an explicit JSONL backend selection.
+func NewComparatorFromDir(ledgerDir string) (*Comparator, error) {
+	store, err := jsonlFullStore(ledgerDir)
+	if err != nil {
+		return nil, err
+	}
+	return NewComparatorWithStore(store), nil
 }
 
 func (c *Comparator) ComparePortfolio() (Comparison, error) {

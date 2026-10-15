@@ -7,6 +7,8 @@ import (
 	"slices"
 	"time"
 
+	"github.com/kaecer68/atlas-go/internal/config"
+	"github.com/kaecer68/atlas-go/internal/ledger"
 	"github.com/kaecer68/atlas-go/internal/logging"
 )
 
@@ -114,14 +116,33 @@ type LiveChannelOpener interface {
 //
 // The function is exported so production wiring can call it after
 // RunScheduledBacktest succeeds; tests can drive it without scheduling.
-func SignalApply(ctx context.Context, ledgerDir string, gw LiveChannelOpener) error {
+//
+// It builds the engine from cfg, i.e. from the backend-aware store production
+// actually writes to (PG under ATLAS_STORE_BACKEND=postgres). A
+// directory-based caller must use SignalApplyWithStore with an explicit JSONL
+// store instead: an unpopulated JSONL directory returns zero signals with a
+// nil error, which silently disables the breaker (2026-10 production defect).
+func SignalApply(ctx context.Context, cfg config.Config, gw LiveChannelOpener) error {
 	if gw == nil {
 		return nil
 	}
-	engine, err := NewSignalEngine(ledgerDir)
+	engine, err := NewSignalEngine(cfg)
 	if err != nil {
 		return fmt.Errorf("autobacktest signal engine: %w", err)
 	}
+	return signalApplyEngine(engine, gw)
+}
+
+// SignalApplyWithStore is the store-injectable form of SignalApply (DI for
+// production wiring and tests).
+func SignalApplyWithStore(ctx context.Context, store ledger.FullStore, gw LiveChannelOpener) error {
+	if gw == nil {
+		return nil
+	}
+	return signalApplyEngine(NewSignalEngineWithStore(store), gw)
+}
+
+func signalApplyEngine(engine *SignalEngine, gw LiveChannelOpener) error {
 	sigs, err := engine.Evaluate()
 	if err != nil {
 		return fmt.Errorf("autobacktest signal evaluate: %w", err)

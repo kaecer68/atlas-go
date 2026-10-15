@@ -1874,6 +1874,18 @@ func (a *DashboardAPI) RegisterBacktestRoutes(mux *http.ServeMux) {
 		svc.WithEventBus(a.eventBus)
 	}
 	handlers := apibacktest.NewHandlers(svc, a.ledgerDir)
+	// SSOT (T1 fix, 2026-10-16): the signal endpoint evaluated a hardcoded JSONL
+	// store, so on production (ATLAS_STORE_BACKEND=postgres) it read an
+	// unpopulated directory, answered 200 with all-zero metrics, and the
+	// CIRCUIT_BREAKER consumer never fired. Read through the backend-aware
+	// factory instead; if it cannot be built, the handler answers 500 rather
+	// than pretending the portfolio is risk-free.
+	if store, err := ledger.NewFullStore(cfg); err == nil {
+		handlers.WithStore(store)
+	} else {
+		logging.Error("dashboard", "backtest_signals_store_init_failed", logging.Err(err))
+		handlers.WithStoreError(err)
+	}
 	handlers.RegisterRoutes(mux)
 }
 

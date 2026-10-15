@@ -172,8 +172,11 @@ func (r *Runner) syncToLiveStore() {
 }
 
 func (r *Runner) recordSnapshot(date time.Time) error {
-	cmp := NewComparator(r.cfg.LedgerDir)
-	eng, err := NewSignalEngine(r.cfg.LedgerDir)
+	cmp, err := NewComparator(r.cfg)
+	if err != nil {
+		return fmt.Errorf("create comparator: %w", err)
+	}
+	eng, err := NewSignalEngine(r.cfg)
 	if err != nil {
 		return fmt.Errorf("create signal engine: %w", err)
 	}

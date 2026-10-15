@@ -3,6 +3,7 @@ package autobacktest
 import (
 	"fmt"
 
+	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/ledger"
 	riskpkg "github.com/kaecer68/atlas-go/internal/risk"
@@ -34,12 +35,49 @@ type SignalEngine struct {
 	store ledger.FullStore
 }
 
-func NewSignalEngine(ledgerDir string) (*SignalEngine, error) {
-	store, ok := ledger.NewStore(ledgerDir).(ledger.FullStore)
-	if !ok {
-		return nil, fmt.Errorf("ledger store does not implement FullStore: backtest signals require scorecard and summary access")
+// NewSignalEngine builds the signal engine on the backend-aware ledger store,
+// so production (ATLAS_STORE_BACKEND=postgres) evaluates the returns and
+// session summaries that live in PostgreSQL instead of an unpopulated JSONL
+// directory.
+//
+// Do not reintroduce a raw ledger.NewStore(dir) here: the JSONL store answers
+// a missing file with (nil, nil), so Evaluate() returns zero signals and a nil
+// error, and the CIRCUIT_BREAKER consumer in SignalApply never fires
+// (production incident 2026-10; see scripts/ci/check_ledger_seam.py).
+func NewSignalEngine(cfg config.Config) (*SignalEngine, error) {
+	store, err := ledger.NewFullStore(cfg)
+	if err != nil {
+		return nil, fmt.Errorf("autobacktest signal engine: %w", err)
 	}
-	return &SignalEngine{store: store}, nil
+	return NewSignalEngineWithStore(store), nil
+}
+
+// NewSignalEngineWithStore injects an already-constructed store (DI path for
+// production wiring and tests). store must be non-nil.
+func NewSignalEngineWithStore(store ledger.FullStore) *SignalEngine {
+	return &SignalEngine{store: store}
+}
+
+// NewSignalEngineFromDir keeps the pre-2026-10 directory-based call sites
+// (tests, CLI helpers) working: it selects the JSONL backend explicitly rather
+// than by omission, so an unpinned caller can never silently read the wrong
+// backend.
+func NewSignalEngineFromDir(ledgerDir string) (*SignalEngine, error) {
+	store, err := jsonlFullStore(ledgerDir)
+	if err != nil {
+		return nil, err
+	}
+	return NewSignalEngineWithStore(store), nil
+}
+
+// jsonlFullStore is the explicit-JSONL factory shared by the directory-based
+// compatibility constructors.
+func jsonlFullStore(ledgerDir string) (ledger.FullStore, error) {
+	store, err := ledger.NewFullStore(config.Config{StoreBackend: "jsonl", LedgerDir: ledgerDir})
+	if err != nil {
+		return nil, fmt.Errorf("autobacktest jsonl store: %w", err)
+	}
+	return store, nil
 }
 
 func (se *SignalEngine) Evaluate() (Signals, error) {

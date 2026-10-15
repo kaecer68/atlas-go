@@ -2,11 +2,13 @@ package backtest
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strconv"
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/autobacktest"
+	"github.com/kaecer68/atlas-go/internal/ledger"
 	"github.com/kaecer68/atlas-go/internal/monitoring/api/shared"
 	"github.com/kaecer68/atlas-go/internal/monitoring/service"
 )
@@ -14,10 +16,46 @@ import (
 type Handlers struct {
 	LedgerDir string
 	svc       *service.BacktestService
+	// store is the backend-aware ledger store backing GET /api/backtest/signals.
+	// Dashboard wiring injects it (WithStore); nil keeps the directory-based
+	// JSONL read for struct-literal construction in tests.
+	store ledger.FullStore
+	// storeErr records a wiring failure so the signals endpoint fails loudly
+	// (500) instead of degrading to an empty JSONL read that answers 200 with
+	// all-zero metrics and no error (2026-10 production defect).
+	storeErr error
 }
 
 func NewHandlers(svc *service.BacktestService, ledgerDir string) *Handlers {
 	return &Handlers{LedgerDir: ledgerDir, svc: svc}
+}
+
+// WithStore injects the backend-aware store used by the signals endpoint.
+func (h *Handlers) WithStore(store ledger.FullStore) *Handlers {
+	h.store = store
+	h.storeErr = nil
+	return h
+}
+
+// WithStoreError records that the backend-aware store could not be built, so
+// the signals endpoint returns 500 rather than misleading zeros.
+func (h *Handlers) WithStoreError(err error) *Handlers {
+	h.store = nil
+	h.storeErr = err
+	return h
+}
+
+// signalEngine returns the engine backing GET /api/backtest/signals: the
+// injected backend-aware store when wired, the legacy JSONL directory
+// otherwise.
+func (h *Handlers) signalEngine() (*autobacktest.SignalEngine, error) {
+	if h.storeErr != nil {
+		return nil, fmt.Errorf("backtest signals store unavailable: %w", h.storeErr)
+	}
+	if h.store != nil {
+		return autobacktest.NewSignalEngineWithStore(h.store), nil
+	}
+	return autobacktest.NewSignalEngineFromDir(h.LedgerDir)
 }
 
 func (h *Handlers) RegisterRoutes(mux *http.ServeMux) {
@@ -100,7 +138,7 @@ type BacktestSignalsResponse struct {
 }
 
 func (h *Handlers) HandleBacktestSignals(r *http.Request) (int, any) {
-	eng, err := autobacktest.NewSignalEngine(h.LedgerDir)
+	eng, err := h.signalEngine()
 	if err != nil {
 		return http.StatusInternalServerError, map[string]string{"error": err.Error()}
 	}
