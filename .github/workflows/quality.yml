@@ -224,6 +224,25 @@ jobs:
     - name: Inert closure regression tests (hermetic fixtures)
       run: bash tests/scripts/test-inert-closure.sh
 
+  # ledger store seam 守門（T1/S1，2026-10-16）— 禁「新增裸 ledger.NewStore」：
+  # internal/ledger 的 backend-aware factory 是 opt-in，直建 JSONL store 的站點在
+  # ATLAS_STORE_BACKEND=postgres 的生產機上會**安靜地讀錯後端**（JSONL 對缺檔回 (nil, nil)），
+  # 2026-10 的實例是 autobacktest signal engine ⇒ GET /api/backtest/signals 回 200 全 0、
+  # CIRCUIT_BREAKER 的 ForceOpenChannel 永不觸發（live 斷路器在生產是死的）。
+  # 無 path filter：docs- 或 scripts-only 的 PR 也要跑（檢查 <5s；回歸測試為 hermetic fixture）。
+  # 既有 32 個站點由 scripts/ci/ledger-seam-allowlist.json 登錄（每筆 reason 必填）。
+  # 規格：scripts/ci/check_ledger_seam.py 的 docstring。
+  ledger-seam:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+    - name: Check no new raw ledger.NewStore in cmd/ and internal/
+      run: bash scripts/ci/check_ledger_seam.sh
+
+    - name: Ledger seam regression tests (hermetic fixtures)
+      run: bash tests/scripts/test-ledger-seam.sh
+
   # 合併結果驗證 + diff 衛生閘門（issue #1993）— 2026-09-26 重新定性為 v2
   # 兩相（規格 §1）：
   #   FAIL（真回退）＝ 合併結果驗證：`git merge-tree --write-tree` 算出的結果樹，改掉 main 上

@@ -193,6 +193,7 @@ help:
 	@echo "  test               test-frontend + test-backend"
 	@echo "  lint               lint-backend"
 	@echo "  ci                 跑 scripts/ci/ 下所有 check_*.sh (per-script timeout 30s)"
+	@echo "  ledger-seam-check  ledger store seam 守門 + 契約測試 (禁新增裸 ledger.NewStore)"
 	@echo "  ci-quick           只跑快速 check(<2s,適合 PR 前)"
 	@echo "  ci-slow            只跑慢速 check(data_naming/layer3/markdown)"
 	@echo "  ci-quota            FinMind 每日 quota 檢查 (--strict, 週一開市前)"
@@ -570,6 +571,29 @@ inert-check: inert-check-selftest
 inert-check-update:
 	@python3 scripts/ci/check_inert_closure.py --root . --update-baseline
 	@echo "   → 請編輯 scripts/ci/inert-baseline.json 填寫 reason（TODO 開頭會讓檢查變紅）"
+
+# ---- ledger store seam 守門（T1/S1，2026-10-16）----
+# 目的：攔下**新增**的裸 `ledger.NewStore(dir)`。backend-aware factory 是 opt-in，直建 JSONL store
+#       的站點在生產（ATLAS_STORE_BACKEND=postgres）會安靜地讀錯後端：JSONL 對缺檔回 (nil, nil)
+#       ⇒ GET /api/backtest/signals 回 200 全 0、err 為 nil ⇒ CIRCUIT_BREAKER 永不觸發。
+#       allowlist：scripts/ci/ledger-seam-allowlist.json（每筆 reason 必填）
+#       規格：scripts/ci/check_ledger_seam.py 的 docstring
+#   make ledger-seam-check      檢查 + hermetic 契約測試（~5s）
+#   make ledger-seam-selftest   只跑契約測試（fixture，不碰 git／production／Go toolchain）
+#   make ledger-seam-update     以現況重寫 allowlist（新條目 reason 留 TODO，人工填寫後才 commit）
+.PHONY: ledger-seam-check ledger-seam-selftest ledger-seam-update
+
+ledger-seam-selftest:
+	@echo "  → ledger seam regression tests（hermetic fixtures）"
+	@bash tests/scripts/test-ledger-seam.sh
+
+ledger-seam-check: ledger-seam-selftest
+	@echo "  → ledger store seam check（禁新增裸 ledger.NewStore）"
+	@bash scripts/ci/check_ledger_seam.sh
+
+ledger-seam-update:
+	@python3 scripts/ci/check_ledger_seam.py --root . --update
+	@echo "   → 請編輯 scripts/ci/ledger-seam-allowlist.json 填寫 reason（TODO 開頭會讓檢查變紅）"
 
 # ---- 合併結果驗證 + diff 衛生閘門（#1993，2026-09-26）----
 # FAIL（evil merge）：用 `git merge-tree --write-tree` 算「併進 main 之後長怎樣」，若會改掉 main
@@ -1080,6 +1104,10 @@ ci-gate: embed-dirs
 	@echo "    ✅"
 	@echo "  → inert 閉環靜態檢查（#1944 建議 2；allowlist 見 scripts/ci/inert-baseline.json）"
 	@bash scripts/ci/check_inert_closure.sh
+	@echo "    ✅"
+	@echo "  → ledger store seam 守門（T1/S1：禁新增裸 ledger.NewStore；hermetic 契約測試）"
+	@bash tests/scripts/test-ledger-seam.sh
+	@bash scripts/ci/check_ledger_seam.sh
 	@echo "    ✅"
 	@echo "  → monitoring 單一設定樹自我測試（hermetic fixtures；PR 階段攔『改錯棵』）"
 	@bash tests/scripts/test-monitoring-single-source.sh
