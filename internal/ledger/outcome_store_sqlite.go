@@ -401,6 +401,14 @@ func (s *SQLiteOutcomeStore) LoadAllSessionTrades() ([]domain.TradeRecord, error
 }
 
 // RecordExperiment writes an experiment record to the global experiments table.
+//
+// FU-20261016-03: experiment_id is UNIQUE and the pipeline legitimately retries
+// the same id (see the #1780 note on PostgresLedgerStore.RecordExperiment), so
+// a bare INSERT raised a constraint violation that the caller discarded. This
+// now mirrors the PostgreSQL write with ON CONFLICT DO NOTHING: first write
+// wins, later transitions are append-only via RecordPromptExperimentResult.
+// Backend parity matters here — the two stores must not disagree on whether a
+// repeated experiment_id is an error.
 func (s *SQLiteOutcomeStore) RecordExperiment(record domain.ExperimentRecord) error {
 	briefJSON, err := json.Marshal(record) // mutation brief fields embedded in record
 	if err != nil {
@@ -410,7 +418,8 @@ func (s *SQLiteOutcomeStore) RecordExperiment(record domain.ExperimentRecord) er
 	_, err = s.db.Exec(
 		`
 		INSERT INTO experiments (experiment_id, mutation_brief_json, accepted, timestamp)
-		VALUES (?, ?, ?, ?)`,
+		VALUES (?, ?, ?, ?)
+		ON CONFLICT (experiment_id) DO NOTHING`,
 		record.ID,
 		string(briefJSON),
 		record.Status == domain.ExperimentAccepted,
@@ -424,6 +433,12 @@ func (s *SQLiteOutcomeStore) RecordExperiment(record domain.ExperimentRecord) er
 }
 
 // RecordSessionExperiment writes an experiment record for a specific session.
+//
+// FU-20261016-03: mirrors the PostgreSQL upsert. The session-scoped write runs
+// after the session-less one for the same experiment_id, so a bare INSERT hit
+// the UNIQUE index on experiment_id every time and the link was never stored.
+// The upsert only fills an empty session_id (COALESCE keeps the existing value),
+// so re-running a candidate flow cannot re-attribute an existing record.
 func (s *SQLiteOutcomeStore) RecordSessionExperiment(session domain.ReplaySession, record domain.ExperimentRecord) error {
 	briefJSON, err := json.Marshal(record)
 	if err != nil {
@@ -433,7 +448,9 @@ func (s *SQLiteOutcomeStore) RecordSessionExperiment(session domain.ReplaySessio
 	_, err = s.db.Exec(
 		`
 		INSERT INTO experiments (experiment_id, session_id, mutation_brief_json, accepted, timestamp)
-		VALUES (?, ?, ?, ?, ?)`,
+		VALUES (?, ?, ?, ?, ?)
+		ON CONFLICT (experiment_id) DO UPDATE
+			SET session_id = COALESCE(experiments.session_id, excluded.session_id)`,
 		record.ID,
 		session.ID,
 		string(briefJSON),
@@ -441,6 +458,7 @@ func (s *SQLiteOutcomeStore) RecordSessionExperiment(session domain.ReplaySessio
 		record.WindowStart.Format("2006-01-02T15:04:05Z07:00"),
 	)
 	if err != nil {
+		sessionExperimentLinkErrorTotal.Add(1)
 		return fmt.Errorf("insert session experiment: %w", err)
 	}
 

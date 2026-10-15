@@ -1018,8 +1018,33 @@ func (s *System) NextExperimentCandidate() (*domain.Candidate, error) {
 	scorecards := ledger.BuildScorecards(outcomes)
 	candidate := domain.SelectWeakestAgent(s.Sim().registry, scorecards)
 	if candidate != nil {
-		_ = s.Sim().ledger.RecordExperiment(candidate.Experiment)
-		_ = s.Sim().ledger.RecordSessionExperiment(s.Sim().session, candidate.Experiment)
+		// FU-20261016-03 (2026-10-16): both errors used to be discarded, and
+		// the session-scoped INSERT had no ON CONFLICT, so every session link
+		// for an already-recorded experiment_id was lost silently — production
+		// carried 894/894 experiments rows with session_id = NULL. The stores
+		// now upsert; the failures below are reported instead of dropped.
+		//
+		// Trade-off: candidate selection does NOT abort on a write failure. The
+		// experiment record itself is a bookkeeping side effect of selection,
+		// and the same session keeps calling this path, so a transient store
+		// outage must not break the candidate pipeline. The failure is logged
+		// at ERROR and counted (ledger.SessionExperimentLinkErrorTotal), which
+		// is what makes the loss visible without stopping the flow.
+		if recErr := s.Sim().ledger.RecordExperiment(candidate.Experiment); recErr != nil {
+			logging.Error("orchestrator", "record_experiment_failed",
+				"experiment_id", candidate.Experiment.ID,
+				"agent_id", candidate.Experiment.TargetAgentID,
+				"err", recErr.Error())
+		}
+		if recErr := s.Sim().ledger.RecordSessionExperiment(s.Sim().session, candidate.Experiment); recErr != nil {
+			logging.Error("orchestrator", "record_session_experiment_failed",
+				"experiment_id", candidate.Experiment.ID,
+				"session_id", s.Sim().session.ID,
+				"err", recErr.Error(),
+				// Process-wide count maintained by the ledger stores (a failing
+				// write increments it before returning).
+				"link_failures_total", ledger.SessionExperimentLinkErrorTotal())
+		}
 	}
 
 	// New agent onboarding: create experiments for agents with outcomes but no
