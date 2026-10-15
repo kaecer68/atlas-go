@@ -6,9 +6,23 @@ import (
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/config"
+	"github.com/kaecer68/atlas-go/internal/ledger"
 )
 
+// Run loads the replay data, calibrates the requested module(s) and renders the
+// report.
+//
+// It is the store-less entry point; the darwinian module then reads the flat
+// JSONL mirror under <workDir>/data/state. Callers that hold a backend-aware
+// ledger store should use RunWithStore.
 func Run(workDir, module, dataPath string, dryRun, verbose bool, writeback config.CalibrationWriteback) (string, error) {
+	return RunWithStore(workDir, module, dataPath, dryRun, verbose, writeback, nil)
+}
+
+// RunWithStore is Run with an injected ledger outcome store. Only the darwinian
+// module reads the ledger, so a nil store (or any other module) keeps the
+// previous behavior byte for byte.
+func RunWithStore(workDir, module, dataPath string, dryRun, verbose bool, writeback config.CalibrationWriteback, store ledger.OutcomeStore) (string, error) {
 	replayPath := dataPath
 	if replayPath == "" {
 		if replayPath = config.GetReplayDataPath(workDir); replayPath == "" {
@@ -36,7 +50,7 @@ func Run(workDir, module, dataPath string, dryRun, verbose bool, writeback confi
 	if err != nil {
 		return "", fmt.Errorf("load returns: %w", err)
 	}
-	results, err := CalibrateModule(module, config.NewInferenceEngine(paramsCfg), returns, n, paramsCfg)
+	results, err := CalibrateModuleWithStore(module, config.NewInferenceEngine(paramsCfg), returns, n, paramsCfg, store)
 	if err != nil {
 		return "", err
 	}

@@ -102,12 +102,6 @@
         "reason": "獨立 CLI cmd/run-experiment 以 cfg.LedgerDir 直建 JSONL store 餵 experiment.NewExecutor；不在本 PR（T1）範圍"
       },
       {
-        "file": "internal/calibration/calibrate.go",
-        "line": 148,
-        "snippet": "ledgerStore := ledger.NewStore(filepath.Join(workDir, \"data\", \"state\"))",
-        "reason": "calibration 以 filepath.Join(workDir,\"data\",\"state\") 直建 JSONL store；不在本 PR（T1）範圍"
-      },
-      {
         "file": "internal/experiment/auto.go",
         "line": 114,
         "snippet": "store := ledger.NewStore(cfg.Config.LedgerDir)",
