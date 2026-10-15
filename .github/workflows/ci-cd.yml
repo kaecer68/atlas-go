@@ -468,6 +468,12 @@ jobs:
             # internal/orchestrator/stockpicker_winrate_backend_integration_test.go
             # （真 PG：方向、空≠故障、PG 不可用回退）。
             - 'internal/orchestrator/**'
+            # Q2 batch 2 單元 1：live 監控 API 的 outcome/session-summary 讀取
+            # 改走 backend-aware store（PG 優先、JSONL 回退）時，同 PR 附上
+            # internal/monitoring/api/live/outcomes_store_integration_test.go
+            # （真 PG：方向／空≠故障／PG 不可用回退）。此前 internal/monitoring
+            # 不在過濾器內 ⇒ 該目錄的 integration 測試從未被執行。
+            - 'internal/monitoring/**'
             # 只在該 cmd 已有 PG integration 測試時才加進來（否則只是空跑 13 分鐘）；新增測試後同 PR 一併補上。
             # cmd/atlas-mcp：C6 的 win-rate PG 讀取路徑在 2026-10-13 同 PR 附上
             # tools_stock_winrate_pg_integration_test.go（PG/SQLite 逐列一致 + 唯讀釘子）。

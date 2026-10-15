@@ -15,6 +15,7 @@ import (
 	"github.com/kaecer68/atlas-go/internal/constants"
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/industry"
+	"github.com/kaecer68/atlas-go/internal/ledger"
 	livestore "github.com/kaecer68/atlas-go/internal/live/store"
 	"github.com/kaecer68/atlas-go/internal/logging"
 	"github.com/kaecer68/atlas-go/internal/monitoring/api/shared"
@@ -29,6 +30,24 @@ type Handlers struct {
 	Svc           *service.LiveService
 	Classifier    *industry.ClassificationTree
 	AgentLayerMap map[string]string
+
+	// store backs the L-cold recommendation-outcome and session-summary reads
+	// of these handlers through the backend-aware ledger store (PostgreSQL
+	// first, JSONL fallback on production):
+	//   - HandlePnLAttribution: the session listing that used to be a raw
+	//     os.ReadDir over LedgerDir/sessions, and its outcome read,
+	//   - HandleRiskExposure: the outcome read behind sector/factor exposure.
+	// When nil the handlers keep the legacy direct-file reads over
+	// LedgerDir/sessions (tests/legacy), so this seam is additive.
+	store ledger.OutcomeStore
+}
+
+// WithStore wires the backend-aware ledger store used for the L-cold outcome
+// and session-summary reads (P&L attribution, risk exposure). When nil, those
+// handlers fall back to the JSONL files under LedgerDir.
+func (h *Handlers) WithStore(store ledger.OutcomeStore) *Handlers {
+	h.store = store
+	return h
 }
 
 // sectorLabel returns the Chinese label for a sector ID, sourced from the
@@ -278,34 +297,15 @@ type PositionConcentration struct {
 
 // HandlePnLAttribution returns P&L attribution breakdown by agent, sector, symbol, and factor.
 func (h *Handlers) HandlePnLAttribution(r *http.Request) (int, any) {
-	sessionsDir := filepath.Join(h.LedgerDir, "sessions")
-	entries, err := os.ReadDir(sessionsDir)
+	allSummaries, err := h.sessionSummaries()
 	if err != nil {
-		if os.IsNotExist(err) {
-			return http.StatusOK, PnLAttributionResponse{}
-		}
 		logging.Warn("live_handler", "sessions_dir_unreadable", logging.Err(err))
 		return http.StatusOK, PnLAttributionResponse{}
 	}
 
 	latestSession := ""
 	var latestSummary domain.SessionSummary
-	var allSummaries []domain.SessionSummary
-	for _, entry := range entries {
-		if !entry.IsDir() {
-			continue
-		}
-		summaryPath := filepath.Join(sessionsDir, entry.Name(), "summary.json")
-		bytes, err := os.ReadFile(summaryPath)
-		if err != nil {
-			continue
-		}
-		var s domain.SessionSummary
-		if err := json.Unmarshal(bytes, &s); err != nil {
-			logging.Warn("live_handler", "corrupted_summary_skipped", logging.Err(err))
-			continue
-		}
-		allSummaries = append(allSummaries, s)
+	for _, s := range allSummaries {
 		if s.SessionID > latestSession {
 			latestSession = s.SessionID
 			latestSummary = s
@@ -316,6 +316,8 @@ func (h *Handlers) HandlePnLAttribution(r *http.Request) (int, any) {
 		return http.StatusOK, PnLAttributionResponse{}
 	}
 
+	// Clone before sorting: the slice may belong to the injected store.
+	allSummaries = slices.Clone(allSummaries)
 	slices.SortFunc(allSummaries, func(a, b domain.SessionSummary) int {
 		return strings.Compare(a.SessionID, b.SessionID)
 	})
@@ -331,7 +333,7 @@ func (h *Handlers) HandlePnLAttribution(r *http.Request) (int, any) {
 		cumulativeRetPct = cumulativePnL / startingValue
 	}
 
-	outcomes, _ := loadRecommendationOutcomes(h.LedgerDir, latestSession)
+	outcomes, _ := h.recommendationOutcomes(latestSession)
 	symSectorMap := buildSymbolSectorMap(h.Classifier)
 	var (
 		agentMap                                    = make(map[string]*AgentAttribution)
@@ -478,7 +480,7 @@ func (h *Handlers) HandleRiskExposure(r *http.Request) (int, any) {
 		cashRatio = portfolio.Cash / portfolioValue
 	}
 
-	outcomes, _ := loadRecommendationOutcomes(h.LedgerDir, "")
+	outcomes, _ := h.recommendationOutcomes("")
 	symSectorMap := buildSymbolSectorMap(h.Classifier)
 	sectorWeights, factorExp := h.computeSectorFactorExposure(outcomes, portfolioValue, symSectorMap)
 
@@ -547,6 +549,109 @@ func (h *Handlers) HandleTradeHistory(r *http.Request) (int, any) {
 		trades = []domain.TradeRecord{}
 	}
 	return http.StatusOK, trades
+}
+
+// sessionSummaries returns every session summary, through the injected
+// backend-aware store when present (PostgreSQL first, JSONL fallback) and
+// through the legacy direct scan of LedgerDir/sessions otherwise. A missing
+// sessions directory yields no summaries and no error, matching the
+// os.ReadDir behavior this replaced.
+func (h *Handlers) sessionSummaries() ([]domain.SessionSummary, error) {
+	if h.store != nil {
+		summaries, err := h.store.LoadSessionSummaries()
+		h.logReadSource("session_summaries_read", "")
+		return summaries, err
+	}
+	return loadSessionSummariesFromDir(filepath.Join(h.LedgerDir, "sessions"))
+}
+
+// loadSessionSummariesFromDir is the pre-seam file reader for session
+// summaries (LedgerDir/sessions/<id>/summary.json). Corrupted summaries are
+// skipped with a warning, exactly like the inline loop it replaced.
+func loadSessionSummariesFromDir(sessionsDir string) ([]domain.SessionSummary, error) {
+	entries, err := os.ReadDir(sessionsDir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	summaries := make([]domain.SessionSummary, 0, len(entries))
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		data, err := os.ReadFile(filepath.Join(sessionsDir, entry.Name(), "summary.json"))
+		if err != nil {
+			continue
+		}
+		var s domain.SessionSummary
+		if err := json.Unmarshal(data, &s); err != nil {
+			logging.Warn("live_handler", "corrupted_summary_skipped", logging.Err(err))
+			continue
+		}
+		summaries = append(summaries, s)
+	}
+	return summaries, nil
+}
+
+// recommendationOutcomes returns the recommendation outcomes of sessionID,
+// through the injected backend-aware store when present (PostgreSQL first,
+// JSONL fallback) and through the legacy direct file read otherwise. An empty
+// sessionID means "the latest session": the file path resolves it from the
+// session directory names, the store path from the session summaries the
+// backend reports. The two agree whenever a session directory carries the
+// summary.json that created it.
+func (h *Handlers) recommendationOutcomes(sessionID string) ([]domain.RecommendationOutcome, error) {
+	if h.store == nil {
+		return loadRecommendationOutcomes(h.LedgerDir, sessionID)
+	}
+	if sessionID == "" {
+		summaries, err := h.sessionSummaries()
+		if err != nil {
+			return nil, err
+		}
+		latest := ""
+		for _, s := range summaries {
+			if s.SessionID > latest {
+				latest = s.SessionID
+			}
+		}
+		if latest == "" {
+			return nil, nil
+		}
+		sessionID = latest
+	} else if err := shared.ValidateSessionID(sessionID); err != nil {
+		return nil, err
+	}
+	outcomes, err := h.store.LoadSessionOutcomes(sessionID)
+	h.logReadSource("recommendation_outcomes_read", sessionID)
+	return outcomes, err
+}
+
+// logReadSource records which backend actually served a store-backed read
+// (SourceBackend()/Degraded() of the PG-first store). The live API response
+// shape is frozen, so a JSONL fallback is surfaced in the log instead of the
+// payload — the signal risk handlers expose as response fields (P1-3).
+func (h *Handlers) logReadSource(event, sessionID string) {
+	if h.store == nil {
+		return
+	}
+	source, degraded := "unknown", false
+	if s, ok := h.store.(interface{ SourceBackend() string }); ok {
+		source = s.SourceBackend()
+	}
+	if d, ok := h.store.(interface{ Degraded() bool }); ok {
+		degraded = d.Degraded()
+	}
+	fields := []any{
+		logging.FStr("source", source),
+		logging.FBool("degraded", degraded),
+	}
+	if sessionID != "" {
+		fields = append(fields, logging.SessionID(sessionID))
+	}
+	logging.Info("live_handler", event, fields...)
 }
 
 func loadRecommendationOutcomes(ledgerDir, sessionID string) ([]domain.RecommendationOutcome, error) {
