@@ -31,24 +31,44 @@ type Runner struct {
 	evaluator   ConditionEvaluator
 }
 
-func NewRunner(cfg config.Config) *Runner {
-	store := ledger.NewStore(cfg.LedgerDir)
+// NewRunner builds the auto-backtest runner on the backend-aware ledger store
+// (Q2 batch 2, T2): the run records its window summary and mutation brief
+// through this store, so on production (ATLAS_STORE_BACKEND=postgres) the
+// window family must land in PostgreSQL — the JSONL directory it used to write
+// is no longer where the report / system-health readers look.
+//
+// Do not reintroduce a raw ledger.NewStore(dir) here: the JSONL store answers a
+// missing file with an empty result and never reports the mismatch (same
+// failure mode as the T1 signal-engine incident, see
+// scripts/ci/check_ledger_seam.py).
+func NewRunner(cfg config.Config) (*Runner, error) {
+	store, err := ledger.NewFullStore(cfg)
+	if err != nil {
+		return nil, fmt.Errorf("autobacktest runner store: %w", err)
+	}
+	return NewRunnerWithStore(cfg, store), nil
+}
+
+// NewRunnerWithEventBus is NewRunner plus the dashboard event bus (SSE
+// streaming).
+func NewRunnerWithEventBus(cfg config.Config, eventBus *eventbus.ChannelEventBus) (*Runner, error) {
+	runner, err := NewRunner(cfg)
+	if err != nil {
+		return nil, err
+	}
+	runner.eventBus = eventBus
+	if eventBus != nil {
+		runner.btRunner.WithEventBus(eventBus)
+	}
+	return runner, nil
+}
+
+// NewRunnerWithStore injects an already-constructed store (DI path for
+// production wiring and tests). store must be non-nil.
+func NewRunnerWithStore(cfg config.Config, store ledger.FullStore) *Runner {
 	return &Runner{
 		btRunner: backtest.NewRunner(cfg, store),
 		cfg:      cfg,
-	}
-}
-
-func NewRunnerWithEventBus(cfg config.Config, eventBus *eventbus.ChannelEventBus) *Runner {
-	store := ledger.NewStore(cfg.LedgerDir)
-	btRunner := backtest.NewRunner(cfg, store)
-	if eventBus != nil {
-		btRunner.WithEventBus(eventBus)
-	}
-	return &Runner{
-		btRunner: btRunner,
-		cfg:      cfg,
-		eventBus: eventBus,
 	}
 }
 

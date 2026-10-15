@@ -1139,22 +1139,35 @@ func (a *DashboardAPI) warmupQuotes() {
 }
 
 func (a *DashboardAPI) RegisterRoutes(mux *http.ServeMux) {
+	storeCfg := config.Config{
+		LedgerDir:    a.ledgerDir,
+		StoreBackend: a.storeBackend,
+		SQLitePath:   a.sqlitePath,
+	}
 	var outcomeStore ledger.OutcomeStore
 	if a.repo != nil {
 		a.outcomeStore = NewDualWriteOutcomeStoreAdapter(a.repo)
 		outcomeStore = a.outcomeStore
 	} else {
-		cfg := config.Config{
-			LedgerDir:    a.ledgerDir,
-			StoreBackend: a.storeBackend,
-			SQLitePath:   a.sqlitePath,
-		}
 		var err error
-		outcomeStore, err = ledger.NewOutcomeStore(cfg)
+		outcomeStore, err = ledger.NewOutcomeStore(storeCfg)
 		if err != nil {
 			logging.Error("dashboardapi", "create_outcome_store_failed", "err", err)
 			outcomeStore = nil
 		}
+	}
+
+	// Q2 batch 2, T2 (window family): the window summaries / mutation briefs
+	// are produced through the backend-aware factory by every producer (the
+	// weekly window_backtest task, the daily auto-backtest, the manual
+	// /api/backtest/start run), so the readers must follow the same
+	// declaration: on a postgres deployment the window family lives in
+	// PostgreSQL, and the legacy <ledgerDir>/windows scan below would answer
+	// with the pre-migration files or nothing. A build failure leaves the
+	// services on the legacy file path (nil seam) and is logged loudly.
+	windowStore, windowStoreErr := ledger.NewWindowStore(storeCfg)
+	if windowStoreErr != nil {
+		logging.Error("dashboardapi", "window_store_init_failed", logging.Err(windowStoreErr))
 	}
 
 	// Register SSE event stream endpoint.
@@ -1289,7 +1302,7 @@ func (a *DashboardAPI) RegisterRoutes(mux *http.ServeMux) {
 
 	decisionHandlers.RegisterRoutes(mux)
 
-	reportSvc := service.NewReportService(a.workDir, a.ledgerDir, outcomeStore)
+	reportSvc := service.NewReportService(a.workDir, a.ledgerDir, outcomeStore).WithWindowStore(windowStore)
 	if a.macroProvider != nil {
 		detector := portfolio.NewPeriodDetectorWithDefaults()
 		advisor := methodology.NewAdvisor(nil)
@@ -1430,7 +1443,7 @@ func (a *DashboardAPI) RegisterRoutes(mux *http.ServeMux) {
 		outcomeStore,
 		a.janusEngine,
 		apigateway.NewChannelHealthStoreWithPool(filepath.Join(a.workDir, "data/state"), a.pool),
-	)
+	).WithWindowStore(windowStore)
 	if a.pool != nil {
 		systemSvc.SetHistoricalStore(ledger.NewPostgresHistoricalStore(a.pool))
 	}

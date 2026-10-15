@@ -230,6 +230,10 @@ func (s *SQLiteStore) UpdatePromptExperimentResult(experimentID string, result d
 }
 
 // RecordWindowSummary persists a backtest window summary as a JSON blob.
+//
+// Upsert for the same reason as the PostgreSQL store: window_id is UNIQUE and
+// the JSONL store overwrites <windowID>.json, so re-running one window must
+// refresh the row rather than fail on the unique constraint.
 func (s *SQLiteStore) RecordWindowSummary(summary domain.BacktestWindowSummary) error {
 	data, err := json.Marshal(summary)
 	if err != nil {
@@ -238,11 +242,14 @@ func (s *SQLiteStore) RecordWindowSummary(summary domain.BacktestWindowSummary) 
 	_, err = s.db.Exec(
 		`
 		INSERT INTO window_summaries (window_id, data_json, created_at)
-		VALUES (?, ?, ?)`,
+		VALUES (?, ?, ?)
+		ON CONFLICT(window_id) DO UPDATE SET
+			data_json = excluded.data_json,
+			created_at = excluded.created_at`,
 		summary.WindowID, string(data), time.Now().UTC().Format(time.RFC3339),
 	)
 	if err != nil {
-		return fmt.Errorf("insert window summary: %w", err)
+		return fmt.Errorf("upsert window summary: %w", err)
 	}
 	return nil
 }

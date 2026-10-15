@@ -39,6 +39,11 @@ type SystemService struct {
 	historicalStore ledger.HistoricalStore
 	JanusEngine     *janus.Engine
 	CycleTracker    *industry.CycleTracker
+
+	// windowStore is the backend-aware window-summary read seam (Q2 batch 2,
+	// T2) behind LastWindowID / LastWindowGeneratedAt / the "找不到回測窗口
+	// 摘要" warning. nil keeps the legacy <LedgerDir>/windows directory scan.
+	windowStore ledger.WindowSummaryReader
 }
 
 // NewSystemService creates a new SystemService.
@@ -61,6 +66,14 @@ func NewSystemService(workDir, ledgerDir, baselinePath string, store ledger.Outc
 // (macro_ingest 收盤權威值) instead of the session-execution-time regime.
 func (s *SystemService) SetHistoricalStore(hs ledger.HistoricalStore) {
 	s.historicalStore = hs
+}
+
+// WithWindowStore wires the backend-aware window-summary reader used by
+// LoadSystemHealth. nil (the default) keeps the legacy <LedgerDir>/windows
+// directory scan.
+func (s *SystemService) WithWindowStore(store ledger.WindowSummaryReader) *SystemService {
+	s.windowStore = store
+	return s
 }
 
 // LoadPhase3Status loads Phase 3 metrics from the well-known path.
@@ -161,8 +174,28 @@ func (s *SystemService) LoadSystemHealth() (SystemHealthResponse, error) {
 
 	lastWindow := ""
 	var lastWindowTime time.Time
-	windowsDir := filepath.Join(s.LedgerDir, "windows")
-	if entries, err := os.ReadDir(windowsDir); err == nil {
+	if s.windowStore != nil {
+		// Backend-aware window read (Q2 batch 2, T2): the producers persist the
+		// window family through the same factory, so the file scan below would
+		// report "找不到回測窗口摘要" forever once the deployment writes to
+		// PostgreSQL. GeneratedAt replaces the file mtime as the window age.
+		summaries, readErr := s.windowStore.LoadWindowSummaries()
+		if readErr != nil {
+			warnings = append(warnings, "回測窗口摘要讀取失敗："+readErr.Error())
+		}
+		for _, summary := range summaries {
+			if summary.GeneratedAt.After(lastWindowTime) {
+				lastWindow = summary.WindowID
+				lastWindowTime = summary.GeneratedAt
+			}
+		}
+		logging.Info("system_service", "window_summaries_read",
+			logging.FStr("source", storeSourceBackend(s.windowStore)),
+			logging.FBool("degraded", storeDegraded(s.windowStore)),
+			"count", len(summaries),
+			"last_window_id", lastWindow,
+		)
+	} else if entries, err := os.ReadDir(filepath.Join(s.LedgerDir, "windows")); err == nil {
 		var latest time.Time
 		for _, e := range entries {
 			if e.IsDir() || !strings.HasSuffix(e.Name(), ".json") || strings.Contains(e.Name(), "mutation-brief") {

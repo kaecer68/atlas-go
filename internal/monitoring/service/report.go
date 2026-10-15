@@ -57,6 +57,15 @@ type ReportService struct {
 	store           ledger.OutcomeStore
 	periodProvider  PeriodProvider
 
+	// windowStore is the backend-aware window-summary read seam (Q2 batch 2,
+	// T2). The producers (weekly window_backtest task, daily auto-backtest,
+	// /api/backtest/start) persist the window family through the same
+	// factory, so a postgres deployment keeps its window summaries in
+	// PostgreSQL; scanning <ledgerDir>/windows would then answer with the
+	// pre-migration files (stale) or nothing at all (empty). nil keeps the
+	// legacy directory scan, so file-only deployments and tests are unchanged.
+	windowStore ledger.WindowSummaryReader
+
 	// reportTTL bounds how long a rendered /api/report/latest payload is
 	// reused. 0 → defaultLatestReportTTL.
 	reportTTL time.Duration
@@ -136,6 +145,14 @@ func (s *ReportService) loadScorecards() ([]domain.Scorecard, error) {
 // SetPeriodProvider sets an optional callback for period-enriched daily summaries.
 func (s *ReportService) SetPeriodProvider(p PeriodProvider) {
 	s.periodProvider = p
+}
+
+// WithWindowStore wires the backend-aware window-summary reader used by
+// LoadLatestReport / LoadReportList. nil (the default) keeps the legacy
+// <ledgerDir>/windows directory scan.
+func (s *ReportService) WithWindowStore(store ledger.WindowSummaryReader) *ReportService {
+	s.windowStore = store
+	return s
 }
 
 // NewReportService creates a new ReportService.
@@ -339,6 +356,22 @@ func (s *ReportService) loadLatestWindowSummary() (domain.BacktestWindowSummary,
 }
 
 func (s *ReportService) loadAllWindowSummaries() ([]domain.BacktestWindowSummary, error) {
+	if s.windowStore != nil {
+		summaries, err := s.windowStore.LoadWindowSummaries()
+		if err != nil {
+			return nil, err
+		}
+		// Record which backend actually answered (and whether it had to fall
+		// back to JSONL) so a PG deployment that silently serves the old files
+		// is visible in the log.
+		logging.Info("report_service", "window_summaries_read",
+			logging.FStr("source", storeSourceBackend(s.windowStore)),
+			logging.FBool("degraded", storeDegraded(s.windowStore)),
+			"count", len(summaries),
+		)
+		return summaries, nil
+	}
+
 	windowsDir := filepath.Join(s.ledgerDir, "windows")
 	entries, err := os.ReadDir(windowsDir)
 	if err != nil {

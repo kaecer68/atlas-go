@@ -867,6 +867,12 @@ func (s *PostgresLedgerStore) LoadTrialSharpes() ([]TrialSharpe, error) {
 // ------------------------------------------------------------------
 
 // RecordWindowSummary persists a backtest window summary as a JSON blob.
+//
+// The upsert is deliberate: window_summaries.window_id is UNIQUE and the JSONL
+// store it mirrors overwrites <windowID>.json, so a re-run of the same window
+// (a restarted weekly task, a second /api/backtest/start on the same window, an
+// idempotent backfill) must refresh the row instead of failing with a
+// duplicate-key error and dropping the window.
 func (s *PostgresLedgerStore) RecordWindowSummary(summary domain.BacktestWindowSummary) error {
 	data, err := json.Marshal(summary)
 	if err != nil {
@@ -876,9 +882,12 @@ func (s *PostgresLedgerStore) RecordWindowSummary(summary domain.BacktestWindowS
 	_, err = s.pool.Exec(ctx, `
 		INSERT INTO window_summaries (window_id, data_json, created_at)
 		VALUES ($1, $2, $3)
+		ON CONFLICT (window_id) DO UPDATE SET
+			data_json = excluded.data_json,
+			created_at = excluded.created_at
 	`, summary.WindowID, string(data), time.Now().UTC().Format(time.RFC3339))
 	if err != nil {
-		return fmt.Errorf("insert window summary: %w", err)
+		return fmt.Errorf("upsert window summary: %w", err)
 	}
 	return nil
 }

@@ -214,4 +214,115 @@ func (s *PGFirstOutcomeStore) LoadHumanInterventions() ([]domain.HumanInterventi
 	return s.pg.LoadHumanInterventions()
 }
 
-var _ OutcomeStore = (*PGFirstOutcomeStore)(nil)
+// ---- window family (window summary + mutation brief) ----
+//
+// The window family used to be entirely file-based on both sides, so a
+// PostgreSQL deployment could not see its own window summaries. The PG-first
+// wrapper carries the window surface for the same reason it carries the
+// outcome surface: PostgreSQL is the SSoT once ATLAS_STORE_BACKEND=postgres,
+// reads fall back to the JSONL ledger ONLY when PostgreSQL errors (a
+// successful-but-empty PostgreSQL stays authoritative — a backfill concern,
+// see cmd/migrate-data -windows), and every fallback marks the store degraded
+// so the caller can log/flag it.
+
+// pgWindowStore is the PostgreSQL half of the window surface.
+func (s *PGFirstOutcomeStore) pgWindowStore() (WindowStore, error) {
+	store, ok := s.pg.(WindowStore)
+	if !ok {
+		return nil, fmt.Errorf("postgres store %T does not implement ledger.WindowStore", s.pg)
+	}
+	return store, nil
+}
+
+// jsonlWindowReader is the JSONL half of the window READ surface (the fallback
+// target); nil when the store was built without a JSONL directory.
+func (s *PGFirstOutcomeStore) jsonlWindowReader() (WindowSummaryReader, bool) {
+	reader, ok := s.jsonl.(WindowSummaryReader)
+	return reader, ok
+}
+
+// RecordWindowSummary writes the summary to PostgreSQL. Write paths do not
+// fall back: a PostgreSQL failure must be visible (the window summary is the
+// input of the report/health reads), not silently redirected to a JSONL file
+// no longer in the read path.
+func (s *PGFirstOutcomeStore) RecordWindowSummary(summary domain.BacktestWindowSummary) error {
+	pg, err := s.pgWindowStore()
+	if err != nil {
+		return err
+	}
+	return pg.RecordWindowSummary(summary)
+}
+
+// RecordMutationBrief writes the brief to PostgreSQL (same no-fallback policy
+// as RecordWindowSummary).
+func (s *PGFirstOutcomeStore) RecordMutationBrief(windowID string, brief domain.MutationBrief) error {
+	pg, err := s.pgWindowStore()
+	if err != nil {
+		return err
+	}
+	return pg.RecordMutationBrief(windowID, brief)
+}
+
+// LoadWindowSummaries reads PostgreSQL first; the JSONL window directory is
+// used only when PostgreSQL errors (degraded).
+func (s *PGFirstOutcomeStore) LoadWindowSummaries() ([]domain.BacktestWindowSummary, error) {
+	pg, err := s.pgWindowStore()
+	if err != nil {
+		return nil, err
+	}
+	summaries, err := pg.LoadWindowSummaries()
+	if err == nil {
+		s.markDegraded(false)
+		return summaries, nil
+	}
+	fallback, ok := s.jsonlWindowReader()
+	if !ok {
+		return nil, fmt.Errorf("load window summaries from postgres: %w", err)
+	}
+	jsonlSummaries, ferr := fallback.LoadWindowSummaries()
+	if ferr != nil {
+		return nil, fmt.Errorf("postgres unavailable (%v) and jsonl fallback failed: %w", err, ferr)
+	}
+	s.markDegraded(true)
+	return jsonlSummaries, nil
+}
+
+// LoadWindowSummary reads one window summary, PostgreSQL first with the same
+// error-only JSONL fallback as LoadWindowSummaries.
+func (s *PGFirstOutcomeStore) LoadWindowSummary(windowID string) (domain.BacktestWindowSummary, bool, error) {
+	pg, err := s.pgWindowStore()
+	if err != nil {
+		return domain.BacktestWindowSummary{}, false, err
+	}
+	summary, found, err := pg.LoadWindowSummary(windowID)
+	if err == nil {
+		s.markDegraded(false)
+		if found {
+			return summary, true, nil
+		}
+		// PostgreSQL answered authoritatively: the window is not there. Do not
+		// mask that with a pre-migration JSONL file.
+		return domain.BacktestWindowSummary{}, false, nil
+	}
+	fallback, ok := s.jsonlWindowReader()
+	if !ok {
+		return domain.BacktestWindowSummary{}, false, fmt.Errorf("load window summary %s from postgres: %w", windowID, err)
+	}
+	jsonlSummary, found, ferr := fallback.LoadWindowSummary(windowID)
+	if ferr != nil {
+		return domain.BacktestWindowSummary{}, false, fmt.Errorf("postgres unavailable (%v) and jsonl fallback failed: %w", err, ferr)
+	}
+	s.markDegraded(true)
+	return jsonlSummary, found, nil
+}
+
+var (
+	_ OutcomeStore = (*PGFirstOutcomeStore)(nil)
+	// WindowStore ⇒ BacktestStore: without the write half here, the handler
+	// that injects this store into backtest.Runner (BacktestService.WithStore,
+	// dashboard_api.go) ran the whole simulation and then failed with
+	// "store does not implement BacktestStore" — the window summary was never
+	// persisted anywhere (regression pinned by
+	// internal/monitoring/service/backtest_window_store_test.go).
+	_ WindowStore = (*PGFirstOutcomeStore)(nil)
+)

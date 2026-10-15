@@ -41,6 +41,8 @@ factory 2026-05-09 誕生後，直建 `ledger.NewStore(dir)`（JSONL-only）的�
     `os.ReadFile(.../recommendation_outcomes.jsonl)`。那是另一個家族（file-scan），
     守門抓不到，只能靠 review（同族案例見 `internal/monitoring/api/system/handlers.go` 的舊寫法註解）。
   * **呼叫圖/別名再包裝**：把 `internal/ledger` 包成自己的 adapter 再呼叫、或 dot-import。
+    （`ledger.NewFullStore(config.Config{StoreBackend: "jsonl", …})` 這類**顯式** JSONL
+    呼叫不在本掃描清單裡：它把後端寫出來了，不是靠預設值；判準是「有沒有明示」。）
   * 本守門是**靜態建構站點清單**：不做呼叫圖分析，因此「有注入」不會自動放行，
     「沒注入」也不必然代表該呼叫路徑真的讀了 store —— allowlist 的 reason 必須自己講清楚。
 
@@ -98,7 +100,9 @@ REASON_TODO = "TODO"
 FACTORY_HINT = (
     "請改用 backend-aware factory：ledger.NewFullStore(cfg) / "
     "ledger.NewOutcomeStore(cfg) / ledger.NewReportOutcomeStore(cfg) / "
-    "ledger.NewPGFirstOutcomeStore(pg, jsonl)"
+    "ledger.NewPGFirstOutcomeStore(pg, jsonl) / ledger.NewWindowStore(cfg)"
+    "（唯一例外：確實只需要 JSONL 檔案契約的呼叫端，請顯式寫出 "
+    'config.Config{StoreBackend: "jsonl", …}，不要靠「忘了指定後端」的預設值）'
 )
 
 # 掃描目標（兩相）。id 形如 `pkg.Ctor`；mechanism 寫「未注入時落到哪一行」，advice 寫修法。

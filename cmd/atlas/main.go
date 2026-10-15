@@ -2114,7 +2114,16 @@ func run(args []string, deps appDeps) error {
 				Interval: 7 * 24 * time.Hour,
 				Enabled:  true,
 				Task: func(ctx context.Context) error {
-					store := ledger.NewStore(cfg.LedgerDir)
+					// Q2 batch 2, T2: the weekly window writes the window
+					// summary + mutation brief through the backend-aware store,
+					// so on production (ATLAS_STORE_BACKEND=postgres) they land
+					// in PostgreSQL — the same backend the report and
+					// system-health readers now use. A raw ledger.NewStore(dir)
+					// here would write the window where no reader looks.
+					store, err := ledger.NewFullStore(cfg)
+					if err != nil {
+						return fmt.Errorf("window backtest store: %w", err)
+					}
 					btRunner := backtest.NewRunner(cfg, store)
 					endDate := time.Now().AddDate(0, 0, -3)
 					startDate := endDate.AddDate(0, 0, -20)
@@ -2752,10 +2761,22 @@ func run(args []string, deps appDeps) error {
 
 			var btRunner *autobacktest.Runner
 			if dashboard.GetEventBus() != nil {
-				btRunner = autobacktest.NewRunnerWithEventBus(cfg, dashboard.GetEventBus())
+				runner, runnerErr := autobacktest.NewRunnerWithEventBus(cfg, dashboard.GetEventBus())
+				if runnerErr != nil {
+					// Startup-fatal: cancel the monitor context like every
+					// other early return in this block (go vet lostcancel).
+					sysCancel()
+					return runnerErr
+				}
+				btRunner = runner
 				log.Printf("[AutoBacktest] connected to Dashboard EventBus for SSE streaming")
 			} else {
-				btRunner = autobacktest.NewRunner(cfg)
+				runner, runnerErr := autobacktest.NewRunner(cfg)
+				if runnerErr != nil {
+					sysCancel()
+					return runnerErr
+				}
+				btRunner = runner
 				log.Printf("[AutoBacktest] running without EventBus (no SSE events)")
 			}
 			// Wire attribution pipeline (#1259): every backtest writes a

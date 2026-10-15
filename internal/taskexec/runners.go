@@ -277,7 +277,14 @@ func (r *backtestWindowRunner) Run(ctx context.Context, req SubmitRequest, sink 
 	default:
 	}
 
-	runner := backtest.NewRunner(r.cfg, ledger.NewStore(r.cfg.LedgerDir))
+	// Q2 batch 2, T2: the window family (summary + mutation brief) is written
+	// through the backend-aware store, so a postgres deployment persists the
+	// window where the report / system-health readers look.
+	store, err := ledger.NewFullStore(r.cfg)
+	if err != nil {
+		return fmt.Errorf("backtest window store: %w", err)
+	}
+	runner := backtest.NewRunner(r.cfg, store)
 	summary, err := runner.Run(startDate, endDate)
 	if err != nil {
 		return fmt.Errorf("run backtest window: %w", err)

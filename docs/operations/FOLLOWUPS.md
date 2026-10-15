@@ -2753,7 +2753,7 @@ PY
 - **最小處置（三選一或並用）**：①**去重**：主機端 CLI 改讀 compose 的 `${DB_PASSWORD}`（或共用一份檔）而非第二份 DSN；②**守門**：CLI 在 `-backend postgres` 首次連線失敗且為 auth 錯誤時，明確提示「DSN 可能與 DB 憑證不同步（輪替後只改了一處）」；③**文件化**：在部署 runbook 的「輪替 DB 密碼」步驟明列**兩個位置**（compose `.env` 與主機 `~/.config/atlas-go/.env`）。
 - **查法**：`grep -m1 '^DATABASE_URL=' ~/.config/atlas-go/.env | sed 's#://[^:]*:[^@]*@#://USER:PASS@#'` 對照 `docker inspect atlas-postgres` 的 `POSTGRES_PASSWORD`（只比 hash）；再以該 DSN 跑 `go run ./cmd/run-stockpicker-backtest -dry-run -backend postgres -expect-db atlas`。
 
-### FU-20261016-01 — ledger store seam：仍剩 32 處直建 `ledger.NewStore`，`Deprecated:` 標記要等它們遷移後才加
+### FU-20261016-01 — ledger store seam：仍剩 27 處直建 `ledger.NewStore`，`Deprecated:` 標記要等它們遷移後才加
 
 - **狀態**：`open`
 - **記錄日期**：2026-10-16
@@ -2789,6 +2789,12 @@ PY
   `cmd/*` 獨立 CLI 與 `cmd/experimental/*` 可最後（後者是顯式目錄的實驗 harness）②每遷移一處就刪
   allowlist 對應條目（stale 條目刻意紅燈，這是刻意的耦合）③站點清空後另開一個 PR 加 `Deprecated:`
   並把 allowlist 縮到 0（此時 `make ledger-seam-check` 應報 `0 個裸 ledger.NewStore`）。
+- **2026-10-16 Q2b2 T2（window 家族）進度**：直建站點由 32 降到 **27**（allowlist 40 → 35 筆），
+  遷移清單亦記在 `scripts/ci/ledger-seam-allowlist.json` 的 `_doc`：
+  `internal/autobacktest/runner.go` ×2（`NewRunner`／`NewRunnerWithEventBus` 改走 `NewFullStore`）、
+  `cmd/atlas` 的 `window_backtest` 任務、`internal/taskexec/runners.go` 的 backtest-window runner
+  改走 `ledger.NewFullStore(cfg)`；`internal/experiment/auto.go` 的即時補算改成**顯式 JSONL**
+  （見 FU-20261016-05）。`ledger.NewStore` 仍有多個站點 ⇒ 「不加 `Deprecated:`」的結論不變。
 - **查法**：`make ledger-seam-check`；`python3 scripts/ci/check_ledger_seam.py --json`。
 
 ### FU-20261016-02 — bootstrap 的 config 載體**缺欄位**（`ReplayDataPath`／`BaselinePolicyPath`）⇒ `run-experiment` 的 baseline 載入會失敗（目前零行使，潛伏）
@@ -2830,6 +2836,52 @@ PY
 - **T3 的正確順序**：**先統一寫者**（讓 live pipeline 把**完整生命週期**寫進 PG，或把 JSONL 的 `exec-`／`auto-`／`eval_metrics` 遷入 PG），**再切讀取端**；否則會製造假指標。
 - **查法**：`psql -Atc "select experiment_id, to_timestamp(substring(experiment_id from '[0-9]+$')::bigint) as written_at, timestamp as window_start from experiments where experiment_id like 'exp-%' order by 2 desc limit 3"`；`psql -Atc "select count(*), count(*) filter (where accepted<>0) from experiments"`；`psql -Atc "select count(*) from prompt_experiment_results"`。
 
+---
+
+### FU-20261016-05 — window 家族（window summary ＋ mutation brief）的 PG 收斂：實驗室窗口仍走檔案、回填要先跑
+
+- **狀態**：`open`
+- **記錄日期**：2026-10-16
+- **來源**：Q2 第二批 T2（window 家族讀寫收斂）；守門與 allowlist 同 FU-20261016-01
+- **已落地（本單元）**：
+  1. **讀寫兩半一起切**。寫入端（週期 `window_backtest`、每日 auto-backtest、`internal/taskexec` 的
+     backtest-window runner）改走 `ledger.NewFullStore(cfg)`；`/api/backtest/start` 早在 PR #2233 就
+     注入 backend-aware store。讀取端（`internal/monitoring/service/report.go` 的
+     `LoadLatestReport`/`LoadReportList`、`service/system.go` 的 `LastWindowID`／
+     `LastWindowGeneratedAt`）新增可選 seam `WithWindowStore(ledger.WindowSummaryReader)`，
+     `dashboard_api.go` 以 `ledger.NewWindowStore(cfg)` 注入；nil ⇒ 原檔案掃描行為。
+  2. **PG 寫入語意對齊 JSONL**：`window_summaries.window_id` 有 UNIQUE，`RecordWindowSummary` 兩個
+     關聯式後端改成 upsert（原本純 INSERT，同一窗口重跑會 duplicate key 直接失敗）。
+  3. **修掉 #2233 的迴歸**：`/api/backtest/start` 注入的 `*PGFirstOutcomeStore` 當時不實作
+     `ledger.BacktestStore` ⇒ `backtest.Runner.Run` 跑完整段模擬後才回
+     `store does not implement BacktestStore`，窗口**兩邊都沒寫**。現在 PG-first wrapper 帶上
+     window 兩半（寫入不 fallback，讀取 PG-first／JSONL 只在 PG 錯誤時降級並標記 degraded）。
+- **仍然存在的限制**：
+  - `internal/experiment/auto.go` 的「judge 前即時補算」維持**顯式 JSONL**：該窗口是
+    `experiment.Judge` 以**檔案路徑**讀回的 experiments 內部契約（`judge.go` 的
+    `windowSummaryPath`／`loadWindowSummary`），改走 PG 必須同時改 judge 的讀取，屬 experiments
+    寫者裁決（T3）。目前它**不**位於本單元新增的 PG 讀取路徑上。
+  - `mutation_briefs` 沒有 unique 約束（migration 000015），因此 `RecordMutationBrief` 仍是純
+    INSERT；回填工具的 brief 半邊以「先 DELETE 該 window_id 再 INSERT」達到冪等。
+  - `system.go` 的窗口年齡由檔案 mtime 改成 `summary.GeneratedAt`（seam 路徑）。
+- **上線順序（強制）**：**先回填、再部署**。回填指令與驗收：
+  ```
+  go build -o /tmp/migrate-data-windows ./cmd/migrate-data
+  DATABASE_URL='postgres://…/atlas?sslmode=disable' /tmp/migrate-data-windows       -windows -expect-db=atlas            # 預設讀 <LedgerDir>/windows，可用 -windows-dir 覆寫
+  # 驗收
+  SELECT count(*) FROM window_summaries;
+  SELECT count(*) FROM mutation_briefs;
+  SELECT window_id, count(*) FROM mutation_briefs GROUP BY window_id HAVING count(*) > 1;  -- 必須 0 列
+  ```
+  未回填就部署 ⇒ 讀取端（報告／系統健康）只看得到部署後新產生的窗口，歷史窗口不可見（PG 為權威，
+  **不會**靜默回退舊檔案）。`-windows` 刻意不在 `-all` 內，且沒有 `-expect-db` 一律 abort。
+- **同時發現（pre-existing，非本單元造成）**：本機把多個含 `-tags=integration` 的套件**並行**
+  （`go test -tags=integration ./…`，預設 `-p`）跑時，`internal/monitoring/api/risk` 與
+  `internal/monitoring/api/system` 的 PG 案例會讀到 0 筆 session summary；同一組任務以 `-p 1`
+  序列化即全綠，且在未修改的 `main` 上重現。CI 的 integration job 本來就用 `-p 1`
+  （`.github/workflows/ci-cd.yml:554`），故不影響 CI；僅本地並行跑時需注意。
+- **查法**：`grep -n 'window_summaries' sql/migrations/000015_ledger_experiments.up.sql`；
+  `bash scripts/ci/check_ledger_seam.sh`；`grep -n 'FU-20261016-05' docs/operations/FOLLOWUPS.md`。
 ## 相關文件
 
 - [universe-scoring-ranked-zero-20260925.md](universe-scoring-ranked-zero-20260925.md)
