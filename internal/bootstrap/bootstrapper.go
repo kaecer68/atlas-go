@@ -177,8 +177,20 @@ func InitTaskManager(ctx context.Context, pool *pgxpool.Pool, cfg Config) *taske
 	return mgr
 }
 
+// taskRunnerConfig builds the config.Config handed to every taskexec runner.
+// Every field carried by bootstrap.Config must be copied over: dropping
+// LedgerDir made the runners write to the process working directory (the
+// container's /app/, outside the data bind mount) instead of the ledger
+// (L1, fixed 2026-10-16). The field-parity test below pins the mapping.
+func taskRunnerConfig(cfg Config) config.Config {
+	return config.Config{
+		WorkDir:   cfg.WorkDir,
+		LedgerDir: cfg.LedgerDir,
+	}
+}
+
 func registerTaskRunners(mgr *taskexec.Manager, cfg Config) {
-	taskCfg := config.Config{WorkDir: cfg.WorkDir}
+	taskCfg := taskRunnerConfig(cfg)
 	mgr.RegisterRunner(string(domain.TaskTypeRunExperiment), taskexec.NewRunExperimentRunner(taskCfg))
 	mgr.RegisterRunner(string(domain.TaskTypeJudgeExperiment), taskexec.NewJudgeExperimentRunner(taskCfg))
 	mgr.RegisterRunner(string(domain.TaskTypePromoteBaseline), taskexec.NewPromoteBaselineRunner(taskCfg))

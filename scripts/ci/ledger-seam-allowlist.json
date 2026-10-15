@@ -1,0 +1,274 @@
+{
+  "_doc": [
+    "ledger store seam 豁免清單（scripts/ci/check_ledger_seam.py）。",
+    "結構：{\"targets\": {<target id>: [{file, line, snippet, reason}, …]}}。",
+    "line 只是導航用；比對鍵是 (file, snippet) 及其數量（同檔重複也會紅）。",
+    "reason 空白或以 TODO 開頭 ⇒ 檢查失敗（豁免本身必須有理由）。",
+    "新站點一律先紅燈：要用裸／未注入的 JSONL store 就必須在這裡登錄並寫明理由；",
+    "只是為了讓 CI 變綠而登錄（reason 寫「歷史遺留」）不算理由。",
+    "遷移掉一個站點 ⇒ 刪掉對應這一筆（stale 條目會讓檢查紅燈，這是刻意的）。",
+    "`ledger.NewStore` = 直接建構；其餘 target = 未注入時會落到 JSONL 的間接建構子。",
+    "本檔初始內容 = 2026-10-16 T1 前的 34 個直建站點扣除本 PR 遷移的 2 處 = 32，",
+    "再加 PR #2233（Q2b2 unit 2，同日合併）把 2 處裸呼叫收斂成 fallback helper 後的新站點；",
+    "間接站點 8 處（service.NewLiveService ×4、service.NewBacktestService、risk/system.NewHandlers、",
+    "autobacktest.NewSignalEngineFromDir）。",
+    "HEAD 裸 grep 有 35 命中，其中 internal/ledger/ledger.go:434 是文件註解（掃描器去註解後不算）。",
+    "規格：scripts/ci/check_ledger_seam.py 的 docstring（含明確界線：struct literal、檔案直讀、",
+    "呼叫圖包裝都不在本守門範圍）。"
+  ],
+  "version": 2,
+  "targets": {
+    "ledger.NewStore": [
+      {
+        "file": "cmd/atlas/main.go",
+        "line": 896,
+        "snippet": "judge := experiment.NewJudge(ledger.NewStore(cfg.LedgerDir).(ledger.ExperimentStore), cfg.ReplayDataPath, cfg.BaselinePolicyPath)",
+        "reason": "cmd/atlas 的 judge-experiment 路徑：以 LedgerDir 直建 JSONL store 餵 experiment.NewJudge（實驗判定只讀本機 experiment 檔案）；不在本 PR（T1）範圍，遷移列入未竟清單"
+      },
+      {
+        "file": "cmd/atlas/main.go",
+        "line": 1358,
+        "snippet": "summary, _ := monitoringservice.FindLatestSessionSummary(ledger.NewStore(cfg.LedgerDir), cfg.LedgerDir)",
+        "reason": "cmd/atlas 啟動期以 FindLatestSessionSummary 掃 JSONL 找最後 session 摘要；不在本 PR（T1）範圍"
+      },
+      {
+        "file": "cmd/atlas/main.go",
+        "line": 2082,
+        "snippet": "store := ledger.NewStore(cfg.LedgerDir)",
+        "reason": "cmd/atlas 兩處內部工具路徑直建 JSONL store（未走 backend-aware factory）；現存站點，不在本 PR（T1）範圍"
+      },
+      {
+        "file": "cmd/atlas/main.go",
+        "line": 2117,
+        "snippet": "store := ledger.NewStore(cfg.LedgerDir)",
+        "reason": "cmd/atlas 兩處內部工具路徑直建 JSONL store（未走 backend-aware factory）；現存站點，不在本 PR（T1）範圍"
+      },
+      {
+        "file": "cmd/atlas/reconcile_task.go",
+        "line": 94,
+        "snippet": "fileStore := ledger.NewStore(d.Cfg.LedgerDir)",
+        "reason": "reconcile_task 以 LedgerDir 直建 JSONL store 做對帳；不在本 PR（T1）範圍"
+      },
+      {
+        "file": "cmd/atlas/stage3_tasks.go",
+        "line": 57,
+        "snippet": "pipelineSvc := monitoringservice.NewPipelineService(d.cfg.WorkDir, d.cfg.LedgerDir, ledger.NewStore(d.cfg.LedgerDir)).",
+        "reason": "stage3 pipeline 服務：把 JSONL store 直接注入 monitoringservice.NewPipelineService；不在本 PR（T1）範圍"
+      },
+      {
+        "file": "cmd/backtest-window/main.go",
+        "line": 65,
+        "snippet": "runner := backtest.NewRunner(cfg, ledger.NewStore(cfg.LedgerDir))",
+        "reason": "獨立 CLI cmd/backtest-window 以 cfg 直建 JSONL store 餵 backtest.NewRunner；不在本 PR（T1）範圍"
+      },
+      {
+        "file": "cmd/experimental/charter-ab/main.go",
+        "line": 235,
+        "snippet": "runner := backtest.NewRunner(armCfg, ledger.NewStore(dir))",
+        "reason": "experimental harness（charter A/B）以顯式目錄參數直建 JSONL store，不讀 ATLAS_STORE_BACKEND；遷移價值低"
+      },
+      {
+        "file": "cmd/experimental/charter-ab/main.go",
+        "line": 256,
+        "snippet": "store := ledger.NewStore(ledgerDir)",
+        "reason": "experimental harness（charter A/B）以顯式 ledgerDir 直建 JSONL store；遷移價值低"
+      },
+      {
+        "file": "cmd/experimental/janus-backtest/main.go",
+        "line": 48,
+        "snippet": "baselineRunner := backtest.NewRunner(baselineCfg, ledger.NewStore(baselineDir))",
+        "reason": "experimental harness（janus-backtest）以顯式目錄參數直建 JSONL store，不讀 ATLAS_STORE_BACKEND；遷移價值低"
+      },
+      {
+        "file": "cmd/experimental/janus-backtest/main.go",
+        "line": 76,
+        "snippet": "janusRunner := backtest.NewRunner(janusCfg, ledger.NewStore(janusDir)).WithJANUS(engine)",
+        "reason": "experimental harness（janus-backtest）以顯式 janusDir 直建 JSONL store；遷移價值低"
+      },
+      {
+        "file": "cmd/experimental/janus-backtest/main.go",
+        "line": 128,
+        "snippet": "store := ledger.NewStore(ledgerDir)",
+        "reason": "experimental harness（janus-backtest）三處以顯式 ledgerDir 直建 JSONL store；遷移價值低"
+      },
+      {
+        "file": "cmd/experimental/janus-backtest/main.go",
+        "line": 162,
+        "snippet": "store := ledger.NewStore(ledgerDir)",
+        "reason": "experimental harness（janus-backtest）三處以顯式 ledgerDir 直建 JSONL store；遷移價值低"
+      },
+      {
+        "file": "cmd/judge-experiment/main.go",
+        "line": 47,
+        "snippet": "store := ledger.NewStore(cfg.LedgerDir)",
+        "reason": "獨立 CLI cmd/judge-experiment 以 cfg.LedgerDir 直建 JSONL store 餵 judge；不在本 PR（T1）範圍"
+      },
+      {
+        "file": "cmd/migrate-jsonl-to-sqlite/main.go",
+        "line": 66,
+        "snippet": "jsonStore := ledger.NewStore(sourceAbs)",
+        "reason": "JSONL by design：遷移工具的 source 端就是 JSONL（目標才是 sqlite），不可改成 backend-aware factory"
+      },
+      {
+        "file": "cmd/run-experiment/main.go",
+        "line": 32,
+        "snippet": "store := ledger.NewStore(cfg.LedgerDir)",
+        "reason": "獨立 CLI cmd/run-experiment 以 cfg.LedgerDir 直建 JSONL store 餵 experiment.NewExecutor；不在本 PR（T1）範圍"
+      },
+      {
+        "file": "internal/autobacktest/runner.go",
+        "line": 35,
+        "snippet": "store := ledger.NewStore(cfg.LedgerDir)",
+        "reason": "autobacktest Runner（NewRunner／NewRunnerWithEventBus）的 backtest 寫入 store 仍是 JSONL；T1 只涵蓋 signal/comparator 兩站點，此站點留在未竟清單"
+      },
+      {
+        "file": "internal/autobacktest/runner.go",
+        "line": 43,
+        "snippet": "store := ledger.NewStore(cfg.LedgerDir)",
+        "reason": "autobacktest Runner（NewRunner／NewRunnerWithEventBus）的 backtest 寫入 store 仍是 JSONL；T1 只涵蓋 signal/comparator 兩站點，此站點留在未竟清單"
+      },
+      {
+        "file": "internal/calibration/calibrate.go",
+        "line": 148,
+        "snippet": "ledgerStore := ledger.NewStore(filepath.Join(workDir, \"data\", \"state\"))",
+        "reason": "calibration 以 filepath.Join(workDir,\"data\",\"state\") 直建 JSONL store；不在本 PR（T1）範圍"
+      },
+      {
+        "file": "internal/experiment/auto.go",
+        "line": 114,
+        "snippet": "store := ledger.NewStore(cfg.Config.LedgerDir)",
+        "reason": "experiment auto 以 cfg.Config.LedgerDir 直建 JSONL store；不在本 PR（T1）範圍"
+      },
+      {
+        "file": "internal/experiment/auto.go",
+        "line": 143,
+        "snippet": "btRunner := backtest.NewRunner(cfg.Config, ledger.NewStore(baseDir))",
+        "reason": "experiment auto 以 baseDir 直建 JSONL store 餵 backtest runner；不在本 PR（T1）範圍"
+      },
+      {
+        "file": "internal/experiment/auto.go",
+        "line": 326,
+        "snippet": "store := ledger.NewStore(ledgerDir)",
+        "reason": "experiment auto 兩處以顯式 ledgerDir 直建 JSONL store；不在本 PR（T1）範圍"
+      },
+      {
+        "file": "internal/experiment/auto.go",
+        "line": 377,
+        "snippet": "store := ledger.NewStore(ledgerDir)",
+        "reason": "experiment auto 兩處以顯式 ledgerDir 直建 JSONL store；不在本 PR（T1）範圍"
+      },
+      {
+        "file": "internal/monitoring/api/experiment/handlers.go",
+        "line": 203,
+        "snippet": "judge := experiment.NewJudge(ledger.NewStore(h.LedgerDir).(ledger.ExperimentStore), replayPath, h.BaselinePath)",
+        "reason": "experiment API 的 judge 路徑以 h.LedgerDir 直建 JSONL store；不在本 PR（T1）範圍"
+      },
+      {
+        "file": "internal/monitoring/api/risk/handlers.go",
+        "line": 167,
+        "snippet": "return ledger.NewStore(h.LedgerDir)",
+        "reason": "risk handlers 的 summariesStore fallback（未注入 backend-aware store 時才走到）；production 由注入覆蓋，但仍是同類殘留，應後續遷移"
+      },
+      {
+        "file": "internal/monitoring/api/system/handlers.go",
+        "line": 134,
+        "snippet": "return ledger.NewStore(h.Svc.LedgerDir)",
+        "reason": "PR #2233（Q2b2 unit 2）把原本的裸 LoadSessionSummaries 收斂成 summariesStore() 的 fallback：只在 h.store 未注入時走到（Svc 為 nil 時回 nil）；production 由 dashboard 的 systemHandlers.WithStore(NewReportOutcomeStore(cfg)) 注入覆蓋（dashboard_api.go:1456-1460）"
+      },
+      {
+        "file": "internal/monitoring/dashboard_api.go",
+        "line": 1932,
+        "snippet": "store = ledger.NewStore(a.ledgerDir)",
+        "reason": "RegisterPerformanceRoutes 在 NewReportOutcomeStore 失敗時的 fallback（同一分支已 logging.Error）；已知降級路徑，非新增站點"
+      },
+      {
+        "file": "internal/monitoring/service/backtest.go",
+        "line": 60,
+        "snippet": "return ledger.NewStore(s.cfg.LedgerDir)",
+        "reason": "PR #2233 把原本的裸 store 收斂成 BacktestService.summariesStore() 的 fallback：只在 WithStore 未注入時走到；production 由 RegisterBacktestRoutes 以 ledger.NewReportOutcomeStore(cfg) 注入（dashboard_api.go:1904-1908）"
+      },
+      {
+        "file": "internal/monitoring/service/live.go",
+        "line": 144,
+        "snippet": "return ledger.NewStore(s.LedgerDir)",
+        "reason": "LiveService.summariesStore fallback（History 未設時才走到）；production 已由 SSoT provider 覆蓋，但仍是同類殘留，應後續遷移"
+      },
+      {
+        "file": "internal/taskexec/runners.go",
+        "line": 63,
+        "snippet": "store := ledger.NewStore(cfg.LedgerDir)",
+        "reason": "taskexec run-experiment runner 以 cfg.LedgerDir 直建 JSONL store（L1 修好 LedgerDir 傳遞後才指到正確目錄）；未走 factory"
+      },
+      {
+        "file": "internal/taskexec/runners.go",
+        "line": 136,
+        "snippet": "judge := experiment.NewJudge(ledger.NewStore(cfg.LedgerDir).(ledger.ExperimentStore), cfg.ReplayDataPath, cfg.BaselinePolicyPath)",
+        "reason": "taskexec judge-experiment runner 以 JSONL store 餵 judge；不在本 PR（T1）範圍"
+      },
+      {
+        "file": "internal/taskexec/runners.go",
+        "line": 280,
+        "snippet": "runner := backtest.NewRunner(r.cfg, ledger.NewStore(r.cfg.LedgerDir))",
+        "reason": "taskexec backtest-window runner 以 JSONL store 餵 backtest.NewRunner；不在本 PR（T1）範圍"
+      }
+    ],
+    "service.NewLiveService": [
+      {
+        "file": "internal/monitoring/api/dashboard/overview.go",
+        "line": 88,
+        "snippet": "svc = service.NewLiveService(h.Live.WorkDir, h.Live.LedgerDir)",
+        "reason": "**已知缺口**（同批 unit 2 指認此站點；其 PR #2233 只收斂 summaries 讀取，未動此檔 ⇒ 仍 open）：buildOverview 在 h.Live.Svc == nil 時的 fallback，且只用於 HistorySource()／HistoryDegraded() 兩個標籤（兩者只讀 s.History，不讀 store —— 已讀碼）。equity curve 本身來自 h.Live.HandlePortfolioState（已注入的 handlers）；此處裸建構仍是 latent seam，修法是缺注入即報錯（不做呼叫圖分析，故列為 allowlist 觀察項）"
+      },
+      {
+        "file": "internal/monitoring/api/decision/handlers.go",
+        "line": 423,
+        "snippet": "svc := service.NewLiveService(h.WorkDir, h.LedgerDir)",
+        "reason": "**已知缺口**（同批 unit 2 指認此站點；其 PR #2233 只收斂 summaries 讀取，未動此檔 ⇒ 仍 open）：computeExitAlerts 直接建 LiveService 且無任何注入點。本檔只用 svc.LoadPortfolioState()（讀 data/state 檔案，不經 ledger store —— 已讀碼確認），故目前未觸發 JSONL 讀取；但同一 service 的 summariesStore()／tradeStore() 一旦被呼叫就會落到 JSONL ⇒ 修法是 DI 注入（unit 2 處理）"
+      },
+      {
+        "file": "internal/monitoring/api/live/handlers.go",
+        "line": 111,
+        "snippet": "svc := service.NewLiveService(h.WorkDir, h.LedgerDir)",
+        "reason": "Handlers.getService() 的 fallback：只在 h.Svc == nil（未注入 live service）時走到；production 由 RegisterLiveRoutes 設定 Svc（Svc 已 WithHistory）。fallback 自身未注入 ⇒ 一旦 Svc 沒設就會落到 JSONL（known latent seam）"
+      },
+      {
+        "file": "internal/monitoring/dashboard_api.go",
+        "line": 1833,
+        "snippet": "svc := service.NewLiveService(a.workDir, a.ledgerDir)",
+        "reason": "RegisterLiveRoutes：建構後以 WithHistory(service.NewSessionHistoryProvider(cfg)) 注入 SSoT provider（同檔 1838-1846），PR #2233 另加 WithSummaryStore(store) 供 summary 讀取；L-cold 讀取走注入路徑、SQL fallback 亦走 backend-aware store"
+      }
+    ],
+    "service.NewBacktestService": [
+      {
+        "file": "internal/monitoring/dashboard_api.go",
+        "line": 1893,
+        "snippet": "svc := service.NewBacktestService(cfg)",
+        "reason": "RegisterBacktestRoutes：建構後由 PR #2233 以 svc.WithStore(ledger.NewReportOutcomeStore(cfg)) 注入 backend-aware store（dashboard_api.go:1904-1908）；未注入時 BacktestService.summariesStore() 落到 ledger.NewStore(s.cfg.LedgerDir)（service/backtest.go:60）。本 PR 另在其後為 signals 端點注入 FullStore"
+      }
+    ],
+    "risk.NewHandlers": [
+      {
+        "file": "internal/monitoring/dashboard_api.go",
+        "line": 1566,
+        "snippet": "riskHandlers := apirisk.NewHandlers(a.ledgerDir)",
+        "reason": "建構後緊接以 riskHandlers.WithStore(ledger.NewReportOutcomeStore(cfg)) 注入 backend-aware store（同檔 1575-1579）⇒ L-cold summary 讀取與 risk_commentary fallback 走 PG 優先"
+      }
+    ],
+    "system.NewHandlers": [
+      {
+        "file": "internal/monitoring/dashboard_api.go",
+        "line": 1440,
+        "snippet": "systemHandlers := apisystem.NewHandlers(systemSvc)",
+        "reason": "建構後以 systemHandlers.WithHistory(service.NewSessionHistoryProvider(cfg))（同檔 1444-1448）與 systemHandlers.WithStore(ledger.NewReportOutcomeStore(cfg))（同檔 1456-1460，PR #2233）注入⇒ capital-phase equity series 走 SSoT provider／PG 優先 store，而非 JSONL"
+      }
+    ],
+    "autobacktest.NewSignalEngineFromDir": [
+      {
+        "file": "internal/monitoring/api/backtest/handlers.go",
+        "line": 58,
+        "snippet": "return autobacktest.NewSignalEngineFromDir(h.LedgerDir)",
+        "reason": "Handlers.signalEngine() 的 legacy fallback：只在未注入 store（struct literal 建構，測試路徑）時走到；production 由 RegisterBacktestRoutes 的 WithStore 注入 backend-aware store（T1）。fallback 保留是為了不讓既有 handler 測試的斷言失效"
+      }
+    ]
+  }
+}

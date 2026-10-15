@@ -2806,7 +2806,7 @@ func run(args []string, deps appDeps) error {
 					// signal (previously orphan). Only fires when the daily
 					// backtest actually ran, so SignalEngine has fresh
 					// outcomes to evaluate against.
-					if signalErr := autobacktest.SignalApply(ctx, cfg.LedgerDir, gateway); signalErr != nil {
+					if signalErr := autobacktest.SignalApply(ctx, cfg, gateway); signalErr != nil {
 						logging.Warn("autobacktest", "signal_apply_failed", "err", signalErr)
 					}
 					return nil

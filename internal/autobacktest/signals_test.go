@@ -29,7 +29,7 @@ func TestSignalString(t *testing.T) {
 
 func TestSignalEngineEvaluateNoData(t *testing.T) {
 	dir := t.TempDir()
-	eng, err := NewSignalEngine(dir)
+	eng, err := NewSignalEngineFromDir(dir)
 	if err != nil {
 		t.Fatalf("NewSignalEngine: %v", err)
 	}
@@ -67,7 +67,7 @@ func TestSignalEngineVaRWarningActive(t *testing.T) {
 		t.Fatalf("RecordOutcomes: %v", err)
 	}
 
-	eng, err := NewSignalEngine(dir)
+	eng, err := NewSignalEngineFromDir(dir)
 	if err != nil {
 		t.Fatalf("NewSignalEngine: %v", err)
 	}
@@ -103,7 +103,7 @@ func TestSignalEngineVaRNoWarning(t *testing.T) {
 		t.Fatalf("RecordOutcomes: %v", err)
 	}
 
-	eng, err := NewSignalEngine(dir)
+	eng, err := NewSignalEngineFromDir(dir)
 	if err != nil {
 		t.Fatalf("NewSignalEngine: %v", err)
 	}
@@ -161,7 +161,7 @@ func TestSignalEngineCircuitBreakerActive(t *testing.T) {
 		t.Fatalf("RecordOutcomes: %v", err)
 	}
 
-	eng, err := NewSignalEngine(dir)
+	eng, err := NewSignalEngineFromDir(dir)
 	if err != nil {
 		t.Fatalf("NewSignalEngine: %v", err)
 	}
@@ -232,7 +232,7 @@ func TestSignalEngineSharpeDegradationActive(t *testing.T) {
 		t.Fatalf("RecordOutcomes: %v", err)
 	}
 
-	eng, err := NewSignalEngine(dir)
+	eng, err := NewSignalEngineFromDir(dir)
 	if err != nil {
 		t.Fatalf("NewSignalEngine: %v", err)
 	}
@@ -297,7 +297,7 @@ func TestSignalEngineSharpeDegradationInactive(t *testing.T) {
 		t.Fatalf("RecordOutcomes: %v", err)
 	}
 
-	eng, err := NewSignalEngine(dir)
+	eng, err := NewSignalEngineFromDir(dir)
 	if err != nil {
 		t.Fatalf("NewSignalEngine: %v", err)
 	}
@@ -357,7 +357,7 @@ func TestSignalEngineCircuitBreakerInactive(t *testing.T) {
 		t.Fatalf("RecordOutcomes: %v", err)
 	}
 
-	eng, err := NewSignalEngine(dir)
+	eng, err := NewSignalEngineFromDir(dir)
 	if err != nil {
 		t.Fatalf("NewSignalEngine: %v", err)
 	}
