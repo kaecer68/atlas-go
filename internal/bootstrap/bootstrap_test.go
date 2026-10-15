@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -361,5 +362,52 @@ func TestBackgroundHealthRecording(t *testing.T) {
 	}
 	if !strings.Contains(string(data), "auto_geopolitical") {
 		t.Error("auto_geopolitical missing from channel_health.json")
+	}
+}
+
+// TestTaskRunnerConfigCarriesEveryField pins the L1 regression: the taskexec
+// runner config used to be a `config.Config{WorkDir: cfg.WorkDir}` literal,
+// which silently dropped LedgerDir. Downstream runners then resolved
+// ledger.NewStore("") relative to the process working directory — the
+// container's /app/, outside the mounted ledger volume. The test is written
+// against bootstrap.Config's fields by reflection so a future field added to
+// the carrier cannot be dropped again without failing here.
+func TestTaskRunnerConfigCarriesEveryField(t *testing.T) {
+	src := Config{WorkDir: "/work/dir", LedgerDir: "/ledger/dir"}
+	got := taskRunnerConfig(src)
+
+	if got.LedgerDir == "" {
+		t.Fatalf("taskRunnerConfig dropped LedgerDir: %+v", got)
+	}
+	if got.LedgerDir != src.LedgerDir {
+		t.Errorf("LedgerDir = %q, want %q", got.LedgerDir, src.LedgerDir)
+	}
+
+	srcValue := reflect.ValueOf(src)
+	gotValue := reflect.ValueOf(got)
+	for i := range srcValue.NumField() {
+		name := srcValue.Type().Field(i).Name
+		field := gotValue.FieldByName(name)
+		if !field.IsValid() {
+			t.Fatalf("bootstrap.Config field %s is not carried into config.Config", name)
+		}
+		if field.String() != srcValue.Field(i).String() {
+			t.Errorf("%s = %q, want %q", name, field.String(), srcValue.Field(i).String())
+		}
+	}
+}
+
+// TestRegisterTaskRunnersUsesLedgerDir checks the wiring end of L1: the
+// manager built by InitTaskManager registers runners whose config carries the
+// LedgerDir it was given.
+func TestRegisterTaskRunnersUsesLedgerDir(t *testing.T) {
+	ledgerDir := t.TempDir()
+	mgr := InitTaskManager(context.Background(), nil, Config{WorkDir: t.TempDir(), LedgerDir: ledgerDir})
+	if mgr == nil {
+		t.Fatal("expected non-nil manager")
+	}
+	cfg := taskRunnerConfig(Config{WorkDir: ".", LedgerDir: ledgerDir})
+	if cfg.LedgerDir != ledgerDir {
+		t.Errorf("runner LedgerDir = %q, want %q", cfg.LedgerDir, ledgerDir)
 	}
 }
