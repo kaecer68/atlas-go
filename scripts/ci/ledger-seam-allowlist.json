@@ -18,7 +18,17 @@
     "2026-10-16 Q2b2 T2（window 家族）遷移：internal/autobacktest/runner.go ×2（NewRunner／",
     "NewRunnerWithEventBus 改走 NewFullStore）、cmd/atlas 的 window_backtest 任務、",
     "internal/taskexec/runners.go 的 backtest-window runner，以及 internal/experiment/auto.go",
-    "的即時補算（judge 以檔案路徑讀取 ⇒ 改為顯式 JSONL 後端，非預設值省略；PG 化待 T3）。"
+    "的即時補算（judge 以檔案路徑讀取 ⇒ 改為顯式 JSONL 後端，非預設值省略；PG 化待 T3）。",
+    "2026-10-16 Q2 第二批 unit B+C（其他生產讀寫 ＋ CLI）遷移 4 筆：",
+    "  · cmd/atlas/main.go 的日報 regime provider 與 cmd/atlas/stage3_tasks.go 的 pipeline service store",
+    "    改走 ledger.NewReportOutcomeStore(cfg)（後者該實例只走 LoadRegimeHistory ⇒ latent seam）；",
+    "    建不起來 ⇒ nil，維持原本「FindLatestSessionSummary 掃磁碟」的行為。",
+    "  · internal/calibration/calibrate.go 的 darwinian 校準改為可注入 store（CalibrateDarwinianWithStore／",
+    "    CalibrateModuleWithStore／RunWithStore）；nil ⇒ 顯式 jsonl 鏡射（NewOutcomeStore + StoreBackend=\"jsonl\"）。",
+    "  · cmd/backtest-window CLI 改走 ledger.NewFullStore(cfg) 並依 ATLAS_STORE_BACKEND 開池注入",
+    "    （postgres 缺 DSN ⇒ 明確錯誤，不降級寫 JSONL）。",
+    "  直接站點 27 → 23、總筆數 35 → 31。experiments 家族 11 筆（需先統一寫者）與刻意 JSONL 者",
+    "  （cmd/migrate-jsonl-to-sqlite、cmd/experimental/**）本單元不動。"
   ],
   "version": 2,
   "targets": {
@@ -40,12 +50,6 @@
         "line": 94,
         "snippet": "fileStore := ledger.NewStore(d.Cfg.LedgerDir)",
         "reason": "reconcile_task 以 LedgerDir 直建 JSONL store 做對帳；不在本 PR（T1）範圍"
-      },
-      {
-        "file": "cmd/backtest-window/main.go",
-        "line": 65,
-        "snippet": "runner := backtest.NewRunner(cfg, ledger.NewStore(cfg.LedgerDir))",
-        "reason": "獨立 CLI cmd/backtest-window 以 cfg 直建 JSONL store 餵 backtest.NewRunner；不在本 PR（T1）範圍"
       },
       {
         "file": "cmd/experimental/charter-ab/main.go",
