@@ -2753,6 +2753,29 @@ PY
 - **最小處置（三選一或並用）**：①**去重**：主機端 CLI 改讀 compose 的 `${DB_PASSWORD}`（或共用一份檔）而非第二份 DSN；②**守門**：CLI 在 `-backend postgres` 首次連線失敗且為 auth 錯誤時，明確提示「DSN 可能與 DB 憑證不同步（輪替後只改了一處）」；③**文件化**：在部署 runbook 的「輪替 DB 密碼」步驟明列**兩個位置**（compose `.env` 與主機 `~/.config/atlas-go/.env`）。
 - **查法**：`grep -m1 '^DATABASE_URL=' ~/.config/atlas-go/.env | sed 's#://[^:]*:[^@]*@#://USER:PASS@#'` 對照 `docker inspect atlas-postgres` 的 `POSTGRES_PASSWORD`（只比 hash）；再以該 DSN 跑 `go run ./cmd/run-stockpicker-backtest -dry-run -backend postgres -expect-db atlas`。
 
+### FU-20261016-01 — ledger store seam：仍剩 32 處直建 `ledger.NewStore`，`Deprecated:` 標記要等它們遷移後才加
+
+- **狀態**：`open`
+- **記錄日期**：2026-10-16
+- **來源**：T1/S1（`internal/autobacktest` 走 backend-aware store ＋ 新增守門）
+  ；allowlist：`scripts/ci/ledger-seam-allowlist.json`；守門：`scripts/ci/check_ledger_seam.py`
+- **事實**：2026-05-09 backend-aware factory（`NewFullStore`／`NewOutcomeStore`／`NewReportOutcomeStore`／
+  `PGFirstOutcomeStore`）誕生後，直建 `ledger.NewStore(dir)`（JSONL-only）的**程式碼**站點仍成長到
+  **34 處**（`grep -rn 'ledger\.NewStore(' --include='*.go' cmd internal | grep -v _test.go` 另命中
+  `internal/ledger/ledger.go:434` 的**文件註解**，掃描器去註解後不算）。T1 只遷移
+  `internal/autobacktest` 的 signal engine 與 comparator 這 **2 處** ⇒ 剩 **32 處**逐筆登錄在
+  allowlist（每筆 reason 必填）。守門會擋下：新增裸呼叫、同檔數量超出、stale 條目（站點已遷移卻
+  沒刪條目）、reason 留 `TODO`。
+- **為何本 PR 不加 `Deprecated:`**：`ledger.NewStore` 仍有 32 個 production 站點（含 `store_factory`
+  自己的 jsonl 分支與 `internal/monitoring` 的 fallback）⇒ 標記後 SA1019 會在 32 處一起冒出來、
+  CI 直接變紅。改以「明確守門 ＋ allowlist」先擋新增，等多數站點遷移後再單獨一 PR 加標記。
+- **最小處置**：①先遷移 production 讀取面（`internal/monitoring/service/{backtest,live}.go`、
+  `internal/monitoring/api/{risk,system,experiment}/handlers.go`、`internal/taskexec/runners.go`），
+  `cmd/*` 獨立 CLI 與 `cmd/experimental/*` 可最後（後者是顯式目錄的實驗 harness）②每遷移一處就刪
+  allowlist 對應條目（stale 條目刻意紅燈，這是刻意的耦合）③站點清空後另開一個 PR 加 `Deprecated:`
+  並把 allowlist 縮到 0（此時 `make ledger-seam-check` 應報 `0 個裸 ledger.NewStore`）。
+- **查法**：`make ledger-seam-check`；`python3 scripts/ci/check_ledger_seam.py --json`。
+
 ## 相關文件
 
 - [universe-scoring-ranked-zero-20260925.md](universe-scoring-ranked-zero-20260925.md)
