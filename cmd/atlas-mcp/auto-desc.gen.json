@@ -1142,6 +1142,39 @@
       "type": "object"
     }
   },
+  "stockpicker_walkforward": {
+    "name": "stockpicker_walkforward",
+    "description": "Run a read-only walk-forward validation over persisted stockpicker signal outcomes for one condition (never recomputes backtests). Data source: stock_signal_outcomes, read-only from PostgreSQL when DATABASE_URL is set and ATLAS_STORE_BACKEND declares postgres, otherwise read-only from the SQLite ledger configured via ATLAS_MCP_STOCKPICKER_DB. Input: condition_id (required — a cross-condition pooled walk-forward is meaningless), rolling_window (default 120d), folds (default 3), min_train (default 5), forward_days (default 5, trading days), asof (default now, PIT cutoff). Output: per-fold validation windows (val_start/val_end, train/val observations, pooled net win_rate) plus the win-rate distribution (n/mean/min/max) across folds — read the distribution, not a single Sharpe. Label windows are computed on the trading calendar (long holidays included), so purge is exact. Demoted families are allowed here: this is measurement, not ranking (unlike stock_picker_scan which withholds them). DIRECTION SEMANTICS: the pooled win_rate is reported as-is; for avoid-semantics conditions such as price-volume-top-divergence a LOW win rate confirms the bearish signal. No stored outcomes returns found=false with a clear message. Alternative: stock_get_win_rate for a single symbol.",
+    "inputSchema": {
+      "properties": {
+        "asof": {
+          "description": "as-of date YYYY-MM-DD (PIT cutoff; stored outcomes are returned as-is, never recomputed)",
+          "type": "string"
+        },
+        "condition_id": {
+          "description": "condition id, e.g. price-volume-bottom-divergence; required (a cross-condition walk-forward is meaningless)",
+          "type": "string"
+        },
+        "folds": {
+          "description": "number of walk-forward folds; default 3",
+          "type": "integer"
+        },
+        "forward_days": {
+          "description": "holding period in trading days; default 5",
+          "type": "integer"
+        },
+        "min_train": {
+          "description": "minimum training observations per fold; default 5",
+          "type": "integer"
+        },
+        "rolling_window": {
+          "description": "rolling window label, e.g. 120d; default 120d",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    }
+  },
   "strategy_for_period": {
     "name": "strategy_for_period",
     "description": "Return the strategies allowed for a given market period (downturn / turnaround_up / bull / plateau / consolidation / turnaround_down / black_swan). Reads configs/methodology_rules.yaml (same source as MethodologyAdvisor). Use to answer 'what strategy fits this regime' without calling the recommender. Read-only; no side effects.",

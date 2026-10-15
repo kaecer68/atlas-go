@@ -1,13 +1,13 @@
 # atlas-mcp Tool Catalog
 
-> **122 tools**（預設啟用；sampling/elicitation feature-gated 全開時 124）grouped by functional area. For investor use cases, see [`docs/investor/use-cases/`](../investor/use-cases/).
+> **123 tools**（預設啟用；sampling/elicitation feature-gated 全開時 125）grouped by functional area. For investor use cases, see [`docs/investor/use-cases/`](../investor/use-cases/).
 > For natural language query examples, see [`docs/investor/query-examples.md`](../investor/query-examples.md).
 
 ## 工具數量
 
-業務 110+ + template_detector 2 + audit 4 + audit_state 1 + strategy_for_period 1 + stock_get_monthly_revenue 1 + stock_get_win_rate 1 + stock_picker_scan 1 + stock_get_volume_divergence 1 + stock_get_condition_winrate 1 + stock_get_industry_winrate 1 + Phase 2 alert lifecycle 4 − prism_get_training_results 1（#1527 移除）= **122**（**基礎 122**, **+2** sampling/elicitation feature-gated 預設關閉 → 最多 124；啟動期 assert ∈ [118, 126]，見 `cmd/atlas-mcp/server/server.go`）
+業務 110+ + template_detector 2 + audit 4 + audit_state 1 + strategy_for_period 1 + stock_get_monthly_revenue 1 + stock_get_win_rate 1 + stock_picker_scan 1 + stockpicker_walkforward 1 + stock_get_volume_divergence 1 + stock_get_condition_winrate 1 + stock_get_industry_winrate 1 + Phase 2 alert lifecycle 4 − prism_get_training_results 1（#1527 移除）= **123**（**基礎 123**, **+2** sampling/elicitation feature-gated 預設關閉 → 最多 125；啟動期 assert ∈ [118, 126]，見 `cmd/atlas-mcp/server/server.go`）
 
-## 完整工具 Catalog（124 個 tool 槽位，其中 122 個預設啟用；Phase 2 與 PR 1/2/3 全部上線）
+## 完整工具 Catalog（125 個 tool 槽位，其中 123 個預設啟用；Phase 2 與 PR 1/2/3 全部上線）
 
 
 ### Regime（1 個）
@@ -176,6 +176,7 @@
 |------|------|
 | `stock_get_win_rate` | Phase 4 個股勝率聚合（read-only；不重新計算；無資料回 found=false）。**資料來源（C6, 2026-10-13）**：`DATABASE_URL` 有值且 `ATLAS_STORE_BACKEND=postgres` 時讀 **PostgreSQL**（連線 `default_transaction_read_only=on`），否則讀 `ATLAS_MCP_STOCKPICKER_DB` 指定的 SQLite ledger（`mode=ro`）；兩條路徑同一份 SQL |
 | `stock_picker_scan` | Phase 4 多 symbol 勝率掃描（read-only；過濾 observations/win_rate/calibration，wilson_lower、win_rate 或 shrunk_rate 排序，top_n 截斷）。資料來源與 `stock_get_win_rate` 相同（PG 優先，SQLite 回退） |
+| `stockpicker_walkforward` | Phase 4 walk-forward 驗證（read-only；單條件 outcomes → 前進 folds + pooled 勝率 + 分佈；標籤窗以交易日曆計）。資料來源與 `stock_get_win_rate` 相同（PG 優先，SQLite 回退） |
 | `stock_get_quote` | 個股即時報價（最新價、漲跌、成交量） |
 | `stock_get_fundamentals` | 個股基本面（PE、PB、PS、殖利率、sector 等） |
 | `stock_get_chips` | 個股籌碼面（法人/外資/投信買賣超，可選日期） |
