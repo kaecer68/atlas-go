@@ -2707,6 +2707,18 @@ PY
 - **最小處置**：隨 Q2 的「單一 PG」收斂（C1→C7）一併對齊；在那之前守門以 allowlist **明文列出並在每次測試輸出**，避免這些分歧被默默當成「已同意」。
 - **查法**：`go test ./internal/ledger/ -run SchemaParity -v`（輸出會逐條列出 allowlisted divergence）。
 
+### FU-20261015-01 — CI 的 integration 路徑過濾器**漏掉多個目錄** ⇒ 那些 `-tags=integration` 測試從未在 CI 執行
+
+- **狀態**：`open`
+- **記錄日期**：2026-10-15
+- **來源**：Q2 第二批 unit 1（PR #2230）實作時發現；同期 C6／C6b／C6c／C7 各補一個目錄（`cmd/atlas-mcp/**`、`internal/stocktools/**`、`internal/orchestrator/**`、`internal/stockpicker/**`）
+- **事實**：`.github/workflows/ci-cd.yml` 的 integration job 以**路徑過濾器**決定是否執行；未列入的目錄，其 `-tags=integration` 測試**永遠不會在 CI 跑**（本機跑得到 ⇒ 形成「本機綠、CI 從未驗」的假安全）。已知仍缺：
+  - `internal/monitoring/**`（**已由 PR #2230 補上** ✓）
+  - `internal/calibration/**`
+  - `internal/apigateway/**`
+- **風險**：這些目錄的 integration 契約（真實 PG／外部依賴）沒有任何 CI 保護 ⇒ 回歸可長期潛伏（與「檢查存在但不在生效路徑上」同族）。
+- **最小處置**：把上述目錄補進過濾器；並加一個**契約測試**：掃 `*_integration_test.go`／`//go:build integration` 的所在目錄，斷言每個目錄都被 integration 過濾器涵蓋（避免日後又漏）。
+- **查法**：`grep -rn 'go:build integration' --include='*.go' . | sed 's#/.*##' | sort -u` 對照 `.github/workflows/ci-cd.yml` 的 filters 清單。
 ## 相關文件
 
 - [universe-scoring-ranked-zero-20260925.md](universe-scoring-ranked-zero-20260925.md)
