@@ -6,6 +6,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"time"
 
@@ -15,6 +16,7 @@ import (
 	"github.com/kaecer68/atlas-go/internal/eventdriven"
 	"github.com/kaecer68/atlas-go/internal/industry"
 	"github.com/kaecer68/atlas-go/internal/ledger"
+	"github.com/kaecer68/atlas-go/internal/logging"
 	"github.com/kaecer68/atlas-go/internal/monitoring"
 	monitoringservice "github.com/kaecer68/atlas-go/internal/monitoring/service"
 	"github.com/kaecer68/atlas-go/internal/scheduler"
@@ -40,6 +42,27 @@ type stage3Deps struct {
 	capitalFlow *capitalflow.Service
 }
 
+// stage3PipelineStore resolves the ledger store handed to the stage-3 pipeline
+// service (Q2 batch 2, unit B+C — site 2).
+//
+// It replaces a raw JSONL store (ledger.NewStore(cfg.LedgerDir)) so the pipeline
+// service reads the same backend as the writers: under
+// ATLAS_STORE_BACKEND=postgres the session summaries live in PG and the flat
+// ledger is only the 12h reconcile mirror (reconcile_task.go).
+//
+// A nil return means "could not resolve": the pipeline service then keeps its
+// historical behavior (FindLatestSessionSummary(nil, ledgerDir) scans
+// <LedgerDir>/sessions). The failure is logged, never silent.
+func stage3PipelineStore(cfg config.Config) ledger.OutcomeStore {
+	store, err := ledger.NewReportOutcomeStore(cfg)
+	if err != nil {
+		logging.Warn("stage3", "pipeline_store_init_failed", logging.Err(err))
+		return nil
+	}
+	logging.Info("stage3", "pipeline_store_resolved", logging.FStr("store", fmt.Sprintf("%T", store)))
+	return store
+}
+
 // registerStage3Tasks wires the 5 Stage 3 scheduled tasks into BTM.
 // All tasks run at 1-minute interval; the task wrappers contain daily/weekly/
 // monthly once-guards so they only execute at the scheduled time.
@@ -54,7 +77,16 @@ func registerStage3Tasks(d stage3Deps) {
 		tz = time.UTC
 	}
 
-	pipelineSvc := monitoringservice.NewPipelineService(d.cfg.WorkDir, d.cfg.LedgerDir, ledger.NewStore(d.cfg.LedgerDir)).
+	// Q2 batch 2, unit B+C (site 2): the store handed to the pipeline service
+	// used to be a raw JSONL ledger (ledger.NewStore(d.cfg.LedgerDir)). This
+	// instance only ever serves LoadRegimeHistory, which reads the injected
+	// historicalStore and never the ledger store, so the site is a latent seam
+	// rather than a live defect — but a raw JSONL store here would read the flat
+	// mirror (stale under ATLAS_STORE_BACKEND=postgres) the moment another
+	// pipeline method is called on it. Resolve it through the backend-aware
+	// factory; a nil result keeps the historical behavior (the pipeline
+	// service's FindLatestSessionSummary disk scan).
+	pipelineSvc := monitoringservice.NewPipelineService(d.cfg.WorkDir, d.cfg.LedgerDir, stage3PipelineStore(d.cfg)).
 		WithHistoricalStore(d.historicalStore)
 
 	oncestore, oncestoreErr := scheduler.NewFileOncestampStore(d.cfg.LedgerDir)

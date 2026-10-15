@@ -8,26 +8,40 @@ import (
 	"sort"
 
 	"github.com/kaecer68/atlas-go/internal/config"
+	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/ledger"
 	"github.com/kaecer68/atlas-go/internal/logging"
 )
 
 // CalibrateModule dispatches to the requested calibrator(s).
+//
+// It is the store-less entry point: the darwinian calibrator then reads the flat
+// JSONL mirror under <cwd>/data/state (see CalibrateDarwinianWithStore).
 func CalibrateModule(module string, ie *config.InferenceEngine, returns []float64, n int, cfg *config.ParametersConfig) ([]CalibrationResult, error) {
+	return CalibrateModuleWithStore(module, ie, returns, n, cfg, nil)
+}
+
+// CalibrateModuleWithStore is CalibrateModule with an injected ledger outcome
+// store.
+//
+// Only the darwinian calibrator reads the ledger (garch/var/factor are computed
+// from the replay returns alone), so a nil store — or any module other than
+// darwinian/all — behaves exactly as before this seam was introduced.
+func CalibrateModuleWithStore(module string, ie *config.InferenceEngine, returns []float64, n int, cfg *config.ParametersConfig, store ledger.OutcomeStore) ([]CalibrationResult, error) {
 	switch module {
 	case "garch":
 		return []CalibrationResult{CalibrateGARCH(ie, returns, n, cfg)}, nil
 	case "var":
 		return []CalibrationResult{CalibrateVaR(ie, returns, n, cfg)}, nil
 	case "darwinian":
-		return []CalibrationResult{CalibrateDarwinian(ie, n, cfg)}, nil
+		return []CalibrationResult{CalibrateDarwinianWithStore(ie, n, cfg, store)}, nil
 	case "factor":
 		return []CalibrationResult{CalibrateFactor(ie, returns, n, cfg)}, nil
 	case "all":
 		return []CalibrationResult{
 			CalibrateGARCH(ie, returns, n, cfg),
 			CalibrateVaR(ie, returns, n, cfg),
-			CalibrateDarwinian(ie, n, cfg),
+			CalibrateDarwinianWithStore(ie, n, cfg, store),
 			CalibrateFactor(ie, returns, n, cfg),
 		}, nil
 	default:
@@ -141,15 +155,88 @@ func CalibrateVaR(ie *config.InferenceEngine, returns []float64, n int, cfg *con
 	return res
 }
 
+// Source labels reported by darwinian_ledger_source. They are stable strings so
+// an operator can tell from the log alone which backend actually served the
+// calibration input.
+const (
+	darwinianSourceInjectedStore = "injected-store"
+	darwinianSourceJSONLMirror   = "explicit-jsonl-mirror"
+)
+
+// darwinianMirrorRelDir is the flat JSONL ledger directory the darwinian
+// calibrator has always read, relative to the process working directory.
+var darwinianMirrorRelDir = filepath.Join("data", "state")
+
+// darwinianOutcomes resolves the outcome data the darwinian calibration runs on
+// and logs which source actually served it.
+//
+// Order: the injected store first; the flat JSONL mirror only as a fallback when
+// the store read ERRORED. The mirror is the file the session_summary_reconcile
+// job backfills from PostgreSQL (every 12h), so it is a possibly-lagging copy —
+// which is why an injected store always wins when one is wired.
+//
+// Read failures keep the pre-seam tolerance: no outcomes at all, and the caller
+// then reports "insufficient outcome data" and uses the heuristic defaults.
+func darwinianOutcomes(workDir string, store ledger.OutcomeStore) []domain.RecommendationOutcome {
+	source := darwinianSourceInjectedStore
+	defer func() {
+		logging.Info("calibration", "darwinian_ledger_source",
+			logging.FStr("source", source),
+			logging.FStr("store", fmt.Sprintf("%T", store)))
+	}()
+
+	if store != nil {
+		outcomes, err := store.LoadOutcomesFromSessions()
+		if err == nil {
+			return outcomes
+		}
+		logging.Warn("calibration", "darwinian_store_read_failed",
+			logging.Err(err),
+			logging.FStr("fallback", darwinianSourceJSONLMirror))
+	}
+	source = darwinianSourceJSONLMirror
+
+	// Explicit JSONL backend, deliberately not the deploy-time backend: the
+	// darwinian calibrator reads the PER-SESSION files under
+	// <workDir>/data/state/sessions/*, which is what the mirror holds. Naming the
+	// backend keeps a postgres deployment from resolving some other directory
+	// (same convention as internal/experiment/auto.go).
+	mirror, err := ledger.NewOutcomeStore(config.Config{
+		StoreBackend: "jsonl",
+		LedgerDir:    filepath.Join(workDir, darwinianMirrorRelDir),
+	})
+	if err != nil {
+		return nil
+	}
+	outcomes, err := mirror.LoadOutcomesFromSessions()
+	if err != nil {
+		return nil
+	}
+	return outcomes
+}
+
+// CalibrateDarwinian calibrates the darwinian parameters from the ledger
+// outcomes found in the flat JSONL mirror under <cwd>/data/state.
+//
+// Callers that already hold a backend-aware ledger store should use
+// CalibrateDarwinianWithStore so the calibration reads the source of truth
+// instead of the mirror.
 func CalibrateDarwinian(ie *config.InferenceEngine, n int, cfg *config.ParametersConfig) CalibrationResult {
+	return CalibrateDarwinianWithStore(ie, n, cfg, nil)
+}
+
+// CalibrateDarwinianWithStore is CalibrateDarwinian with an injected ledger
+// outcome store.
+//
+// A non-nil store is the source of truth (in production: PostgreSQL). The flat
+// JSONL mirror is only read when no store was injected or when the store itself
+// failed — a store that legitimately returns zero outcomes is NOT an error and
+// must never be second-guessed here.
+func CalibrateDarwinianWithStore(ie *config.InferenceEngine, n int, cfg *config.ParametersConfig, store ledger.OutcomeStore) CalibrationResult {
 	res := CalibrationResult{Module: "darwinian"}
 
 	workDir, _ := os.Getwd()
-	ledgerStore := ledger.NewStore(filepath.Join(workDir, "data", "state"))
-	outcomes, err := ledgerStore.LoadOutcomesFromSessions()
-	if err != nil {
-		outcomes = nil
-	}
+	outcomes := darwinianOutcomes(workDir, store)
 	if len(outcomes) < 10 {
 		res.Errors = append(res.Errors, "insufficient outcome data for darwinian calibration, using defaults")
 		res.Parameters = darwinianHeuristicDefaults(n, cfg)
