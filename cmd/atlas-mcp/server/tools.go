@@ -66,6 +66,7 @@ func registerTools(mcpSrv *mcp.Server, s *server) {
 	registerSectorTools(mcpSrv, s)
 	registerStockWinRateTools(mcpSrv, s)
 	registerStockPickerScanTools(mcpSrv, s)
+	registerStockpickerWalkforwardTools(mcpSrv, s)
 
 	countedAddTool(mcpSrv, &mcp.Tool{
 		Name:        "regime_get_history",
