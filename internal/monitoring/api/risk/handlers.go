@@ -74,6 +74,7 @@ func (h *Handlers) HandleRiskMetrics(r *http.Request) (int, any) {
 	// risk-exposure endpoint now read the same PG history.
 	store := h.summariesStore()
 	summaries, err := store.LoadSessionSummaries()
+	h.logReadSource("risk_metrics_summaries_read", store)
 	if err != nil {
 		logging.Warn("risk_handler", "summaries_unreadable", logging.Err(err))
 		return http.StatusOK, map[string]any{
@@ -157,12 +158,48 @@ func (h *Handlers) HandleRiskMetrics(r *http.Request) (int, any) {
 }
 
 // summariesStore resolves the store used for L-cold summary reads: the
-// injected backend-aware store when present, the JSONL ledger otherwise.
+// injected backend-aware store when present (PostgreSQL first, JSONL fallback
+// on production), the legacy JSONL ledger otherwise (tests/legacy).
 func (h *Handlers) summariesStore() ledger.OutcomeStore {
 	if h.store != nil {
 		return h.store
 	}
 	return ledger.NewStore(h.LedgerDir)
+}
+
+// logReadSource records which backend actually served a store-backed read
+// (SourceBackend()/Degraded() of the PG-first store). The risk payloads that
+// already expose source/degraded (HandleRiskMetrics, P1-3) keep doing so; the
+// log covers the paths whose response shape is frozen, so a JSONL fallback on
+// a postgres deployment is never silent. Same convention as the live handlers
+// (Q2 batch 2 unit 1).
+func (h *Handlers) logReadSource(event string, store ledger.OutcomeStore) {
+	if store == nil {
+		return
+	}
+	logging.Info("risk_handler", event,
+		logging.FStr("source", storeSourceBackend(store)),
+		logging.FBool("degraded", storeDegraded(store)))
+}
+
+// storeSourceBackend reports which backend a store served its most recent read
+// from ("postgres" / "jsonl"), or "" for stores that do not track it (and for
+// a nil store, i.e. the legacy file path).
+func storeSourceBackend(store ledger.OutcomeStore) string {
+	if s, ok := store.(interface{ SourceBackend() string }); ok {
+		return s.SourceBackend()
+	}
+	return ""
+}
+
+// storeDegraded reports whether a store's most recent read fell back to JSONL
+// because the SSoT backend was unavailable. False for stores that do not track
+// degradation (and for a nil store).
+func storeDegraded(store ledger.OutcomeStore) bool {
+	if d, ok := store.(interface{ Degraded() bool }); ok {
+		return d.Degraded()
+	}
+	return false
 }
 
 // CorrelationMatrixResponse is the response for GET /api/dashboard/correlation-matrix.
@@ -278,6 +315,7 @@ func (h *Handlers) HandleRiskCommentary(r *http.Request) (int, any) {
 	// risk_commentary from the backend-aware store (PG-first on production).
 	if h.store != nil {
 		if summaries, err := h.store.LoadSessionSummaries(); err == nil {
+			h.logReadSource("commentary_fallback_summaries_read", h.store)
 			var latest *domain.SessionSummary
 			for i := range summaries {
 				s := &summaries[i]
