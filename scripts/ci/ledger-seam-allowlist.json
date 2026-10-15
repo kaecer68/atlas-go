@@ -14,7 +14,11 @@
     "autobacktest.NewSignalEngineFromDir）。",
     "HEAD 裸 grep 有 35 命中，其中 internal/ledger/ledger.go:434 是文件註解（掃描器去註解後不算）。",
     "規格：scripts/ci/check_ledger_seam.py 的 docstring（含明確界線：struct literal、檔案直讀、",
-    "呼叫圖包裝都不在本守門範圍）。"
+    "呼叫圖包裝都不在本守門範圍）。",
+    "2026-10-16 Q2b2 T2（window 家族）遷移：internal/autobacktest/runner.go ×2（NewRunner／",
+    "NewRunnerWithEventBus 改走 NewFullStore）、cmd/atlas 的 window_backtest 任務、",
+    "internal/taskexec/runners.go 的 backtest-window runner，以及 internal/experiment/auto.go",
+    "的即時補算（judge 以檔案路徑讀取 ⇒ 改為顯式 JSONL 後端，非預設值省略；PG 化待 T3）。"
   ],
   "version": 2,
   "targets": {
@@ -35,13 +39,7 @@
         "file": "cmd/atlas/main.go",
         "line": 2082,
         "snippet": "store := ledger.NewStore(cfg.LedgerDir)",
-        "reason": "cmd/atlas 兩處內部工具路徑直建 JSONL store（未走 backend-aware factory）；現存站點，不在本 PR（T1）範圍"
-      },
-      {
-        "file": "cmd/atlas/main.go",
-        "line": 2117,
-        "snippet": "store := ledger.NewStore(cfg.LedgerDir)",
-        "reason": "cmd/atlas 兩處內部工具路徑直建 JSONL store（未走 backend-aware factory）；現存站點，不在本 PR（T1）範圍"
+        "reason": "cmd/atlas 的 auto_propose 背景任務以 LedgerDir 直建 JSONL store 記錄 ExperimentRecord（實驗提案，屬 experiments 家族，唯一寫者待 T3 裁決）；同檔的 window_backtest 任務已於 Q2b2 T2 改走 ledger.NewFullStore(cfg)"
       },
       {
         "file": "cmd/atlas/reconcile_task.go",
@@ -116,18 +114,6 @@
         "reason": "獨立 CLI cmd/run-experiment 以 cfg.LedgerDir 直建 JSONL store 餵 experiment.NewExecutor；不在本 PR（T1）範圍"
       },
       {
-        "file": "internal/autobacktest/runner.go",
-        "line": 35,
-        "snippet": "store := ledger.NewStore(cfg.LedgerDir)",
-        "reason": "autobacktest Runner（NewRunner／NewRunnerWithEventBus）的 backtest 寫入 store 仍是 JSONL；T1 只涵蓋 signal/comparator 兩站點，此站點留在未竟清單"
-      },
-      {
-        "file": "internal/autobacktest/runner.go",
-        "line": 43,
-        "snippet": "store := ledger.NewStore(cfg.LedgerDir)",
-        "reason": "autobacktest Runner（NewRunner／NewRunnerWithEventBus）的 backtest 寫入 store 仍是 JSONL；T1 只涵蓋 signal/comparator 兩站點，此站點留在未竟清單"
-      },
-      {
         "file": "internal/calibration/calibrate.go",
         "line": 148,
         "snippet": "ledgerStore := ledger.NewStore(filepath.Join(workDir, \"data\", \"state\"))",
@@ -141,19 +127,13 @@
       },
       {
         "file": "internal/experiment/auto.go",
-        "line": 143,
-        "snippet": "btRunner := backtest.NewRunner(cfg.Config, ledger.NewStore(baseDir))",
-        "reason": "experiment auto 以 baseDir 直建 JSONL store 餵 backtest runner；不在本 PR（T1）範圍"
-      },
-      {
-        "file": "internal/experiment/auto.go",
-        "line": 326,
+        "line": 344,
         "snippet": "store := ledger.NewStore(ledgerDir)",
         "reason": "experiment auto 兩處以顯式 ledgerDir 直建 JSONL store；不在本 PR（T1）範圍"
       },
       {
         "file": "internal/experiment/auto.go",
-        "line": 377,
+        "line": 395,
         "snippet": "store := ledger.NewStore(ledgerDir)",
         "reason": "experiment auto 兩處以顯式 ledgerDir 直建 JSONL store；不在本 PR（T1）範圍"
       },
@@ -173,11 +153,11 @@
         "file": "internal/monitoring/api/system/handlers.go",
         "line": 134,
         "snippet": "return ledger.NewStore(h.Svc.LedgerDir)",
-        "reason": "PR #2233（Q2b2 unit 2）把原本的裸 LoadSessionSummaries 收斂成 summariesStore() 的 fallback：只在 h.store 未注入時走到（Svc 為 nil 時回 nil）；production 由 dashboard 的 systemHandlers.WithStore(NewReportOutcomeStore(cfg)) 注入覆蓋（dashboard_api.go:1456-1460）"
+        "reason": "PR #2233（Q2b2 unit 2）把原本的裸 LoadSessionSummaries 收斂成 summariesStore() 的 fallback：只在 h.store 未注入時走到（Svc 為 nil 時回 nil）；production 由 dashboard 的 systemHandlers.WithStore(NewReportOutcomeStore(cfg)) 注入覆蓋（dashboard_api.go:1469-1473）"
       },
       {
         "file": "internal/monitoring/dashboard_api.go",
-        "line": 1932,
+        "line": 1945,
         "snippet": "store = ledger.NewStore(a.ledgerDir)",
         "reason": "RegisterPerformanceRoutes 在 NewReportOutcomeStore 失敗時的 fallback（同一分支已 logging.Error）；已知降級路徑，非新增站點"
       },
@@ -185,7 +165,7 @@
         "file": "internal/monitoring/service/backtest.go",
         "line": 60,
         "snippet": "return ledger.NewStore(s.cfg.LedgerDir)",
-        "reason": "PR #2233 把原本的裸 store 收斂成 BacktestService.summariesStore() 的 fallback：只在 WithStore 未注入時走到；production 由 RegisterBacktestRoutes 以 ledger.NewReportOutcomeStore(cfg) 注入（dashboard_api.go:1904-1908）"
+        "reason": "PR #2233 把原本的裸 store 收斂成 BacktestService.summariesStore() 的 fallback：只在 WithStore 未注入時走到；production 由 RegisterBacktestRoutes 以 ledger.NewReportOutcomeStore(cfg) 注入（dashboard_api.go:1917-1921）"
       },
       {
         "file": "internal/monitoring/service/live.go",
@@ -204,12 +184,6 @@
         "line": 136,
         "snippet": "judge := experiment.NewJudge(ledger.NewStore(cfg.LedgerDir).(ledger.ExperimentStore), cfg.ReplayDataPath, cfg.BaselinePolicyPath)",
         "reason": "taskexec judge-experiment runner 以 JSONL store 餵 judge；不在本 PR（T1）範圍"
-      },
-      {
-        "file": "internal/taskexec/runners.go",
-        "line": 280,
-        "snippet": "runner := backtest.NewRunner(r.cfg, ledger.NewStore(r.cfg.LedgerDir))",
-        "reason": "taskexec backtest-window runner 以 JSONL store 餵 backtest.NewRunner；不在本 PR（T1）範圍"
       }
     ],
     "service.NewLiveService": [
@@ -233,33 +207,33 @@
       },
       {
         "file": "internal/monitoring/dashboard_api.go",
-        "line": 1833,
+        "line": 1846,
         "snippet": "svc := service.NewLiveService(a.workDir, a.ledgerDir)",
-        "reason": "RegisterLiveRoutes：建構後以 WithHistory(service.NewSessionHistoryProvider(cfg)) 注入 SSoT provider（同檔 1838-1846），PR #2233 另加 WithSummaryStore(store) 供 summary 讀取；L-cold 讀取走注入路徑、SQL fallback 亦走 backend-aware store"
+        "reason": "RegisterLiveRoutes：建構後以 WithHistory(service.NewSessionHistoryProvider(cfg)) 注入 SSoT provider（同檔 1851-1859），PR #2233 另加 WithSummaryStore(store) 供 summary 讀取；L-cold 讀取走注入路徑、SQL fallback 亦走 backend-aware store"
       }
     ],
     "service.NewBacktestService": [
       {
         "file": "internal/monitoring/dashboard_api.go",
-        "line": 1893,
+        "line": 1906,
         "snippet": "svc := service.NewBacktestService(cfg)",
-        "reason": "RegisterBacktestRoutes：建構後由 PR #2233 以 svc.WithStore(ledger.NewReportOutcomeStore(cfg)) 注入 backend-aware store（dashboard_api.go:1904-1908）；未注入時 BacktestService.summariesStore() 落到 ledger.NewStore(s.cfg.LedgerDir)（service/backtest.go:60）。本 PR 另在其後為 signals 端點注入 FullStore"
+        "reason": "RegisterBacktestRoutes：建構後由 PR #2233 以 svc.WithStore(ledger.NewReportOutcomeStore(cfg)) 注入 backend-aware store（dashboard_api.go:1917-1921）；未注入時 BacktestService.summariesStore() 落到 ledger.NewStore(s.cfg.LedgerDir)（service/backtest.go:60）。本 PR 另在其後為 signals 端點注入 FullStore"
       }
     ],
     "risk.NewHandlers": [
       {
         "file": "internal/monitoring/dashboard_api.go",
-        "line": 1566,
+        "line": 1579,
         "snippet": "riskHandlers := apirisk.NewHandlers(a.ledgerDir)",
-        "reason": "建構後緊接以 riskHandlers.WithStore(ledger.NewReportOutcomeStore(cfg)) 注入 backend-aware store（同檔 1575-1579）⇒ L-cold summary 讀取與 risk_commentary fallback 走 PG 優先"
+        "reason": "建構後緊接以 riskHandlers.WithStore(ledger.NewReportOutcomeStore(cfg)) 注入 backend-aware store（同檔 1588-1592）⇒ L-cold summary 讀取與 risk_commentary fallback 走 PG 優先"
       }
     ],
     "system.NewHandlers": [
       {
         "file": "internal/monitoring/dashboard_api.go",
-        "line": 1440,
+        "line": 1453,
         "snippet": "systemHandlers := apisystem.NewHandlers(systemSvc)",
-        "reason": "建構後以 systemHandlers.WithHistory(service.NewSessionHistoryProvider(cfg))（同檔 1444-1448）與 systemHandlers.WithStore(ledger.NewReportOutcomeStore(cfg))（同檔 1456-1460，PR #2233）注入⇒ capital-phase equity series 走 SSoT provider／PG 優先 store，而非 JSONL"
+        "reason": "建構後以 systemHandlers.WithHistory(service.NewSessionHistoryProvider(cfg))（同檔 1457-1461）與 systemHandlers.WithStore(ledger.NewReportOutcomeStore(cfg))（同檔 1469-1473，PR #2233）注入⇒ capital-phase equity series 走 SSoT provider／PG 優先 store，而非 JSONL"
       }
     ],
     "autobacktest.NewSignalEngineFromDir": [

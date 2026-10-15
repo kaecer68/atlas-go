@@ -192,8 +192,9 @@ func (s *LiveService) HistoryDegraded() bool {
 
 // storeSourceBackend reports which backend a store served its most recent read
 // from ("postgres" / "jsonl"), or "" for stores that do not track it (and for
-// a nil store, i.e. the legacy file path).
-func storeSourceBackend(store ledger.OutcomeStore) string {
+// a nil store, i.e. the legacy file path). It takes any store type: the
+// outcome stores and the window-summary seam (Q2 batch 2, T2) both use it.
+func storeSourceBackend(store any) string {
 	if s, ok := store.(interface{ SourceBackend() string }); ok {
 		return s.SourceBackend()
 	}
@@ -202,8 +203,9 @@ func storeSourceBackend(store ledger.OutcomeStore) string {
 
 // storeDegraded reports whether a store's most recent read fell back to JSONL
 // because the SSoT backend was unavailable. False for stores that do not track
-// degradation (and for a nil store).
-func storeDegraded(store ledger.OutcomeStore) bool {
+// degradation (and for a nil store). See storeSourceBackend on the any-typed
+// parameter.
+func storeDegraded(store any) bool {
 	if d, ok := store.(interface{ Degraded() bool }); ok {
 		return d.Degraded()
 	}

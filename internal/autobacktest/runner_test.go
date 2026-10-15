@@ -14,8 +14,11 @@ import (
 )
 
 func TestNewRunnerWithEventBus(t *testing.T) {
-	cfg := config.Config{LedgerDir: t.TempDir()}
-	runner := NewRunnerWithEventBus(cfg, nil)
+	cfg := config.Config{LedgerDir: t.TempDir(), StoreBackend: "jsonl"}
+	runner, err := NewRunnerWithEventBus(cfg, nil)
+	if err != nil {
+		t.Fatalf("NewRunnerWithEventBus: %v", err)
+	}
 	if runner == nil {
 		t.Fatal("NewRunnerWithEventBus returned nil")
 	}
@@ -83,8 +86,11 @@ func TestRunnerRecordSnapshot(t *testing.T) {
 		t.Fatalf("RecordOutcomes: %v", err)
 	}
 
-	cfg := config.Config{LedgerDir: dir}
-	runner := NewRunner(cfg)
+	cfg := config.Config{LedgerDir: dir, StoreBackend: "jsonl"}
+	runner, err := NewRunner(cfg)
+	if err != nil {
+		t.Fatalf("NewRunner: %v", err)
+	}
 
 	snapDate := time.Date(2026, 3, 15, 0, 0, 0, 0, time.UTC)
 	if err := runner.recordSnapshot(snapDate); err != nil {

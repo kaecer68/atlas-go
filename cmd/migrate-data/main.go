@@ -49,6 +49,8 @@ func run() error {
 		migrateExperimentsSQLite = flag.Bool("experiments-sqlite", false, "Migrate experiments from SQLite atlas.db (C1: id space disjoint from JSONL)")
 		migrateSummariesSQLite   = flag.Bool("summaries-sqlite", false, "Migrate session summaries from SQLite atlas.db (C2: sessions missing from JSONL)")
 		migrateStockpicker       = flag.Bool("stockpicker", false, "Migrate stock_signal_outcomes + stock_win_rate from SQLite atlas.db into the PG tables created by migrations 000018/000019")
+		migrateWindows           = flag.Bool("windows", false, "Migrate backtest window summaries + mutation briefs from <LedgerDir>/windows JSONL into PG (explicit production backfill: not part of -all; requires -expect-db)")
+		windowsDir               = flag.String("windows-dir", "", "Source directory for -windows; defaults to <LedgerDir>/windows")
 		expectDB                 = flag.String("expect-db", "", "assert the postgres database name before migrations (e.g. atlas); aborts with the actual current_database on mismatch (M12 target guard)")
 		dryRun                   = flag.Bool("dry-run", false, "-stockpicker only: compute and print expected migration volumes + source/target digests without writing")
 		outcomesSQLiteSessions   = flag.Bool("outcomes-sqlite-sessions", false, "Backfill SQLite session-scoped outcomes (session_id != '') preserving session_id (A01)")
@@ -65,12 +67,13 @@ func run() error {
 
 	ctx := context.Background()
 
-	// Fail-closed (independent-review P1): -stockpicker writes production
-	// data, so it refuses to run without an explicit -expect-db target
-	// assertion — a forgotten flag must abort, not backfill whatever
-	// DATABASE_URL happens to point at. Other modes keep their legacy
-	// behavior (guard applies only when -expect-db is provided).
-	if err := requireStockpickerTargetAssertion(*migrateStockpicker, *expectDB); err != nil {
+	// Fail-closed (independent-review P1, generalized in the window family
+	// batch): -stockpicker and -windows write production data, so they refuse
+	// to run without an explicit -expect-db target assertion — a forgotten
+	// flag must abort, not backfill whatever DATABASE_URL happens to point at.
+	// Other modes keep their legacy behavior (guard applies only when
+	// -expect-db is provided).
+	if err := requireMigrateTargetAssertion(*migrateStockpicker, *migrateWindows, *expectDB); err != nil {
 		return err
 	}
 
@@ -207,6 +210,20 @@ func run() error {
 	if *migrateStockpicker {
 		if err := migrateStockpickerData(ctx, pool, *sqlitePath, *dryRun); err != nil {
 			return fmt.Errorf("migrate stockpicker: %w", err)
+		}
+	}
+
+	// Deliberately NOT part of -all: backfilling the pre-migration window
+	// history is an explicit production data operation (and -all must keep
+	// working on a deployment whose windows directory is empty or absent).
+	// Requires -expect-db (see requireMigrateTargetAssertion).
+	if *migrateWindows {
+		dir := *windowsDir
+		if dir == "" {
+			dir = filepath.Join(stateDir, "windows")
+		}
+		if err := migrateWindowsData(ctx, pool, dir); err != nil {
+			return fmt.Errorf("migrate windows: %w", err)
 		}
 	}
 

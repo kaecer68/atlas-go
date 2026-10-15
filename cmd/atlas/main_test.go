@@ -499,6 +499,16 @@ func TestStaticDistPrefixMount(t *testing.T) {
 }
 
 func TestDashboardAPIUsesWorkDirForPaths(t *testing.T) {
+	// The window fixture below is a JSONL file, and the window family is read
+	// from the DECLARED backend (Q2 batch 2, T2: RegisterRoutes injects
+	// ledger.NewWindowStore(cfg), so ATLAS_STORE_BACKEND=sqlite/postgres reads
+	// the relational window_summaries table instead of scanning
+	// <ledgerDir>/windows). Pin the declaration the fixture lives in; the
+	// subject of this test is the WorkDir path contract, not the backend
+	// choice. cmd/experimental/staging-drill-strategy-techniques pins jsonl the
+	// same way.
+	t.Setenv("ATLAS_STORE_BACKEND", "jsonl")
+
 	tmpDir := t.TempDir()
 	ledgerDir := filepath.Join(tmpDir, "data", "state")
 	windowsDir := filepath.Join(ledgerDir, "windows")
