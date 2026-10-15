@@ -2764,8 +2764,23 @@ PY
   **34 處**（`grep -rn 'ledger\.NewStore(' --include='*.go' cmd internal | grep -v _test.go` 另命中
   `internal/ledger/ledger.go:434` 的**文件註解**，掃描器去註解後不算）。T1 只遷移
   `internal/autobacktest` 的 signal engine 與 comparator 這 **2 處** ⇒ 剩 **32 處**逐筆登錄在
-  allowlist（每筆 reason 必填）。守門會擋下：新增裸呼叫、同檔數量超出、stale 條目（站點已遷移卻
+  allowlist（每筆 reason 必填）。守門會擋下：新增站點、同檔數量超出、stale 條目（站點已遷移卻
   沒刪條目）、reason 留 `TODO`。
+- **兩相（direct + indirect）**：只掃 `ledger.NewStore(` 會漏掉「**未注入就落到 JSONL**」的間接型態
+  ——建構端檔面上看不到任何 `ledger.NewStore`。守門因此也掃這幾個建構子：`service.NewLiveService`
+  （未注入 `History`/`TradeStore` ⇒ `summariesStore()` 退回 JSONL，`service/live.go:124`）、
+  `service.NewBacktestService`（`Start` 自建 JSONL，`service/backtest.go:70`）、
+  `risk.NewHandlers`／`system.NewHandlers`（未注入 store／history 時的 fallback）、
+  `autobacktest.NewSignalEngineFromDir`／`NewComparatorFromDir`（本 PR 保留的顯式 JSONL 相容入口）。
+  既有 8 處一樣逐筆登錄（每筆註明注入證據或「已知缺口」）。
+  **已知缺口（unit 2 PR 指認）**：`internal/monitoring/api/decision/handlers.go` 的 `computeExitAlerts`
+  與 `api/dashboard/overview.go` 的 `buildOverview` 在 `Svc` 為 nil 時裸建 `LiveService`（前者只用到
+  `LoadPortfolioState`（讀 `data/state` 檔案）；後者只用到 `HistorySource()`／`HistoryDegraded()`
+  （只讀 `s.History`）——已讀碼確認這兩條呼叫路徑目前不經 ledger store，但都是 latent seam，
+  修法為 DI／缺注入即報錯）。
+- **守門抓不到的（明確界線）**：struct literal 填 `LedgerDir`（例：`apilive.Handlers{LedgerDir: …}`）、
+  不經 `ledger.NewStore` 的 JSONL 檔案直讀（`os.ReadDir`/`os.ReadFile`）、把 `ledger` 包成自家
+  adapter 後再呼叫／dot-import。這三類沒有可掃的建構站點，只能靠 review 與 allowlist 追蹤。
 - **為何本 PR 不加 `Deprecated:`**：`ledger.NewStore` 仍有 32 個 production 站點（含 `store_factory`
   自己的 jsonl 分支與 `internal/monitoring` 的 fallback）⇒ 標記後 SA1019 會在 32 處一起冒出來、
   CI 直接變紅。改以「明確守門 ＋ allowlist」先擋新增，等多數站點遷移後再單獨一 PR 加標記。
