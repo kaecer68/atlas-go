@@ -2804,6 +2804,32 @@ PY
 - **最小處置**：①補上 `ReplayDataPath`／`BaselinePolicyPath`（載體與建構處一併）②**加一個 reflection 欄位對等測試**（比對「載體有的欄位」與「runner 實際需要的欄位」，缺一即紅）—— 同型測試 PR #2234 已在 `bootstrap_test.go` 為 `LedgerDir` 做過，可沿用③檢查其餘 runner 是否還有其他必填欄位未帶。
 - **查法**：`grep -n 'taskRunnerConfig' -A15 internal/bootstrap/bootstrapper.go`；`grep -n 'ReplayDataPath\|BaselinePolicyPath' internal/bootstrap/bootstrapper.go internal/taskexec/runners.go`；`psql -Atc 'select count(*) from task_executions'`（生產目前為 0）。
 
+### FU-20261016-03 — `experiments.session_id` **100% NULL**（894/894）：`RecordSessionExperiment` 的錯誤被吞 ＋ INSERT 無 `ON CONFLICT`
+
+- **狀態**：`open`
+- **記錄日期**：2026-10-16
+- **來源**：T3 查證（`atlas-notes/review-20261016/experiments-pg-writer-verdict.md`）；root 已用 psql 複驗
+- **事實（root 實測）**：
+  - 生產 PG `experiments`：**894 列**（`exp-` 748 ＋ `onboard-` 146），`count(session_id)` = **0**、`accepted <> 0` = **0**、`prompt_experiment_results` = **0**。
+  - `internal/orchestrator/system.go:1022` 以 `_ = RecordSessionExperiment(...)` **吞掉錯誤**；而 `internal/ledger/postgres_ledger.go` 的 `INSERT INTO experiments (...)` **沒有 `ON CONFLICT`** ⇒ 同一 `experiment_id` 的第二次插入必撞 UNIQUE ⇒ 被吞掉 ⇒ **session 連結永遠寫不進去**（正是 `session_id` 全 NULL 的成因）。
+- **風險**：實驗與其 replay session 的**可追溯性整體缺失**；且「同一 id 二次寫入」本應是冪等更新，現在是靜默失敗。
+- **最小處置**：①把 INSERT 改為**有針對性的 upsert**（`ON CONFLICT (experiment_id) DO UPDATE SET session_id = COALESCE(experiments.session_id, EXCLUDED.session_id)`）②其餘錯誤**不再吞**（`RecordSessionExperiment` 的回傳值要處理或明確記錄 + 指標）③補測試：同 id 二次寫入 ⇒ session_id 被填上、且不報錯。
+- **查法**：`psql -Atc "select count(*), count(session_id) from experiments"`（生產：894 / 0）；`grep -n '_ = RecordSessionExperiment' internal/orchestrator/system.go`；`grep -n -A3 'INSERT INTO experiments' internal/ledger/postgres_ledger.go`（無 ON CONFLICT）。
+
+### FU-20261016-04 — T3（experiments 讀取端切 PG）的**前置條件**與**驗收判準必須更正**
+
+- **狀態**：`open`
+- **記錄日期**：2026-10-16
+- **來源**：同上 T3 查證；root 已複驗關鍵讀數
+- **事實**：
+  1. **PG experiments 是 LIVE**（最新寫入＝id 尾碼時間 **2026-10-15T05:41:45Z**，量測時僅 13.7 小時前）⇒ 不是快照、也沒有停擺。
+  2. ★ **欄位語意**：`experiments.timestamp` ＝ `ExperimentRecord.WindowStart`，**不是寫入時間**；`exp-*` 路徑為 `time.Now().AddDate(0,0,-20)`（`internal/domain/candidate.go`）⇒ 該欄位 = 寫入 − **20 天**（root 實測：最新列 id 尾碼 2026-10-15 ↔ timestamp 2026-09-25）。`onboard-*` 為零值 ⇒ `0001-01-01`（146 筆）。
+  3. **PG 只有「半條生命週期」**：僅 planned（`accepted` 全 0、`prompt_experiment_results`=0）；JSONL 側另有 `exec-`（1027）／`auto-`（1097）與全部 `eval_metrics` ⇒ **現在切讀取端不是「讀到舊快照」，而是讀到半份資料**（會出現**假「接受率 0%」**）。
+  4. **先停的是 JSONL 側**（`experiments.jsonl` 與 `experiments/` mtime 皆 2026-10-13T23:39:31Z，因 `auto_experiment` 為 7 天間隔），PG 反而寫到 10-15 ⇒ 與「PG 凍結」的直覺相反。
+- **必須更正的驗收判準**：T3 原定「`max(timestamp)` 追上當天」**結構上永遠不可能成立**（該欄位是寫入 − 20 天）⇒ 應改用①依 `experiment_id` 尾碼換算的寫入時間、或②新增明確的 `recorded_at` 欄、或③比對 `prompt_experiment_results` 的列數成長。
+- **T3 的正確順序**：**先統一寫者**（讓 live pipeline 把**完整生命週期**寫進 PG，或把 JSONL 的 `exec-`／`auto-`／`eval_metrics` 遷入 PG），**再切讀取端**；否則會製造假指標。
+- **查法**：`psql -Atc "select experiment_id, to_timestamp(substring(experiment_id from '[0-9]+$')::bigint) as written_at, timestamp as window_start from experiments where experiment_id like 'exp-%' order by 2 desc limit 3"`；`psql -Atc "select count(*), count(*) filter (where accepted<>0) from experiments"`；`psql -Atc "select count(*) from prompt_experiment_results"`。
+
 ## 相關文件
 
 - [universe-scoring-ranked-zero-20260925.md](universe-scoring-ranked-zero-20260925.md)
