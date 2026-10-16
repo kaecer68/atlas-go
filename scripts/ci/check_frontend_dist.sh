@@ -22,6 +22,10 @@
 #   bash scripts/ci/check_frontend_dist.sh --diff origin/main...HEAD
 #       # check only frontends whose files changed in the git range;
 #       # no frontend files changed → exit 0 (pure Go/docs pushes skip)
+#       # A range git cannot resolve (unknown ref, no git binary, not a work
+#       # tree) → exit 1 with git's own error: "git diff failed" and "the diff
+#       # touched no frontend file" print the same empty file list, and
+#       # conflating them let a stale dist pass the gate (2026-10-16).
 #   make check-frontend-dist                                   # same, from Makefile
 #
 # Exit 0 = all checked dists fresh (or nothing to check)
@@ -167,7 +171,23 @@ done
 echo "=== Frontend dist freshness check ==="
 
 if [ "$DIFF_MODE" -eq 1 ]; then
-  changed=$(git diff --name-only "$RANGE" 2>/dev/null || true)
+  # `git diff` FAILING must never be folded into "the diff looked at no frontend
+  # file": both produce an empty stdout, so `|| true` + `2>/dev/null` made the
+  # two indistinguishable and the gate returned green for a push whose frontend
+  # dist was provably stale (2026-10-16, reproduced: same tree, valid range ⇒
+  # rc=1, unresolvable range ⇒ rc=0 "nothing to check"). Capture the status
+  # explicitly, leave git's own stderr visible (dropping `2>/dev/null` is the
+  # point: the operator needs the failing revision), and refuse to judge.
+  diff_rc=0
+  changed=$(git diff --name-only "$RANGE") || diff_rc=$?
+  if [ "$diff_rc" -ne 0 ]; then
+    echo ""
+    echo "❌ check_frontend_dist FAILED — git diff 無法解析 range '$RANGE' (git rc=$diff_rc)"
+    echo "   無法判斷本次 diff 是否含前端檔案 ⇒ 不以「無變更」放行（fail loud）"
+    echo "   修復: 讓 range 可解析（例: git fetch origin && git rev-parse origin/main），"
+    echo "         或在真的不想檢查時明示跳過，不要靠範圍錯誤靜默通過"
+    exit 1
+  fi
   trigger=0
   for p in "${TRIGGER_PATHS[@]}"; do
     if printf '%s\n' "$changed" | grep -q "^$p/"; then
