@@ -255,6 +255,12 @@ func (s *SQLiteStore) RecordWindowSummary(summary domain.BacktestWindowSummary) 
 }
 
 // RecordMutationBrief persists a mutation brief as a JSON blob.
+//
+// Upsert for the same reason as RecordWindowSummary: window_id carries a unique
+// index (ux_mutation_briefs_window_id, mirroring sql/migrations/000029) and the
+// JSONL store this mirrors overwrites <windowID>-mutation-brief.json, so
+// re-running one window must refresh the row instead of appending a second
+// brief.
 func (s *SQLiteStore) RecordMutationBrief(windowID string, brief domain.MutationBrief) error {
 	data, err := json.Marshal(brief)
 	if err != nil {
@@ -263,11 +269,14 @@ func (s *SQLiteStore) RecordMutationBrief(windowID string, brief domain.Mutation
 	_, err = s.db.Exec(
 		`
 		INSERT INTO mutation_briefs (window_id, data_json, created_at)
-		VALUES (?, ?, ?)`,
+		VALUES (?, ?, ?)
+		ON CONFLICT(window_id) DO UPDATE SET
+			data_json = excluded.data_json,
+			created_at = excluded.created_at`,
 		windowID, string(data), time.Now().UTC().Format(time.RFC3339),
 	)
 	if err != nil {
-		return fmt.Errorf("insert mutation brief: %w", err)
+		return fmt.Errorf("upsert mutation brief: %w", err)
 	}
 	return nil
 }

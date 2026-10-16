@@ -2934,13 +2934,50 @@ PY
 
 ### FU-20261016-07 — `mutation_briefs` **沒有 unique 鍵** ⇒ 重複執行會多列（回填目前以 DELETE+INSERT 規避）
 
-- **狀態**：`open`
+- **狀態**：`done`（2026-10-16；原敘述全數保留，處置見條文末）
 - **記錄日期**：2026-10-16
 - **來源**：Q2b2 T2（PR #2238）實作時發現，該 PR 以「先 DELETE 該 window_id 再 INSERT」使**回填**冪等，但未改 schema（建議另案）
 - **事實**：`mutation_briefs`（migration `000015`）**沒有 unique 約束** ⇒ `RecordMutationBrief` 仍是純 `INSERT` ⇒ 同一窗口重跑會**累積重複列**（`window_summaries` 側已有 `window_id` UNIQUE 並改 upsert ✓，兩邊語意不對稱）。
 - **風險**：重複的 brief 列會讓以「brief 列數」為分母或逐列聚合的統計偏高；且回填與日常寫入的冪等性靠**呼叫端**維持，不是 schema 保證。
 - **最小處置**：①為 `mutation_briefs` 加 unique 鍵（如 `(window_id)` 或 `(window_id, ...)`，需先清理既有重複）②把 `RecordMutationBrief` 改為與 `window_summaries` 一致的 upsert ③驗收：`SELECT window_id, count(*) FROM mutation_briefs GROUP BY window_id HAVING count(*) > 1` 必須 **0 列**（PR #2238 的回填驗收已含此查詢）。
 - **查法**：`psql -Atc "select indexdef from pg_indexes where tablename='mutation_briefs'"`；`psql -Atc "select window_id, count(*) from mutation_briefs group by window_id having count(*) > 1"`。
+
+- **完成於**：本 PR（`fix/20261016-dataintegrity`）
+
+**處置（2026-10-16）**
+
+1. **根因複驗（讀碼 ＋ 唯讀實測）**：`sql/migrations/000015` 的 `mutation_briefs` 只有**非唯一**索引
+   `idx_mutation_briefs_window_id`；同一 migration 的 `window_summaries` 則是 `window_id TEXT UNIQUE`
+   且 `RecordWindowSummary` 一向是 upsert ⇒ 兩半語意不對稱**成立**。
+   ★ **更正原敘述一處**：不只 PG —— `internal/ledger/sqlite_core.go` 的 `mutation_briefs` 是**同一個形狀**
+   （非唯一索引 ＋ 純 INSERT），所以「加唯一鍵」必須**兩邊一致**（同 FU-20261012-07 的陷阱），
+   不是只補 PG。另 `ledger.Store`（JSONL）的 `RecordMutationBrief` 一直是冪等（覆寫
+   `<windowID>-mutation-brief.json`）⇒ 唯一性是**檔案後端本來就有的語意**，不是新語意。
+2. **既有重複盤查（schema 變更的前置，唯讀、未刪任何資料）**：production PG `mutation_briefs` = **0 列**
+   （`ssh kmacmini ... docker exec atlas-postgres psql -U atlas -d atlas -At`）、production
+   `data/state/atlas.db` 的 `mutation_briefs` = **0 列**（`sqlite3` 讀 `cp` 出來的副本，原檔未開）
+   ⇒ **不可能有重複** ⇒ 加唯一鍵安全，無需先清理。
+3. **修法**：新增 `sql/migrations/000029_mutation_briefs_unique_window_id.{up,down}.sql`（up 只有一句
+   `CREATE UNIQUE INDEX IF NOT EXISTS ux_mutation_briefs_window_id ON mutation_briefs (window_id)`）＋
+   `sqlite_core.go` 對應一句（`CREATE ... IF NOT EXISTS` 每次 `InitSchema` 都執行 ⇒ 同時治好既有檔案）＋
+   PG／SQLite 兩邊 `RecordMutationBrief` 改 `INSERT ... ON CONFLICT (window_id) DO UPDATE`
+   （`$n`／`?` 雙方言同語意）＋ `cmd/migrate-data/windows.go` 移除已多餘的 DELETE-first 步驟
+   （呼叫端補償改成 schema 保證）。
+4. **失敗模式（刻意 fail loud、絕不刪資料）**：既有檔案若有重複 ⇒ `CREATE UNIQUE INDEX` 失敗並中止
+   `InitSchema`／遷移；PG 錯誤會指名重複鍵（scratch schema 實測：`Key (window_id)=(window-fu101607-upsert) is duplicated.`，
+   SQLSTATE 23505）。清理重複列是 **operator 的資料操作**（保留每 window_id 最新一列），本 migration 不代勞。
+   以 `TestInitSchemaLegacyDuplicatesFailLoudWithoutDeleting`（hermetic，並斷言列數不變）與
+   `TestMigration000029RefusesDuplicatesWithoutDeletingThem`（PG）釘住。
+5. **驗收**：hermetic（重複寫入 ⇒ 1 列且內容為第二次／新舊 schema 的索引存在且 unique／legacy 檔案被治好）
+   ＋ PG integration（二次 `RecordMutationBrief` ⇒ 1 列且 `data_json` 為第二次；raw 重複 INSERT 被拒）
+   ＋ `cmd/migrate-data` 回填 integration（重跑不累積；**原斷言「seed 重複 ⇒ 2 列」已改為「seed 重複 ⇒ 被拒」**，
+   因 schema 已不允許重複 —— 這是語意收緊，不是放寬）。
+6. **負向證明（突變 ⇒ 必紅）**：移除 SQLite 唯一索引 ⇒ 4 紅（含 `ON CONFLICT clause does not match any
+   PRIMARY KEY or UNIQUE constraint`）；PG 改回純 INSERT ⇒ 紅 `duplicate key value violates unique constraint
+   "ux_mutation_briefs_window_id" (SQLSTATE 23505)`；還原成 pre-fix（無索引 ＋ 純 INSERT）⇒ 紅
+   `mutation_briefs rows = 2, want 1 (second write must replace, not accumulate)`。
+7. **已知限制**：舊的非唯一索引 `idx_mutation_briefs_window_id` **刻意保留**（本 migration additive-only；
+   唯一索引已能服務同樣的查詢）。移除它屬外觀層面、可省略，另案。
 
 ### FU-20261016-08 — `PGFirstOutcomeStore` 的 `LoadOutcomes`／`LoadOutcomesFromSessions` **沒有 JSONL 降級**（與 summary 讀取不對稱）
 

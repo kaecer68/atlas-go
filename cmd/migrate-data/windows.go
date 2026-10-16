@@ -17,11 +17,12 @@ package main
 //     brief. A brief file must never be parsed as a summary — it carries a
 //     window_id field, so it would unmarshal cleanly into a half-empty summary
 //     instead of failing.
-//   - Idempotent. The summary half goes through
-//     PostgresLedgerStore.RecordWindowSummary (INSERT ... ON CONFLICT
-//     (window_id) DO UPDATE). mutation_briefs has NO unique key (only a
-//     non-unique index), so the brief half deletes the window's existing rows
-//     first: a re-run replaces, it never accumulates duplicates.
+//   - Idempotent. Both halves go through the store's upsert
+//     (PostgresLedgerStore.RecordWindowSummary / .RecordMutationBrief, both
+//     INSERT ... ON CONFLICT (window_id) DO UPDATE): a re-run replaces, it
+//     never accumulates duplicates. The brief half used to delete the window's
+//     rows first because mutation_briefs had no unique key; sql/migrations/
+//     000029 added one, so the workaround is gone (FU-20261016-07).
 //   - One bad file never aborts the run: unreadable / corrupt artifacts are
 //     warned about and skipped, the rest still migrates.
 //   - Read-only with respect to the filesystem: nothing is written back.
@@ -223,16 +224,11 @@ func migrateWindowsData(ctx context.Context, pool *pgxpool.Pool, windowsDir stri
 
 	var briefCount int
 	for _, artifact := range scan.Briefs {
-		// mutation_briefs carries no unique constraint, so a plain insert on a
-		// re-run appends duplicates forever. Delete this window's rows first:
-		// the run replaces the brief, it never accumulates copies.
-		if _, err := pool.Exec(ctx, `DELETE FROM mutation_briefs WHERE window_id = $1`, artifact.WindowID); err != nil {
-			log.Printf("Warning: failed to clear mutation briefs for %s (%s): %v",
-				artifact.WindowID, artifact.FileName, err)
-			continue
-		}
+		// ON CONFLICT (window_id) DO UPDATE, like the summary half above: a
+		// re-run refreshes the window's brief row (mutation_briefs.window_id is
+		// UNIQUE since 000029, so no delete-first step is needed or wanted).
 		if err := store.RecordMutationBrief(artifact.WindowID, artifact.Brief); err != nil {
-			log.Printf("Warning: failed to insert mutation brief %s (%s): %v",
+			log.Printf("Warning: failed to upsert mutation brief %s (%s): %v",
 				artifact.WindowID, artifact.FileName, err)
 			continue
 		}
