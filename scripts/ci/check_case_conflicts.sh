@@ -7,7 +7,12 @@
 #
 # Usage:
 #   bash scripts/ci/check_case_conflicts.sh          # check all tracked files
-#   bash scripts/ci/check_case_conflicts.sh --strict # fail on any mixed-case filename
+#   bash scripts/ci/check_case_conflicts.sh --strict # exit 1 on a non-allowlisted name
+#                                                    # (only flags the add-on check below
+#                                                    # treats as violations; the
+#                                                    # case-conflict check always exits 1)
+# Unknown flags exit 2: a misspelled flag must not silently fall back to the
+# warning-only mode (FU-20261016-23).
 
 set -euo pipefail
 
@@ -16,10 +21,23 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m'
 
+# Arg parsing is explicit: an unknown flag is a hard error. Silently ignoring it
+# used to turn a typo (`--stric`) into the WARNING-only default, i.e. the same
+# "gate that cannot fail" shape this flag exists to avoid (FU-20261016-23).
+# Exit code 2 = usage error, matching check_frontend_dist.sh / check-binary-freshness.sh.
 STRICT=false
-if [[ "${1:-}" == "--strict" ]]; then
-    STRICT=true
-fi
+case "${1:-}" in
+    "")
+        ;;
+    --strict)
+        STRICT=true
+        ;;
+    *)
+        echo "unknown option: $1" >&2
+        echo "usage: check_case_conflicts.sh [--strict]" >&2
+        exit 2
+        ;;
+esac
 
 echo "🔍 Checking for case-conflicting filenames..."
 
@@ -50,13 +68,34 @@ if $STRICT; then
     echo ""
     echo "🔍 --strict: checking for inconsistent casing..."
 
-    # Files/dirs explicitly allowed to use non-snake_case
+    # Files/dirs explicitly allowed to use non-snake_case.
+    # Every entry must name a **tool-enforced** convention (this check's own
+    # stated criterion), not a one-off exemption:
+    #   * GitHub community-health files — the uppercase name IS the recognised
+    #     spelling: README.md, LICENSE, NOTICE, CHANGELOG.md, CONTRIBUTING.md,
+    #     SECURITY.md
+    #   * AI-tool instruction files — AGENTS.md is a published cross-tool spec
+    #     (https://agents.md); CLAUDE.md is Claude Code's convention
+    #   * Build / container entrypoints — Makefile, VERSION and the
+    #     `Dockerfile<.suffix>` variants (docker keeps the `Dockerfile` stem)
+    # NOTE: the three dotfile entries are unreachable today — the pipeline above
+    # runs `grep -v '^\.'` first, so dotfiles never reach this loop. Kept as
+    # documentation of intent (FU-20261016-23 已知限制).
     ALLOWLIST=(
         "README.md"
+        "LICENSE"
+        "NOTICE"
+        "CHANGELOG.md"
+        "CONTRIBUTING.md"
+        "SECURITY.md"
+        "AGENTS.md"
         "CLAUDE.md"
+        "Makefile"
+        "VERSION"
         "Dockerfile"
         "Dockerfile.cron"
-        "Makefile"
+        "Dockerfile.atlas.local"
+        "Dockerfile.cron.local"
         ".editorconfig"
         ".gitignore"
         ".dockerignore"
@@ -75,11 +114,19 @@ if $STRICT; then
     done)
 
     if [[ -n "$VIOLATIONS" ]]; then
-        echo -e "${YELLOW}⚠️  Non-snake_case files found:${NC}"
+        VIOLATION_COUNT=$(printf '%s\n' "$VIOLATIONS" | wc -l | tr -d ' ')
+        echo -e "${RED}❌ Non-snake_case files found:${NC}"
         echo "$VIOLATIONS"
         echo ""
         echo "These should use snake_case unless there's a tool-enforced convention."
         echo "To suppress: add to ALLOWLIST in this script."
+        echo ""
+        # `--strict` means "treat this as a gate": a non-allowlisted name must end
+        # in a non-zero exit. Until FU-20261016-23 this branch only printed a
+        # warning, so the mode CI (quality.yml `naming`) and local-ci.sh call was
+        # indistinguishable from the default run — the flag had no teeth.
+        echo -e "${RED}❌ --strict: ${VIOLATION_COUNT} file(s) above are not in the ALLOWLIST${NC}"
+        exit 1
     else
         echo -e "${GREEN}✅ All files follow snake_case convention${NC}"
     fi
