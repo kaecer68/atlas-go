@@ -3894,6 +3894,94 @@ PY
   ② `docs/data-maturity-standard.md` §6 描述的是另一套（maturity 欄位有效性／一致性）**從未實作**的檢查
   ⇒ 文件與實作漂移，本 PR 未動；③ `ls -A` 的空目錄跳過（本檔 2 處）仍吞錯（讀不到目錄時會靜默跳過該目錄）；
   ④ `check_catalog_sync` 的「mtime 差 120s」判準本身是弱訊號，本 PR 只修其假綠面、未改判準。
+
+### FU-20261016-23 — `check_case_conflicts.sh --strict` 只印 WARNING、沒有 `exit 1` ⇒ CI 的 `naming` job 永遠是綠的（`quality.yml:190` 正是入口）
+
+- **狀態**：`done`
+- **記錄日期**：2026-10-16 ／ **完成於**：2026-10-16 本 PR（`fix/20261016-case-conflicts-strict`）
+- **嚴重度**：**P1（閘門正在說謊）** —— 與 `-18`／`-19`／`-21`／`-22` 同族（「閘門說謊」）。
+- **來源**：`FU-20261016-19` 的同型稽核（`atlas-notes/review-20261011/sameclass-inventories-20261016/p0a-doclinks-sameclass.md` 真缺陷表 P1 列）＋本檔 `:1264` 的複驗列；2026-10-16 root 指派本車道收斂。
+- **事實（修前碼點；2026-10-16 實測複現）**：
+  ① `scripts/ci/check_case_conflicts.sh:77-85`（修前）`if [[ -n "$VIOLATIONS" ]]; then` 只印黃字
+     `⚠️  Non-snake_case files found:` ＋ `To suppress: add to ALLOWLIST in this script.`，**沒有 `exit 1`**。
+     全檔唯一的 `exit 1` 在 `:42`，判的是**另一件事**（case-conflict pairs）。
+  ② ⇒ `--strict` 與「不帶旗標」的差別**只有輸出文字**，閘門語意為零；而兩個呼叫端都帶 `--strict`：
+     `.github/workflows/quality.yml:190`（job `naming`）與 `scripts/ci/local-ci.sh:71`。
+  ③ 檔頭 `:10` 的用法說明卻已寫著 `--strict # fail on any mixed-case filename` ⇒ 文件與行為不一致。
+     （這**不是**「advisory 是刻意設計」：同族稽核已把 `check_constitution_drift.sh` 那類檔頭自述
+     advisory 者排除，本條是唯一例外。）
+  **【更正派工／F-item 敘述】** 派工文字寫「有衝突且 `--strict` ⇒ 仍 rc=0」**不精確**。hermetic fixture 實測
+  （index 內同目錄 `Folder.md` ＋ `folder.md`）：修前 `--strict` ⇒ **rc=1**、不帶旗標 ⇒ **rc=1**，兩者輸出
+  都是 `❌ CASE CONFLICT DETECTED` ⇒ **衝突路徑本來就有牙齒**；缺牙的是 `--strict` 專屬的
+  **非 snake_case 檔名**那一支。
+- **影響量測（修前，`origin/main` 樹，唯讀）**：`bash scripts/ci/check_case_conflicts.sh --strict` ⇒ 列出 9 個
+  非白名單檔（`AGENTS.md`、`CHANGELOG.md`、`CONTRIBUTING.md`、`Dockerfile.atlas.local`、
+  `Dockerfile.cron.local`、`LICENSE`、`NOTICE`、`SECURITY.md`、`VERSION`）＋ **rc=0** ⇒ CI 這條**永遠綠**。
+  註：掃描面本身只有 **repo 根目錄的檔** —— `:65` 排除樣式 `'/\|\.go$\|…'` 的第一個替代項是**單獨一個 `/`**
+  （BRE alternation；這行**刻意不帶 `-E`**）⇒ 任何含 `/` 的路徑都先被排除。**本 PR 未改這個判準**。
+- **修法（本 PR；只動 `scripts/ci/check_case_conflicts.sh`）**：
+  ① `--strict` 區塊列完違規後**先量條數**（`wc -l`）再印紅燈
+     `❌ --strict: N file(s) above are not in the ALLOWLIST` 並 **`exit 1`**；
+  ② ALLOWLIST 補上 9 個既有且**工具強制慣例**的檔（GitHub community-health：`README.md`／`LICENSE`／
+     `NOTICE`／`CHANGELOG.md`／`CONTRIBUTING.md`／`SECURITY.md`；AI 工具規範：`AGENTS.md`／既有 `CLAUDE.md`；
+     建置／容器進入點：`Makefile`／`VERSION`／`Dockerfile*` 變體），並在註解寫明
+     「**每一筆都必須是工具強制慣例**」⇒ 修完 `--strict` 在 `origin/main` 樹回 **rc=0**
+     （否則修法本身會在 CI 造出 9 條假紅，等於把假綠換成假紅）；
+  ③ **預設（不帶 `--strict`）行為完全不變**：`ci-quick`（`Makefile:592`）走的就是這條 ⇒ 仍 rc=0、
+     不輸出任何非 snake_case 資訊；
+  ④ **未改任何 workflow**：`quality.yml:190` 的 `--strict` 語意與本修法一致（契約測試 ⑧ 把接線釘住）。
+  ⑤ 同檔順手堵**孿生形狀**：未知旗標改為 **`exit 2`**。原本 `--bogus-flag`／拼錯的 `--stric` 都被**靜默忽略**
+     ⇒ 靜默退回 WARNING-only，等於把剛裝上的牙齒又無聲拔掉（實測：修前 `--stric` 在**真的有違規**的樹上 **rc=0**）。
+     `exit 2` 與 `check_frontend_dist.sh:166`／`check-binary-freshness.sh:47` 的用法錯誤碼一致；**既有的三個呼叫端都只帶
+     `--strict`，rc 與輸出逐字不變**（實測）。
+- **負向證明（hermetic fixtures；`tests/scripts/test-check-case-conflicts.sh`，18 斷言，已納入 `make ci-gate`）**：
+  ★ 探針**有鑑別力**（先確認，不是事後補）：同一 fixture（index 只有 `FooBar.md`、**無**大小寫衝突）＋ `--strict`
+    ① **修前**（`git show origin/main:scripts/ci/check_case_conflicts.sh`）⇒ 印
+       `⚠️  Non-snake_case files found:`／`  FooBar.md`／`To suppress: add to ALLOWLIST in this script.`／`Done.`、
+       **rc=0**（假綠原文）；
+    ② **修後** ⇒ 同一輸入 **rc=1**，輸出多出紅燈 `❌ --strict: 1 file(s) above are not in the ALLOWLIST`
+       （且 `⚠️` 升為 `❌`）⇒ 兩者不同才成立。
+  ★ **整支測試**有鑑別力（不只單一斷言）：把修前腳本 `cp` 回受測路徑再跑本測試 ⇒ **rc=1、12 條斷言紅**
+    （①「綠燈缺少合規宣告」／②「--strict 沒有紅」／⑦「--strict 區塊內沒有 exit 1」／⑦「找不到旗標解析的 case 區塊」／
+    ⑨「未知旗標被靜默忽略」／⑨「拼錯的 --strict 被靜默忽略」…）；
+    `cp` 還原後 `sha256` 與備份**逐位元組相等**、測試回 **22 passed / rc=0**。
+  ★ 未知旗標的鑑別力（修法⑤）：修前 `bash scripts/ci/check_case_conflicts.sh --stric` ⇒ **rc=0**（靜默忽略）；
+    修後 ⇒ **rc=2** ＋ stderr `unknown option: --stric` 與 `usage: check_case_conflicts.sh [--strict]`，
+    且斷言 rc=2 時**不得**出現任何掃描結論（不許「用法錯誤」變成另一種假綠）。
+  ★ 測試內突變自證：拿掉 `--strict` 區塊的 `exit 1`（＝修前的 rc 行為）⇒ ② 的斷言**確實會紅**
+    （該次 `negproof_expect` 回報 `期望 exit=1，實際 exit=0`）。
+  ★ 反面控制：慣例檔齊備的 fixture ＋ `--strict` ⇒ rc=0（擋「一律紅」的過度修正）；同一 fixture
+    **不帶** `--strict` ⇒ rc=0 且不得出現任何違規輸出；2 個違規檔 ⇒ 紅燈必須寫 `2 file(s)`
+    （條數是量出來的，不是寫死的）。
+  ★ case-conflict 對（`update-index --cacheinfo` 造同檔名不同大小寫的 index entry）⇒ 帶與不帶 `--strict`
+    **都** rc=1 ⇒ 把「衝突路徑本來就有牙齒」釘成契約（即上面那條敘述更正）。
+- **已知限制**：① 掃描面仍只有 repo **根目錄**的檔（`:65` 第一個替代項是單獨的 `/`）：本 PR 只補 `exit 1`
+  與白名單，**沒有**改判準；要擴大掃描面得先清 `docs/**`／`internal/**` 的既有大寫名，屬另一個主題。
+  ② ALLOWLIST 內三個 dotfile 條目（`.editorconfig`／`.gitignore`／`.dockerignore`）**不可達**：
+  `:65` 管線先 `grep -v '^\.'` ⇒ dotfile 根本不會進這個迴圈；本 PR 保留並加註（不動行為）。
+  ③ 本檢查與 `data-naming` job（`check_data_naming.sh`）判的是不同集合，兩者不互相覆蓋。
+  ④ 判準是「root 檔 ＋ 副檔名不在排除清單」的啟發式：未來新增的 root 慣例檔（例如 `Dockerfile.prod`）
+  仍需人工補 ALLOWLIST，否則 `--strict` 會紅 —— 這正是本次修法要的行為（有牙齒），但需要文件說明補的動作。
+
+- **同型掃描（只列清單，**不**配 ID；2026-10-16 本線逐條複驗，非轉述）**：
+  判準＝「旗標／模式被解析，或檢查被寫出來，但**對結束碼沒有作用**」。方法：`git ls-files '*.sh'` 共 135 檔，
+  對每個「被解析的旗標」做兩件事 —— (a) 該旗標在同檔是否只出現一次（可能只被 echo 說明）、(b) 解析時賦值的
+  變數之後是否**完全沒有引用**（dead flag）；再對留下的候選逐支讀碼 ＋ 實跑比較「帶旗標 vs 不帶」的 rc。
+
+  | 嚴重度 | 位置 | 形狀 | 本線實測 | 判讀 |
+  |---|---|---|---|---|
+  | **P1（同型，未修）** | `scripts/ci/zero-metric-guard.sh:29,63-69` | 旗標**有**牙齒（`--fail` ⇒ `exit 1`），但**全 repo 沒有任何呼叫端帶它** ⇒ 網路效果與本票同類（違規只印 `⚠️`、**rc=0**） | `grep -rn 'zero-metric-guard'` 全 repo 只有它自己的檔頭與 `FOLLOWUPS.md` 引用；實跑 `bash scripts/ci/zero-metric-guard.sh` ⇒ 在 `shared_web/static/js/pages/portfolio.js:77,209` 找到違規、印 `⚠️  unsafe patterns found (treated as warning)`、**rc=0** | 這支守門目前是**死的**；建議 root 另配 ID（本 PR **未動**） |
+  | 非缺陷（**更正 `:1265`**） | `scripts/ci/check_field_contract.sh:160-167` | `--strict` ⇒ `exit 1`（有牙齒） | `.github/workflows/quality.yml:425` `run: bash scripts/ci/check_field_contract.sh --strict` ⇒ **CI 有帶**；只有 `Makefile` 的 ci-quick 與 `local-ci.sh` 兩條**本機**入口不帶 | `:1265` 寫「本機兩個入口都不帶」是對的，但推論成「永遠 0」**不成立**（CI 那條會紅）⇒ 判準有誤，非缺陷 |
+  | 非缺陷（方向相反） | `check_atlas_mcp_docs_consistency.sh:35,127-140`／`check_frontend_imports.sh:29,97`／`check_shellcheck.sh:29,130`／`check_secrets.sh:19`／`check_data_naming.sh:27,392` | 全是 **opt-out** 旗標：**預設有牙齒**，旗標是把它變寬（`exit 0`） | 逐支讀碼：5 支都確實因旗標而改變 rc（`exit 0` vs `exit 1`） | 與本票方向相反，非缺陷 |
+  | 非缺陷（檔頭自述 advisory） | `check_constitution_drift.sh:85-86`（`exit 0  # Drift detection is advisory, not blocking`）；`check_data_catalog.sh`／`check_data_naming.sh` 的多處 `warnings only` | 註解／訊息**明示**非阻斷 | 原文自證 | 判準有誤（同族稽核已如此分類） |
+  | 非缺陷 | `update_doc_crossrefs.sh:29,59`（`--dry-run` 真的不寫檔）／`check_binary-freshness.sh:45-50,211-222`（`--diff-base` 明示跳過且 ref 不可解析 ⇒ `exit 2`）／`verify_governance_gates.sh:166` → `verify_parallel_scenarios.sh:71,443-445`（`--require-diversity` 確實會紅） | 旗標確實改變行為 | 逐支讀碼 | 非缺陷（含 one-level passthrough） |
+  | 已修（他線） | `check_frontend_dist.sh:182-191` | 同族 P0（`git diff` 失敗 ⇒ 併入「沒改前端」） | 現在是 `changed=$(git diff …) \|\| diff_rc=$?` ＋ `diff_rc≠0` ⇒ `exit 1`（行內註解自述 2026-10-16 實測） | 已在本輪他線修掉，不用再修 |
+  | **P1（同型，未修）** | `scripts/ci/check_jev_contract.sh:7,24` | 檔頭宣告 `--with-selftest`（opt-in 連外自測），但 `:24` 是 `exec python3 scripts/jev-contract-check.py --root "$REPO_ROOT"` —— **沒有把 `"$@"` 轉發給被呼叫者** ⇒ 旗標被靜默丟棄 | 本線複驗：帶與不帶旗標 **rc 皆 0 且輸出逐位元組相同**（`sha256(stdout+stderr)` 前 12 碼同為 `a6a097e8eb4f`） | 薄殼的 `"$@"` 轉發是獨立的同型面；建議 root 另配 ID（本 PR **未動**） |
+  | **P2（同型，未修）** | `scripts/ci/check_constitution.sh:13,23,314` ＋ `.github/workflows/constitution.yml:23` | 文件與 CI 都用 `--json`，但程式只認**裸字 `json`** ⇒ `--json` 等同不打旗標 | 本線複驗：`--json` 與不帶旗標輸出相同（`d132602ee9d9`）、裸 `json` 不同（`21518a431d59`）；`constitution.yml:23` 的 step 名就叫 `Summary (JSON)`、跑的卻是 `--json` ⇒ **CI 這步拿到的是文字，不是 JSON** | 建議 root 另配 ID（本 PR **未動**） |
+  | **P3（同型，未修）** | `check_data_catalog.sh:32,399`／`check_data_naming.sh:25,329`／`check_maturity.sh:24,265`／`check_agent_prompts.sh:22,192` | 同一個「**旗標拼法與程式實際接受的值不符**」的死旗標：接受 `--json`，只有裸 `json` 生效 | 本線逐支複驗：四支的 `--json` 輸出皆與不帶旗標**逐位元組相同**（`fa2ddb9f4075`／`7b9e3b12240e`／`148a56b9ab43`／`5405731709d6`），裸 `json` 皆不同；**對照組** `validate_json_schemas.sh:37` 有顯式 arm ⇒ 有生效 | 建議 root 另配 ID（本 PR **未動**） |
+  | 附註（判準） | 形狀（B）要用**三種**判準才掃得乾淨 | — | 只用「解析時賦值的變數之後沒被引用」⇒ **0 筆**（135 支 shell 檔的 16 個候選全是轉傳字面值，如 `.agent-hooks/deny-dangerous.sh:267,414` 的 `--ansi`／`--recursive`、`--porcelain`）；再加上「**薄殼沒把 `"$@"` 轉發**」與「**旗標拼法與實際接受值不符**」才浮現上面 P1／P2／P3 | 只列清單，供 root 另行配發 |
+  | 已修（本 PR，同檔） | `check_case_conflicts.sh:19-36` | 未知旗標被靜默忽略（`--bogus-flag`／`--stric` ⇒ rc=0 ＝ 靜默降級）＝本票缺陷的孿生形狀 | 修前實測 rc=0；修後 rc=2 ＋用法訊息（見修法⑤與負向證明） | 在同一支檔內修掉，未動其他檔 |
+
 ### FU-20261016-24 — `Makefile` 的 `ci-slow`：四支候選慢檢查**全部不存在**仍印 `✅ ci-slow complete` 且 rc=0（無計數、無「0 支 ⇒ 紅」守衛）
 
 > **落點說明**：本條接 `-22` 之後 —— 撰寫時（2026-10-16）`-23` 尚未落 main（它在 `fix/20261016-case-conflicts-strict` 車道內），

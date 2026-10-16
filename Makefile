@@ -1271,6 +1271,9 @@ ci-gate: embed-dirs
 	@echo "  → data catalog 新鮮度（check_data_catalog.sh）契約測試：stale 必指名且不得假綠／工具 rc=2 fail loud（hermetic；FU-20261016-22）"
 	@bash tests/scripts/test-check-data-catalog.sh
 	@echo "    ✅"
+	@echo "  → 檔名大小寫閘門（check_case_conflicts.sh）契約測試：--strict 有違規必紅且指名檔名與條數／預設仍 WARNING（hermetic；FU-20261016-23）"
+	@bash tests/scripts/test-check-case-conflicts.sh
+	@echo "    ✅"
 	@echo "  → 合併結果/ diff 衛生閘門自我測試（hermetic git fixtures；#1993）"
 	@bash tests/scripts/test-revert-guard.sh
 	@echo "    ✅"
