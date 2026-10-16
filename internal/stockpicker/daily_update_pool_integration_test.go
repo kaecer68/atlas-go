@@ -92,18 +92,50 @@ func realRecordingOpener(t *testing.T) *[]*pgxpool.Pool {
 	return opened
 }
 
+// repoRoot walks up from the current working directory to the module root (the
+// directory holding go.mod).
+//
+// Why not "../..": that assumes the working directory is exactly the package
+// directory, and CI proved the failure mode — when the root is resolved AFTER
+// the t.Chdir below, "../../" lands on the parent of the checkout and the run
+// fails with a confusing "configs/parameters.json: no such file". Walking up
+// from wherever the process is gives the same answer in both cases, at any
+// package depth (CI checks out at /home/runner/work/atlas-go/atlas-go).
+func repoRoot(t *testing.T) string {
+	t.Helper()
+	dir, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	for {
+		if _, err := os.Stat(filepath.Join(dir, "go.mod")); err == nil {
+			break
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			t.Fatalf("no module root (go.mod) above %s", dir)
+		}
+		dir = parent
+	}
+	// Sanity-check the pieces this test relies on, and report the resolved path
+	// when one is missing (the CI failure reported the missing file, not the
+	// resolution that caused it).
+	for _, want := range []string{filepath.Join("sql", "migrations"), filepath.Join("configs", "parameters.json")} {
+		if _, err := os.Stat(filepath.Join(dir, want)); err != nil {
+			t.Fatalf("module root resolved to %s, which has no %s: %v", dir, want, err)
+		}
+	}
+	return dir
+}
+
 // serverWorkDir builds a work directory the run accepts (parameters.json) and
 // that absorbs any state file a non-dry run writes, so nothing lands in the
-// checked-out tree.
-func serverWorkDir(t *testing.T) string {
+// checked-out tree. root is the module root from repoRoot.
+func serverWorkDir(t *testing.T, root string) string {
 	t.Helper()
-	root, err := filepath.Abs(filepath.Join("..", ".."))
-	if err != nil {
-		t.Fatalf("abs repo root: %v", err)
-	}
 	raw, err := os.ReadFile(filepath.Join(root, "configs", "parameters.json"))
 	if err != nil {
-		t.Fatalf("read parameters.json: %v", err)
+		t.Fatalf("read parameters.json from %s: %v", root, err)
 	}
 	dst := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(dst, "configs"), 0o755); err != nil {
@@ -127,11 +159,14 @@ func TestRunDailyUpdateReleasesItsPoolAgainstPostgres(t *testing.T) {
 		t.Fatalf("current_database: %v", err)
 	}
 
+	root := repoRoot(t)
+
 	// The run resolves its own DSN from the environment, so point it at the
 	// marked one for the duration of the test.
 	t.Setenv("DATABASE_URL", probeDSN(t))
-	// migrations are addressed relative to the repository root.
-	t.Chdir(filepath.Join("..", ".."))
+	// The run applies `sql/migrations`, which is addressed relative to the
+	// repository root — the directory production runs from.
+	t.Chdir(root)
 
 	baseline := probeBackends(t, observer)
 	if baseline != 0 {
@@ -161,7 +196,7 @@ func TestRunDailyUpdateReleasesItsPoolAgainstPostgres(t *testing.T) {
 			// this test pins is the lifecycle on EVERY return path, and the
 			// empty database can legitimately stop the pipeline early.
 			res, err := RunDailyUpdate(context.Background(), RunDailyOptions{
-				WorkDir:     serverWorkDir(t),
+				WorkDir:     serverWorkDir(t, root),
 				Backend:     "postgres",
 				ExpectDB:    dbName,
 				DualWrite:   tc.dual,
