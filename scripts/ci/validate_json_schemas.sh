@@ -17,7 +17,9 @@
 #   bash scripts/ci/validate_json_schemas.sh --json   # JSON 輸出
 #   bash scripts/ci/validate_json_schemas.sh --dry    # 僅檢查 schema 存在性
 #
-# 退出碼: 0 = 通過, 1 = 驗證失敗, 2 = 缺少依賴
+# 退出碼: 0 = 通過, 1 = 驗證失敗, 2 = 檢查跑不成
+#         （缺少依賴／工具或環境失敗；FU-20261016-29）。
+#         `2` 與 `1` 互斥：前者＝這一支**根本沒跑成**，後者＝真的驗到違規。
 # =============================================================================
 
 set -euo pipefail
@@ -42,8 +44,11 @@ if $FULL_MODE; then
   MAX_LINES=999999  # Effectively all lines
 fi
 
+# 工具／環境失敗（＝這一支「跑不成」）與「真的掃到 0 筆」是兩件事（FU-20261016-29）：
+# 舊版把 `find` 失敗的空集合當成「沒有 schema 可驗證」⇒ 跳過 ⇒ 仍印 `3/3 通過`、rc=0。
 VIOLATIONS=0
 WARNINGS=0
+TOOL_FAILURES=0
 SCHEMA_COUNT=0
 VALIDATED_COUNT=0
 JSON_VIOLATIONS="[]"
@@ -58,6 +63,8 @@ log_pass()  { printf "${GREEN}[PASS]${NC} %s\n" "$1"; }
 log_fail()  { printf "${RED}[FAIL]${NC} %s\n" "$1"; VIOLATIONS=$((VIOLATIONS + 1)); }
 log_warn()  { printf "${YELLOW}[WARN]${NC} %s\n" "$1"; WARNINGS=$((WARNINGS + 1)); }
 log_info()  { printf "       %s\n" "$1"; }
+# log_tool_fail — 「檢查跑不成」（工具缺失／管線 rc 非 0）：與 log_fail（資料違規）分開計數（FU-20261016-29）。
+log_tool_fail() { printf "${RED}[FAIL]${NC} %s\n" "$1"; TOOL_FAILURES=$((TOOL_FAILURES + 1)); }
 
 add_json_violation() {
   local check="$1" file="$2" detail="$3"
@@ -102,12 +109,21 @@ check_schemas_exist() {
     return 0
   fi
 
+  # 掃描失敗 ⇒ 空集合 ⇒ 「沒有 schema」，與「真的沒有 schema」逐字不可區分（FU-20261016-29）
+  local schemas rc=0
+  schemas=$(find "$SCHEMAS_DIR" -maxdepth 1 -name "*.schema.json" | sort) || rc=$?
+  if [ "$rc" -ne 0 ]; then
+    log_tool_fail "列出 $SCHEMAS_DIR/*.schema.json 失敗（find 管線 rc=${rc}）⇒ schema 存在性檢查無效，不得視為通過 (FU-20261016-29)"
+    return 1
+  fi
+
   while IFS= read -r schema; do
+    [ -n "$schema" ] || continue
     SCHEMA_COUNT=$((SCHEMA_COUNT + 1))
     local name
     name=$(basename "$schema" .schema.json)
     log_info "Schema: $name → $schema"
-  done < <(find "$SCHEMAS_DIR" -maxdepth 1 -name "*.schema.json" 2>/dev/null | sort)
+  done <<< "$schemas"
 
   if [ "$SCHEMA_COUNT" -eq 0 ]; then
     log_warn "$SCHEMAS_DIR/ 存在但無 .schema.json 檔案"
@@ -121,10 +137,12 @@ check_schemas_exist() {
 # =============================================================================
 # Helper: find JSONL files matching a schema name
 # =============================================================================
+# 回傳 0 = 掃描成功（可能是空的合法結果）；非 0 = find 失敗（呼叫端必須 fail loud；FU-20261016-29）。
+# `2>/dev/null` 不再使用：工具壞掉要看得到原因。
 find_data_files() {
   local schema_name="$1"
   # Search for matching JSONL files
-  find data/ -type f -name "${schema_name}.jsonl" 2>/dev/null
+  find data/ -type f -name "${schema_name}.jsonl"
 }
 
 # =============================================================================
@@ -207,8 +225,17 @@ check_data_without_schema() {
 
   # Also check per-session outcomes
   if [ -d "data/state/sessions" ]; then
-    local session_outcome_count
-    session_outcome_count=$(find data/state/sessions/ -name "recommendation_outcomes.jsonl" 2>/dev/null | wc -l | tr -d ' ')
+    # FU-20261016-29：舊版 `find … 2>/dev/null | wc -l` 失敗 ⇒ 0 ⇒ 直接跳過這一支檢查
+    # ⇒ 「掃不到」與「真的沒有」不可區分。現在 rc 顯式判定。
+    local session_list session_rc=0 session_outcome_count=0
+    session_list=$(find data/state/sessions/ -name "recommendation_outcomes.jsonl") || session_rc=$?
+    if [ "$session_rc" -ne 0 ]; then
+      log_tool_fail "列出 data/state/sessions/ 的 recommendation_outcomes.jsonl 失敗（find rc=${session_rc}）⇒ 無法判定是否缺 schema，不得視為通過 (FU-20261016-29)"
+      return 1
+    fi
+    if [ -n "$session_list" ]; then
+      session_outcome_count=$(printf '%s\n' "$session_list" | wc -l | tr -d ' ')
+    fi
     if [ "$session_outcome_count" -gt 0 ]; then
       local session_schema="$SCHEMAS_DIR/recommendation_outcomes.schema.json"
       if [ ! -f "$session_schema" ]; then
@@ -230,7 +257,13 @@ check_schema_validation() {
   printf "\n═══ 檢查 3/3: Schema 驗證 ═══\n"
 
   if [ "$SCHEMA_COUNT" -eq 0 ]; then
-    log_warn "無 Schema 可驗證 — 跳過"
+    # 只有「真的沒有 schema」才可以在這裡說「跳過」；若是列舉失敗（檢查 1 已 fail loud），
+    # 不能再用同一句話把它講成「沒有東西要驗」（FU-20261016-29）。
+    if [ "$TOOL_FAILURES" -gt 0 ]; then
+      log_info "Schema 列舉失敗（見上方 [FAIL]）— 這一支不重複判定"
+    else
+      log_warn "無 Schema 可驗證 — 跳過"
+    fi
     return 0
   fi
 
@@ -242,11 +275,25 @@ check_schema_validation() {
   local total_checked=0
   local total_failed=0
 
+  # 掃描失敗 ⇒ 空集合 ⇒ 「沒有 schema 要驗」⇒ 跳過（FU-20261016-29）：先顯式判定 rc。
+  local schemas schemas_rc=0
+  schemas=$(find "$SCHEMAS_DIR" -maxdepth 1 -name "*.schema.json" | sort) || schemas_rc=$?
+  if [ "$schemas_rc" -ne 0 ]; then
+    log_tool_fail "列出 $SCHEMAS_DIR/*.schema.json 失敗（find 管線 rc=${schemas_rc}）⇒ schema 驗證無法執行，不得視為通過 (FU-20261016-29)"
+    return 1
+  fi
+
   while IFS= read -r schema; do
+    [ -n "$schema" ] || continue
     local schema_name
     schema_name=$(basename "$schema" .schema.json)
-    local data_files
-    data_files=$(find_data_files "$schema_name")
+    local data_files df_rc=0
+    data_files=$(find_data_files "$schema_name") || df_rc=$?
+
+    if [ "$df_rc" -ne 0 ]; then
+      log_tool_fail "尋找 ${schema_name}.jsonl 失敗（find rc=${df_rc}）⇒ 無法判定有無對應資料，不得視為通過 (FU-20261016-29)"
+      return 1
+    fi
 
     if [ -z "$data_files" ]; then
       log_warn "$schema_name — Schema 存在但無對應 JSONL 檔案"
@@ -307,7 +354,7 @@ check_schema_validation() {
         log_pass "$datafile — 驗證通過 ($check_lines 行)"
       fi
     done
-  done < <(find "$SCHEMAS_DIR" -maxdepth 1 -name "*.schema.json" 2>/dev/null | sort)
+  done <<< "$schemas"
 
   if [ "$total_failed" -eq 0 ] && [ "$VALIDATED_COUNT" -gt 0 ]; then
     log_pass "所有 Schema 驗證通過 (${total_checked} 行, ${VALIDATED_COUNT} 檔案)"
@@ -348,11 +395,12 @@ main() {
       jq -n \
         --argjson violations "${JSON_VIOLATIONS:-[]}" \
         --argjson total_violations "$VIOLATIONS" \
+        --argjson total_tool_failures "$TOOL_FAILURES" \
         --argjson total_warnings "$WARNINGS" \
         --argjson schema_count "$SCHEMA_COUNT" \
         --argjson validated_count "$VALIDATED_COUNT" \
         --argjson checks_passed "$checks_passed" \
-        '{status:(if $total_violations > 0 then "violations_found" elif $total_warnings > 0 then "warnings" else "passed" end),total_violations:$total_violations,total_warnings:$total_warnings,schema_count:$schema_count,validated_files:$validated_count,checks_passed:$checks_passed,checks_total:3}'
+        '{status:(if $total_tool_failures > 0 then "check_unusable" elif $total_violations > 0 then "violations_found" elif $total_warnings > 0 then "warnings" else "passed" end),total_violations:$total_violations,total_warnings:$total_warnings,schema_count:$schema_count,validated_files:$validated_count,checks_passed:$checks_passed,checks_total:3}'
     else
       printf '{"status":"ok","note":"jq not available for detailed output"}\n'
     fi
@@ -363,7 +411,10 @@ main() {
     [ "$r3" -eq 0 ] && checks_passed=$((checks_passed + 1))
 
     printf "檢查結果: %d/3 通過 | Schema:%d 驗證檔案:%d\n" "$checks_passed" "$SCHEMA_COUNT" "$VALIDATED_COUNT"
-    if [ "$VIOLATIONS" -gt 0 ]; then
+    if [ "$TOOL_FAILURES" -gt 0 ]; then
+      # 不得在工具失敗時印「所有檢查通過」（FU-20261016-29）
+      printf "${RED}檢查未完成：%d 處因工具／環境失敗而無法執行${NC}\n" "$TOOL_FAILURES"
+    elif [ "$VIOLATIONS" -gt 0 ]; then
       printf "${RED}發現 %d 處錯誤${NC}\n\n" "$VIOLATIONS"
       printf "修復建議:\n"
       printf "  1. 修正 JSONL 中不符合 Schema 的欄位\n"
@@ -373,6 +424,17 @@ main() {
     else
       printf "${GREEN}所有檢查通過${NC}\n"
     fi
+  fi
+
+  # 工具／環境失敗：檢查「跑不成」不是「通過」（FU-20261016-29）。
+  if [ "$TOOL_FAILURES" -gt 0 ]; then
+    if [ "$OUTPUT_MODE" != "json" ]; then
+      printf "${RED}⇒ 不得視為通過（FU-20261016-29）${NC}\n"
+    else
+      printf "check unusable: %d tool/environment failure(s) — not a pass (FU-20261016-29)\n" \
+        "$TOOL_FAILURES" >&2
+    fi
+    exit 2
   fi
 
   if [ "$VIOLATIONS" -gt 0 ]; then

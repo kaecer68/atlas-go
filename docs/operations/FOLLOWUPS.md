@@ -4488,6 +4488,132 @@ fixture：`/tmp/fu27-gate-truth/np-orphan`（`main` 與 `work` **無共同祖先
   ⑤ **本修法不會把真 repo 的閘門染紅**：`origin/main` 上 7 個 target 中有 3 支在 `testdata/` 內真的帶 baseline（`internal/config` 2、`cmd/atlas` 1、`internal/narrative` 1）⇒ `executed=3`（>0）走原本的成功路徑。
   ⑥ `check_layer3_benchmarks.sh` 全 SKIP 現在會紅 ⇒ 在 `make ci-slow`（`-24`）內會走「某支 rc≠0 ⇒ 立即紅並指名腳本與 rc」那條路徑（訊息語意一致，無重複計數）。
 
+### FU-20261016-29 — 「空集合 ⇒ 印通過」家族：三支 `scripts/ci` 腳本把「工具／環境失敗」與「真的掃到 0 筆」混為一談（`find`／`ls` 失敗 ⇒ 空集合 ⇒ 照印通過、rc=0）
+
+> **落點說明**：本條接 `-28` 之後（`grep -n '^### FU-20261016-28'` 定位後、下一個 `## ` 之前；**不靠行號**）。
+> **行號基準**：「修前」一律指 `origin/main`（`91e72b12d`）；「修後」指本 PR（`fix/20261016-fu29-emptyset-pass`）的 head。
+
+- **狀態**：`done`
+- **記錄日期**：2026-10-16 ／ **完成於**：2026-10-16 本 PR（`fix/20261016-fu29-emptyset-pass`）
+- **嚴重度**：**P2 ×3**（閘門說謊；三處皆在 `make ci`／`quality.yml` 的資料閘門路徑上）。
+- **來源**：上級稽核候選三項 ＋ 本車道逐項最小複現；同族見 `-22`／`-24`／`-25`／`-27`。
+
+#### ★ F-item 敘述更正／補充（本車道複現後改寫；這些比原敘述更精確）
+
+- **① 候選①（`check_data_naming.sh:155,159`）逐字成立，但**範圍比敘述大**：同一根因在**同檔 5 支檢查全部命中**
+  （`:155,159` 只是「檢查 1」那一支）。注入 `find` 失敗後，**五支全部**印 `[PASS]`、`5/5 通過`、`rc=0`。
+  本 PR 因此修的是這 5 處（同一 root cause），不是只修被點名的 2 行。
+- **② 候選②的路徑（`validate_json_schemas.sh:211`）成立，但它是**第二**個站點；第一個更嚴重**：
+  `check_schemas_exist`（`:110`）與 `check_schema_validation`（`:310`）都靠 `find "$SCHEMAS_DIR" …` 列舉 schema，
+  失敗 ⇒ `SCHEMA_COUNT=0` ⇒ 檢查 1 只 `log_warn`、檢查 3 只 `log_warn "無 Schema 可驗證 — 跳過"`
+  ⇒ 收尾照印 **`檢查結果: 3/3 通過 | Schema:0 驗證檔案:0`、`rc=0`**（本車道實跑；**8 個 schema 被靜默縮成 0**）。
+- **③ 候選③（`check_data_catalog.sh:163,309`）**：**是缺陷，未被前批修掉**。`-22` 修的是同檔 `grep -oP` 死判、
+  `-26` 修的是旗標／zero-metric、`-27` 只在同型表**列出**這兩處（未修）。逐字確認：修前兩處仍是
+  `if [ -z "$(ls -A "$dir" 2>/dev/null)" ]; then continue; fi`（`ls` 失敗 ⇒ 空 ⇒ 與「空目錄」不可區分）。
+  ⇒ **據實回報「成立」，不做「非缺陷」判定**。
+- **④ rc 契約（與 F-item 的「工具失敗 ⇒ rc=2」部分不一致，這裡說明取捨）**：
+  `check_data_naming.sh`／`validate_json_schemas.sh` 採 **rc=2**（分別與兩檔都已文件的「2 ＝ 用法錯誤」／「2 ＝ 缺少依賴」同族；
+  且與 `1`（真的掃到違規）互斥，已由契約測試 A3 釘住）。
+  `check_data_catalog.sh` **維持 rc=1**：這是 `-22` 已落地的契約（`tests/scripts/test-check-data-catalog.sh` 的
+  ⑥⑦⑨ 三處斷言 **exit 1**，且 `-22`／`-27` 的 `ci-full-trigger` 家族一致）——**不放寬既有斷言、不改別條的已落地契約**。
+
+#### 根因（逐項讀碼指名到行；修前 `91e72b12d`）
+
+三處是**同一個根因**的三個實例：`find`／`ls` 失敗時 stdout **空**，而「真的沒有東西」的 stdout **也是空**
+⇒ 在管線輸出上**逐字相同**；再加 `2>/dev/null` 把 `find: …: No such file or directory` 吞掉
+⇒ 「跑不成」與「沒有違規」不可區分，一律落到「通過」分支。
+
+- **① `scripts/ci/check_data_naming.sh:155,159`（＋同檔 `:204`／`:255`／`:283`／`:314` 同型）**：
+  `< <(find … 2>/dev/null | filter_not_ignored | sort)` 的 rc 不接（`< <(...)` 的失敗不會傳給 `while`）
+  ⇒ 迴圈 0 圈 ⇒ `found_any=0` ⇒ `:160` 再用**第二次** find 算 count（同樣失敗）⇒ 印
+  `[PASS] 所有 0 個目錄命名符合 snake_case (R1, R8)`、`5/5 通過`、`rc=0`。
+  另有一層：`filter_not_ignored`（`:118-124`）用 `git check-ignore --verbose --non-matching --stdin 2>/dev/null | awk …`，
+  git 失敗 ⇒ 空集合；而 `git check-ignore` 的 **rc=1 是「沒有任何路徑被 ignore」的正常結果**（不是失敗）——兩者必須分開。
+- **② `scripts/ci/validate_json_schemas.sh:110`／`:127`（`find_data_files`）／`:211`／`:310`**：同上（`:211` 的 `find … 2>/dev/null | wc -l`
+  失敗 ⇒ `session_outcome_count=0` ⇒ `:212` 的 `-gt 0` 為假 ⇒ **靜默跳過**該項檢查；`:220-222` 仍可印 `log_pass`）。
+- **③ `scripts/ci/check_data_catalog.sh:163,309`**：`[ -z "$(ls -A "$dir" 2>/dev/null)" ]` ⇒ `ls` 失敗 ⇒
+  判定為「空目錄」⇒ `continue` ⇒ **該目錄整支檢查逃掉**（檢查 2 的「未記錄目錄」與檢查 4 的「缺 `_metadata.json`」同時消失）。
+
+#### 影響量測（修前 vs 修後；同一輸入；rc 一律從 log 讀，不在管線後讀 `$?`）
+
+log 目錄：`/tmp/fu29-logs/`；shim 目錄：`/tmp/fu29-emptyset-shim/`（假 `find`）、`/tmp/fu29-emptyset-shim-ls/`（假 `ls`，只在 `-A` 時失敗）。
+
+| # | 輸入 | 修前（`origin/main` 版） | 修後（本 PR） |
+|---|---|---|---|
+| ① | `check_data_naming.sh`（`PATH` 注入假 `find`） | **rc=0**、`[PASS] 所有 0 個目錄命名符合 snake_case (R1, R8)`＋`檢查結果: 5/5 通過` | **rc=2**、`[FAIL] 列出「data/ 目錄」失敗（find/filter 管線 rc=1）⇒ 檢查無效，不得視為通過 (FU-20261016-29)`＋`檢查未完成：5 處因工具／環境失敗而無法執行` |
+| ② | `validate_json_schemas.sh`（同上） | **rc=0**、`[WARN] schemas/ 存在但無 .schema.json 檔案`＋`檢查結果: 3/3 通過 \| Schema:0 驗證檔案:0` | **rc=2**、`[FAIL] 列出 schemas/*.schema.json 失敗（find 管線 rc=1）…`（schema 數不再被講成 0） |
+| ②b | 同上＋只注入 sessions 掃描失敗 | **rc=0**、`3/3 通過`（該項**完全不出現**） | **rc=2**、`[FAIL] 列出 data/state/sessions/ 的 recommendation_outcomes.jsonl 失敗（find rc=1）…` |
+| ③ | `check_data_catalog.sh`（`PATH` 注入假 `ls -A`） | **rc=0**、`檢查結果: 5/5 通過`、警告數 **43 → 41**（`data/state/` 等目錄被當成空目錄跳過） | **rc=1**、`[FAIL] 列出 data/state/ 內容失敗（ls rc=2）⇒ 無法判定該目錄是否為空，不得視為通過 (FU-20261016-29)`＋`檢查本身無法執行（15 處工具／環境錯誤）⇒ 不因 --warn-only 而放行` |
+| ③b | 同上＋hermetic fixture（`top-only`） | **rc=0**、`[PASS] 所有必要目錄都有 _metadata.json`（該目錄的 `[WARN] … 缺少 _metadata.json` 消失） | **rc=1**、`[FAIL] … ls rc=2 …`，且**不再印**該 PASS |
+| ①/②/③ | **正常路徑**（不注入失敗） | — | **rc=0 且輸出與修前逐位元組相同**（`diff` 全等；log sha256 修前＝修後：①`7b9e3b12…a93ed2`、②`4f6d475e…cfe172`、③`fa2ddb9f…e643be`） |
+
+#### 修法（共同原則：**工具失敗 fail loud；合法空集合保留既有語意但不可與工具失敗混淆**）
+
+- **① `check_data_naming.sh`**：新增 `TOOL_FAILURES` 計數與 `log_tool_fail()`；新增 helper
+  `collect_tree <變數名> <掃描根> <描述> <find 參數…>`（把「find → filter → sort」收成變數，**三態回傳**：
+  `0`＝成功／`1`＝掃描根不存在（**合法空集合**，印明「沒有東西可檢查」後沿用既有語意）／`2`＝工具失敗）。
+  五支檢查全改用 `collect_tree` ＋ `[ "$rc" -eq 2 ] && return 1`；`[PASS] 所有 N 個目錄…` 的 N 改取自**同一次掃描**
+  （不再第二次 find）；`filter_not_ignored` 改為「不在 git work tree ⇒ `cat` 原樣放行；在 work tree 但 git 失敗 ⇒ 不導 stderr、rc 往上傳」，
+  並**明示 `git check-ignore` rc=1 ＝正常**（只有 rc≥2 才算失敗）；收尾新增 `TOOL_FAILURES > 0 ⇒ 印「檢查未完成」＋ `exit 2``
+  （不再印「所有檢查通過」）；`--json` 的 `status` 新增 `check_unusable`（診斷訊息走 stderr，JSON stdout 保持乾淨）。
+- **② `validate_json_schemas.sh`**：同法（`TOOL_FAILURES` ＋ `log_tool_fail`）；`:110`／`:127`／`:211`／`:310` 與 `find_data_files()`
+  全部接 rc；`find_data_files` 不再吞 stderr；schema 列舉失敗時不再用「無 Schema 可驗證 — 跳過」把它講成正常；
+  收尾 `exit 2`（與檔頭既有的「2 ＝ 缺少依賴」同族）。
+- **③ `check_data_catalog.sh`**：兩處改為 `[ -d "$dir" ] || continue`（掃描期間目錄消失＝真的沒東西可檢查）
+  ＋ `ls_out=$(ls -A "$dir") || ls_rc=$?`；`ls_rc≠0` ⇒ `log_tool_fail`（既有機制：不受 `--warn-only` 抑制，收尾 `exit 1`）。
+- **不得改成一律紅**：①／② 的 `合法空集合`（掃描根不存在、真的沒有違規）與 ③ 的「真的每個目錄都有 `_metadata.json`」
+  都**保留綠燈**，並各有契約測試（A2/A5/B3/C3）釘住。
+
+#### 負向證明（每項：同輸入 ⇒ 修前假綠原文 ≠ 修後紅燈原文；`cp` 還原 ＋ sha256 逐位元組相等）
+
+1. **修前 vs 修後（同一輸入、同一 shim）**：見上方「影響量測」表 ①／②／②b／③／③b —— 修前 rc=0 ＋ 逐字「通過／0 個目錄／3/3 通過／5/5 通過」，修後 rc=2/2/2/1/1 ＋ 逐字指名**是哪一支掃描壞掉、rc 多少、不得視為通過**。**兩者不同**。
+2. **新契約測試對「修前版本」必紅**（把 `origin/main` 的三支腳本 ＋ 本 PR 的新測試放進同一棵樹跑）：
+   `12 passed, 19 failed`，其中包含逐字假綠斷言：`❌ A1 仍印「所有 0 個目錄命名符合 snake_case」＝假綠復活`、
+   `❌ B1 仍印「3/3 通過」＝假綠復活`、`❌ C1 仍印「所有必要目錄都有 _metadata.json」＝假綠復活`
+   ⇒ 探針**能區分修前／修後**（不是兩邊同結果的空證明）。
+3. **檔層突變 ⇒ 測試必紅；`cp` 還原 ＋ sha256 逐位元組驗回**（不用 `git checkout --`，避免把剛改好的打回已提交版本）：
+   | # | 突變（真檔單行） | 突變後 sha256 | 測試 rc | 紅燈原文（逐字，節錄） | 還原後 sha256（= 修後版） |
+   |---|---|---|---|---|---|
+   | ① | `collect_tree` 的 `if [ "$__rc" -ne 0 ]; then` ⇒ `if false;` | `2cfeaedd…08e176` | **1** | `❌ A1 工具失敗沒有 fail loud`／`❌ A1 沒報管線 rc` | `bb180cb2…c1b7dc` |
+   | ② | sessions 掃描守衛 ⇒ `if false;` | `cdeefd9f…a807c1d` | **1** | `❌ B2 sessions 掃描失敗被靜默吞掉` | `78c346a3…6a27ef` |
+   | ③ | `ls` 守衛 ⇒ `if false;` | `7021e9d1…138dcb4c` | **1** | `❌ C1 ls 失敗沒有 fail loud` | `4a289418…1a50d8` |
+   還原後三檔 sha256 與備份**逐位元組相等**，且測試回綠（`32 passed, 0 failed`）。修後版 sha256：
+   ①`bb180cb2176646c592945ebab89c9dbc09c22d0a2577d511b330e870d0c1b7dc`／②`78c346a31918f47c465b0afd3d82a86474102d312ebfded46384f8ff196a27ef`／
+   ③`4a2894188b72175436835cb4f6760aed5c13d569ac27009e92ddd500871a50d8`；測試檔 `3346c69e…592b41`。
+4. **合併前複驗（區段逐位元組比對）**：`docs/operations/FOLLOWUPS.md` 的改動是**純插入**（`git diff --numstat` ⇒ `N insertions / 0 deletions`），
+   且其他既有條目（`-18`…`-28`）以 `git show origin/main:…` vs `git show HEAD:…` 抽出逐段**逐位元組相同**。
+
+#### 新增契約測試（hermetic；已掛進 `make ci-gate`）
+
+- **`tests/scripts/test-empty-set-pass-gate.sh`（**32 項**，已納入 `make ci-gate`）**：
+  A1–A5（`check_data_naming.sh`：工具失敗 rc=2 ＋ 指名管線 rc ＋ 不得再印「所有 0 個目錄」／正常路徑 rc=0 ＋ **真的**計數 3／
+  真有 kebab-case ⇒ rc=1（與工具失敗互斥）／mutation 自證／**掃描根不存在 ⇒ 仍回綠**）、
+  B1–B4（`validate_json_schemas.sh`：工具失敗 rc=2、不得印「所有檢查通過」／`:211` sessions 失敗 rc=2 且指名／
+  正常 fixture rc=0 ＋ 真的數到 schema／mutation 自證）、
+  C1–C4（`check_data_catalog.sh`：`ls` 失敗 rc=1 ＋ 指名 `ls rc=2` ＋ 不得印 metadata PASS／正常 fixture 真的報出缺 `_metadata.json` 的目錄／
+  乾淨 fixture 仍印 PASS／mutation 自證）、
+  D（靜態返祖：三支腳本的可執行行不得再出現 `find … 2>/dev/null … | wc -l` 形狀）。
+  全部只走「fixture ＋ PATH shim ＋ 腳本副本」⇒ 不碰真 repo、不連網、不動 `data/`。
+
+#### 同型掃描（只列清單，**不**配 ID；本車道複現／讀碼複驗，行號基準＝ `origin/main`）
+
+| 嚴重度 | 位置 | 形狀 | 判讀 |
+|---|---|---|---|
+| P2（未修；**讀碼**） | `scripts/openclaw/status.sh:84,119` | `find … 2>/dev/null \| wc -l` ⇒ 失敗＝0 ⇒ 訊息變「no data files」 | 觀察型腳本，不影響 rc；同族但無閘門語意 |
+| P2（未修；**讀碼**） | `scripts/openclaw/execute_next.sh:185` | `[ -z "$(ls -A data/replay 2>/dev/null)" ]` ⇒ `ls` 失敗＝「空」 | **方向相反**（變成 `Error: Missing prerequisites` ⇒ 偏紅），列出以免日後誤列為假綠 |
+| P2（未修；**讀碼**） | `scripts/ci/verify_factor_integrity.sh:105`（G10） | `grep … \| wc -l` ⇒ 0 ⇒ 進 `MISSING` ⇒ 只 `warn` | 方向是「差異 ⇒ 警告」，不影響 rc；同檔 G8 的 `0 case ⇒ fail` 反而是**正確的 fail-closed 樣板** |
+| P3（未修；**已由 `-27` 列出**） | `scripts/ci/check_maturity.sh:111` | `grep -c … \|\| true` ⇒ 讀檔失敗 ⇒ count 空 ⇒ 既不報缺也不報多 | 實務上難到達（檢查 1 已先擋 `doc.go` 不存在） |
+| **非缺陷（正面樣板，勿改）** | `scripts/ci/check_sa12_negative_evidence.sh:93-104`、`scripts/ci/check_followups_unique_ids.sh:34-42` | 先證明「掃描面存在」（`internal/**.go` 有檔／FOLLOWUPS 有行），0 筆才判 | **已具 fail-closed 前置**：`internal/` 不存在或 `*.go` 掃不到 ⇒ `exit 1`；這是本家族應有的正面樣板 |
+| **反向（空集合 ⇒ 紅；非假綠）** | `.githooks/pre-push:245`、`.githooks/pre-commit:12` | `git diff … 2>/dev/null` 失敗 ⇒ 空 | 兩者都 fail-closed（`-27` 已複現）⇒ 不同類 |
+
+#### 已知限制
+
+① ①／② 的「工具失敗」判定只涵蓋**該次掃描的管線 rc**；管線所有段都回 0 但**語意**被上游改壞（例如 `filter_not_ignored` 的 `awk` 條件被改鬆）仍可能得到空集合 ⇒ 這與 `-27` 的已知限制同源，本 PR 不擴大處理。
+② `collect_tree` 的「掃描根不存在 ⇒ 合法空集合」分支是**以 `[ -d ]` 事後判別**：若掃描根在檢查期間被刪除（TOCTOU），會走工具失敗分支（偏紅）。本 PR 選擇「偏紅」而非「偏綠」，並在此明示。
+③ `git check-ignore` 的 rc 語意（`0`＝有命中／`1`＝沒有命中／`128`＝致命）是本修法的前提，已用實測釘住（`printf 'data/\n' | git check-ignore --verbose --non-matching --stdin` ⇒ rc=1 且**輸出正常**）。
+④ `check_data_catalog.sh` 的工具失敗仍走 **rc=1**（`-22` 的已落地契約），與①／② 的 `rc=2` 不同 —— 這是**刻意保留**的一致性取捨，不是遺漏；要統一需另開票連同 `-22` 的契約測試一起改。
+⑤ 同型清單中的 `check_sa12_negative_evidence.sh` 之計數仍用 `grep … 2>/dev/null | wc -l`，但已有掃描面前置 ⇒ **本 PR 不動它**（改了只會製造無謂 diff）。
+
 ## 相關文件
 
 - [universe-scoring-ranked-zero-20260925.md](universe-scoring-ranked-zero-20260925.md)
