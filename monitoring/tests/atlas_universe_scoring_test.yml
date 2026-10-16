@@ -1031,9 +1031,11 @@ tests:
               先查什麼(依序):
               1. verdict:curl -s localhost:18080/metrics | grep '^atlas_universe_last_run_'
                  outcome=universe_empty、gathered=0 就是本條。
-              2. 母體來源:
-                 docker logs atlas --since 48h 2>&1 | grep -E 'symbols_gathered|universe.*population'
-                 (Step 1 的 `symbols_gathered count=0` 是本條的直接日誌證據)
+              2. 母體來源(pipeline 自己在這條路徑上的日誌,reason 直接指名本條):
+                 docker logs atlas --since 48h 2>&1 | grep 'ranked_not_trustworthy.*reason=empty_universe'
+                 ⚠️ **不要** grep `symbols_gathered`:那一行寫在 `if SymbolsBuilt == 0 { return }`
+                 **之後** ⇒ 這條路徑上永遠不會出現 count=0 的 `symbols_gathered`
+                 (2026-10-16 實測:空的執行 0 行、健康的執行 count=2)。這正是本條存在的理由。
               3. 分類樹 / substrate / Mapper:substrate 載入失敗(age/load_error)、
                  gate 被關、或代號正規化後全部不匹配。
               4. 若每一輪都如此,本條會持續 firing;這不是「等下一輪」的情形。
