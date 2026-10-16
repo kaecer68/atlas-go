@@ -4,6 +4,8 @@
 #
 # 【為什麼要有它】`tests/scripts/test-monitoring-single-source.sh` 證明的是 tempdir fixture 上的邏輯；
 #   本腳本證明「**用 repo 的 tracked 檔清單、走 CI 的路徑**」時仍然會擋（2026-09-25 實測過 CI 平台差異）。
+#   2026-10-16（FU-20260927-05）新增第二個 fixture：R4（runbook_url 目標存在性）作用在**規則檔**上，
+#   與 R2/R3 的 compose 檔是不同類別 ⇒ 它需要自己的負向證明與自己的規則 id 斷言。
 #
 # 【為什麼一定要斷言「恰好 exit 1」】（issue #2011）
 #   本步原本寫在 `.github/workflows/quality.yml` 內：
@@ -34,14 +36,19 @@ cd "${REPO_ROOT}" || { negproof_err "無法進入 ${REPO_ROOT}"; exit 1; }
 
 CHECK="scripts/ci/check_monitoring_single_source.sh"
 FIXTURE="scripts/docker-compose.__negtest__.yml"
+# 第二個 fixture（2026-10-16，FU-20260927-05）：R4 是**另一個檔案類別**（規則檔，不是 compose），
+# 所以它需要自己的負向證明 —— 只證明 R2/R3 有牙齒，不代表 R4 有。
+R4_FIXTURE="monitoring/rules/__negtest__.yml"
+R4_DIR="$(dirname "${R4_FIXTURE}")"
 # 這個 fixture 是為了同時踩到**哪幾條**規則（規則 id 字面值，見 check_monitoring_single_source.py
 # 的 R2 / R3）。負向證明不只要證明「有東西擋下」，還要證明「**這幾條規則**擋下」——否則其中一條
 # 被停用／改壞、由另一條代擋時，只看 rc 會誤以為「兩條都還有效」。
 RULE_IDS="R2 R3"
 LOG="$(mktemp)"
 cleanup() {
-  git -C "${REPO_ROOT}" rm --cached -q --ignore-unmatch -- "${FIXTURE}" >/dev/null 2>&1 || :
-  rm -f "${REPO_ROOT}/${FIXTURE}"
+  git -C "${REPO_ROOT}" rm --cached -q --ignore-unmatch -- "${FIXTURE}" "${R4_FIXTURE}" >/dev/null 2>&1 || :
+  rm -f "${REPO_ROOT}/${FIXTURE}" "${REPO_ROOT}/${R4_FIXTURE}"
+  rmdir "${REPO_ROOT}/${R4_DIR}" 2>/dev/null || :
   rm -f "${LOG}"
 }
 trap cleanup EXIT INT TERM
@@ -61,13 +68,26 @@ printf '%s\n' \
   '    volumes:' \
   '      - ~/workspace/'"atlas-monitoring"'/prometheus.yml:/etc/prometheus/prometheus.yml:ro' \
   > "${REPO_ROOT}/${FIXTURE}"
-git -C "${REPO_ROOT}" add -f -- "${FIXTURE}" || { negproof_err "git add -f ${FIXTURE} 失敗"; exit 1; }
-if ! git -C "${REPO_ROOT}" ls-files --error-unmatch -- "${FIXTURE}" >/dev/null 2>&1; then
-  negproof_err "fixture 沒進 index（tracked 清單）⇒ 檢查看不到它，負向證明失去意義（fail-closed）"
-  exit 1
-fi
+# R4 fixture：一條 alert rule，`runbook_url` 指到**本 repo 內不存在**的檔案
+# ⇒ R4 必須以 `[R4]` 擋下（R2/R3 不看這種檔案，所以它是 R4 的**專屬**證據）。
+mkdir -p "${REPO_ROOT}/${R4_DIR}"
+printf '%s\n' \
+  'groups:' \
+  '  - name: negtest' \
+  '    rules:' \
+  '      - alert: NegTestRule' \
+  '        annotations:' \
+  '          runbook_url: "https://github.com/kaecer68/atlas-go/blob/main/docs/operations/__negtest_missing__.md"' \
+  > "${REPO_ROOT}/${R4_FIXTURE}"
+git -C "${REPO_ROOT}" add -f -- "${FIXTURE}" "${R4_FIXTURE}" || { negproof_err "git add -f fixture 失敗"; exit 1; }
+for f in "${FIXTURE}" "${R4_FIXTURE}"; do
+  if ! git -C "${REPO_ROOT}" ls-files --error-unmatch -- "${f}" >/dev/null 2>&1; then
+    negproof_err "fixture ${f} 沒進 index（tracked 清單）⇒ 檢查看不到它，負向證明失去意義（fail-closed）"
+    exit 1
+  fi
+done
 
-echo "負向證明（monitoring 單一設定樹）：${FIXTURE} 已 staged（掛載指回舊樹）→ 檢查必須以 exit 1 擋下"
+echo "負向證明（monitoring 單一設定樹）：${FIXTURE} 已 staged（掛載指回舊樹）、${R4_FIXTURE} 已 staged（runbook_url 指向不存在的檔）→ 檢查必須以 exit 1 擋下"
 if ! negproof_expect 1 "檢查擋下指向舊樹的 tracked compose" "${LOG}" -- "${CHECK_CMD[@]}"; then
   negproof_show_log "${LOG}"
   exit 1
@@ -85,5 +105,11 @@ for rule in ${RULE_IDS}; do
     exit 1
   fi
 done
+# R4 的規則層斷言：擋下規則檔 fixture 的那一行必須帶 `[R4]`（同一個「不是別的規則代擋」的要求）。
+if ! negproof_expect_output_line "$(basename "${R4_FIXTURE}")" "[R4]" "${LOG}" \
+     "擋下 ${R4_FIXTURE} 的是 R4 這條規則（不是別的規則代擋）"; then
+  negproof_show_log "${LOG}"
+  exit 1
+fi
 negproof_show_log "${LOG}"
-echo "✅ 負向證明通過：檢查以 exit 1 擋下 ${FIXTURE}，且擋下它的是規則 [$(echo "${RULE_IDS}" | tr ' ' '/')]（精確 rc ＋ 規則 id 斷言；127/2 不再算「擋下了」）"
+echo "✅ 負向證明通過：檢查以 exit 1 擋下 ${FIXTURE} 與 ${R4_FIXTURE}，且擋下它們的是規則 [$(echo "${RULE_IDS}" | tr ' ' '/')]/R4（精確 rc ＋ 規則 id 斷言；127/2 不再算「擋下了」）"

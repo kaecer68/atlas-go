@@ -1,3 +1,13 @@
+# llm_annotator_alerts.yml — 失敗歸因 LLM 呼叫的 SLO 告警
+#
+# 2026-10-16（FU-20260927-04）：本檔 5 個 `runbook_url` 原本指向一個
+# **DNS 已不存在**的內部 wiki 主機（NXDOMAIN）⇒ 改指 repo 內的
+# `docs/operations/llm-annotator-runbook.md`。該檔 §1 記載一個**先讀**的事實：
+# `llm_annotator_requests_total` 的唯一生產者是 legacy `KimiClient`，而它在
+# #1897 之後不在 `/annotate` 路徑上（`configs/llm_router.yaml`: kimi 不在任何鏈）
+# ⇒ 本檔告警對應的序列在生產為空集合（休眠），只有 router 的
+# `llm_client_requests_total` / `llm_router_fallback_triggered_total` 在動。
+# 守門：`scripts/ci/check_monitoring_single_source.py` R4。
 groups:
   - name: llm_annotator_availability_fast_burn
     rules:
@@ -19,7 +29,7 @@ groups:
           description: |
             Provider {{ $labels.provider }} 1h error rate: {{ $value | humanizePercentage }}.
             At this rate, the 30-day error budget exhausts in ~2 days.
-          runbook_url: "https://wiki.internal/runbooks/llm-annotator-fast-burn"
+          runbook_url: "https://github.com/kaecer68/atlas-go/blob/main/docs/operations/llm-annotator-runbook.md"
 
       - alert: LLMAnnotatorHighErrorRateMediumBurn
         expr: |
@@ -39,7 +49,7 @@ groups:
           description: |
             Provider {{ $labels.provider }} 6h error rate: {{ $value | humanizePercentage }}.
             At this rate, the 30-day error budget exhausts in ~5 days.
-          runbook_url: "https://wiki.internal/runbooks/llm-annotator-medium-burn"
+          runbook_url: "https://github.com/kaecer68/atlas-go/blob/main/docs/operations/llm-annotator-runbook.md"
 
   - name: llm_annotator_availability_slow_burn
     rules:
@@ -57,7 +67,7 @@ groups:
           description: |
             Provider {{ $labels.provider }} sustained error rate: {{ $value | humanizePercentage }}.
             At baseline burn, the 30-day budget exhausts exactly on day 30.
-          runbook_url: "https://wiki.internal/runbooks/llm-annotator-slow-burn"
+          runbook_url: "https://github.com/kaecer68/atlas-go/blob/main/docs/operations/llm-annotator-runbook.md"
 
   - name: llm_annotator_circuit_breaker
     rules:
@@ -73,7 +83,7 @@ groups:
           description: |
             Circuit breaker is rejecting all requests to provider {{ $labels.provider }}.
             Provider has been failing consecutively; check provider status page.
-          runbook_url: "https://wiki.internal/runbooks/llm-annotator-circuit-breaker"
+          runbook_url: "https://github.com/kaecer68/atlas-go/blob/main/docs/operations/llm-annotator-runbook.md"
 
   - name: llm_annotator_error_category_spikes
     rules:
@@ -141,4 +151,4 @@ groups:
           description: |
             No successful LLM annotator requests in the last 10 minutes.
             Service may be down or no traffic is flowing.
-          runbook_url: "https://wiki.internal/runbooks/llm-annotator-no-traffic"
+          runbook_url: "https://github.com/kaecer68/atlas-go/blob/main/docs/operations/llm-annotator-runbook.md"

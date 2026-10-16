@@ -117,6 +117,8 @@
 | `docs/operations/README.md` | Operations 目錄入口 | ✅ |
 | `docs/operations/version-bumping.md` | Version bump SOP | ✅ |
 | `docs/operations/wave9-runbook.md` | Wave 9 Observability 操作手冊 | ✅ |
+| `docs/operations/channel-health-runbook.md` | 通道健康 4 條告警的 triage（FU-20260927-04） | ✅ |
+| `docs/operations/llm-annotator-runbook.md` | 失敗歸因 LLM 呼叫的 triage（FU-20260927-04；含指標休眠實證） | ✅ |
 | `docs/operations/l2-4-runbook.md` | L2.4 觀察期操作手冊 | ✅ |
 | `docs/operations/l3-runbook.md` | L3 操作手冊 | ✅ |
 | `docs/operations/loki-deployment.md` | Loki 集中式 log 部署 | ✅ |

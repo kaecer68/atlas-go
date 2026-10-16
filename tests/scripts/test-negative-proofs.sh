@@ -133,6 +133,8 @@ exit 1
 STUB
 
 # ── 規則層 mutation（改的是**規則程式碼**，不是換掉受測命令）───────────────────
+# 註（2026-10-16）：monitoring 的受測檢查同時有 R2/R3 與 R4 兩組 fixture ⇒ 停用時
+# 必須把三條規則的判定一起拿掉，否則剩下的那條會擋下 fixture，掩蓋 E7 要證明的形狀。
 # ① 「正確的規則」被改成永遠通過：把該規則的樣式／記錄改成永不命中這個 fixture。
 mutate_disable_rule() {   # mutate_disable_rule <label> <repo>
   case "$1" in
@@ -149,14 +151,18 @@ open(p, "w", encoding="utf-8").write(s2)
 PY
       ;;
     monitoring)
+      # 2026-10-16：負向證明的 fixture 有兩個（compose → R2/R3；規則檔 → R4），
+      # 所以「讓閘門不再擋」必須把**兩類**判定一起停用；只停 R2/R3 時 R4 仍會擋下
+      # ⇒ 證明的訊息會變成「輸出不含 fixture」而不是「exit=0」，E7 的斷言就失去意義。
       python3 - "$2/scripts/ci/check_monitoring_single_source.py" <<'PY'
 import sys
 p = sys.argv[1]
 s = open(p, encoding="utf-8").read()
 s2 = s.replace('violations.append(("R2"', 'None and violations.append(("R2"')
 s2 = s2.replace('violations.append(("R3"', 'None and violations.append(("R3"')
+s2 = s2.replace('violations.append(("R4"', 'None and violations.append(("R4"')
 if s2 == s:
-    sys.exit("mutation 目標（R2/R3 的 violations.append）找不到 —— 檢查被重構過，請更新本測試")
+    sys.exit("mutation 目標（R2/R3/R4 的 violations.append）找不到 —— 檢查被重構過，請更新本測試")
 open(p, "w", encoding="utf-8").write(s2)
 PY
       ;;
