@@ -19,10 +19,12 @@
 #   SMOKE_SKIP          — 設為 1 時印 SKIP 並 exit 0
 #
 # 退出碼：
-#   0 = smoke pass 或無相關 page（skip）
+#   0 = smoke pass 或無相關 page（skip）。兩種結果**可區分**：skip 會印
+#       `SMOKE_RESULT=SKIP`，真的跑完 smoke 會印 `SMOKE_RESULT=PASS`。
 #   1 = smoke fail（任一 page 抓到 bad pattern 或 exception）
 #   2 = build/server 啟動失敗
-#   3 = diff 解析失敗
+#   3 = diff 解析失敗（fail loud：無法推導要 smoke 哪些頁面 ⇒ 不得當成 skip，
+#       FU-20261016-27。此碼自 2026-08-24 起就寫在本檔頭卻從未實作）
 
 set -euo pipefail
 
@@ -90,7 +92,24 @@ else
     ADMIN_PAGES="home,live,reports,experiments,pipeline,performance-report,parameters,alerts,datachannels,metrics,config"
     CLIENT_PAGES="home,crossmarket,industry,narrative,capital-causality,strategies"
   else
-    CHANGED=$(git diff --name-only "$BASE_REF"...HEAD 2>/dev/null || true)
+    # `git diff` FAILING must never be folded into "no relevant changes": both
+    # produce an empty file list, so `2>/dev/null || true` (the previous shape)
+    # made them indistinguishable and this gate printed SKIP + exited 0 for a
+    # diff it could never read (2026-10-16, reproduced: a history whose
+    # `$BASE_REF...HEAD` has no merge base ⇒ `fatal: … no merge base`, git
+    # rc=128, while `git rev-parse --verify "$BASE_REF"` succeeded ⇒ SKIP rc=0).
+    # Capture the status explicitly, leave git's stderr visible, and refuse to
+    # judge. exit 3 is the "diff 解析失敗" code this file has always declared
+    # (and it stays distinct from 1 = smoke found a real problem and 2 = the
+    # build/server never came up).
+    DIFF_RC=0
+    CHANGED=$(git diff --name-only "$BASE_REF"...HEAD) || DIFF_RC=$?
+    if [[ $DIFF_RC -ne 0 ]]; then
+      err "無法用 git 解析 diff range '$BASE_REF...HEAD'（git rc=${DIFF_RC}）⇒ 無法推導要 smoke 的頁面"
+      err "不以「無相關改動」放行（fail loud）。修復：確認 $BASE_REF 與 HEAD 有 merge base"
+      err "（shallow clone 先 git fetch --unshallow），或改傳可解析的 base_ref。"
+      exit 3
+    fi
     if [[ -z "$CHANGED" ]]; then
       log "No diff (empty commit or base==HEAD)"
     else
@@ -151,6 +170,9 @@ fi
 if [[ $RUN_ADMIN -eq 0 && $RUN_CLIENT -eq 0 ]]; then
   log "No relevant frontend mapped from diff → SKIP"
   ok "Smoke gate skipped (no relevant changes)"
+  # 機器可讀的區分（FU-20261016-27）：skip 與 pass 都是 rc=0，只靠散文句子
+  # 區分太脆弱；呼叫端（與 CI log 掃描）可以 grep 這一行。
+  echo "SMOKE_RESULT=SKIP (no relevant changes)"
   exit 0
 fi
 
@@ -245,6 +267,7 @@ fi
 # 9. 結果
 if [[ $OVERALL_EXIT -eq 0 ]]; then
   ok "All smoke PASSED"
+  echo "SMOKE_RESULT=PASS"
   exit 0
 else
   err "Smoke FAILED. See atlas log: /tmp/atlas-smoke.log"

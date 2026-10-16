@@ -34,6 +34,14 @@
 # The host binaries are judged with exactly the same rule as the images
 # (buildinfo.Commit must contain LAST_BUILD_COMMIT, and be an ancestor of HEAD),
 # so there is one freshness rule in this repo, not two.
+#
+# Exit codes (three states, same convention as ci-full-trigger.sh):
+#   0 = every judged binary is fresh, OR nothing needed judging (a push that
+#       moved no build input under --diff-base, or a clone with no host binary).
+#   1 = at least one binary is STALE / lacks buildinfo.
+#   2 = the check could NOT be performed: unknown argument, --diff-base that does
+#       not resolve, or `git diff` failing to resolve <base>...HEAD. Never a pass
+#       (FU-20261016-27).
 
 set -euo pipefail
 
@@ -49,7 +57,10 @@ while [ $# -gt 0 ]; do
             ;;
         --diff-base=*) DIFF_BASE=${1#--diff-base=} ;;
         -h|--help)
-            sed -n '2,40p' "$0"
+            # Print the header doc block only (up to the first non-comment line).
+            # The previous hardcoded `sed -n '2,40p'` silently truncated the help
+            # as soon as the header grew, and printed a code line too.
+            awk 'NR > 1 { if ($0 !~ /^#/) exit; print }' "$0"
             exit 0
             ;;
         *)
@@ -213,7 +224,26 @@ if [ -n "$DIFF_BASE" ]; then
         echo "ERROR: --diff-base ${DIFF_BASE} does not resolve in this repo" >&2
         exit 2
     fi
-    changed=$(git diff --name-only "${DIFF_BASE}...HEAD" -- "${BUILD_INPUT_PATHS[@]}" 2>/dev/null || true)
+    # `git diff` FAILING must never be folded into "no build input changed":
+    # both produce an empty list, so `2>/dev/null || true` (the previous shape)
+    # made them indistinguishable and the gate exited 0 with "host binary
+    # freshness not required" for a range it could never read (2026-10-16,
+    # reproduced on a history without a merge base: `git diff main...HEAD` ⇒
+    # `fatal: … no merge base`, git rc=128 — while `${DIFF_BASE}^{commit}`
+    # resolved fine, so the guard above cannot catch it). Capture the status
+    # explicitly, leave git's stderr visible, and refuse to judge: exit 2 is the
+    # same "cannot determine" state as the unresolved --diff-base above (and as
+    # ci-full-trigger.sh, FU-20261016-21).
+    DIFF_RC=0
+    changed=$(git diff --name-only "${DIFF_BASE}...HEAD" -- "${BUILD_INPUT_PATHS[@]}") || DIFF_RC=$?
+    if [ "$DIFF_RC" -ne 0 ]; then
+        echo "ERROR: git diff could not resolve '${DIFF_BASE}...HEAD' (git rc=$DIFF_RC)" >&2
+        echo "       cannot tell whether this push moved a build input ⇒ host binary" >&2
+        echo "       freshness is NOT skipped (fail loud, FU-20261016-27)" >&2
+        echo "       fix: make the range resolvable (git fetch origin; git fetch --deepen/--unshallow)," >&2
+        echo "            or drop --diff-base to judge the binaries unconditionally" >&2
+        exit 2
+    fi
     if [ -z "$changed" ]; then
         echo "  ℹ no build input changed in ${DIFF_BASE}...HEAD → host binary freshness not required for this push"
         echo "  ✓ (host binaries are judged only when the push can change them)"

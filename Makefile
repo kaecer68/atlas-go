@@ -1212,12 +1212,18 @@ ci-gate: embed-dirs
 	@echo "  → 關鍵背景任務存在於 binary（DCE 防再犯，2026-08-10 事故）"
 	@bash scripts/ci/check_critical_tasks.sh
 	@echo "    ✅"
-	@echo "  → binary freshness guard contract tests（唯一 hermetic 的 tests/scripts 測試；見 #1927）"
+	@echo "  → binary freshness guard contract tests（唯一 hermetic 的 tests/scripts 測試；見 #1927；＋ --diff-base 三態 FU-20261016-27）"
 	@bash tests/scripts/test-binary-freshness-guard.sh
 	@echo "    ✅"
 	@echo "  → pre-push 閘門契約測試（E4 fail-closed fetch ＋ FU-20260926-15 host binary 新鮮度 ＋ FU-20261016-21 git 失敗≠docs-only；hermetic fixtures）"
 	@bash tests/scripts/test-prepush-gates.sh
 	@bash tests/scripts/test-ci-full-trigger.sh
+	@echo "    ✅"
+	@echo "  → commit-message 閘門契約測試（range 不可解析 ⇒ rc=2 fail loud／合法訊息仍通過／舊形狀 mutation 自證；hermetic；FU-20261016-27）"
+	@bash tests/scripts/test-commit-message-gate.sh
+	@echo "    ✅"
+	@echo "  → frontend smoke diff 閘門契約測試（'git diff' 不可解析 ⇒ rc=3 fail loud／真 skip 仍 rc=0／mutation 自證；hermetic；FU-20261016-27）"
+	@bash tests/scripts/test-frontend-smoke-diff-gate.sh
 	@echo "    ✅"
 	@echo "  → embed-dirs 契約測試（hermetic：只用 mktemp 目錄，不建 git worktree）"
 	@bash tests/scripts/test-embed-dirs.sh

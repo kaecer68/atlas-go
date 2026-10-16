@@ -435,6 +435,154 @@ run_freshness_rule_tests() {
   fi
 }
 
+# ── --diff-base: "git diff failed" must not look like "no build input" ──────
+# 2026-10-16 (FU-20261016-27): the flag's whole purpose is to SKIP the check when
+# a push cannot invalidate a binary. The skip test was
+#   changed=$(git diff --name-only "${DIFF_BASE}...HEAD" -- … 2>/dev/null || true)
+# so `git diff` failing (no merge base — the guard above only proves the REF
+# resolves, not that `<base>...HEAD` does) produced the same empty list as a
+# genuinely build-input-free push and the gate exited 0 saying "host binary
+# freshness not required". These cases pin both sides: git failing ⇒ rc=2 (fail
+# loud), a real build-input-free push ⇒ still rc=0 (the fix must not turn the
+# documented skip into a blanket red).
+
+# Build <dir>/repo2: docs seed → main.go → compose-only, plus an orphan branch
+# that shares no commit with main (the no-merge-base shape).
+make_diff_base_repo() {
+  local dir=$1
+  local repo="$dir/repo2"
+  mkdir -p "$repo/docs"
+  # -b main: the cases below name `main` explicitly (an implicit `master` would
+  # make every range in this section unresolvable for the wrong reason).
+  fake_git "$repo" init -q -b main
+  test -d "$repo/.git" || fail "diff-base fixture has no .git directory (GIT_DIR leak?)"
+  printf 'seed\n' >"$repo/docs/seed.md"
+  fake_git "$repo" add docs/seed.md
+  fake_git "$repo" commit -q -m "docs seed"
+  # (checked after the first commit: on an unborn branch rev-parse has no HEAD)
+  test "$(git -C "$repo" rev-parse --abbrev-ref HEAD)" = "main" || \
+    fail "diff-base fixture is not on main (git init -b main failed)"
+  printf 'package main\n' >"$repo/main.go"
+  fake_git "$repo" add main.go
+  fake_git "$repo" commit -q -m "go change"
+  printf 'services: {}\n' >"$repo/docker-compose.yml"
+  fake_git "$repo" add docker-compose.yml
+  fake_git "$repo" commit -q -m "compose only"
+  fake_git "$repo" checkout -q --orphan orphan
+  fake_git "$repo" rm -rq --cached . >/dev/null 2>&1 || true
+  rm -rf "$repo/docs"
+  printf 'package orphan\n' >"$repo/orphan.go"
+  fake_git "$repo" add -A
+  fake_git "$repo" commit -q -m "orphan root with a go file"
+  # Back to main: cases (a)/(b)/(d) need a HEAD whose history is main's. Case (c)
+  # switches to `orphan` itself (and asserts that it is on it).
+  fake_git "$repo" checkout -q main
+}
+
+run_diff_base_tests() {
+  local dir out status
+  dir=$(mktemp -d)
+  trap 'rm -rf "$dir"' RETURN
+  make_diff_base_repo "$dir"
+  local repo="$dir/repo2"
+  mkdir -p "$dir/tool" "$dir/freshness"
+  cp "$CHECK" "$dir/tool/check-binary-freshness.sh"
+
+  run_diff_base() {  # run_diff_base <cwd> [args...] → sets DIFF_OUT / DIFF_RC
+    local cwd=$1
+    shift
+    DIFF_RC=0
+    DIFF_OUT=$( cd "$cwd" && FRESHNESS_TMPDIR="$dir/freshness" \
+      bash "$dir/tool/check-binary-freshness.sh" --host-only "$@" 2>&1 ) || DIFF_RC=$?
+  }
+
+  # (a) resolvable range whose diff really has no build input ⇒ documented skip.
+  run_diff_base "$repo" --diff-base "HEAD~1"
+  test "$DIFF_RC" -eq 0 || fail "(a) a build-input-free range must still skip (exit 0), got $DIFF_RC: $DIFF_OUT"
+  printf '%s\n' "$DIFF_OUT" | grep -Fq -- "no build input changed" || \
+    fail "(a) expected the documented skip message, got: $DIFF_OUT"
+
+  # (b) resolvable range that DOES move a build input ⇒ the gate judges.
+  run_diff_base "$repo" --diff-base "HEAD~2"
+  test "$DIFF_RC" -eq 0 || fail "(b) a build-input range must be evaluated (exit 0 here), got $DIFF_RC: $DIFF_OUT"
+  printf '%s\n' "$DIFF_OUT" | grep -Fq -- "build input(s) changed" || \
+    fail "(b) the gate did not report the changed build inputs: $DIFF_OUT"
+  printf '%s\n' "$DIFF_OUT" | grep -Fq -- "no build input changed" && \
+    fail "(b) a build-input range was reported as 'no build input changed': $DIFF_OUT"
+
+  # (e) pre-existing guard kept: a --diff-base that does not resolve is still 2.
+  run_diff_base "$repo" --diff-base "does-not-exist-xyz"
+  test "$DIFF_RC" -eq 2 || fail "(e) an unresolvable --diff-base must exit 2, got $DIFF_RC: $DIFF_OUT"
+  printf '%s\n' "$DIFF_OUT" | grep -Fq -- "does not resolve" || \
+    fail "(e) expected the unresolved-ref message, got: $DIFF_OUT"
+
+  # (d) seam: the range IS valid — git itself fails (broken GIT_DIR, no git).
+  local fake="$dir/fakebin"
+  mkdir -p "$fake"
+  {
+    printf '#!/usr/bin/env bash\n'
+    printf 'case "$1" in\n'
+    printf '  diff) echo "fatal: injected git failure (test seam)" >&2; exit 128 ;;\n'
+    printf '  *) exec "%s" "$@" ;;\n' "$(command -v git)"
+    printf 'esac\n'
+  } >"$fake/git"
+  chmod +x "$fake/git"
+  DIFF_RC=0
+  DIFF_OUT=$( cd "$repo" && PATH="$fake:$PATH" FRESHNESS_TMPDIR="$dir/freshness" \
+    bash "$dir/tool/check-binary-freshness.sh" --host-only --diff-base "HEAD~1" 2>&1 ) || DIFF_RC=$?
+  test "$DIFF_RC" -eq 2 || fail "(d) an injected git failure must exit 2, got $DIFF_RC: $DIFF_OUT"
+  printf '%s\n' "$DIFF_OUT" | grep -Fq -- "128" || \
+    fail "(d) the failure should report git's status, got: $DIFF_OUT"
+  printf '%s\n' "$DIFF_OUT" | grep -Fq -- "no build input changed" && \
+    fail "(d) an injected git failure was reported as 'no build input changed': $DIFF_OUT"
+
+  # (c) the defect: ${DIFF_BASE}^{commit} resolves, but `${DIFF_BASE}...HEAD` has
+  #     no merge base (shallow / cut history) ⇒ rc=2, never the skip. This half
+  #     of the suite runs on the orphan branch (HEAD shares no commit with main).
+  fake_git "$repo" checkout -q orphan
+  test "$(git -C "$repo" rev-parse --abbrev-ref HEAD)" = "orphan" || \
+    fail "(c) fixture must be on the orphan branch"
+  git -C "$repo" rev-parse --verify -q "main^{commit}" >/dev/null || \
+    fail "(c) fixture must resolve main^{commit}"
+  ( cd "$repo" && git diff --name-only "main...HEAD" >/dev/null 2>&1 ) && \
+    fail "(c) fixture unexpectedly resolves main...HEAD (no-merge-base case lost)"
+  run_diff_base "$repo" --diff-base "main"
+  test "$DIFF_RC" -eq 2 || fail "(c) a diff git cannot resolve must exit 2 (fail loud), got $DIFF_RC: $DIFF_OUT"
+  printf '%s\n' "$DIFF_OUT" | grep -Fq -- "main...HEAD" || \
+    fail "(c) failure must name the unusable range, got: $DIFF_OUT"
+  printf '%s\n' "$DIFF_OUT" | grep -Fq -- "no build input changed" && \
+    fail "(c) an unresolvable range was reported as 'no build input changed': $DIFF_OUT"
+  printf '%s\n' "$DIFF_OUT" | grep -Fq -- "ALL BINARIES FRESH" && \
+    fail "(c) an unresolvable range produced a green summary: $DIFF_OUT"
+
+  # (f) mutation self-proof: the OLD pipeline shape reproduces the false green on
+  #     the same fixture, so (c) really distinguishes old code from new code.
+  cat >"$dir/old-shape.sh" <<'OLD'
+#!/usr/bin/env bash
+set -euo pipefail
+DIFF_BASE=$1
+BUILD_INPUT_PATHS=('*.go' 'go.mod' 'go.sum' 'Dockerfile*' 'scripts/cron-entrypoint.sh')
+changed=$(git diff --name-only "${DIFF_BASE}...HEAD" -- "${BUILD_INPUT_PATHS[@]}" 2>/dev/null || true)
+if [ -z "$changed" ]; then
+  echo "  ℹ no build input changed in ${DIFF_BASE}...HEAD → host binary freshness not required for this push"
+  exit 0
+fi
+echo "  build input(s) changed"
+OLD
+  local old_rc=0 old_out
+  old_out=$( cd "$repo" && bash "$dir/old-shape.sh" "main" 2>&1 ) || old_rc=$?
+  test "$old_rc" -eq 0 || fail "(f) the old shape must reproduce the false green (exit 0), got $old_rc: $old_out"
+  printf '%s\n' "$old_out" | grep -Fq -- "no build input changed" || \
+    fail "(f) the old shape must print the skip message, got: $old_out"
+
+  # (g) static: the fail-open shape must not come back.
+  grep -Fq 'git diff --name-only "${DIFF_BASE}...HEAD" -- "${BUILD_INPUT_PATHS[@]}" 2>/dev/null || true' "$CHECK" && \
+    fail "(g) check-binary-freshness.sh still contains the fail-open git-diff pipeline"
+  grep -Fq 'DIFF_RC' "$CHECK" || \
+    fail "(g) check-binary-freshness.sh must capture git diff's status explicitly"
+  echo "  ✓ --diff-base: real skip ⇒ rc=0 / unresolvable or failing diff ⇒ rc=2 / old shape ⇒ rc=0 (mutation)"
+}
+
 run_static_contract_tests() {
   assert_contains "$ROOT/docker-compose.yml" 'GIT_COMMIT: ${ATLAS_GIT_COMMIT:?'
   assert_contains "$ROOT/Dockerfile" 'GIT_COMMIT must be set'
@@ -539,6 +687,7 @@ run_atlas_family_tag_test() {
 }
 
 run_atlas_family_tag_test
+run_diff_base_tests
 run_session_start_test
 run_static_contract_tests
 
