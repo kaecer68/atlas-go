@@ -31,7 +31,7 @@
 |---|---|---|---|---|
 | E1 | coverage 門檻空值 fail-open | `Makefile` + `ci-cd.yml` + `quality.yml` + `local-ci.sh` | 他線 `atlas-cov-fix` | 在飛（**佔用 Makefile/quality.yml**）|
 | E2 | 負向證明把 exit 127/2 當「擋下了」 | 10 處 | — | ✅ 已併（#2020/#2022）|
-| E3 | `timeout(124)` 只計 skipped ⇒ 掛住的檢查仍讓 `make ci` 回 0 | `Makefile` ci 段 | **他線（已登記 `FU-20260926-12`，#2028）** | **不重複** |
+| E3 | `timeout(124)` 只計 skipped ⇒ 掛住的檢查仍讓 `make ci` 回 0 | `Makefile` ci 段 | ✅ **已修（PR #2245，`FU-20260926-12`）** | **已結案**（2026-10-16 root 更新）：改為三態（pass／skip／fail），124 ⇒ 紅；同型稽核另立 `FU-20261016-18`／`-19`（P0） |
 | E4 | pre-push 取不到 `origin/main` 即放行 4 gate | `.githooks/pre-push` | ✅ **#2049**（已併）| 修法＝fail-closed（fetch 失敗 ⇒ exit 1 ＋ 列出「哪些閘門為何不能跑」＋ 原始錯誤 ＋ `--no-verify` 提示）＋ 新增 **Gate 0b**（`check-binary-freshness.sh --host-only --diff-base`：**完全不碰 docker**、只判 `bin/atlas`＋`bin/atlas-mcp`、純 docs push 不擋、無 `bin/` 的 clone 軟跳過）。**原描述低估影響**：`exit 0` 另跳過 Gate 1c（frontend dist）、Gate 2（HEAD==origin/main）、Gate 3（zero-diff）。**併同修掉一個「無聲死亡」**：`test-binary-freshness-guard.sh` 在 `set -e` 下以 rc=1、**stdout/stderr 皆 0 bytes** 結束 ⇒ 操作者只看到「ci-gate FAILED」而無原因、唯一出路是 `--no-verify`（不可行動的假紅）|
 | E5 | ~~危險指令 hook 預設 warn~~ **實為「死守門」**：`.claude/settings.json` 只有 `SessionStart`、**無 `PreToolUse`** ⇒ **沒有任何機制自動呼叫** `deny-dangerous.sh`（唯一 PreToolUse 在 **gitignored** 的 `.claude/settings.local.json`）；且該腳本用 `${CHECK,,}`（bash 4）⇒ macOS bash 3.2 **對每個指令誤判** | `.agent-hooks/` ＋ `.claude/settings.json` | **#2048** | ✅ **已併**（`fe779473`）：tracked `settings.json` 加 `PreToolUse`→薄 adapter（pattern 邏輯無第二份）、bash 3.2 語法修為 `tr`、`tests/scripts/test-agent-hook-wiring.sh`（11 組契約）納入 `make ci-gate`；**維持 warn 為預設**（見 E23）|
 | E6 | `--warn-only` 使 job 不可能紅；shellcheck/frontend-smoke skip 出口 | `quality.yml` 等 | **無**（等 E1/#2003 讓出）| 待派（串行）|
