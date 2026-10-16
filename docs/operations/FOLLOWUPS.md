@@ -574,7 +574,7 @@
   負對照：`msg`／`status` 仍完整可見。實測：`go test ./internal/marketdata/ -run HidesTokenFragment`
   與 `-run SinkCorpus` 全綠；`TestFinMindClient_Non2xx_LogLineHidesTokenFragment` 對 400／402／403 三種 body
   同時斷言「不含 fixture 憑證／`token_tail`」與「含狀態碼＋上游訊息」。
-- **未做（另立條目）**：機密片段仍可從**非 FinMind** 的 provider 進 log／error ⇒ 見 `FU-20261016-10`～`-15`。
+- **未做（另立條目）**：機密片段仍可從**非 FinMind** 的 provider 進 log／error ⇒ 見 `FU-20261016-11`～`-16`。
 
 ---
 
@@ -3137,16 +3137,7 @@ PY
 
 ---
 
-## 相關文件
-
-- [universe-scoring-ranked-zero-20260925.md](universe-scoring-ranked-zero-20260925.md)
-  — SmartUniverseBuilder `symbols_ranked=0` 根因報告（含 §6.2 缺口與 §8 防再犯檢查建議）
-- [README.md](README.md) — 本目錄索引
-- [local-deploy.md](local-deploy.md) — 部署與 `.env` 分工（prod DSN 為何不放 `.env`）
-
----
-
-### FU-20261016-10 — TEJ：`api_key` 放在 **query string**，且 transport error 會把**整條 URL**寫進 error（channel health 直接顯示）
+### FU-20261016-11 — TEJ：`api_key` 放在 **query string**，且 transport error 會把**整條 URL**寫進 error（channel health 直接顯示）
 
 - **狀態**：`open`
 - **記錄日期**：2026-10-16
@@ -3163,14 +3154,14 @@ PY
   ⇒ 「URL 進 error」為 Go 保證，不是本 repo 的推測。**未實測**：TEJ 真實回應 body 是否真的回帶憑證
   （無 TEJ 憑證／端點，且不需要：URL 這條已經成立）。
 - **建議（未實作）**：① 憑證改走 header（`X-API-KEY` 或 `Authorization`），或至少在 error 前把 query 的
-  機密參數遮蔽（見 `FU-20261016-14` 的共用 URL 遮蔽器）；② `:209`／`:282` 的 body 走共用遮蔽器；
+  機密參數遮蔽（見 `FU-20261016-15` 的共用 URL 遮蔽器）；② `:209`／`:282` 的 body 走共用遮蔽器；
   ③ 補一個 hermetic 測試：以含假 `api_key` 的 URL 觸發 transport error，斷言錯誤字串不含該值。
 - **驗收條件**：TEJ 的 transport／非 2xx error 字串**不含** `api_key` 原值，且仍含 `status`／上游 `Error.Code`／
   `Error.Message`；負對照（拿掉遮蔽）⇒ 新測試紅燈。
 
 ---
 
-### FU-20261016-11 — `internal/live`：券商回應 body 原文進下單／風控錯誤訊息
+### FU-20261016-12 — `internal/live`：券商回應 body 原文進下單／風控錯誤訊息
 
 - **狀態**：`open`
 - **記錄日期**：2026-10-16
@@ -3179,18 +3170,18 @@ PY
   - `internal/live/twse_adapter.go:207`／`:271`／`:322` —— 委託、狀態、取消三條路徑都把
     `strings.TrimSpace(string(respBody))` **原文**放進 `fmt.Errorf("… API error status=%d body=%s")`。
   - `internal/live/http_adapter.go:306` —— `brokerHTTPError.message` 直接放 `body=%s`（原文）；
-    `:294` 的 transport error 也以 `%v` 原文放進 message（同 `FU-20261016-10` 的 URL 類風險：
+    `:294` 的 transport error 也以 `%v` 原文放進 message（同 `FU-20261016-11` 的 URL 類風險：
     券商 URL 雖未帶 key，但 `*url.Error` 會帶完整 path／參數）。
   - `internal/live/fubon_dma.go:285` —— unmarshal 失敗時把**整行回應**（`line`）放進 error。
 - **為何是機密問題**：這些訊息的消費者是下單／風控紀錄與告警；券商 API 的錯誤 body 常回帶帳號、
   委託書號，甚至（在認證失敗時）憑證前綴。**未實測** single case（無券商憑證，且不應在生產探測）。
 - **建議（未實作）**：套用共用的上游文字遮蔽器（`internal/marketdata/redact.go` 的那一套，
-  建議提升為跨套件套件，見 `FU-20261016-14`），保留 `status`／`code`。
+  建議提升為跨套件套件，見 `FU-20261016-15`），保留 `status`／`code`。
 - **驗收條件**：以假 body（含假憑證／帳號）驅動三條錯誤路徑 ⇒ message 不含原值、仍含 status 與 code。
 
 ---
 
-### FU-20261016-12 — LLM client 家族：provider 錯誤 body 原文進 error（401 常回帶 key 前綴）
+### FU-20261016-13 — LLM client 家族：provider 錯誤 body 原文進 error（401 常回帶 key 前綴）
 
 - **狀態**：`open`
 - **記錄日期**：2026-10-16
@@ -3210,7 +3201,7 @@ PY
 
 ---
 
-### FU-20261016-13 — `internal/marketdata` 其餘 provider 的 raw-body error 站點（遮蔽器已就位，屬機械式套用）
+### FU-20261016-14 — `internal/marketdata` 其餘 provider 的 raw-body error 站點（遮蔽器已就位，屬機械式套用）
 
 - **狀態**：`open`
 - **記錄日期**：2026-10-16
@@ -3224,13 +3215,13 @@ PY
 - **為何仍要登記**：這些 provider 的 body 是否真的回帶機密**尚未逐一實測**；但失效模式已經證實存在於
   同族（FinMind 的 `token_tail`、以及 `retry.go` 的共用 sink）⇒ 以「有憑證的 provider 一律遮蔽」為預設，
   比「逐一證明會漏」便宜。**這正是本條不與 `-02` 合併的原因**：範圍不同、且改動面是 26 個站點。
-- **建議（未實作）**：① 先做 `-14`（共用遮蔽器跨套件化）；② 逐 provider 套用並補「含假憑證 body」的
+- **建議（未實作）**：① 先做 `-15`（共用遮蔽器跨套件化）；② 逐 provider 套用並補「含假憑證 body」的
   負向測試；③ 有憑證的 provider（fugle／fubon／tej／yahoo session）優先。
 - **驗收條件**：上列站點全部經遮蔽；每個 provider 至少一個「餵假憑證 body ⇒ 不得出現在 error／log」的測試。
 
 ---
 
-### FU-20261016-14 — 遮蔽器**不可跨套件重用**（且沒有 URL／query 類機密遮蔽器）
+### FU-20261016-15 — 遮蔽器**不可跨套件重用**（且沒有 URL／query 類機密遮蔽器）
 
 - **狀態**：`open`
 - **記錄日期**：2026-10-16
@@ -3238,18 +3229,18 @@ PY
 - **事實**：本 PR 的 `redactUpstreamText` 定義在 `internal/marketdata/redact.go`，是**未匯出**的套件內函式
   ⇒ `internal/llm`、`internal/live`、`cmd/*` 都拿不到，只能各自複製一份清單（`FU-20260926-01/-09` 的
   「三份 14400」正是同一種病：同一個知識有多份副本，就會漂移）。另外**沒有任何 URL／query 遮蔽器**：
-  憑證放進 query string 的 provider（目前確認只有 TEJ，見 `FU-20261016-10`）在 `*url.Error` 這條路徑上
+  憑證放進 query string 的 provider（目前確認只有 TEJ，見 `FU-20261016-11`）在 `*url.Error` 這條路徑上
   完全沒有防線。
 - **建議（未實作）**：① 提升為 `internal/redact`（或 `internal/logging` 的子套件）並匯出
   `RedactUpstreamText`／`RedactURL`；② 在 `internal/logging` 這一層加保險（例如對 key 名像
   `token/api_key/authorization/cookie` 的 log 欄位值自動遮蔽），讓「忘記呼叫遮蔽器」不再是單點失效；
-  ③ 把 `FU-20261016-13` 的站點改成呼叫共用版。
+  ③ 把 `FU-20261016-14` 的站點改成呼叫共用版。
 - **驗收條件**：`internal/marketdata` 以外的套件可 import 同一個遮蔽器；且刪掉任一 provider 的呼叫
   ⇒ 該 provider 的負向測試紅燈（而不是「安靜地少一層防護」）。
 
 ---
 
-### FU-20261016-15 — `cmd/*` CLI 與 `atlas-mcp` 的 raw body／fullURL 進 error（輸出到終端與 log 檔）
+### FU-20261016-16 — `cmd/*` CLI 與 `atlas-mcp` 的 raw body／fullURL 進 error（輸出到終端與 log 檔）
 
 - **狀態**：`open`
 - **記錄日期**：2026-10-16
@@ -3260,7 +3251,18 @@ PY
   `cmd/experimental/c07-obs-collector/main.go:240`、`cmd/experimental/c07-spot-check-recorder/main.go:336`、
   `cmd/atlas-mcp/server/http_client.go:111`（`fullURL` ＋ 原文 body；URL 由呼叫端參數組出）。
 - **為何要登記**：這些是**手動／cron CLI**，錯誤直接印到終端機與 `logs/`，貼進 issue 的機率不比服務 log 低。
-  與 `-13` 差別在於：這裡沒有 `internal/marketdata` 的共用遮蔽器可用（見 `-14`），且 `fullURL` 屬
-  「URL 類」（同 `-10`）。
-- **建議（未實作）**：待 `-14` 落地後套用；`atlas-mcp` 的 `fullURL` 需要 URL 遮蔽器。
-- **驗收條件**：同 `-13`（假憑證不得出現在 CLI 的錯誤輸出）。
+  與 `-14` 差別在於：這裡沒有 `internal/marketdata` 的共用遮蔽器可用（見 `-15`），且 `fullURL` 屬
+  「URL 類」（同 `-11`）。
+- **建議（未實作）**：待 `-15` 落地後套用；`atlas-mcp` 的 `fullURL` 需要 URL 遮蔽器。
+- **驗收條件**：同 `-14`（假憑證不得出現在 CLI 的錯誤輸出）。
+
+---
+
+## 相關文件
+
+- [universe-scoring-ranked-zero-20260925.md](universe-scoring-ranked-zero-20260925.md)
+  — SmartUniverseBuilder `symbols_ranked=0` 根因報告（含 §6.2 缺口與 §8 防再犯檢查建議）
+- [README.md](README.md) — 本目錄索引
+- [local-deploy.md](local-deploy.md) — 部署與 `.env` 分工（prod DSN 為何不放 `.env`）
+
+---
