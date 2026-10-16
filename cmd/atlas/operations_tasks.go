@@ -621,7 +621,15 @@ type replayFreshness struct {
 }
 
 // conversionNeeded reports whether the JSONL must be rebuilt from the CSV:
-// the CSV holds a newer data date, or the JSONL is missing/unreadable.
+// the two data dates disagree in **either** direction, or the JSONL is
+// missing/unreadable.
+//
+// Semantics (FU-20260927-08): the JSONL is a derived file and the CSV (TWSE
+// open data) is its source, so any disagreement must converge back to the CSV —
+// including "the JSONL is ahead", which an external writer, a manual repair, or
+// cmd/import-replay can produce. The previous one-way comparison
+// (csvLatest.After(jsonlLatest)) left such a file stale forever while the log
+// called it "already up to date".
 //
 // An unreadable CSV is NOT a reason to convert — there would be nothing to
 // convert from, and the converter would fail with the same error anyway.
@@ -632,7 +640,14 @@ func (f replayFreshness) conversionNeeded() bool {
 	if f.jsonlErr != nil {
 		return true
 	}
-	return f.csvLatest.After(f.jsonlLatest)
+	return !f.csvLatest.Equal(f.jsonlLatest)
+}
+
+// jsonlAhead reports whether the JSONL holds a newer data date than the CSV —
+// i.e. the JSONL disagrees with its source because something other than this
+// task wrote it. It is only used to name the conversion reason in the logs.
+func (f replayFreshness) jsonlAhead() bool {
+	return f.csvErr == nil && f.jsonlErr == nil && f.jsonlLatest.After(f.csvLatest)
 }
 
 // compareReplayCSVToJSONL reads both files' newest data date.
@@ -652,18 +667,25 @@ func compareReplayCSVToJSONL(csvPath, jsonlPath string) replayFreshness {
 	return f
 }
 
-// syncReplayJSONLFromCSV refreshes the JSONL from the CSV, but only when the
-// JSONL is actually behind, and logs which of the three outcomes happened.
+// syncReplayJSONLFromCSV refreshes the JSONL from the CSV whenever the two
+// disagree, and logs which outcome happened.
 //
-// Gate: convert iff the CSV's newest data date is strictly newer than the
-// JSONL's (or the JSONL cannot be read). When the JSONL is already current the
-// file is left untouched — zero work, zero writes.
+// Gate: convert iff the CSV's and the JSONL's newest data dates differ in
+// **either** direction (or the JSONL cannot be read). Only "the CSV and the
+// JSONL agree" is a no-op — zero work, zero writes.
 //
-// The three outcomes are distinguishable in the logs by these tokens:
+// The outcomes are distinguishable in the logs by these tokens:
 //
+//	conversion: needed (CSV is newer)          — conversion ran, reason: CSV ahead
+//	conversion: needed (JSONL is ahead)        — conversion ran, reason: JSONL ahead
+//	conversion: needed (JSONL unreadable: …)   — conversion ran, reason: no usable JSONL
 //	conversion: converted                      — file rewritten, caller state: caught up
-//	conversion: skipped (already up to date)   — zero work, file untouched
+//	conversion: skipped (already up to date)   — zero work, file untouched (dates equal)
+//	conversion: skipped (replay CSV unreadable: …) — nothing to convert from
 //	conversion failed (non-fatal)              — attempted, did not succeed
+//
+// The logged reason must always match the observed state: "already up to date"
+// is only allowed when the two dates are equal (FU-20260927-08).
 //
 // A failure stays non-fatal (a derived file must not fail the task) but is
 // returned so tests and future callers can react; runAutoBackfill ignores it,
@@ -676,6 +698,7 @@ func syncReplayJSONLFromCSV(csvPath, jsonlPath string) error {
 		log.Printf("[Gateway] backfill CSV→JSONL conversion: skipped (replay CSV unreadable: %v) — csv=%s", fresh.csvErr, csvPath)
 		return nil
 	case !fresh.conversionNeeded():
+		// Only reachable when both dates are equal: any disagreement converts.
 		log.Printf("[Gateway] backfill CSV→JSONL conversion: skipped (already up to date) — csv_latest=%s jsonl_latest=%s jsonl=%s",
 			fresh.csvLatest.Format(dateLayout), fresh.jsonlLatest.Format(dateLayout), jsonlPath)
 		return nil
@@ -684,6 +707,13 @@ func syncReplayJSONLFromCSV(csvPath, jsonlPath string) error {
 		// path for "conversion never succeeded" and "file was deleted".
 		log.Printf("[Gateway] backfill CSV→JSONL conversion: needed (JSONL unreadable: %v) — csv_latest=%s jsonl=%s",
 			fresh.jsonlErr, fresh.csvLatest.Format(dateLayout), jsonlPath)
+	case fresh.jsonlAhead():
+		// The JSONL disagrees with its source because something else wrote it
+		// (external writer, manual repair, cmd/import-replay). The CSV is the
+		// source of truth and the JSONL is derived, so converge back to the CSV
+		// instead of reporting "already up to date" for a stale-by-design file.
+		log.Printf("[Gateway] backfill CSV→JSONL conversion: needed (JSONL is ahead) — csv_latest=%s jsonl_latest=%s jsonl=%s",
+			fresh.csvLatest.Format(dateLayout), fresh.jsonlLatest.Format(dateLayout), jsonlPath)
 	default:
 		log.Printf("[Gateway] backfill CSV→JSONL conversion: needed (CSV is newer) — csv_latest=%s jsonl_latest=%s",
 			fresh.csvLatest.Format(dateLayout), fresh.jsonlLatest.Format(dateLayout))

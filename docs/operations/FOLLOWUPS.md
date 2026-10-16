@@ -1988,8 +1988,8 @@ glob 空集合=紅／**預算覆寫=清單內放寬後綠、放寬後仍超時�
 
 ### FU-20260927-07 — CSV→JSONL 轉檔**非原子**：`os.Create` 先 truncate 再逐行寫 ⇒ 讀端可能讀到 0-byte 檔
 
-- **狀態**：`open`
-- **記錄日期**：2026-09-27
+- **狀態**：`done`
+- **記錄日期**：2026-09-27 ／ **完成於**：2026-10-16（PR #2263）
 - **來源**：PR #2079 的未驗項 ②（該 PR 讓轉檔在**沒有缺口的日子也會評估／執行** ⇒ 這條既有缺陷的**曝露面變大**）。
 - **事實（位置由我複核）**：`internal/importer/twmarket.go:11-34` 的 `ImportTWOpenDataCSVToJSONL`：
   - `:21` `f, err := os.Create(targetPath)` —— **當場 truncate 目標檔**（舊內容先消失）；
@@ -2005,12 +2005,36 @@ glob 空集合=紅／**預算覆寫=清單內放寬後綠、放寬後仍超時�
 - **驗收條件**：寫入進行中（或注入延遲）時由讀端開檔 ⇒ 只會拿到合法 JSONL 或舊檔，**不得**出現 0-byte／截斷；
   轉檔失敗（例如目標路徑是目錄）⇒ **不得**留下半成品檔（有負向對照）。
 
+- **處置（2026-10-16，PR #2263）**：**敘述成立**（修前最小複現見下），已修。
+  - **根因（讀碼確認，比原敘述更精確）**：`ImportTWOpenDataCSVToJSONL` 的 `os.Create(targetPath)`
+    在**開檔當下**就把目標 truncate 成 0 bytes，之後才逐列 `enc.Encode(bar)`；
+    整個寫入期間檔案都是不完整的，且**沒有** temp+rename、**沒有** 檔案鎖。
+    讀端確實是 `internal/orchestrator/composition.go:113` → `portfolio.HistoricalPrices.LoadFromExtendedJSONL`
+    的 `bufio.Scanner`（位置與原敘述一致）。
+  - **最小複現（修前 `f9d49ba6d`）**：fixture 40 日 × 400 檔（16,000 列、目標檔 2,560,000 bytes），
+    於轉檔進行中以無 sleep 的緊密輪詢統計目標檔 size（＝讀端開檔會看到的大小）
+    ⇒ **21,220 次取樣中 7 次為 0 bytes、17,300 次為截斷檔**（min=0、old=50、new=2560000）。
+    紅燈原文：`a concurrent reader observed 7/21220 samples of a 0-byte file and 17300/21220 samples of a truncated file`。
+  - **修法**：改為「同目錄暫存檔 → `tmp.Sync()`（fsync）→ `os.Rename`」；rename 同檔案系統內為原子
+    ⇒ 讀端只會看到完整的舊檔或完整的新檔。任何失敗路徑（含 rename 失敗）都移除暫存檔。
+    **沒有**用「只加鎖、仍原地 truncate」的替代寫法。
+  - **權限語意（原敘述已預告，實測後照此處理）**：目標檔**已存在** ⇒ 暫存檔 `Chmod` 回其既有權限
+    （0640 ⇒ 轉檔後仍 0640）；目標檔**不存在** ⇒ 以 `0666` 為請求模式建立，由 kernel 套 umask
+    （與 `os.Create` 的 `0666 & ~umask` 語意相同）⇒ 不出現 `os.CreateTemp` 的 0600 默默收緊。
+    測試以「同目錄 `os.Create` 對照組」比對，不依賴 umask 的實際值。
+  - **修後負向證明**：同一 fixture ⇒ **25,277 次取樣，0-byte=0、truncated=0、min=50（＝舊檔大小）**。
+    突變（把 temp+rename 打回 `os.Create`）⇒ 紅燈重現（`4/25940 samples of a 0-byte file and 21723/25940 samples of a truncated file`）；
+    `cp` 備份還原後 sha256 逐位元組相等（`d58eb31a7cd5c2a0da5b54e90c3be5b803c53761cc8c135f5b94a2e227def625`）。
+  - **失敗路徑**：`TestImportTWOpenDataCSVToJSONL_FailureLeavesNoPartialFile`（目標路徑是目錄）
+    ⇒ rename 失敗、錯誤往上回、目錄內容逐項不變（無 `.tmp-*` 殘留）。
+  - **同型清單（僅列出，未修；新 ID 由 root 配）**：見 PR #2263 body「同型掃描」段。
+
 ---
 
 ### FU-20260927-08 — 轉檔閘門**單向**：只比「CSV 較新」⇒ JSONL 領先時永不修，而日誌會把它說成「已同步」
 
-- **狀態**：`open`
-- **記錄日期**：2026-09-27
+- **狀態**：`done`
+- **記錄日期**：2026-09-27 ／ **完成於**：2026-10-16（PR #2263）
 - **來源**：PR #2079 的未驗項 ③。
 - **事實（位置由我複核，來自該 PR 的新增碼）**：PR #2079 的 `cmd/atlas/operations_tasks.go` 新增 `replayFreshness.conversionNeeded()`：
   - `csvErr != nil` ⇒ `false`（沒有來源可轉）；
@@ -2023,6 +2047,30 @@ glob 空集合=紅／**預算覆寫=清單內放寬後綠、放寬後仍超時�
   並讓「不一致但刻意不動」成為**具名**的第三態日誌。
   ⚠️ 要先決定**語意**：JSONL 領先時轉檔會**覆蓋外部寫入者的資料** ⇒ 這不是實作細節，是 owner 決策（不宜由實作者順手改）。
 - **驗收條件**：JSONL 尾行日期 > CSV 的 fixture ⇒ 下一輪轉檔後兩檔一致；且日誌**不再**把該狀態寫成 `already up to date`。
+
+- **處置（2026-10-16，PR #2263）**：**敘述成立**（修前最小複現見下），已修；原敘述的 owner 語意決策已定案。
+  - **最小複現（修前 `f9d49ba6d`）**：fixture CSV 最新日 `2026-03-19`、JSONL `2026-03-20`（外部寫入者領先）
+    ⇒ 舊碼 `conversionNeeded() == false`、`syncReplayJSONLFromCSV` rc=nil，日誌原文
+    `[Gateway] backfill CSV→JSONL conversion: skipped (already up to date) — csv_latest=2026-03-19 jsonl_latest=2026-03-20`，
+    且 JSONL **逐位元組未變** ⇒ 檔案永遠修不好、日誌把「不一致」講成「已同步」（假綠）。
+  - **語意決策（原敘述要求先定案）**：以「**衍生檔必須收斂回來源**」定案。JSONL 是衍生檔，
+    CSV（TWSE open data）是來源；衍生檔不得成為權威 ⇒ 任何不一致都轉，包含「JSONL 領先」
+    （外部寫入者／人工修復／`cmd/import-replay`／`composition.loadHistoricalPrices` 的補轉路徑）。
+    已知代價：外部寫入者刻意寫在 CSV 之後的資料會被覆蓋 —— 這是刻意的（該檔不應由本 task 以外的
+    元件寫入；`cmd/import-replay` 的輸入本來就必須是同一份 CSV）。
+  - **修法**：`conversionNeeded()` 由 `f.csvLatest.After(f.jsonlLatest)` 改為 `!f.csvLatest.Equal(f.jsonlLatest)`；
+    日誌新增具名第三態 `conversion: needed (JSONL is ahead) — csv_latest=… jsonl_latest=…`（方向逐字寫出）。
+    **既有斷言未放寬**：兩邊日期相等仍為 zero-work skip（不重寫）、CSV 讀不到仍不轉；
+    另**新增**「JSONL 領先 ⇒ 必須轉」的案例與「日誌 token 必須與事實相符」的斷言。
+  - **修後負向證明**：同一 fixture ⇒ 日誌 `needed (JSONL is ahead)` 後接 `converted`；
+    JSONL 由 `2026-03-20` 收斂回 `2026-03-19`、內容確實被重寫（前後 bytes 不同）。
+    突變（把閘門打回單向 `csvLatest.After(...)`）⇒ 紅燈重現
+    （`日誌說『already up to date』但兩邊日期不同：csv_latest=2026-03-19 jsonl_latest=2026-03-20 ⇒ 判定失真`
+    ＋ `JSONL 領先 CSV 時閘門必須要求轉檔…`）；`cp` 備份還原後 sha256 逐位元組相等
+    （`8ec1a39b3f2108648db78c9e2d482aaf90127ec6bca8ebea3b9915bca50abb7b`）。
+  - **日誌與事實一致性**：`TestSyncReplayJSONLFromCSV_LogMatchesReality` 對四種前置狀態
+    （落後／領先／一致／缺席）斷言「每個 token 都必須與觀測相符」：`already up to date`
+    只允許在兩邊日期相等、且檔案未被改寫時出現；`needed (...)` 的方向字串也必須與實際狀態相符。
 
 ---
 
