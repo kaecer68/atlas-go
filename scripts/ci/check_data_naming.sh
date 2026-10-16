@@ -14,7 +14,7 @@
 #   bash scripts/ci/check_data_naming.sh --json   # JSON 輸出 (CI 整合用)
 #   bash scripts/ci/check_data_naming.sh --dry    # 僅報告，不退出 (開發用)
 #
-# 退出碼: 0 = 通過, 1 = 違規發現
+# 退出碼: 0 = 通過, 1 = 違規發現, 2 = 用法錯誤（未知旗標；FU-20261016-26）
 # =============================================================================
 
 set -euo pipefail
@@ -22,11 +22,22 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$REPO_ROOT"
 
-OUTPUT_MODE="${1:-text}"
+# 旗標解析（FU-20261016-26）：`--json` 與裸字 `json` **等效**；`--dry` 保留；
+# 未知旗標 ⇒ rc=2 ＋ 用法。舊版只比對 `$1`／`$2` 的字面值 ⇒ 任何拼法不符的旗標
+# （含檔頭宣告的 `--json`）都被靜默丟棄 ＝ 旗標是死的。
+OUTPUT_MODE="text"
 DRY_RUN=false
-if [ "${1:-}" = "--dry" ] || [ "${2:-}" = "--dry" ]; then
-  DRY_RUN=true
-fi
+for arg in "$@"; do
+  case "$arg" in
+    json|--json) OUTPUT_MODE="json" ;;
+    --dry)       DRY_RUN=true ;;
+    *)
+      echo "unknown option: $arg" >&2
+      echo "usage: check_data_naming.sh [--json|json] [--dry]" >&2
+      exit 2
+      ;;
+  esac
+done
 
 VIOLATIONS=0
 WARNINGS=0

@@ -6,7 +6,7 @@ import { renderRiskPanel } from '../components/risk-panel.js';
 import { renderRiskGatePanel } from '../components/risk-gate-panel.js';
 
 import { renderStockCell } from '../names.js';
-import { formatMaxDrawdown, formatHHI, fmtSafeNumber, fmtSafeSignedPct, fmtCurrency } from '../shared/format-metric.js';
+import { formatMaxDrawdown, formatHHI, fmtSafeNumber, fmtSafeSignedPct, fmtSafeCurrency } from '../shared/format-metric.js';
 
 function isValidNumber(v) {
   return typeof v === 'number' && Number.isFinite(v);
@@ -74,7 +74,9 @@ export async function loadPortfolioPage(getJSON, agentNameFn) {
     };
 
     function kpiNTD(v) {
-      return window.fmtNTD ? window.fmtNTD(v) : fmtCurrency(v, { decimals: 0 });
+      // FU-20261016-26：走 `fmtSafe*` 入口（zero-metric-guard 的結構規則）。
+      // 兩者輸出逐值相同（`fmtCurrency` 對無效值本來就回 '—'；見 format-metric.js:117）。
+      return window.fmtNTD ? window.fmtNTD(v) : fmtSafeCurrency(v, { decimals: 0 });
     }
     function kpiNum(v) {
       return typeof v === 'number' ? v.toString() : '—';
@@ -206,7 +208,7 @@ export async function loadPortfolioPage(getJSON, agentNameFn) {
             <td class="${sideClass}">${sideLabel}</td>
             <td style="text-align:right">${fmtI(quantity)}</td>
             <td style="text-align:right">${fmtSafeNumber(price, { decimals: 2 })}</td>
-            <td style="text-align:right">${isValidNumber(amount) ? (window.fmtNTD ? window.fmtNTD(amount) : fmtCurrency(amount, { decimals: 0 })) : '—'}</td>
+            <td style="text-align:right">${isValidNumber(amount) ? (window.fmtNTD ? window.fmtNTD(amount) : fmtSafeCurrency(amount, { decimals: 0 })) : '—'}</td>
             <td>${trade.reason || '—'}</td>
           </tr>
         `;

@@ -13,7 +13,7 @@
 #   bash scripts/ci/check_maturity.sh          # 完整檢查
 #   bash scripts/ci/check_maturity.sh --json   # JSON 輸出 (CI 整合用)
 #
-# 退出碼: 0 = 通過, 1 = 違規發現
+# 退出碼: 0 = 通過, 1 = 違規發現, 2 = 用法錯誤（未知旗標；FU-20261016-26）
 # =============================================================================
 
 set -euo pipefail
@@ -21,7 +21,20 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$REPO_ROOT"
 
-OUTPUT_MODE="${1:-text}"
+# 旗標解析（FU-20261016-26）：`--json` 與裸字 `json` **等效**；未知旗標 ⇒ rc=2 ＋ 用法。
+# 舊版 `OUTPUT_MODE="${1:-text}"` 只認裸字 `json` ⇒ 檔頭宣告的 `--json` 與「不帶旗標」
+# 逐位元組相同（死旗標）。
+OUTPUT_MODE="text"
+for arg in "$@"; do
+  case "$arg" in
+    json|--json) OUTPUT_MODE="json" ;;
+    *)
+      echo "unknown option: $arg" >&2
+      echo "usage: check_maturity.sh [--json|json]" >&2
+      exit 2
+      ;;
+  esac
+done
 VIOLATIONS=0
 JSON_VIOLATIONS="[]"
 

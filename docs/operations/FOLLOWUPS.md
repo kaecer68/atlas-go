@@ -4118,6 +4118,150 @@ PY
   ④ `git ls-files` 成功但輸出含**需要引號的怪檔名**（`core.quotePath` 預設把非 ASCII 檔名加上引號）時，
      原本與現在都用未加引號的 `for f in …` 展開 ⇒ 這類檔名的二進位判定本來就不可靠（**原有**限制，本 PR 未改）。
 
+### FU-20261016-26 — 「死旗標／無呼叫端」家族：薄殼吞旗標（`check_jev_contract.sh`）＋ 旗標拼法不符（5 支 `--json`）＋ 有牙齒但零呼叫端（`zero-metric-guard.sh --fail`）
+
+> **落點說明**：本條接 `-25` 之後 —— 兩條原本都插在 `-24` 之後（同一個插入點）⇒ 合併時必然撞一小段衝突，
+> 依「號碼遞增」解為 **`-25` 在前、本條在後**。2026-10-16 `-25`（#2255）先落 main，本 PR rebase 後即為此順序
+> （`-18`…`-25` 的內文在此次解衝突中**逐位元組未動**，見負向證明段）。
+> **行號基準**：本條「修前」行號一律指 `origin/main`（`d9b9c8be8`）；「修後」指本 PR 的 head。
+
+- **狀態**：`done`
+- **記錄日期**：2026-10-16 ／ **完成於**：2026-10-16 本 PR（`fix/20261016-dead-flags`）
+- **嚴重度**：**P1**（薄殼吞旗標 ＝ 檔頭宣告的介面是死的）／**P2**（`--json` 名實不符，CI 那一步的**步驟名**與實際輸出不符）／**P1**（守門有牙齒但**零呼叫端** ⇒ 網路效果等於沒有牙齒）。
+- **來源**：`FU-20261016-24` 的同型掃描（P1／P2／P3 三列）；2026-10-16 root 指派本車道收斂。
+
+- **★ 判準（本票的方法論本體）**：上級稽核敘述附的三種判準**必須一起用**，只用第一種會得 **0 筆**：
+  **(a)** 旗標被解析、賦值的變數之後未被引用；**(b)** 薄殼沒有把 `"$@"` 轉發給被呼叫者；
+  **(c)** 旗標**拼法**與程式實際接受的值不符（只認裸字 `json`，不認 `--json`）。
+  本票**三種都命中**（(b) 一處、(c) 五處、(a) 見同型掃描）。
+  反面教材：本車道對 135 支 shell 檔只套判準 (a) ⇒ **0 筆**（16 個候選全是「轉傳字面值」如 `--ansi`／`--recursive`）
+  —— 與 `-24` 的紀錄一致。
+
+- **根因（逐項讀碼指名到行；修前基準 `d9b9c8be8`）**：
+  **① `scripts/ci/check_jev_contract.sh:24`（薄殼吞旗標，判準 (b)）**：檔頭 `:6-7` 宣告
+  「live 自測為 opt-in：`--with-selftest` 或 `JEV_CONTRACT_SELFTEST=1`」，
+  但最後一行只寫 `exec python3 scripts/jev-contract-check.py --root "$REPO_ROOT"` —— **沒有 `"$@"`**
+  ⇒ 被呼叫者的 argparse（`scripts/jev-contract-check.py:144-152`）永遠收不到 `--with-selftest`，
+  而薄殼自己也沒有任何旗標檢查 ⇒ **任何**旗標（含打錯的）都被靜默吃掉。
+  **② `scripts/ci/check_constitution.sh:23`（拼法不符，判準 (c)）**：`OUTPUT_MODE="${1:-text}"`
+  只把**裸字** `json` 當 JSON；所有判斷都是 `[ "$OUTPUT_MODE" = "json" ]`／`!= "json"`。
+  ⇒ 檔頭 `:13` 與 CI（`.github/workflows/constitution.yml:23`）都寫 `--json`，兩者皆無效。
+  `constitution.yml:22` 的步驟名就叫 **`Summary (JSON)`** ⇒ **CI 那一步拿到的是文字**。
+  **③ `check_data_catalog.sh:32`／`check_data_naming.sh:25`／`check_maturity.sh:24`／
+  `check_agent_prompts.sh:22`（同一形狀 ×4）**：同樣是 `OUTPUT_MODE="${1:-text}"`。
+  `check_data_catalog.sh:35-40` 另有 `for arg in "$@"` 迴圈，但只認 `--warn-only`／`--strict`
+  且有 `case` **無** `*)` 分支 ⇒ 連「旗標被忽略」都不說一聲；`check_data_naming.sh:27` 更只比對
+  `$1`／`$2` 兩個位置的字面值。副作用：`--strict json` 這種順序會讓 `$1`＝`--strict`
+  ⇒ **連裸字 `json` 都失效**（JSON 模式消失，見下方負向證明 BASE2）。
+  **④ `scripts/ci/zero-metric-guard.sh:29,63-69`（有牙齒但零呼叫端）**：
+  `--fail` 會 `exit 1`（牙齒是真的），但 `grep -rn 'zero-metric-guard'` 全 repo 只有它自己的檔頭；
+  Makefile／workflows／tests **都沒有呼叫端** ⇒ 預設路徑在 `shared_web/static/js/pages/portfolio.js:77,209`
+  找到違規仍印 `⚠️ … (treated as warning)`、**rc=0**。
+  ❗ **F-item 敘述更正一處（本車道實測後改寫）**：那 2 處**不是**真的零指標缺陷
+  —— `fmtCurrency` 自己就對無效值回 `'—'`（`shared/format-metric.js:117`），
+  所以它們只是**守門自身的結構規則**（「頁面必須走 `fmtSafe*` 入口」）下的命中，
+  不是「missing data 被渲染成 0」。本車道的處置因此是**結構性**的（見修法④），不是修一個渲染 bug。
+  F-item 敘述的其餘部分（①–④ 四項、含這 2 行的 rc=0）逐項實測**全部成立**。
+
+- **影響量測（修前；本車道實跑，`cd <lane> &&` 執行；sha ＝ `sha256(stdout+stderr)` 前 12 碼）**：
+
+  | 受測命令 | rc | sha | 判讀 |
+  |---|---|---|---|
+  | `bash scripts/ci/check_jev_contract.sh` | 0 | `a6a097e8eb4f` | — |
+  | `bash scripts/ci/check_jev_contract.sh --with-selftest` | 0 | `a6a097e8eb4f` | **逐位元組相同** ⇒ 旗標沒作用 |
+  | `bash scripts/ci/check_jev_contract.sh --bogus-flag` | 0 | `a6a097e8eb4f` | 打錯的旗標也不吭聲 |
+  | `bash scripts/ci/check_constitution.sh` | 0 | `d132602ee9d9` | — |
+  | `bash scripts/ci/check_constitution.sh --json` | 0 | `d132602ee9d9` | **相同** ⇒ CI 的 `Summary (JSON)` 拿到文字 |
+  | `bash scripts/ci/check_constitution.sh json` | 0 | `21518a431d59` | 只有裸字生效 |
+  | `check_data_catalog.sh` / `--json` / `json` | 0 | `fa2ddb9f4075` / `fa2ddb9f4075` / `18ad3b1eaebe` | 同型 |
+  | `check_data_naming.sh` / `--json` / `json` | 0 | `7b9e3b12240e` / `7b9e3b12240e` / `0e65e7302b0a` | 同型 |
+  | `check_maturity.sh` / `--json` / `json` | 0 | `148a56b9ab43` / `148a56b9ab43` / `1e82edcaafc3` | 同型 |
+  | `check_agent_prompts.sh` / `--json` / `json` | 0 | `5405731709d6` / `5405731709d6` / `905631c8d832` | 同型 |
+  | `zero-metric-guard.sh`（預設） | **0** | — | 找到 `portfolio.js:77,209` 兩處違規仍回綠 |
+  | `zero-metric-guard.sh --fail` | 1 | — | 牙齒是真的（只是沒人喊） |
+  | `zero-metric-guard.sh --bogus` | 0 | — | 未知旗標靜默忽略 |
+  | `grep -rn 'zero-metric-guard' --exclude-dir=.git .` | — | — | 只有 `scripts/ci/zero-metric-guard.sh` 自身（+ `FOLLOWUPS.md` 引用）⇒ **零呼叫端** |
+
+- **修法（本 PR；按嚴重度排序）**：
+  **① P1 `check_jev_contract.sh`**：末行改為 `exec python3 scripts/jev-contract-check.py --root "$REPO_ROOT" "$@"`
+  ⇒ 旗標交給被呼叫者的 argparse；未知旗標自然 **rc=2 ＋ usage**（fail loud，不另外自寫解析器）。
+  **② P2 `constitution.yml` 的名實不符**：**改旗標**（讓 `--json` 生效），**不改步驟名** —— 理由：
+  腳本檔頭、CI、文件三處都已經寫 `--json`，程式是唯一的落後者 ⇒ 改 1 支腳本勝過改 3 份文件；
+  步驟名 `Summary (JSON)` 在有 `--json` 之後才**真的**成立。
+  `check_constitution.sh` 的解析改為 `for arg in "$@"` ＋ `case`（`json|--json` 等效、`*` ⇒ rc=2 ＋ usage）。
+  **③ P3 四支 `--json`**：同一種解析（`json|--json` 等效、原有 `--warn-only`／`--strict`／`--dry` 保留、
+  `*` ⇒ rc=2 ＋ usage）。順帶修掉「`json` 必須是第一個參數」的潛在順序 bug。
+  **④ P1 `zero-metric-guard.sh`**：**加呼叫端**（不降級），兩個入口各一處：
+  - `Makefile` 的 `ci-gate`（pre-push；與 check_frontend_imports 同層）—— 為什麼：本機最快回饋，
+    且該 target 的既有風格就是「逐支明列檢查」；
+  - `.github/workflows/quality.yml` 的 `frontend-tests` job（PR 階段）—— 為什麼：它守的是
+    `shared_web/static/js/{pages,components}/*.js`，與緊鄰的 `node --test shared_web/static/js/__tests__/*.mjs`
+    是**同一批檔案、同一群觀眾**，不必新增 job 名（也避開 branch-protection 的 check 名稱耦合）。
+  同時把 `shared_web/static/js/pages/portfolio.js:77,209` 的 `fmtCurrency` 改走 `fmtSafeCurrency`
+  （**輸出逐值相同**：`fmtCurrency` 對無效值本來就回 `'—'`；node 實測 17 種輸入——含 `null`／`undefined`／
+  `''`／`NaN`／`'abc'`／`0`／`-0`／`±Infinity`／`true`／`{}`／`[]`——**0 筆差異**）⇒ 讓守門在真實 repo 回綠，
+  而**沒有任何行為改變**。另補 `*` ⇒ rc=2 ＋ usage（未知旗標不得靜默退回報告模式）。
+  **⑤ 文件同步**：六支腳本的檔頭「退出碼」補 `2 = 用法錯誤（未知旗標）`。
+
+- **負向證明（每項都「修前相同 ⇒ 修後不同」；log 皆為實跑輸出）**：
+  **① `check_jev_contract.sh`**：修前 noflag ≡ `--with-selftest`（`a6a097e8eb4f`，`rc` 皆 0）⇒ **死旗標**。
+  修後：noflag **仍是** `a6a097e8eb4f`／rc=0（既有呼叫端不受影響），
+  `--with-selftest` ⇒ `9da91635f3fa`／rc=0，多出
+  `  ✓ jevkit 自測通過（  ✓ 實際呼叫 OK: noul=0.94 model=jev-1.13.0 tokens=281 261ms attempts=1）`
+  （真的跑了一次 live 自測）；`--bogus-flag` ⇒ **rc=2** ＋
+  `jev-contract-check.py: error: unrecognized arguments: --bogus-flag`。
+  **② `check_constitution.sh`**：修前 `--json` ≡ noflag（`d132602ee9d9`）⇒ **死旗標**；
+  修後 `--json` ≡ 裸字 `json`（`21518a431d59`，與修前的裸字結果相同）且 ≠ noflag；
+  輸出尾端可 `json.loads`（`status=violations_found`、`total_violations=216`）；`--bogus` ⇒ rc=2 ＋ usage。
+  **③ 四支 `--json`**：修前 `--json` ≡ noflag（上表四個 sha）；修後 `--json` ≡ 裸字 `json`
+  （`18ad3b1eaebe`／`0e65e7302b0a`／`1e82edcaafc3`／`905631c8d832`，**恰好等於修前裸字 `json` 的輸出**）
+  且 ≠ noflag；四支的 `--bogus` 皆 rc=2 ＋ `unknown option` ＋ `usage:`。
+  不帶旗標的輸出一律**逐位元組不變**（`fa2ddb9f4075`／`7b9e3b12240e`／`148a56b9ab43`／`5405731709d6`）
+  ⇒ 既有呼叫端（`make ci-quick`、`quality.yml` 的 `--warn-only`）不受影響；`--warn-only` rc=0、
+  `--dry` rc=0、`--strict` rc=1（`ea8148de4ed9587f`，與修前 `--strict` 逐位元組相同）。
+  **額外**：`check_data_catalog.sh --strict json` 修前 ≡ `--strict`（`ea8148de…`，JSON 模式被吃掉），
+  修後 ⇒ `f07ae830befc5639`（真的 JSON）—— 修掉了「`json` 必須排第一」的順序依賴。
+  **④ `zero-metric-guard.sh`**：修前同一棵 fixture（含 `fmtCurrency(` 違規）：
+  預設 **rc=0**／`--fail` **rc=1**（`❌ zero-metric guard failed…`）⇒ 牙齒存在但無人喊。
+  修後：`Makefile` 與 `quality.yml` 都以 `--fail` 呼叫（`grep -F 'zero-metric-guard.sh --fail'` 命中）；
+  真實 repo 的 `--fail` **rc=0**（`✅ no unsafe formatting patterns found`）；
+  fixture 違規 ＋ `--fail` ⇒ rc=1 ＋ 指名 `has-violation.js`；同 fixture 不帶旗標 ⇒ rc=0（報告模式保留）；
+  乾淨 fixture ＋ `--fail` ⇒ rc=0（不誤紅）；`--bogus` ⇒ rc=2 ＋ usage。
+  **⑤ 新增 hermetic 契約測試 `tests/scripts/test-dead-flag-contract.sh`（19 項，已納入 `make ci-gate`，不連網、不碰真 repo）**：
+  ①–⑤ 五支的 `--json ≡ json 且 ≠ 不帶旗標`（fixture 內複製真檔；`REPO_ROOT` 由 `BASH_SOURCE` 推導 ⇒ 自動落在 fixture）；
+  ⑥ 六支（含 `zero-metric-guard.sh`）未知旗標 ⇒ rc=2 ＋ `unknown option` ＋ `usage:`；
+  ⑦ `check_jev_contract.sh` 的轉發用 **stub checker 觀察 argv**（真 `--with-selftest` 會做一次真 API 呼叫，CI 不得跑）；
+  ⑧ 守門的牙齒／報告模式／不誤紅三態；
+  ⑨ **接線契約**：`Makefile` 與 `quality.yml` 都必須出現 `zero-metric-guard.sh --fail`（防「牙齒又變成無人喊」）；
+  ⑩ **突變自證**：把 constitution 的解析**還原成修前形狀**（`json|--json` → `json`、`*)` 的 `exit 2` 拿掉）
+  ⇒ 判準如預期變紅且訊息正是 `--json 與不帶旗標輸出逐位元組相同（＝旗標沒作用）`（＝修前症狀）；
+  另斷言受測腳本跑完 sha256 不變。
+
+- **同型掃描（只列清單，**不**配 ID；判準＝本票開頭 (a)(b)(c) 三種，逐條**讀碼**複驗過）**：
+
+  | 嚴重度 | 位置 | 形狀 | 本車道複驗 | 判讀 |
+  |---|---|---|---|---|
+  | **P3（未修）** | `scripts/ci/validate_json_schemas.sh:28,33-39` | (c)＋無 fail-loud：`OUTPUT_MODE="${1:-text}"` ＋ `for arg in "$@"` 的 `case` **無 `*)`** | `--json` **有效**（`:37` 有顯式 arm，與 `-24` 記載一致）；缺口只在「未知旗標靜默忽略」與「`json` 必須排第一」 | 本車道**未動**（未被指派；同型的最後一支） |
+  | **P3（未修）** | `check_agent_prompts.sh:23` `VIOLATIONS=0` | 判準 (a)：賦值後**全檔未被引用**（`grep -n VIOLATIONS` 只有這一行；`main()` 用的是 `local total_violations`） | shellcheck `-S warning` 也報 `SC2034 VIOLATIONS appears unused`（本車道已確認**修前修後皆然**，非本 PR 引入） | 純死變數，**不影響 rc** ⇒ 未動 |
+  | 非缺陷（判準 (a) 的誘餌） | `check_agent_prompts.sh:41` `YELLOW`；`check_maturity.sh:50` `log_info`；`check_constitution.sh:84` `extract_env_var` | 賦值／定義後未被引用 | 讀碼確認：`YELLOW` 只在 `printf` 格式字串出現 0 次；`log_info` 0 次呼叫；`extract_env_var` 0 次呼叫（檢查 1 已改用 `[[ =~ ]]`＋`BASH_REMATCH`） | shellcheck `SC2034`／`SC2329`（info）明示；**不影響 rc** ⇒ 非本票缺陷 |
+  | 非缺陷（(b) 的誘餌） | `scripts/ci/check_channel_index.sh:7` `python3 "${REPO_ROOT}/…/check_channel_index.py"`（無 `"$@"`） | 薄殼未轉發 | 被呼叫的 `check_channel_index.py` **沒有 argparse／`sys.argv`**（`grep` 0 命中）⇒ 沒有旗標可吞 | 非缺陷 |
+  | 非缺陷（(c) 的誘餌） | `check_doc_ports.sh:35`（`Unknown flag: …` ⇒ exit 2）／`check_finmind_quota.sh:52`（`未知參數` ⇒ exit 2）／`check-binary-freshness.sh:55-57`（`unknown argument` ⇒ exit 2）／`ci-full-trigger.sh:47-48`（>1 參數 ⇒ exit 2，單一旗標會被當 range ⇒ git rc≠0 ⇒ rc=2） | 看起來像「無 fail-loud」 | 逐支讀碼：**都有** fail-loud，只是措辭不是 `unknown option` | 非缺陷（本車道的啟發式誤判，已人工複驗推翻） |
+  | 已修（本 PR，同族） | 五支 `--json` ＋ `check_jev_contract.sh` ＋ `zero-metric-guard.sh` | (b)(c)＋零呼叫端 | 見修法 | 本 PR |
+
+- **已知限制**：
+  ① `zero-metric-guard.sh` 的**預設仍是報告模式（rc=0）**：本 PR 用「呼叫端必須帶 `--fail`」取得牙齒，
+  而不是把預設改成硬紅 —— 後者會讓 `--fail` 變成新的死旗標（沒人需要帶它）。代價是「未來有人新增呼叫端卻忘了帶 `--fail`」
+  仍可能發生；由契約測試 ⑨（`Makefile`／`quality.yml` 都必須出現 `… --fail`）擋住「**現有兩處**被改掉」，
+  但**擋不住「新增第三處不帶旗標」**。若要比照 `check_data_catalog.sh` 改成 `--warn-only` opt-out，
+  需另開票（本 PR 未做，避免同時改語意與接線）。
+  ② 契約測試的 fixture 是「真檔複製進 `mktemp`」而非真 repo 全樹：它證明的是**旗標層**的等效／差異，
+  不覆蓋各檢查的判定邏輯（那些由各自的契約測試負責）。
+  ③ `tests/scripts/` 不在 `scripts/ci/check_shellcheck.sh` 的掃描根目錄內（`ROOTS=(scripts openclaw monitoring monitor git-workflow .agent-hooks)`）
+  ⇒ 新測試本身沒有 shellcheck 覆蓋；本車道已手動 `shellcheck` 過（僅 `SC1091` info，與既有 `test-check-case-conflicts.sh` 同）。
+  ④ 五支腳本仍接受**裸字** `json`（向後相容）。這不是「兩種拼法都留著」的疏忽，而是刻意的：
+  裸字是目前唯一**確定有人用**的拼法（`constitution.yml` 修前靠它），移除會是行為變更；本 PR 只讓 `--json` 追平。
+
+
 ## 相關文件
 
 - [universe-scoring-ranked-zero-20260925.md](universe-scoring-ranked-zero-20260925.md)
