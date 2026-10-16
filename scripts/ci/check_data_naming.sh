@@ -14,7 +14,9 @@
 #   bash scripts/ci/check_data_naming.sh --json   # JSON 輸出 (CI 整合用)
 #   bash scripts/ci/check_data_naming.sh --dry    # 僅報告，不退出 (開發用)
 #
-# 退出碼: 0 = 通過, 1 = 違規發現, 2 = 用法錯誤（未知旗標；FU-20261016-26）
+# 退出碼: 0 = 通過, 1 = 違規發現, 2 = 檢查跑不成
+#         （用法錯誤，或工具／環境失敗；FU-20261016-26 ＋ FU-20261016-29）。
+#         `2` 與 `1` 互斥：前者＝這一支**根本沒跑成**，後者＝真的掃到違規。
 # =============================================================================
 
 set -euo pipefail
@@ -39,8 +41,12 @@ for arg in "$@"; do
   esac
 done
 
+# 工具／環境失敗（＝這一支「跑不成」）與「真的掃到 0 筆」是兩件事（FU-20261016-29）：
+# 舊版把 `find` 失敗的**空集合**當成「沒有違規」⇒ 印 `[PASS] 所有 0 個目錄命名符合 snake_case`、
+# `5/5 通過`、rc=0，與「真的沒違規」逐位元組不可區分。
 VIOLATIONS=0
 WARNINGS=0
+TOOL_FAILURES=0
 JSON_VIOLATIONS="[]"
 
 if [ -t 1 ] && [ "$OUTPUT_MODE" != "json" ]; then
@@ -53,6 +59,9 @@ log_pass()  { printf "${GREEN}[PASS]${NC} %s\n" "$1"; }
 log_fail()  { printf "${RED}[FAIL]${NC} %s\n" "$1"; VIOLATIONS=$((VIOLATIONS + 1)); }
 log_warn()  { printf "${YELLOW}[WARN]${NC} %s\n" "$1"; WARNINGS=$((WARNINGS + 1)); }
 log_info()  { printf "       %s\n" "$1"; }
+# log_tool_fail — 「檢查跑不成」（工具缺失／管線 rc 非 0）：與 log_fail（資料違規）**分開計數**，
+# 這樣 rc 才能把「跑不成」與「有違規」分開（FU-20261016-29）。
+log_tool_fail() { printf "${RED}[FAIL]${NC} %s\n" "$1"; TOOL_FAILURES=$((TOOL_FAILURES + 1)); }
 
 add_json_violation() {
   local check="$1" file="$2" detail="$3"
@@ -115,12 +124,52 @@ is_exception() {
 # Used to skip runtime/generated artifacts under data/ that are not meant to be
 # committed. See data-naming-convention.md and .gitignore.
 # =============================================================================
+# FU-20261016-29：舊版對 `git check-ignore` 的 rc 一無所知（`2>/dev/null` ＋ 管線尾端是 `awk`）
+# ⇒ git 失敗時 stdout **空**，與「全部都被 .gitignore 排除」逐字相同 ⇒ 呼叫端看到 0 筆 ⇒ 印通過。
+# 現在：① 不在任何 git work tree 內 ⇒ 沒有 ignore 語意可套用 ⇒ 原樣放行（`cat`），
+#        ② 在 work tree 內但 `check-ignore` 失敗 ⇒ **不導掉 stderr**，rc 由 pipefail 往上傳。
 filter_not_ignored() {
-  if command -v git >/dev/null 2>&1; then
-    git check-ignore --verbose --non-matching --stdin 2>/dev/null | awk -F'\t' '/^::\t/{print $2}'
-  else
-    cat
+  if command -v git >/dev/null 2>&1 && git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    # `git check-ignore` 的 rc=1 ＝「沒有任何一條路徑被 ignore」（**正常**，`--non-matching` 下
+    # 仍會把每一條印出來），rc>=2 才是工具／用法／致命錯誤 ⇒ 只有後者可以往上當失敗傳。
+    local rc=0
+    git check-ignore --verbose --non-matching --stdin | awk -F'\t' '/^::\t/{print $2}' || rc=$?
+    if [ "$rc" -gt 1 ]; then
+      echo "filter_not_ignored: git check-ignore 失敗（rc=${rc}）⇒ 無法判定哪些路徑被 .gitignore 排除" >&2
+      return "$rc"
+    fi
+    return 0
   fi
+  cat
+}
+
+# =============================================================================
+# Helper: collect_tree <變數名> <掃描根> <描述> <find 參數…>
+#   把「find → filter_not_ignored → sort」的結果收成變數，並把兩種「沒有輸出」**分開**：
+#     回傳 0 = 掃描成功（`<變數名>` 為清單；可能是**合法的**空清單）
+#     回傳 1 = **掃描根不存在** ⇒ 真的沒有東西可檢查（合法空集合；沿用既有語意印通過／跳過）
+#     回傳 2 = **工具／環境失敗**（管線 rc 非 0）⇒ 已印 [FAIL]；呼叫端必須 fail loud
+#   `2>/dev/null` 一律不加：工具壞掉要看得到原因（與 FU-20261016-27 同紀律）。
+# =============================================================================
+collect_tree() {
+  local __var="$1" __root="$2" __desc="$3"
+  shift 3
+
+  if [ ! -d "$__root" ]; then
+    log_info "$__root 不存在 —「${__desc}」沒有東西可檢查（合法空集合，非工具失敗）"
+    printf -v "$__var" '%s' ""
+    return 1
+  fi
+
+  local __out __rc=0
+  __out=$(find "$__root" "$@" | filter_not_ignored | sort) || __rc=$?
+  if [ "$__rc" -ne 0 ]; then
+    log_tool_fail "列出「${__desc}」失敗（find/filter 管線 rc=${__rc}）⇒ 檢查無效，不得視為通過 (FU-20261016-29)"
+    return 2
+  fi
+
+  printf -v "$__var" '%s' "$__out"
+  return 0
 }
 
 # =============================================================================
@@ -131,7 +180,12 @@ check_dir_naming() {
   printf "\n═══ 檢查 1/5: 目錄命名 (R1 + R8) ═══\n"
   local found_any=0
 
+  local dirs rc=0
+  collect_tree dirs data/ "data/ 目錄" -type d || rc=$?
+  [ "$rc" -eq 2 ] && return 1   # 工具失敗 ⇒ fail loud（rc=2），不得與「真的 0 筆」混淆
+
   while IFS= read -r dir; do
+    [ -n "$dir" ] || continue
     local dirname
     dirname=$(basename "$dir")
 
@@ -152,11 +206,15 @@ check_dir_naming() {
     fi
 
     # R9: no kebab-case period
-  done < <(find data/ -type d 2>/dev/null | filter_not_ignored | sort)
+  done <<< "$dirs"
 
   if [ "$found_any" -eq 0 ]; then
-    local count
-    count=$(find data/ -type d 2>/dev/null | filter_not_ignored | wc -l | tr -d ' ')
+    # 計數取自**同一次掃描**的清單（不再第二次 find）：舊版第二次 find 也會失敗，
+    # 於是印出「所有 0 個目錄」——與工具壞掉的空集合逐字相同。
+    local count=0
+    if [ -n "$dirs" ]; then
+      count=$(printf '%s\n' "$dirs" | wc -l | tr -d ' ')
+    fi
     log_pass "所有 ${count} 個目錄命名符合 snake_case (R1, R8)"
   fi
   return $found_any
@@ -178,7 +236,13 @@ check_daily_file_format() {
       continue
     fi
 
+    local files rc=0
+    collect_tree files "$dir" "$dir 的每日數據檔" \
+        -maxdepth 1 -type f \( -name "*.json" -o -name "*.jsonl" \) || rc=$?
+    [ "$rc" -eq 2 ] && return 1   # 工具失敗 ⇒ fail loud（rc=2）
+
     while IFS= read -r file; do
+      [ -n "$file" ] || continue
       local fname
       fname=$(basename "$file")
 
@@ -201,7 +265,7 @@ check_daily_file_format() {
         add_json_violation "daily_nonstandard" "$file" "non-standard daily file name: '$fname'"
         found_any=1
       fi
-    done < <(find "$dir" -maxdepth 1 -type f \( -name "*.json" -o -name "*.jsonl" \) 2>/dev/null | filter_not_ignored | sort)
+    done <<< "$files"
   done
 
   if [ "$found_any" -eq 0 ]; then
@@ -220,7 +284,22 @@ check_jsonl_extension() {
 
   # Check: all JSONL content uses .jsonl extension
   # T-401 perf: prune high-volume subdirs (mutation briefs accumulate hundreds/day)
+  local files rc=0
+  collect_tree files data/ "data/ 下的 JSON／JSONL 檔" \
+      \( -path 'data/state/sessions' -o \
+         -path 'data/state/mutation-briefs' -o \
+         -path 'data/state/parameter-snapshots' -o \
+         -path 'data/state/sector_index' -o \
+         -path 'data/state/baseline_reports' -o \
+         -path 'data/state/backtest_results' -o \
+         -path 'data/state/live/state' -o \
+         -path 'data/state/experiments/archive' -o \
+         -path 'data/state-archive' \) -prune -o \
+      -type f \( -name "*.json" -o -name "*.jsonl" \) -print || rc=$?
+  [ "$rc" -eq 2 ] && return 1   # 工具失敗 ⇒ fail loud（rc=2）
+
   while IFS= read -r file; do
+    [ -n "$file" ] || continue
     local fname
     fname=$(basename "$file")
 
@@ -242,17 +321,7 @@ check_jsonl_extension() {
         fi
       fi
     fi
-  done < <(find data/ \
-      \( -path 'data/state/sessions' -o \
-         -path 'data/state/mutation-briefs' -o \
-         -path 'data/state/parameter-snapshots' -o \
-         -path 'data/state/sector_index' -o \
-         -path 'data/state/baseline_reports' -o \
-         -path 'data/state/backtest_results' -o \
-         -path 'data/state/live/state' -o \
-         -path 'data/state/experiments/archive' -o \
-         -path 'data/state-archive' \) -prune -o \
-      -type f \( -name "*.json" -o -name "*.jsonl" \) -print 2>/dev/null | filter_not_ignored | sort)
+  done <<< "$files"
 
   if [ "$found_any" -eq 0 ]; then
     log_pass "所有 JSONL 檔案使用正確的 .jsonl 副檔名"
@@ -268,7 +337,12 @@ check_state_flat_files() {
   printf "\n═══ 檢查 4/5: data/state/ 平面檔案 (R1) ═══\n"
   local found_any=0
 
+  local files rc=0
+  collect_tree files data/state/ "data/state/ 下的平面檔" -maxdepth 1 -type f || rc=$?
+  [ "$rc" -eq 2 ] && return 1   # 工具失敗 ⇒ fail loud（rc=2）
+
   while IFS= read -r file; do
+    [ -n "$file" ] || continue
     local fname
     fname=$(basename "$file")
 
@@ -280,7 +354,7 @@ check_state_flat_files() {
     log_warn "$file — data/state/ 下的平面檔案，應遷移至子目錄 (§3.2 R1)"
     add_json_violation "state_flat_file" "$file" "flat file in data/state/, should be in subdirectory (P3.0)"
     found_any=1
-  done < <(find data/state/ -maxdepth 1 -type f 2>/dev/null | filter_not_ignored | sort)
+  done <<< "$files"
 
   if [ "$found_any" -eq 0 ]; then
     log_pass "data/state/ 下沒有平面檔案"
@@ -297,7 +371,12 @@ check_backup_files() {
   printf "\n═══ 檢查 5/5: 備份與臨時檔案 (R6) ═══\n"
   local found_any=0
 
+  local files rc=0
+  collect_tree files data/ "data/ 下的備份檔" -type f -name "*.backup.*" || rc=$?
+  [ "$rc" -eq 2 ] && return 1   # 工具失敗 ⇒ fail loud（rc=2）
+
   while IFS= read -r file; do
+    [ -n "$file" ] || continue
     local fname
     fname=$(basename "$file")
 
@@ -311,7 +390,7 @@ check_backup_files() {
       add_json_violation "backup_in_main" "$file" "backup file should be in data/archive/, not main directories"
       found_any=1
     fi
-  done < <(find data/ -type f -name "*.backup.*" 2>/dev/null | filter_not_ignored | sort)
+  done <<< "$files"
 
   if [ "$found_any" -eq 0 ]; then
     log_pass "主目錄中沒有備份檔案"
@@ -349,9 +428,10 @@ main() {
       jq -n \
         --argjson violations "${JSON_VIOLATIONS:-[]}" \
         --argjson total_violations "$VIOLATIONS" \
+        --argjson total_tool_failures "$TOOL_FAILURES" \
         --argjson total_warnings "$WARNINGS" \
         --argjson checks_passed "$checks_passed" \
-        '{status:(if $total_violations > 0 then "violations_found" elif $total_warnings > 0 then "warnings" else "passed" end),total_violations:$total_violations,total_warnings:$total_warnings,checks_passed:$checks_passed,checks_total:5}'
+        '{status:(if $total_tool_failures > 0 then "check_unusable" elif $total_violations > 0 then "violations_found" elif $total_warnings > 0 then "warnings" else "passed" end),total_violations:$total_violations,total_tool_failures:$total_tool_failures,total_warnings:$total_warnings,checks_passed:$checks_passed,checks_total:5}'
     else
       printf '{"status":"ok","note":"jq not available for detailed output"}\n'
     fi
@@ -364,7 +444,10 @@ main() {
     [ "$r5" -eq 0 ] && checks_passed=$((checks_passed + 1))
 
     printf "檢查結果: %d/5 通過\n" "$checks_passed"
-    if [ "$VIOLATIONS" -gt 0 ]; then
+    if [ "$TOOL_FAILURES" -gt 0 ]; then
+      # 不得在工具失敗時印「所有檢查通過」（FU-20261016-29）
+      printf "${RED}檢查未完成：%d 處因工具／環境失敗而無法執行${NC}\n" "$TOOL_FAILURES"
+    elif [ "$VIOLATIONS" -gt 0 ]; then
       printf "${RED}發現 %d 處違規${NC}\n\n" "$VIOLATIONS"
       printf "修復建議:\n"
       printf "  1. 目錄命名 → 使用 snake_case (參考 data-naming-convention.md §2)\n"
@@ -396,6 +479,18 @@ main() {
       printf "  R6 備份檔位置:  %s\n" "$r6_count"
       printf "  R8 目錄 kebab-case: %s\n" "$r8_count"
     fi
+  fi
+
+  # 工具／環境失敗優先：這一支「跑不成」不是「通過」，也不與「真的掃到違規」共用 rc（FU-20261016-29）。
+  if [ "$TOOL_FAILURES" -gt 0 ]; then
+    if [ "$OUTPUT_MODE" != "json" ]; then
+      printf "${RED}⇒ 不得視為通過（FU-20261016-29）${NC}\n"
+    else
+      # JSON 模式的 stdout 必須留給 JSON 本身 ⇒ 診斷訊息走 stderr
+      printf "check unusable: %d tool/environment failure(s) — not a pass (FU-20261016-29)\n" \
+        "$TOOL_FAILURES" >&2
+    fi
+    exit 2
   fi
 
   # Only exit non-zero for actual violations (not warnings)

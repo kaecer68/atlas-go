@@ -160,7 +160,19 @@ check_undocumented_files() {
     # Skip sessions/ individual dirs (too many)
     [[ "$dir" == data/state/sessions/session-* ]] && continue
     # Skip empty dirs
-    if [ -z "$(ls -A "$dir" 2>/dev/null)" ]; then
+    # FU-20261016-29：`ls -A` 失敗時 stdout 是空的 ⇒ 舊寫法把它當成「空目錄」跳過
+    # ⇒ 那個目錄**整支檢查都逃掉了**（少報違規、仍可印 PASS）。這裡把兩種「沒有輸出」分開：
+    #   ① 目錄在掃描期間消失 ⇒ 真的沒有東西可檢查（合法 skip）
+    #   ② `ls` 失敗（權限／工具壞掉）⇒ log_tool_fail（工具錯誤，不受 --warn-only 抑制）
+    [ -d "$dir" ] || continue
+    local ls_out ls_rc=0
+    ls_out=$(ls -A "$dir") || ls_rc=$?
+    if [ "$ls_rc" -ne 0 ]; then
+      log_tool_fail "列出 ${dir} 內容失敗（ls rc=${ls_rc}）⇒ 無法判定該目錄是否為空，不得視為通過 (FU-20261016-29)"
+      found_any=1
+      continue
+    fi
+    if [ -z "$ls_out" ]; then
       continue
     fi
 
@@ -199,6 +211,11 @@ check_undocumented_files() {
 #      ⇒ 無條件印 `[PASS] catalog 中無 stale entries`。
 #   ⇒ 實測（main clone，2026-10-16）：同一 pattern 換成 `-E` 得 45 條、其中 5 條 stale，
 #      舊版在 macOS 仍印 `[PASS] 無 stale entries`／`5/5 通過` rc=0。
+#
+# 2026-10-16（FU-20261016-29）:
+#   同檔殘留的兩處 `[ -z "$(ls -A "$dir" 2>/dev/null)" ]`（檢查 2 與檢查 4 的「跳過空目錄」）
+#   也是同族：`ls` 失敗 ⇒ stdout 空 ⇒ 與「空目錄」不可區分 ⇒ 該目錄**整支檢查逃掉**。
+#   現改為 rc 顯式判定：目錄真的消失 ⇒ 合法 skip；`ls` 失敗 ⇒ log_tool_fail（工具錯誤）。
 #
 # 【為什麼 stale 預設仍是 WARN，不直接 FAIL】
 #   `[ ! -e ]` 判的是「**這棵工作樹**裡有沒有」，不是「catalog 是否過期」：
@@ -306,7 +323,19 @@ check_metadata_files() {
     # Skip individual session dirs
     [[ "$dir" == data/state/sessions/session-* ]] && continue
     # Skip empty dirs
-    if [ -z "$(ls -A "$dir" 2>/dev/null)" ]; then
+    # FU-20261016-29：`ls -A` 失敗時 stdout 是空的 ⇒ 舊寫法把它當成「空目錄」跳過
+    # ⇒ 那個目錄**整支檢查都逃掉了**（少報違規、仍可印 PASS）。這裡把兩種「沒有輸出」分開：
+    #   ① 目錄在掃描期間消失 ⇒ 真的沒有東西可檢查（合法 skip）
+    #   ② `ls` 失敗（權限／工具壞掉）⇒ log_tool_fail（工具錯誤，不受 --warn-only 抑制）
+    [ -d "$dir" ] || continue
+    local ls_out ls_rc=0
+    ls_out=$(ls -A "$dir") || ls_rc=$?
+    if [ "$ls_rc" -ne 0 ]; then
+      log_tool_fail "列出 ${dir} 內容失敗（ls rc=${ls_rc}）⇒ 無法判定該目錄是否為空，不得視為通過 (FU-20261016-29)"
+      found_any=1
+      continue
+    fi
+    if [ -z "$ls_out" ]; then
       continue
     fi
 
