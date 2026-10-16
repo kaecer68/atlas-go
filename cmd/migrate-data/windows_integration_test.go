@@ -52,10 +52,10 @@ func writeWindowFixture(t *testing.T, dir, name, content string) {
 
 // TestMigrateWindowsData exercises the real backfill against PG (dev
 // DATABASE_URL per testdb policy): the first run writes both halves of the
-// window family, the mandatory second run proves idempotency (summary upsert,
-// brief replace), and a pre-seeded duplicate brief row is collapsed instead of
-// accumulated (mutation_briefs has no unique key, so the delete-first step is
-// the only thing keeping re-runs clean).
+// window family, the mandatory second run proves idempotency (both halves are
+// upserts), and the schema — not a delete-first step — is what keeps re-runs
+// clean: since migration 000029 mutation_briefs.window_id is UNIQUE, so a raw
+// duplicate INSERT for a window is rejected outright.
 func TestMigrateWindowsData(t *testing.T) {
 	pool := connectTestPG(t)
 	cleanupWindowTestRows(t, pool)
@@ -127,22 +127,23 @@ func TestMigrateWindowsData(t *testing.T) {
 		t.Fatalf("mutation_briefs rows after re-run = %d, want 1 (delete-first must not accumulate)", got)
 	}
 
-	// Duplicate-brief proof: with a stray extra row present for the same
-	// window, one more run must leave exactly one row behind. Without the
-	// delete-first step this count would grow on every run.
+	// Duplicate-brief proof, inverted by migration 000029: window_id is UNIQUE
+	// now, so a stray second row for the same window is REJECTED by the schema
+	// instead of being tolerated and silently collapsed by a delete-first step.
+	// Without 000029 this INSERT succeeds and the count below is 2.
 	if _, err := pool.Exec(ctx,
 		`INSERT INTO mutation_briefs (window_id, data_json, created_at) VALUES ($1, '{}', '2026-01-01T00:00:00Z')`,
-		summaryA.WindowID); err != nil {
-		t.Fatalf("seed duplicate brief: %v", err)
+		summaryA.WindowID); err == nil {
+		t.Fatal("raw duplicate mutation_briefs INSERT returned nil error, want a unique-violation (window_id must be UNIQUE since 000029)")
 	}
-	if got := windowRowCount(t, pool, "mutation_briefs"); got != 2 {
-		t.Fatalf("seeded duplicate brief rows = %d, want 2", got)
+	if got := windowRowCount(t, pool, "mutation_briefs"); got != 1 {
+		t.Fatalf("mutation_briefs rows after the rejected duplicate = %d, want 1", got)
 	}
 	if err := migrateWindowsData(ctx, pool, dir); err != nil {
 		t.Fatalf("third migrateWindowsData: %v", err)
 	}
 	if got := windowRowCount(t, pool, "mutation_briefs"); got != 1 {
-		t.Fatalf("mutation_briefs rows after replace = %d, want 1 (duplicate must collapse)", got)
+		t.Fatalf("mutation_briefs rows after replace = %d, want 1 (upsert must replace, not accumulate)", got)
 	}
 	if got := windowRowCount(t, pool, "window_summaries"); got != 2 {
 		t.Fatalf("window_summaries rows = %d, want 2", got)

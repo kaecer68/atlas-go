@@ -923,6 +923,13 @@ func (s *PostgresLedgerStore) RecordWindowSummary(summary domain.BacktestWindowS
 }
 
 // RecordMutationBrief persists a mutation brief as a JSON blob.
+//
+// The upsert is deliberate, exactly as in RecordWindowSummary above:
+// window_id is UNIQUE (sql/migrations/000029) and the JSONL store this table
+// mirrors overwrites <windowID>-mutation-brief.json, so a re-run of one window
+// must refresh its brief instead of appending a second row. Before 000029 the
+// table had no unique key and this was a plain INSERT, which is why the
+// backfill had to delete the window's rows first (cmd/migrate-data -windows).
 func (s *PostgresLedgerStore) RecordMutationBrief(windowID string, brief domain.MutationBrief) error {
 	data, err := json.Marshal(brief)
 	if err != nil {
@@ -932,9 +939,12 @@ func (s *PostgresLedgerStore) RecordMutationBrief(windowID string, brief domain.
 	_, err = s.pool.Exec(ctx, `
 		INSERT INTO mutation_briefs (window_id, data_json, created_at)
 		VALUES ($1, $2, $3)
+		ON CONFLICT (window_id) DO UPDATE SET
+			data_json = excluded.data_json,
+			created_at = excluded.created_at
 	`, windowID, string(data), time.Now().UTC().Format(time.RFC3339))
 	if err != nil {
-		return fmt.Errorf("insert mutation brief: %w", err)
+		return fmt.Errorf("upsert mutation brief: %w", err)
 	}
 	return nil
 }

@@ -133,7 +133,54 @@ func (s *PGFirstOutcomeStore) LoadSessionScorecardOutcomes(sessionID string) ([]
 	return fallback, nil
 }
 
-// ---- the rest of OutcomeStore delegates to PG (write paths). ----
+// LoadOutcomes reads the whole outcome table, PostgreSQL first with the same
+// error-only JSONL fallback as LoadSessionSummaries: only a FAILED PG read
+// degrades, a usable-but-empty one is authoritative (a reconcile/backfill
+// concern, never a reason to silently mix backends).
+//
+// This used to delegate straight to PG while its sibling reads degraded, which
+// gave one store two different availability semantics that no caller could see
+// from the interface (FU-20261016-08). Callers — internal/calibration's
+// darwinian seam among them — had to carry their own fallback as a result.
+func (s *PGFirstOutcomeStore) LoadOutcomes() ([]domain.RecommendationOutcome, error) {
+	outcomes, err := s.pg.LoadOutcomes()
+	if err == nil {
+		s.markDegraded(false)
+		return outcomes, nil
+	}
+	if s.jsonl == nil {
+		return nil, fmt.Errorf("load outcomes from postgres: %w", err)
+	}
+	fallback, ferr := s.jsonl.LoadOutcomes()
+	if ferr != nil {
+		return nil, fmt.Errorf("postgres unavailable (%v) and jsonl fallback failed: %w", err, ferr)
+	}
+	s.markDegraded(true)
+	return fallback, nil
+}
+
+// LoadOutcomesFromSessions aggregates the per-session outcome files. Same
+// semantics as LoadOutcomes, and the same asymmetry fix: the JSONL side reads
+// the richer per-session source, and that source is used ONLY when PostgreSQL
+// errors.
+func (s *PGFirstOutcomeStore) LoadOutcomesFromSessions() ([]domain.RecommendationOutcome, error) {
+	outcomes, err := s.pg.LoadOutcomesFromSessions()
+	if err == nil {
+		s.markDegraded(false)
+		return outcomes, nil
+	}
+	if s.jsonl == nil {
+		return nil, fmt.Errorf("load outcomes from sessions: %w", err)
+	}
+	fallback, ferr := s.jsonl.LoadOutcomesFromSessions()
+	if ferr != nil {
+		return nil, fmt.Errorf("postgres unavailable (%v) and jsonl fallback failed: %w", err, ferr)
+	}
+	s.markDegraded(true)
+	return fallback, nil
+}
+
+// ---- the rest of OutcomeStore is the write path: it delegates to PG. ----
 
 func (s *PGFirstOutcomeStore) RecordOutcomes(outcomes []domain.RecommendationOutcome) error {
 	return s.pg.RecordOutcomes(outcomes)
@@ -141,14 +188,6 @@ func (s *PGFirstOutcomeStore) RecordOutcomes(outcomes []domain.RecommendationOut
 
 func (s *PGFirstOutcomeStore) RecordSessionOutcomes(session domain.ReplaySession, outcomes []domain.RecommendationOutcome) error {
 	return s.pg.RecordSessionOutcomes(session, outcomes)
-}
-
-func (s *PGFirstOutcomeStore) LoadOutcomes() ([]domain.RecommendationOutcome, error) {
-	return s.pg.LoadOutcomes()
-}
-
-func (s *PGFirstOutcomeStore) LoadOutcomesFromSessions() ([]domain.RecommendationOutcome, error) {
-	return s.pg.LoadOutcomesFromSessions()
 }
 
 func (s *PGFirstOutcomeStore) RecordSessionScreeningRejects(sessionID string, rejects []domain.ScreeningReject) error {

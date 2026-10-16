@@ -13,24 +13,54 @@ import (
 type stubOutcomeStore struct {
 	summaries    []domain.SessionSummary
 	outcomes     []domain.RecommendationOutcome
+	allOutcomes  []domain.RecommendationOutcome
+	allFromSess  []domain.RecommendationOutcome
+	trades       []domain.TradeRecord
 	summariesErr error
 	outcomesErr  error
+	allErr       error
+	fromSessErr  error
+	tradesErr    error
+
+	// readCounts records how often each read was actually reached, so a test
+	// can prove the PG side was tried first (and not skipped).
+	readCounts map[string]int
+}
+
+func (s *stubOutcomeStore) count(method string) {
+	if s.readCounts == nil {
+		s.readCounts = map[string]int{}
+	}
+	s.readCounts[method]++
 }
 
 func (s *stubOutcomeStore) LoadSessionSummaries() ([]domain.SessionSummary, error) {
+	s.count("LoadSessionSummaries")
 	return s.summaries, s.summariesErr
 }
 
 func (s *stubOutcomeStore) LoadSessionOutcomes(sessionID string) ([]domain.RecommendationOutcome, error) {
+	s.count("LoadSessionOutcomes")
 	return s.outcomes, s.outcomesErr
+}
+
+func (s *stubOutcomeStore) LoadOutcomes() ([]domain.RecommendationOutcome, error) {
+	s.count("LoadOutcomes")
+	return s.allOutcomes, s.allErr
+}
+
+func (s *stubOutcomeStore) LoadOutcomesFromSessions() ([]domain.RecommendationOutcome, error) {
+	s.count("LoadOutcomesFromSessions")
+	return s.allFromSess, s.fromSessErr
+}
+
+func (s *stubOutcomeStore) LoadAllSessionTrades() ([]domain.TradeRecord, error) {
+	s.count("LoadAllSessionTrades")
+	return s.trades, s.tradesErr
 }
 
 func (s *stubOutcomeStore) RecordOutcomes([]domain.RecommendationOutcome) error { panic("unused") }
 func (s *stubOutcomeStore) RecordSessionOutcomes(domain.ReplaySession, []domain.RecommendationOutcome) error {
-	panic("unused")
-}
-func (s *stubOutcomeStore) LoadOutcomes() ([]domain.RecommendationOutcome, error) { panic("unused") }
-func (s *stubOutcomeStore) LoadOutcomesFromSessions() ([]domain.RecommendationOutcome, error) {
 	panic("unused")
 }
 func (s *stubOutcomeStore) RecordSessionScreeningRejects(string, []domain.ScreeningReject) error {
@@ -41,7 +71,6 @@ func (s *stubOutcomeStore) LoadSessionScreeningRejects(string) ([]domain.Screeni
 }
 func (s *stubOutcomeStore) RecordSessionTrades(string, []domain.TradeRecord) error { panic("unused") }
 func (s *stubOutcomeStore) LoadSessionTrades(string) ([]domain.TradeRecord, error) { panic("unused") }
-func (s *stubOutcomeStore) LoadAllSessionTrades() ([]domain.TradeRecord, error)    { panic("unused") }
 func (s *stubOutcomeStore) RecordExperiment(domain.ExperimentRecord) error         { panic("unused") }
 func (s *stubOutcomeStore) RecordSessionExperiment(domain.ReplaySession, domain.ExperimentRecord) error {
 	panic("unused")

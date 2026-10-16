@@ -1,0 +1,32 @@
+-- 000029_mutation_briefs_unique_window_id.up.sql
+--
+-- Give mutation_briefs the same "one row per window" guarantee that
+-- window_summaries has had since 000015 (window_id TEXT UNIQUE, and
+-- RecordWindowSummary has always been an INSERT ... ON CONFLICT upsert).
+--
+-- Why: RecordMutationBrief was a plain INSERT, and the only index on
+-- window_id was non-unique, so re-running one window (a restarted weekly task,
+-- a second /api/backtest/start on the same window, an idempotent backfill)
+-- appended a new brief row per run. The JSONL ledger store this table mirrors
+-- was always idempotent — Store.RecordMutationBrief writes
+-- <windowID>-mutation-brief.json, overwriting the previous file — so this is
+-- not a new semantic: it is the file backend's semantic that PostgreSQL never
+-- had. Until now the backfill (cmd/migrate-data -windows) compensated with a
+-- DELETE-first step, which is a caller-side workaround for a missing schema
+-- guarantee (the same asymmetry FU-20261016-07 records).
+--
+-- Existing duplicates: CREATE UNIQUE INDEX cannot succeed while two rows share
+-- a window_id (PostgreSQL names one of the duplicated keys in the error), and a
+-- migration that fails at startup takes the process down. Measured read-only on
+-- 2026-10-16 — no duplicates exist anywhere this migration can meet:
+--   production PostgreSQL (atlas-postgres)  mutation_briefs = 0 rows
+--   production SQLite (data/state/atlas.db) mutation_briefs = 0 rows
+-- A deployment that DOES hold duplicates must resolve them first. This
+-- migration deliberately deletes nothing: row cleanup is an operator data
+-- operation. If it is needed, keep the newest row per window_id
+-- (ORDER BY created_at DESC, id DESC) and remove the superseded briefs.
+--
+-- The pre-000015 non-unique index idx_mutation_briefs_window_id is left in
+-- place: this migration is additive, and a unique index on the same column
+-- serves the same lookups. Removing it is a separate, purely cosmetic change.
+CREATE UNIQUE INDEX IF NOT EXISTS ux_mutation_briefs_window_id ON mutation_briefs (window_id);
