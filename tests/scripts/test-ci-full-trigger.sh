@@ -129,7 +129,8 @@ scenario4_build_and_ci_inputs_run_ci_full() {
                   .githooks/pre-push scripts/x.sh internal/x/x.py bin/x.c lib/x.cpp inc/x.h \
                   internal/x/y.ts admin_web/z.jsx)
   for p in "${paths[@]}"; do
-    rm -rf "$tmp/internal" "$tmp/.github" "$tmp/.githooks" "$tmp/scripts" "$tmp/bin" "$tmp/lib" "$tmp/inc" "$tmp/admin_web"
+    rm -rf "${tmp:?}/internal" "${tmp:?}/.github" "${tmp:?}/.githooks" "${tmp:?}/scripts" \
+           "${tmp:?}/bin" "${tmp:?}/lib" "${tmp:?}/inc" "${tmp:?}/admin_web"
     git -C "$tmp" checkout -q -- . 2>/dev/null || true
     commit_paths "$tmp" "chore: $p" "$p"
     run_trigger "$tmp" origin/main...HEAD

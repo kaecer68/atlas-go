@@ -3715,6 +3715,115 @@ PY
 - **判準（建議）**：測試**不得**用固定相對層數定位 repo 根；一律「從 cwd 往上找 `go.mod`」，且失敗訊息必須**指名解析出來的路徑**。
 - **建議處置**：① 機械掃描 `*_test.go` 內 `"../.."`／`filepath.Join("..","..")` 之類的 repo-root 假設，逐筆判定 ② 若數量可觀，加一道守門（新測試**禁止**此形狀）③ 相關記憶：global `atlas_lane_test_cwd_traps_2026_10_16`（PR #2246 車道寫入）。
 
+### FU-20261016-21 — `ci-full` 的觸發判定把「git 失敗」與「真的只改文件」混為一談 ⇒ 最強閘門可被靜默跳過（`Makefile` 的副本還已與 hook 分歧）
+
+- **狀態**：`done`（2026-10-16 收斂；處置與證據見條文末）
+- **記錄日期**：2026-10-16
+- **嚴重度**：**P0（閘門說謊）** —— root 依同型稽核指派（該稽核 25 列中 P0=3，本條為其一）；與 `-18`／`-19` 同族。
+- **來源**：`FU-20260926-12` 修復時（PR [#2245](https://github.com/kaecer68/atlas-go/pull/2245)）的同型唯讀稽核；稽核交付 `atlas-notes/review-20261011/sameclass-inventories-20261016/p0a-doclinks-sameclass.md`（P0 列）、root 已獨立複驗。2026-10-16 lane `fix/20261016-ci-gate-git-failure` 收斂。
+- **事實（碼點，修前）**：
+  - `Makefile:46-51`：`@if git diff --name-only origin/main...HEAD 2>/dev/null | grep -qE '\.(go|ts|…|h)$$|(^|/)Makefile$$|Dockerfile|docker-compose|\.github/|\.githooks/'; then … $(MAKE) ci-full; else echo "ℹ️  docs-only diff — ci-gate 已足夠（ci-full 跳過）"; fi`
+  - `.githooks/pre-push:180`：`if git diff --name-only origin/main...HEAD 2>/dev/null | grep -qE '…|\.githooks/|^configs/'; then code_changed=1; fi`（`code_changed=0` ⇒ `:203` 印 `ℹ️  pre-push: docs-only diff — ci-gate 已足夠（ci-full 跳過）`）
+- **根因**：`git diff` 失敗時 stdout 為**空字串**，`2>/dev/null` 又把 `fatal:` 吞掉；而「真的只改文件」的 stdout 同樣是空 ⇒ 兩者在管線輸出上**逐字相同** ⇒ 一律落 else ⇒ 判 docs-only ⇒ `ci-full`（lint／staticcheck／test／race／coverage）**不跑，且輸出說「已足夠」**。
+- **建議處置（本 PR 全部實作）**：① 判定收斂成**單一實作**（兩份副本本身就是漂移來源）；② 三態契約：`0`＝含程式碼變更／`1`＝**真的** docs-only／`2`＝無法判定 ⇒ 呼叫端 fail loud 且非 0；③ 負向證明（注入 git 失敗 ⇒ 必紅）；④ 真 docs-only／真改碼兩條路徑行為不變（**不得**改成一律跑 ci-full）。
+- **已派工**：2026-10-16 lane `fix/20261016-ci-gate-git-failure`（root 指定）。
+
+**處置（2026-10-16；分支 `fix/20261016-ci-gate-git-failure`）**
+
+**1. 根因複現（真 repo 唯讀；fixture 自建於 `/tmp/fu21-docsgate-*`；rc 一律從 log 讀）**
+
+| 情境 | 指令 | git rc | 舊管線（`… 2>/dev/null \| grep -qE '…'`）rc |
+|---|---|---|---|
+| 對照：真 docs-only | `git diff --name-only origin/main...HEAD`（fixture） | 0 | **1**＝docs-only（正確） |
+| range 不可解析 | `git diff --name-only origin/does-not-exist...HEAD` | **128** | **1**＝docs-only ✗（與上一列**不可區分**） |
+| 不在 git work tree | 同上（非 repo 目錄） | **129** | **1** ✗ |
+| shallow clone 無 merge base | base ref 在、`…` 算不出 merge base | **128** | **1** ✗ |
+
+**2. ★ 本 lane 的兩處判讀更正／補充（F-item 敘述之外）**
+
+* **（更正）「靜默跳過 ci-full」這條結果路徑，目前在真樹被另一個閘門遮蔽**：`-19`（2026-10-16 同日）修好的
+  `scripts/ci/check_frontend_dist.sh` 在**兩個呼叫端都排在分類之前**（`Makefile:45` 先於 `:46`；hook 的 Gate 1c 先於
+  Gate 1b），且用的是**同一個** `git diff --name-only origin/main...HEAD` ⇒ git 一失敗，Gate 1c 先 fail loud
+  （複驗：`bash scripts/ci/check_frontend_dist.sh --diff origin/does-not-exist...HEAD` ⇒ rc=1、訊息指名 range 與 `git rc=128`）。
+  ⇒ 本條的**實際可達性**是「被遮蔽的 fail-open」，不是「今天就會靜默放行」。但缺陷本身不因此降級：
+  (a) 分類器仍 fail-open（誰先把 Gate 1c 移走／改 range／改順序就會露出）；(b) 同一 pattern 的第二個後果**今天就活的**（下一點）。
+* **（新增缺陷）兩份副本已經分歧，且此分歧今天可達**：`.githooks/pre-push` 的 pattern 有 `|^configs/`（PR
+  [#2176](https://github.com/kaecer68/atlas-go/pull/2176)，2026-09-30 「值變更不得歸 docs-only」），`Makefile:46` **沒有**。
+  逐字實測（fixture，只改 `configs/parameters.json`）：`Makefile` pattern ⇒ rc=1（docs-only）／hook pattern ⇒ rc=0（code）。
+  ⇒ `make pre-push`（`Makefile:40` 自述「同 hook 邏輯」）在 configs-only 的 push 上**跳過 ci-full**，而 `git push` 走的 hook 會跑。
+  這條**不被 Gate 1c 遮蔽**（Gate 1c 只對 `admin_web/client_web/shared_web` 觸發）。⇒ 修法選「單一實作」而非「兩份都改」即為此。
+
+**3. 修法（單一實作 ＋ 三態契約；`Makefile` 的 `ci:` 三態區塊未動）**
+
+* 新增 **`scripts/ci/ci-full-trigger.sh`**（唯一判定實作，`CODE_PATTERN` 只有這一份，含 `^configs/`）：
+  * `0`＝含程式碼／值變更 ⇒ 呼叫端跑 `ci-full`；`1`＝真的 docs-only ⇒ 可跳過；`2`＝無法判定 ⇒ 呼叫端 fail loud。
+  * 顯式接住 `git diff` 的 rc、**不導掉 stderr**（`fatal:` 要讓操作者看到）、不吞錯、不 `|| true`。
+* **`Makefile` 的 `pre-push`**：改呼叫該腳本，並新增 `elif`／`else` 的 fail-loud 分支（`else` ⇒ 明示 `exit 1`）。
+* **`.githooks/pre-push` 的 Gate 1b**：改呼叫該腳本，`case` 三態；`2` ⇒ 印「無法判定…（ci-full-trigger rc=2）— push refused
+  (fail-closed)」並 `exit 1`。
+* 兩端的舊 pattern／舊管線**逐字移除**（靜態守衛禁止返祖，見第 5 節 scenario12）。
+* 取捨（**未**採「一律跑 ci-full」）：docs-only PR 佔比不低，一律跑等於每個文件 PR 多等 5-8 分鐘，且 `PRE_PUSH_FULL=never`
+  這條明示覆寫會被架空 ⇒ 只把「無法判定」升級為紅燈，合法跳過維持原速。**成本**：多一支腳本的 fork（實測 ~10ms）。
+
+**4. 負向證明（突變 ⇒ 必紅；`cp` 備份還原並以 sha256 逐位元組驗回；log `/tmp/fu21-docsgate-*.log`）**
+
+**4.1 分類器 / hook 突變（三個突變各自讓對應斷言紅）**
+
+| # | 突變（受測樹） | 突變後 sha256 | 測試 rc | 紅燈原文（逐字，節錄） |
+|---|---|---|---|---|
+| A | `.githooks/pre-push` 還原成 `origin/main` 的舊 fail-open 管線 | `7e141ad9…93642e` | `tests/scripts/test-prepush-gates.sh` **rc=1** | `FAIL: (FU-20261016-21) refusal does not name the unusable classification: ℹ️  pre-push: docs-only diff — ci-gate 已足夠（ci-full 跳過）` ← **假綠原文直接現形** |
+| B | `ci-full-trigger.sh` 的 fail-loud 分支由 `exit 2` 改成 `exit 1` | （同檔改一行） | `tests/scripts/test-ci-full-trigger.sh` **rc=1** | `FAIL: scenario6: range 不可解析必須 rc=2（fail loud），不得是 1（docs-only）: 期望 rc=2，實得 rc=1` |
+| C | `Makefile` 還原成 `origin/main`（pre-push 不再呼叫唯一實作） | `0c9e26c9…babdec` | `tests/scripts/test-ci-full-trigger.sh` **rc=1** | `FAIL: scenario12: Makefile 的 pre-push 沒有呼叫唯一判定實作` |
+
+還原：`cp` 回備份 ⇒ `shasum -a 256 -c` **OK**（`.githooks/pre-push`／`Makefile`／`scripts/ci/ci-full-trigger.sh` 三檔皆逐位元組相等；
+修好版 sha256：`ab35e024…7795c1a`／`15fb99a0…95c99a`／`3890ac21…841132`）⇒ 兩支契約測試回綠
+（`PASS: pre-push gate contract tests` rc=0；`✅ test-ci-full-trigger.sh PASSED (12/12)` rc=0）。
+
+**4.2 Makefile recipe 端到端（hermetic fixture：逐字抽出真實 `pre-push` recipe ＋ stub `ci-gate`/`ci-full`）
+
+| 情境 | 修前（`origin/main` 的 recipe） | 修後（本 PR） |
+|---|---|---|
+| 真 docs-only | rc=0、`ℹ️ docs-only diff — ci-gate 已足夠（ci-full 跳過）`、未跑 ci-full ✓ | **完全相同**（rc=0、同訊息、未跑 ci-full）✓ |
+| 真改碼（`internal/x/x.go`） | rc=0、`🧪 diff 含程式碼變更 → 跑 make ci-full`、ci-full 有跑 ✓ | **完全相同** ✓ |
+| 只改 `configs/parameters.json` | rc=0、**`docs-only diff`（ci-full 未跑）** ✗（分歧缺陷） | rc=0、`🧪 … 跑 make ci-full`、ci-full 有跑 ✓ |
+| **注入 `git diff` 失敗**（PATH seam；range 合法） | **rc=0**、`ℹ️ docs-only diff — ci-gate 已足夠（ci-full 跳過）` ✗ | **rc=2**、`❌ ci-full-trigger: 無法用 git 解析 diff range 'origin/main...HEAD'（git rc=128）`＋`❌ make pre-push: 無法判定 diff 是否含程式碼變更（ci-full-trigger rc=2）`＋`make: *** [pre-push] Error 1` ✓ |
+
+**4.3 真樹（`make pre-push`／hook 的呼叫端）**：`make ci-gate` rc=0、`make ci-full` rc=0（coverage 71.0%、`✅ ci-full passed`）。
+
+**5. 契約測試（hermetic；已掛進 `make ci-gate`）**
+
+* 新增 **`tests/scripts/test-ci-full-trigger.sh`**（12 scenario）：真 git fixture 釘 `0/1`（`.go`／`configs/**`／`Makefile`／
+  `Dockerfile`／`.github/**`／`.githooks/**`／`*.sh|py|js|ts` ⇒ 0；只有 `.md`／非程式碼路徑 ⇒ 1）；
+  `rc=2` 三態：range 不可解析（並指名 range 與 `git rc=128`）／git 缺失（原始 rc=127 有回報）／git 自身失敗（保留 `fatal:`）／
+  非 git work tree；參數契約（預設 `origin/main...HEAD`、多參數 rc=2、`--help` rc=0）；stdout 在 `0/1` 必須為空（rc 才是契約）。
+  * **scenario11 為突變自證**：把**修前的舊管線形狀**（逐字）套在同一 fixture 上 ⇒ 必須得 rc=1（假綠再現），真腳本 rc=2 ⇒ 斷言有鑑別力。
+  * **scenario12 為靜態接線守衛**：兩端都必須呼叫該腳本、**可執行行**不得再內嵌 `CODE_PATTERN` 或 `2>/dev/null | grep -qE`。
+* **`tests/scripts/test-prepush-gates.sh` 新增 scenario**（`run_diff_failure_is_not_docs_only_test`）：fixture 內以 PATH seam
+  **只讓 `git diff` 失敗**（fetch/rev-parse 照常），斷言 hook 必須非 0、必須印 `ci-full-trigger rc=2` 與 `fail-closed`、
+  **不得**再出現 `docs-only diff`、且 `ci-full` 不得被跑；並含對照組（同一 fixture 不注入 ⇒ rc=0 且走 docs-only）。
+* `make ci-gate` 的 pre-push 契約測試那行下方新增 `bash tests/scripts/test-ci-full-trigger.sh`。
+
+**6. 同型掃描（只列清單，**不**配 ID）**
+
+* **本 PR 順帶查證到的同型（未被既有 F-item 點名）**：`scripts/check-binary-freshness.sh:216`
+  `changed=$(git diff --name-only "${DIFF_BASE}...HEAD" -- "${BUILD_INPUT_PATHS[@]}" 2>/dev/null || true)`
+  —— 與本條**逐字同型**（git 失敗 ⇒ 空清單 ⇒ 「沒有 build input 變更」⇒ host binary 閘門靜默跳過）；它落在 pre-push **Gate 0b**，
+  排在 Gate 1c 之前 ⇒ 同樣被 Gate 1c 遮蔽（今天不可達）。本 PR **未改**（屬 `FU-20260926-15` 的檔案，避免同一 PR 兩個主題）。
+* 其餘同族沿用 `-19` 的 145 處清單（`frontend_smoke.sh:93`、`check_commit_messages.sh:40`、`check_doc_ports.sh:86,90`…）與
+  `-22` 的 grep/find/stat 家族；`Makefile` 內其他 `2>/dev/null`／`|| true` 未逐筆重掃。
+* `docs/operations/remediation-manifest.md` 的 E3 列與 `-12` §6 的表把本條記為 **P1**（該表以爆炸半徑為主），與本條 P0 的判準
+  （「最強閘門可被靜默跳過」）不一致；本 PR **未動**那兩處（避免與他線 `Makefile`／`quality.yml` 佔用衝突）。
+
+**7. 已知限制**
+
+* **被 Gate 1c 遮蔽**（見第 2 節）：本條修好的是「分類器不再說謊」，不是「今天就會擋下一個真實事故」——今天真的擋下的是 Gate 1c。
+  兩者互為 backstop，**不得**因為有對方而移除任一方。
+* `ci-full-trigger.sh` 只判斷「要不要跑」，**不**判斷「跑了會不會過」；`PRE_PUSH_FULL=never` 仍是明示覆寫（會印訊息），不受本修法影響。
+* pattern 本身仍是**啟發式清單**（新增語言／新的值目錄要記得補）：本 PR 把它收斂成一份，但沒有把它換成結構化判定（例如
+  `git diff --numstat` ＋ 副檔名資料表）——那會改變 docs-only 的範圍，屬另一個主題。
+* `Makefile` 的 `pre-push` 仍**不**跑 Gate 0 的 fetch（那是 hook 專屬）；`make pre-push` 直呼時 `origin/main` 可能過期 ⇒ 本修法
+  只保證「取不到 diff 時紅燈」，不保證「基準新鮮度」。
+
 ### FU-20261016-22 — `check_data_catalog.sh` 的 stale 檢查在 macOS 上**永遠是綠的**（`grep -oP` ＋ 管線子殼）⇒ 5 條真 stale 被掩蓋
 
 - **狀態**：`done`
