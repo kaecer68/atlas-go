@@ -2709,7 +2709,7 @@ PY
 
 ### FU-20261015-01 — CI 的 integration 路徑過濾器**漏掉多個目錄** ⇒ 那些 `-tags=integration` 測試從未在 CI 執行
 
-- **狀態**：`open`
+- **狀態**：`done`（**2026-10-16 PR #2244**；原敘述與標題全數保留，處置、證據與錯誤更正見文末）
 - **記錄日期**：2026-10-15
 - **來源**：Q2 第二批 unit 1（PR #2230）實作時發現；同期 C6／C6b／C6c／C7 各補一個目錄（`cmd/atlas-mcp/**`、`internal/stocktools/**`、`internal/orchestrator/**`、`internal/stockpicker/**`）
 - **事實**：`.github/workflows/ci-cd.yml` 的 integration job 以**路徑過濾器**決定是否執行；未列入的目錄，其 `-tags=integration` 測試**永遠不會在 CI 跑**（本機跑得到 ⇒ 形成「本機綠、CI 從未驗」的假安全）。已知仍缺：
@@ -2718,7 +2718,76 @@ PY
   - `internal/apigateway/**`
 - **風險**：這些目錄的 integration 契約（真實 PG／外部依賴）沒有任何 CI 保護 ⇒ 回歸可長期潛伏（與「檢查存在但不在生效路徑上」同族）。
 - **最小處置**：把上述目錄補進過濾器；並加一個**契約測試**：掃 `*_integration_test.go`／`//go:build integration` 的所在目錄，斷言每個目錄都被 integration 過濾器涵蓋（避免日後又漏）。
-- **查法**：`grep -rn 'go:build integration' --include='*.go' . | sed 's#/.*##' | sort -u` 對照 `.github/workflows/ci-cd.yml` 的 filters 清單。
+- **查法**：`grep -rn 'go:build integration' --include='*.go' . | sed 's#/.*##' | sort -u` 對照 `.github/workflows/ci-cd.yml` 的 filters 清單。（**此指令算不出目錄，見處置 3 的更正與替代指令**）
+- **處置（2026-10-16，PR #2244；root 實測）**：
+  - **根因查證後更正原敘述（4 處；原敘述與標題全數保留）**：
+    1. 「未列入的目錄，其 `-tags=integration` 測試**永遠不會**在 CI 執行」**不精確**：`integration` job 一旦被
+       **任何**白名單目錄觸發，跑的是**整個**套件（`go test -v -tags=integration -p 1 ./...`）⇒ 漏列目錄的測試
+       仍會在「別的目錄」的 PR 上被跑到。真正的缺陷是「**只**改該目錄的 PR ⇒ 該次變更**零** integration 驗證
+       （job = skipping，不是 pass）」。
+    2. 缺口不只 2 個（`internal/calibration`／`internal/apigateway`）而是 **6 個**：另含 repo 根
+       `integration_test.go`、`internal/fubonproxy`、`internal/marketdata`、`cmd/atlas-mcp-setup`
+       （5 個目錄 ＋ 1 個根檔；`internal/monitoring` 已由 #2230 修）。
+    3. 本條的「查法」`grep -rn 'go:build integration' --include='*.go' . | sed 's#/.*##' | sort -u`
+       **算不出目錄**：grep 每行都以 `./` 開頭，`s#/.*##` 會把整行砍成 `.`。且它會把 `.worktrees/` 的
+       巢狀 worktree 算進來。權威指令見文末。
+    4. 判準必須是**目錄**（檔案的 build constraint），不是檔名 —— 反向也會錯：實測**檔名** `*_integration_test.go`
+       但**無** tag 者 **11 支**（例 `internal/storage/lifecycle_integration_test.go`、`internal/monitoring/monitor_integration_test.go`）；
+       有 tag 但檔名不含 integration 者 **19 支**（`internal/db/schema_version_pg_test.go`、`internal/repository/dual_write_*_test.go`、
+       `cmd/migrate-data/main_test.go`、`internal/fubonproxy/e2e_test.go`…）。照原敘述的「掃 `*_integration_test.go`」兩邊都會錯。
+  - **權威盤點（main `c3398813b`；排除 `.worktrees/`）**：`grep -rl 'go:build integration' --include=*.go . | grep -v '^\./\.worktrees/'`
+    ⇒ **47 檔 / 25 目錄**（獨立複核：`go list -tags=integration` 的檔集差集 ⇒ 兩份清單完全一致）。與白名單
+    （22 條 glob，**picomatch** 語意）逐目錄比對 ⇒ 未涵蓋 **6 個**。
+  - **修法（PR #2244）補 4 條進 `integration:` 白名單**（每條附註解寫明該目錄的測試檔名）：
+    `'integration_test.go'`（根）、`'internal/apigateway/**'`、`'internal/calibration/**'`、`'internal/fubonproxy/**'`。
+    **這四條買到的是真覆蓋**：同一份 CI log（run 38831941034）實測
+    `ok github.com/kaecer68/atlas-go 0.008s`／`internal/apigateway 48.918s`／`internal/calibration 0.554s`／
+    `internal/fubonproxy 274.873s`，全 log `FAIL` 行 0。
+  - **另 2 個缺口登錄豁免**（格式 `# integration-filter-exempt: <dir> — <理由>`，由新守門解析且**強制理由**）：
+    ① `internal/marketdata`：唯一 integration 測試 `sector_index_reader_real_test.go` 在 CI **確定性 SKIP**
+       （log 第 24353-24354 行逐字：`sector_index dir present but no parseable data for window` ＋
+       `--- SKIP: TestSectorIndexReader_ReadRange_RealFixture (0.00s)`）；成因是**設計**（fixture 在 gitignored 的
+       repo 根 `data/state/sector_index`，該檔自身註明 never fail CI on missing data）。該目錄是近期最熱的
+       （近 3 個月 185 個檔案異動）⇒ 補進白名單只會讓每個 marketdata PR 多跑一趟 integration suite
+       （實測 864s／820s）而**零覆蓋**。**要真覆蓋得先把該測試改成合成 fixture（另案）**。
+    ② `cmd/atlas-mcp-setup`：已由 `test-cmd-atlas` job（無 paths filter、實測 95s）逐 PR 執行
+       `go test -tags=integration ./cmd/atlas-mcp-setup/` ⇒ 不需再拉整個 suite。
+  - **最小處置①（契約測試／守門）已完成**：`scripts/ci/check_integration_filter_sync.py`（＋ `.sh`）——
+    以「repo 內帶 integration tag 的檔所在目錄集合」對 `integration:` 白名單**逐目錄**比對（glob 用 picomatch
+    語意；`a/**` 涵蓋之下所有層、`**/*.sql` 可跨層、**無** matchBase，兩條已與 `node`+`picomatch` 對拍 10/10）；
+    不一致 exit 1。豁免必須登錄理由、不得 stale、不得與白名單重複涵蓋（矛盾）＝紅燈；**反向**（白名單有條目
+    但無 gated 測試）只**報告**不紅燈。契約測試 `tests/scripts/test-integration-filter-sync.sh`（14 組 hermetic
+    fixture）。註冊於 `governance` job（**無 paths filter**）＋ `make ci-gate`（另有 `make integration-filter-check`）。
+    **刻意不在 `integration` job 內註冊**：放那裡就等於「漏列時守門也不會跑」。
+  - **負向證明（突變 ⇒ 必紅；`cp` 備份還原並以 sha256 驗回）**：① 移除 `- 'internal/calibration/**'` ⇒ rc=1，
+    逐字 `❌ 有 integration 測試、但**沒有任何白名單條目**涵蓋的目錄：` /
+    `- internal/calibration（pg_reader_integration_test.go）→ 建議補：- 'internal/calibration/**'`；
+    ② 清空 marketdata 豁免的理由 ⇒ rc=1，逐字 `❌ 豁免沒寫理由（理由必填）：# integration-filter-exempt: internal/marketdata —`。
+    兩次都以 `cp` 還原，`shasum -a 256 .github/workflows/ci-cd.yml` = `9f42bc9c…d27e69`（與突變前逐位元組相同）⇒ rc=0。
+  - **CI 觸發實測（skipping ≠ pass，逐字記錄）**：本 PR #2244 的 diff 含 `internal/calibration/**`（該檔一行
+    CI 觸發指標註解）⇒ `integration` job **真的執行**：`gh pr checks 2244` 逐字 `integration  pass`
+    （run `38840575713` job `116781729996`；02:36:29Z→02:49:58Z = **806s／13m26s**）。該 job log 實測
+    **193 個套件回報、`FAIL` 行 0**，含 `ok github.com/kaecer68/atlas-go 0.005s`、`internal/apigateway 48.553s`、
+    `internal/calibration 2.179s`、`internal/fubonproxy 256.347s`、`internal/marketdata 78.293s`（內含上述 SKIP）、
+    `cmd/atlas-mcp-setup 1.538s`；全 PR `gh pr checks 2244` = **61 pass／6 skipping／0 fail**。**對照組（修法前的 skipping）**：`gh pr checks 2208` 逐字
+    `integration  skipping` —— 該 PR 唯一變更檔就是 `internal/apigateway/channel_status_integration_test.go`
+    （**帶** `//go:build integration`）；`gh pr checks 2240` 同為 `integration  skipping`（只動
+    `cmd/calibrate-parameters`／`internal/calibration`）。兩者皆本 PR 作者以 `gh` 直接複驗（非引用他人結論）。
+  - **反向清理（只報告，未刪任何條目）** —— 白名單仍有 6 條無 gated 測試，逐條證據與建議：
+    ① `internal/testdb/**`、`internal/config/**`：**建議保留**（實測 `go list -deps -test -tags=integration`：
+       25 個 gated 套件中有 19／17 個在依賴閉包內含它們 ⇒ 改它們要一起觸發）。
+    ② `internal/storage/**`：**可移除**（同一量測：**0/25** 個 gated 套件在閉包內含它）。未刪（等業主決定）；
+       留著的代價是 storage-only PR 多跑一趟 ~14 分鐘。
+    ③ `cmd/run-stockpicker-backtest/**`：無 gated 測試、且**沒有任何 Go 檔 import 它**（CLI；面板邏輯已於 PR 2e 移到
+       `internal/stockpicker`，後者已在白名單內）⇒ 建議保留到它的 PG integration 測試補上（與 #2107 另外三支
+       backfill CLI 對齊），或另案移除。
+    ④ `migrations/**`：**證明為死條目** —— repo 內**不存在** `migrations/` 目錄（`ls -d migrations` 失敗），
+       56 個 `.sql` 全在 `sql/migrations/` 且已被 `**/*.sql` 涵蓋 ⇒ 此 glob 匹配不到任何路徑、刪除不影響任何 job。
+       **未刪**：`code` filter 有同一條死條目（要清應一起處理），且刪除會讓「未來有人建 `migrations/foo.sh`」
+       不再觸發 `code`（非嚴格 inert）⇒ 另案。
+  - **權威查法**：`bash scripts/ci/check_integration_filter_sync.sh`（rc=0 即同步；`--json` 機器可讀）。
+    盤點：`grep -rl 'go:build integration' --include=*.go . | grep -v '^\./\.worktrees/' | sed 's#/[^/]*$##' | sort -u`（25 條，含 `.`）。
+
 ### FU-20261015-02 — CI 出現**偶發性 flaky 測試**（本 session 兩起，皆與變更無關）
 
 - **狀態**：`open`
