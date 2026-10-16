@@ -177,33 +177,38 @@ check_promotion_safety() {
     
     echo -e "${CYAN}Running safety checks...${NC}\n"
     
+    # 注意：這裡**不可以**寫成 `((checks_total++))`。在 `set -e` 下，算術命令的結束碼是
+    # 「運算式是否為 0」，所以 `checks_total=0` 時的 `((checks_total++))` 回傳 1
+    # ⇒ 整個腳本在**第一項檢查之前**就中止：三項檢查都不跑、總結（`Safety: N/M checks passed`）
+    # 不印、`--dry-run` 預覽也不印、rc=1（假紅）。賦值形式 `VAR=$((VAR + 1))` 的結束碼恆為 0。
+    # 回歸守衛：tests/scripts/test-decide-completes-all-checks.sh（FU-20261016-30）。
     local checks_passed=0
     local checks_total=0
     
     # Check 1: Status is accepted or ready
-    ((checks_total++))
+    checks_total=$((checks_total + 1))
 	local status=$(cat "$result_file" | grep '"status"' | head -1 | sed 's/.*"status"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/')
     if [ "$status" = "accepted" ]; then
         echo -e "  ${GREEN}✓${NC} Experiment status: ${status}"
-        ((checks_passed++))
+        checks_passed=$((checks_passed + 1))
     else
         echo -e "  ${YELLOW}⚠${NC} Experiment status: ${status} (may need judge first)"
     fi
     
     # Check 2: Has valid metrics
-    ((checks_total++))
+    checks_total=$((checks_total + 1))
     if grep -q '"candidate_value":' "$result_file"; then
         echo -e "  ${GREEN}✓${NC} Has candidate metrics"
-        ((checks_passed++))
+        checks_passed=$((checks_passed + 1))
     else
         echo -e "  ${RED}✗${NC} Missing candidate metrics"
     fi
     
     # Check 3: Reason provided
-    ((checks_total++))
+    checks_total=$((checks_total + 1))
     if [ -n "$REASON" ]; then
         echo -e "  ${GREEN}✓${NC} Reason provided"
-        ((checks_passed++))
+        checks_passed=$((checks_passed + 1))
     else
         echo -e "  ${RED}✗${NC} No reason provided"
     fi

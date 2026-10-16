@@ -1308,6 +1308,9 @@ ci-gate: embed-dirs
 	@echo "  → layer3 benchmarks 判定機制契約測試（hermetic：全 SKIP ⇒ 必紅／正常不誤紅；FU-20261016-28）"
 	@bash tests/scripts/test-layer3-bench-zero-executed.sh
 	@echo "    ✅"
+	@echo "  → decide.sh 判定機制契約測試（hermetic：三項安全檢查跑不完 ⇒ 假紅；mutation 自證；FU-20261016-30）"
+	@bash tests/scripts/test-decide-completes-all-checks.sh
+	@echo "    ✅"
 	@echo "  → fast CI scripts"
 	@$(MAKE) --no-print-directory ci-quick
 	@echo ""
