@@ -3589,12 +3589,9 @@ PY
 - **查法**：`bash scripts/ci/check_integration_filter_sync.sh`（應顯示 `⏭️ internal/marketdata ← exempt：…`）；
   `go test -tags=integration -run TestSectorIndexReader_ReadRange_RealFixture -v ./internal/marketdata/`（本機有真資料時才會真的跑）。
 
----
-
-
 ### FU-20261016-18 — `check_doc_links.sh` **永遠不紅**（BSD grep 無 `-rnP` ＋ 吞錯）⇒ 死閘門
 
-- **狀態**：`open`
+- **狀態**：`done`（2026-10-16 收斂；處置與證據見條文末）
 - **記錄日期**：2026-10-16
 - **嚴重度**：**P0（閘門說謊）** —— 不需任何前提，只要環境或輸入異常就會回 0，且輸出**看不出「其實沒檢查」**。
 - **來源**：`FU-20260926-12` 修復時（PR #2245）的同型唯讀稽核（25 列，P0=3），root 已**獨立複驗**。
@@ -3604,6 +3601,69 @@ PY
 - **爆炸半徑**：本檔**不在任何 GitHub workflow 內**（GH 只跑 `scripts/ci/check_markdown_links.sh`，該支正常：633 reference(s)）⇒ 在 macOS 上這支檢查在**任何路徑**都是空的；`make ci` 的 glob 會跑到它（`Makefile` 的 ci 段）、`make ci-gate` 與 pre-push → ci-gate 亦然。
 - **建議處置**：① 讓它真的能偵測壞連結（BSD 相容寫法或委派既有可用的 `check_markdown_links.sh` —— 需先判斷兩者是否重複，避免雙重維護）② **工具錯誤不得被吞**（非 0/1 退出碼必須 fail loud）③ **負向證明**：fixture 含一條壞連結 ⇒ 必須紅 ④ 同型掃描全 `scripts/ci/**`。
 - **已派工**：2026-10-16 車道（root 指定，目標 PR 需改 `FOLLOWUPS` 本條為 `done` 並附處置）。
+
+**處置（2026-10-16，分支 `fix/20261016-doc-links-false-green`）**
+
+**1. 修法：入口改為「轉呼叫既有實作」，不寫第二份 pattern（選擇理由）**
+
+`scripts/ci/check_doc_links.sh` 現在只做三件事：拒絕不接受的參數、確認被呼叫端存在、`exec` 轉呼叫
+`scripts/ci/check_markdown_links.sh`。理由（全部有實測支撐，不是偏好）：
+
+| 判準 | 證據 |
+|---|---|
+| 被呼叫端本來就可用、且是 **CI 真正跑的那一支** | `.github/workflows/quality.yml:566`（required context `markdown-links`）跑 `check_markdown_links.sh`；判定在 `check_markdown_links.py`；已有契約測試 `tests/scripts/test-check-markdown-links.sh` |
+| 兩者是**重複**而非互補（本檔是嚴格子集） | 舊版只掃 `docs/**/*.md` 的 `[]()` 相對連結；被呼叫端用 git-aware 蒐集，本車道實測其清單含 **208/208** 個 `docs/**/*.md`（`find docs -name '*.md'` 對照，零遺漏） |
+| 不會因委派而**少檢查** | 被呼叫端的三條 docs 排除（`**/docs/briefs/**`／`**/docs/handoff/**`／`**/docs/audit/**`）在本 repo **不存在**（實測 0 檔）；`**/CHANGELOG.md` 只命中根目錄的 `CHANGELOG.md`（不在 `docs/` 內） |
+| 覆蓋面變成**超集**（強化，非放寬） | 除同批 docs 檔外，另檢查全 repo `.md` 的內部連結與 backtick 裸路徑 |
+| 消除「第二份實作靜默分歧」 | 本票的根因就是**兩份實作**之一悄悄失效而無人發現；轉呼叫後只剩一份 |
+
+**2. fail loud 契約（工具錯誤不得被當成「沒有連結」）**
+
+`exit 0`＝真的檢查過且全部有效／`exit 1`＝找到壞連結／`exit 2`＝環境或用法錯誤。入口 `exec` 轉呼叫，
+本身**沒有** `2>/dev/null`、`|| true`、`grep -c` 當判定（契約測試的 ⑧ 逐字釘住「可執行行內不得再出現」）。
+實測：`PATH` 內沒有 `python3` ⇒ **rc=127**（工具缺失 fail loud）；被呼叫端不存在 ⇒ **rc=2**＋「找不到實作」；
+不在 git work tree ⇒ **rc=2**＋「不在 git work tree 內」；帶參數 ⇒ **rc=2**（不得靜默忽略參數）。
+
+**3. 契約測試（hermetic；已掛進 `make ci-gate`）**
+
+新增 `tests/scripts/test-check-doc-links.sh`（9 案、14 斷言，用 `scripts/ci/negative-proof-lib.sh` 的
+**精確** rc 斷言）：壞連結必紅（並指名檔案與連結）／同一 fixture 修好必綠／把被呼叫端換成 no-op ⇒ 紅燈消失
+（證明紅燈來自被呼叫端）／實作缺失 ⇒ rc=2／非 git ⇒ rc=2／帶參數 ⇒ rc=2／工具缺失 ⇒ rc=127／
+入口不得自行 grep 蒐集或吞錯（靜態返祖守衛）／被 hook 呼叫（`GIT_DIR` 指向呼叫者）時 fixture 不污染呼叫者 repo。
+
+**4. 負向證明（暫時 fixture ⇒ 必紅；`cp` 還原並以 sha256 逐位元組驗回）**
+
+* 受測樹突變（把該檔**換回** `origin/main` 的舊版）：`git show origin/main:scripts/ci/check_doc_links.sh | sha256sum`
+  = `8f16cd78c69b00882de2c2a56979ea9b07055211ae3e7ac3fec4a991be6da118`（= 還原後檔案的 sha256，證明突變忠實）。
+  · 契約測試 ⇒ **紅**：`❌ test-check-doc-links: 5 passed, 14 failed`、`rc=1`，逐條指名
+    `① 壞連結沒有讓入口變紅`、`④ 實作缺失沒有 fail loud（靜默回綠＝本票的缺陷形狀）`、
+    `⑦ 工具缺失時的結束碼不是 127 ⇒ 工具錯誤沒有被明確傳遞`、`⑧ 入口的可執行行內出現 '2>/dev/null'`。
+  · 同一棵樹的真實探針（`docs/operations/README.md` 追加一行指向 `definitely-not-exists-xyz.md` 的相對連結）
+    ⇒ 舊版仍印 `✅ All links OK`、**rc=0**（缺陷重現）。
+* 還原：`cp` 回備份 ⇒ `sha256sum -c` **OK**、sha256 = `308f9e5029a7eaab77fbba679b3704380e99c9a155d82bcff84c953d19b4013c`
+  ⇒ 契約測試 **綠**（`14 passed`、rc=0）。
+* 修正後的同一探針：相對壞連結 ⇒ **rc=1**（並指名 `docs/operations/README.md` 與該連結）；`cp` 還原 ⇒ `sha256sum -c` OK、rc=0。
+  ⚠️ 注意：**外部 URL**（`https://…/x.md`）探針在修好後**仍為 rc=0** —— 外部 URL 本來就不在兩支檢查器的範圍內
+  （舊版與被呼叫端都跳過），該探針**沒有鑑別力**；要證明「有牙齒」必須用**相對**連結。
+
+* **本車道補測（`-E` 版數量）**：同一 pattern 改 `-E`（`grep -rnE '\[.*?\]\([^http#].*?\.md[#\)]' docs/ --include="*.md"`）⇒ **343 行**（root 記 37、`FU-20260926-12` 記 328；量測引號／旗標不同，方向一致 ＝ 非 0 ⇒ 舊版那個 `All links OK` 是空判決）。
+
+**5. 已知限制（誠實列出，勿當成已修）**
+
+* `check_markdown_links.sh` 的 `xargs` 會把子程序 rc 壓成 1 ⇒ macOS 的 BSD xargs 在 `python3`
+  「存在但執行失敗」時**沉默**、整體 rc=1（與「找到壞連結」**同碼**且**無任何訊息**）。此屬被呼叫端
+  （動它要同時改其契約測試的突變錨點），不在本條修法範圍 ⇒ 列出交由 root 配 F-item。
+* `git` 不在 `PATH`（或執行失敗）時會被誤診為「不在 git work tree 內」：仍然 **rc=2、仍然 fail loud**，
+  只是訊息不精確。
+* `Makefile` 的 `ci` declared-skip 清單仍以檔名比對 `*markdown_links*`（理由寫「慢檢查」）。本檔改為轉呼叫後，
+  同一份工作也會在 `ci-quick` 的 10s 預算內經由 `check_doc_links.sh` 跑到（全庫實測 ~0.4s）⇒ 該清單對
+  「markdown 連結檢查是否在 `ci-quick` 內執行」不再有區分力。本車道**未改**該清單（不擴大 `make ci` recipe 的改動面）。
+
+**6. 驗收條件（本條已達成）**
+
+`docs/operations/README.md` 追加一條**相對**壞連結 ⇒ `bash scripts/ci/check_doc_links.sh` rc≠0（實測 rc=1，
+輸出指名檔案與連結）；還原後 `sha256sum -c` OK 且 rc=0。`bash tests/scripts/test-check-doc-links.sh` rc=0
+（14 斷言），且該測試已列入 `make ci-gate`。
 
 ### FU-20261016-19 — `check_frontend_dist.sh` 的 `git diff … || true` ⇒ **pre-push 的 dist 閘門可被靜默放行**
 

@@ -1152,7 +1152,7 @@ ci-gate: embed-dirs
 		exit 1; \
 	}
 	@echo "    ✅"
-	@echo "  → docs 同步檢查（AGENTS.md line drift + 斷鏈）"
+	@echo "  → docs 同步檢查（AGENTS.md line drift + 內部斷鏈：docs/ 與全 repo 的 .md）"
 	@bash scripts/ci/check_agents_md_drift.sh
 	@bash scripts/ci/check_doc_links.sh
 	@echo "    ✅"
@@ -1214,6 +1214,9 @@ ci-gate: embed-dirs
 	@echo "    ✅"
 	@echo "  → Markdown 連結檢查器的 git-aware 蒐集契約測試（hermetic 臨時 git repo；#2114）"
 	@bash tests/scripts/test-check-markdown-links.sh
+	@echo "    ✅"
+	@echo "  → docs 斷鏈入口（check_doc_links.sh）契約測試：壞連結必紅／工具缺失 fail loud（hermetic；FU-20261016-18）"
+	@bash tests/scripts/test-check-doc-links.sh
 	@echo "    ✅"
 	@echo "  → 合併結果/ diff 衛生閘門自我測試（hermetic git fixtures；#1993）"
 	@bash tests/scripts/test-revert-guard.sh
