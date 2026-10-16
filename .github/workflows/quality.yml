@@ -1116,6 +1116,14 @@ jobs:
     - name: Run shared JS unit tests
       run: node --test shared_web/static/js/__tests__/*.mjs
 
+    # 零指標靜態守門（FU-20261016-26）。
+    # 這支腳本 2026-07 建立後**零呼叫端** ⇒ `--fail` 只在有人記得帶它時才成立，
+    # 預設路徑即使找到違規仍 rc=0（與「死旗標」同型的網路效果）。
+    # 放在這裡的理由：它守的是 `shared_web/static/js/{pages,components}/*.js`，
+    # 與上面那步（同一批 JS 的單元測試）同一群觀眾、同一批變更。
+    - name: Zero-metric static guard (no bare non-safe formatters on audited pages)
+      run: bash scripts/ci/zero-metric-guard.sh --fail
+
     # Install browsers from each project's Playwright version. Running
     # `npx playwright` from the repo root resolves to the latest published
     # version, which installs browser binaries incompatible with the pinned

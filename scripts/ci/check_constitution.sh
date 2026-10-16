@@ -12,7 +12,7 @@
 #   bash scripts/ci/check_constitution.sh          # 完整檢查
 #   bash scripts/ci/check_constitution.sh --json   # JSON 輸出 (CI 整合用)
 #
-# 退出碼: 0 = 通過, 1 = 違規發現
+# 退出碼: 0 = 通過, 1 = 違規發現, 2 = 用法錯誤（未知旗標；FU-20261016-26）
 # =============================================================================
 
 set -euo pipefail
@@ -20,7 +20,21 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$REPO_ROOT"
 
-OUTPUT_MODE="${1:-text}"
+# 旗標解析（FU-20261016-26）：`--json` 與裸字 `json` **等效**；未知旗標 ⇒ rc=2 ＋ 用法。
+# 舊版 `OUTPUT_MODE="${1:-text}"` 只把**裸字** `json` 當 JSON ⇒ 文件與 CI 寫的 `--json`
+# 與「不帶旗標」**逐位元組相同**（修前實測 sha256 前 12 碼同為 d132602ee9d9），
+# 而 `constitution.yml` 的步驟名就叫 `Summary (JSON)` ⇒ 那一步拿到的是文字。
+OUTPUT_MODE="text"
+for arg in "$@"; do
+  case "$arg" in
+    json|--json) OUTPUT_MODE="json" ;;
+    *)
+      echo "unknown option: $arg" >&2
+      echo "usage: check_constitution.sh [--json|json]" >&2
+      exit 2
+      ;;
+  esac
+done
 VIOLATIONS=0
 JSON_VIOLATIONS="[]"
 

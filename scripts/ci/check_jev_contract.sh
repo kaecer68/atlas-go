@@ -21,4 +21,9 @@ if ! command -v python3 >/dev/null 2>&1; then
     exit 1
 fi
 
-exec python3 scripts/jev-contract-check.py --root "$REPO_ROOT"
+# FU-20261016-26：`"$@"` 必須轉發給被呼叫者。
+# 舊版把旗標吞掉 ⇒ `--with-selftest`（opt-in 連外自測）被**靜默丟棄**：帶與不帶旗標
+# rc 皆 0、輸出**逐位元組相同**（修前實測 sha256 前 12 碼同為 a6a097e8eb4f），
+# 未知旗標同樣被靜默忽略 ⇒ 檔頭宣告的介面是死的。
+# 轉發後由 argparse 處理：未知旗標 ⇒ rc=2 ＋ usage（fail loud，不靜默退回預設）。
+exec python3 scripts/jev-contract-check.py --root "$REPO_ROOT" "$@"

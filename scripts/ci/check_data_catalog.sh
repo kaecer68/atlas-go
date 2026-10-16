@@ -17,6 +17,7 @@
 # 退出碼:
 #   0 = 一致（或 --warn-only 下僅有資料警告）
 #   1 = 有違規、或 **檢查本身跑不成**（工具／環境錯誤；此類不受 --warn-only 抑制）
+#   2 = 用法錯誤（未知旗標；FU-20261016-26）
 #
 # 2026-10-16（FU-20261016-22）:
 #   `-oP` 是 GNU 專屬 ⇒ macOS 的 BSD grep 回 rc=2／0 行，舊寫法把 stderr 導掉、
@@ -29,13 +30,22 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$REPO_ROOT"
 
-OUTPUT_MODE="${1:-text}"
+# 旗標解析（FU-20261016-26）：`--json` 與裸字 `json` **等效**；未知旗標 ⇒ rc=2 ＋ 用法。
+# 舊版 `OUTPUT_MODE="${1:-text}"` 只認裸字 `json` ⇒ `--json` 與「不帶旗標」逐位元組相同，
+# 且把旗標當成 OUTPUT_MODE 的字面值（`--strict json` 這種順序會連帶丟掉 JSON 模式）。
+OUTPUT_MODE="text"
 WARN_ONLY=false
 STRICT=false
 for arg in "$@"; do
   case "$arg" in
+    json|--json) OUTPUT_MODE="json" ;;
     --warn-only) WARN_ONLY=true ;;
     --strict)    STRICT=true ;;
+    *)
+      echo "unknown option: $arg" >&2
+      echo "usage: check_data_catalog.sh [--json|json] [--warn-only] [--strict]" >&2
+      exit 2
+      ;;
   esac
 done
 

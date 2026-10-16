@@ -1111,7 +1111,7 @@ rebuild-all: build-frontend build-backend rebuild-host-bin rebuild-atlas rebuild
 # 與 GitHub CI 對應關係：
 #   ci-gate     → fmt + build + generate + naming + frontend-imports + field-contract +
 #                  agent-prompts + constitution + channel-index + agents-md-drift +
-#                  inert-closure（#1944 建議 2）
+#                  inert-closure（#1944 建議 2）+ zero-metric guard（FU-20261016-26）
 #   ci-full     → ci-gate + lint (golangci-lint) + staticcheck + test + race + coverage +
 #                  cmd/atlas integration + ci (all scripts) + ci-slow + orphan check
 #
@@ -1286,6 +1286,12 @@ ci-gate: embed-dirs
 	@echo "    ✅"
 	@echo "  → 落後分支 diff 衛生 + evil-merge 檢查（#1993；allowlist 見 scripts/ci/revert-guard-allowlist.json）"
 	@bash scripts/ci/check_revert_guard.sh
+	@echo "    ✅"
+	@echo "  → 零指標靜態守門（zero-metric-guard --fail：審計頁面不得直接呼叫非安全格式化）"
+	@bash scripts/ci/zero-metric-guard.sh --fail
+	@echo "    ✅"
+	@echo "  → 死旗標契約測試（--json ≡ 裸 json／未知旗標 rc=2／jev 薄殼轉發／zero-metric 有呼叫端；hermetic；FU-20261016-26）"
+	@bash tests/scripts/test-dead-flag-contract.sh
 	@echo "    ✅"
 	@echo "  → fast CI scripts"
 	@$(MAKE) --no-print-directory ci-quick
