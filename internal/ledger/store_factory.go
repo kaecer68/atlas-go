@@ -30,6 +30,18 @@ func SetPostgresPool(pool *pgxpool.Pool) {
 	postgresPool = pool
 }
 
+// PostgresPool reports the pool currently injected by SetPostgresPool.
+//
+// It exists for the one caller that opens its OWN pool, installs it, and then
+// has to close the pool again when its run ends: the injection is process-wide,
+// so such a caller must capture the previous value and put it back, or it
+// leaves the factory pointing at a dead pool for every later store
+// (stockpicker.RunDailyUpdate — see poolOwnership there). Read-only: it must not
+// be used to mutate the injection.
+func PostgresPool() *pgxpool.Pool {
+	return postgresPool
+}
+
 // getSharedSQLiteDB returns a shared *sql.DB for the given path.
 // The DB is opened once per path, WAL mode is enabled, foreign keys
 // are enforced, and the ledger schema is initialized on the first call.
@@ -255,6 +267,12 @@ func (s *SQLiteStore) RecordWindowSummary(summary domain.BacktestWindowSummary) 
 }
 
 // RecordMutationBrief persists a mutation brief as a JSON blob.
+//
+// Upsert for the same reason as RecordWindowSummary: window_id carries a unique
+// index (ux_mutation_briefs_window_id, mirroring sql/migrations/000029) and the
+// JSONL store this mirrors overwrites <windowID>-mutation-brief.json, so
+// re-running one window must refresh the row instead of appending a second
+// brief.
 func (s *SQLiteStore) RecordMutationBrief(windowID string, brief domain.MutationBrief) error {
 	data, err := json.Marshal(brief)
 	if err != nil {
@@ -263,11 +281,14 @@ func (s *SQLiteStore) RecordMutationBrief(windowID string, brief domain.Mutation
 	_, err = s.db.Exec(
 		`
 		INSERT INTO mutation_briefs (window_id, data_json, created_at)
-		VALUES (?, ?, ?)`,
+		VALUES (?, ?, ?)
+		ON CONFLICT(window_id) DO UPDATE SET
+			data_json = excluded.data_json,
+			created_at = excluded.created_at`,
 		windowID, string(data), time.Now().UTC().Format(time.RFC3339),
 	)
 	if err != nil {
-		return fmt.Errorf("insert mutation brief: %w", err)
+		return fmt.Errorf("upsert mutation brief: %w", err)
 	}
 	return nil
 }

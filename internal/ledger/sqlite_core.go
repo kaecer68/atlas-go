@@ -295,6 +295,17 @@ func InitSchema(db *sql.DB) error {
 	CREATE INDEX IF NOT EXISTS idx_prompt_experiment_results_experiment_id ON prompt_experiment_results(experiment_id);
 	CREATE INDEX IF NOT EXISTS idx_window_summaries_window_id ON window_summaries(window_id);
 	CREATE INDEX IF NOT EXISTS idx_mutation_briefs_window_id ON mutation_briefs(window_id);
+	-- Mirrors sql/migrations/000029: one row per window_id, so re-running a
+	-- window refreshes its brief instead of appending a second one (the JSONL
+	-- writer overwrites <windowID>-mutation-brief.json, window_summaries has
+	-- carried the same UNIQUE guarantee since the original schema).
+	--
+	-- This CREATE runs on every InitSchema, including against an existing
+	-- file, which is what heals a pre-000029 atlas.db. It FAILS LOUD when the
+	-- table already holds two rows with the same window_id: that is a data
+	-- condition an operator must resolve (keep the newest row per window_id),
+	-- not something a schema step may fix by deleting rows.
+	CREATE UNIQUE INDEX IF NOT EXISTS ux_mutation_briefs_window_id ON mutation_briefs(window_id);
 	CREATE INDEX IF NOT EXISTS idx_regime_history_captured_at ON regime_history(captured_at);
 	CREATE INDEX IF NOT EXISTS idx_stress_index_history_captured_at ON stress_index_history(captured_at);
 	CREATE INDEX IF NOT EXISTS idx_period_history_captured_at ON period_history(captured_at);

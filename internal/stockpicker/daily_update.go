@@ -173,7 +173,7 @@ func RunDailyUpdate(ctx context.Context, opts RunDailyOptions) (RunDailyResult, 
 		}
 		guardCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 		defer cancel()
-		if err := guardDatabaseTarget(guardCtx, os.Getenv("DATABASE_URL"), opts.ExpectDB); err != nil {
+		if err := guardPostgresTarget(guardCtx, os.Getenv("DATABASE_URL"), opts.ExpectDB); err != nil {
 			return res, err
 		}
 	}
@@ -198,6 +198,14 @@ func RunDailyUpdate(ctx context.Context, opts RunDailyOptions) (RunDailyResult, 
 	}
 	res.Conditions = conditionIDs(conds)
 
+	// This run owns every pool it opens: the defer below closes them and puts
+	// the previous ledger injection back when the run ends, on every return
+	// path (FU-20260930-12 — a pool per tick used to survive the tick).
+	// Registered before the stdlib wrapper's Close so it runs last, i.e. the
+	// *sql.DB handle is released before the pool underneath it.
+	poolOwner := newPoolOwnership()
+	defer poolOwner.release()
+
 	// Resolve the PostgreSQL destination BEFORE opening anything else: the
 	// idempotency gate below must reflect every enabled destination (P1 fix),
 	// and the SQLite artifact must stay unopened on a PG-primary run (C7).
@@ -205,6 +213,9 @@ func RunDailyUpdate(ctx context.Context, opts RunDailyOptions) (RunDailyResult, 
 	if err != nil {
 		return res, err
 	}
+	// resolvePGDest returns non-nil only for a pool it opened itself (an
+	// injected handle is caller-owned and must not be closed here).
+	poolOwner.adopt(pgPool)
 	if pgOutcomesDB != nil && opts.PGOutcomesDB == nil {
 		// Derived handle (stdlib wrapper over the opened pool): close at the
 		// end of the run. Injected handles are owned by the caller.
@@ -334,14 +345,16 @@ func RunDailyUpdate(ctx context.Context, opts RunDailyOptions) (RunDailyResult, 
 		if backend == "postgres" {
 			// Reuse the pool resolvePGDest opened for the derived dual-write
 			// handle; open one only when dual-write did not (kill switch off,
-			// or a dry-run that still needs quotes).
+			// or a dry-run that still needs quotes). Either way this run owns
+			// whatever it opened here and closes it on return.
 			pool := pgPool
 			if pool == nil {
-				opened, err := openPostgres(ctx)
+				opened, err := openPostgresPool(ctx)
 				if err != nil {
 					return res, err
 				}
 				pool = opened
+				poolOwner.adopt(opened)
 			}
 			panel, err = NewRealPanel(ctx, ledger.NewPostgresQuoteStore(pool), opts.WorkDir)
 			if err != nil {
@@ -544,6 +557,13 @@ func openOutcomeDB(workDir string) (*sql.DB, error) {
 	return db, nil
 }
 
+// guardPostgresTarget is the M12 target assertion (guardDatabaseTarget). It is a
+// variable so a test can pin what happens AFTER the guard — the pool lifecycle
+// (FU-20260930-12) — without a PostgreSQL server. The guard is a mandatory
+// prerequisite for both pool-open sites on the postgres backend, so a test
+// cannot simply choose options that skip it: that is why the seam exists.
+var guardPostgresTarget = guardDatabaseTarget
+
 // postgresTargetGuardNeeded reports whether the M12 migration-target guard
 // (DATABASE_URL identity check) must run for this postgres-backend run.
 //
@@ -613,17 +633,81 @@ func resolvePGDest(ctx context.Context, opts RunDailyOptions, backend string, pa
 	if panelInjected {
 		return nil, nil, fmt.Errorf("dual-write requested (backend=postgres) but panel was injected without PGOutcomesDB; pass PGOutcomesDB explicitly")
 	}
-	pool, err = openPostgres(ctx)
+	// Opened by this run, which must adopt and close it (it is returned so the
+	// panel build can reuse it instead of dialing a second pool).
+	pool, err = openPostgresPool(ctx)
 	if err != nil {
 		return nil, nil, err
 	}
 	return stdlib.OpenDBFromPool(pool), pool, nil
 }
 
+// poolOwnership owns every pgxpool a single RunDailyUpdate call opened
+// (FU-20260930-12).
+//
+// Why a run has to own its pool: pgx v5 documents that closing the *sql.DB
+// returned by stdlib.OpenDBFromPool does NOT close the pgxpool it wraps, so the
+// `defer pgOutcomesDB.Close()` in RunDailyUpdate released the stdlib wrapper
+// only. The daily task ticks hourly, and every tick past 18:00 Asia/Taipei
+// reached at least one open site, so each tick left behind a pool together with
+// its health-check goroutine, its idle connections, and the ledger-factory
+// injection that pointed at it. Nothing observes that today, which is exactly
+// why it accumulated.
+//
+// release() therefore does two things, and both are needed:
+//   - close every adopted pool, so the connections go back to PostgreSQL;
+//   - put the PREVIOUS ledger injection back (recorded at construction, before
+//     the first open), because a closed pool left installed in the process-wide
+//     factory turns a resource leak into a hard failure for every later store
+//     that the factory builds.
+type poolOwnership struct {
+	pools   []*pgxpool.Pool
+	restore *pgxpool.Pool
+}
+
+// newPoolOwnership records the ledger injection that is in place before this
+// run opens any pool.
+func newPoolOwnership() *poolOwnership {
+	return &poolOwnership{restore: ledger.PostgresPool()}
+}
+
+// adopt takes ownership of a pool the run just opened. It is a method on a
+// possibly nil receiver so the two call sites can stay one-liners.
+func (o *poolOwnership) adopt(pool *pgxpool.Pool) {
+	if o == nil || pool == nil {
+		return
+	}
+	o.pools = append(o.pools, pool)
+}
+
+// release closes every adopted pool and restores the previous injection. It is
+// safe to call with nothing adopted (a SQLite-primary run opens no pool): the
+// restoration still runs, which is a no-op when the injection never changed.
+func (o *poolOwnership) release() {
+	if o == nil {
+		return
+	}
+	for _, pool := range o.pools {
+		pool.Close()
+	}
+	o.pools = nil
+	ledger.SetPostgresPool(o.restore)
+}
+
+// openPostgresPool is the opener both call sites use. It is a variable so a test
+// can substitute a pool that never dials (internal/testdb.UnconnectedPool) and
+// pin the open/close lifecycle of a whole RunDailyUpdate call without a
+// PostgreSQL server — the leak this fixes is a lifecycle bug, and a lifecycle
+// bug that only an integration test can see is a bug that regrows.
+var openPostgresPool = openPostgres
+
 // openPostgres connects to the migration target, applies pending migrations,
 // and injects the pool into the ledger factory (WP4 quote-store convention).
 // Callers derive whatever handles they need from the returned pool (quote
 // store, and — batch B — stdlib.OpenDBFromPool for outcome dual-write).
+//
+// The caller owns the returned pool: it must adopt it into the run's
+// poolOwnership so it is closed when the run ends.
 func openPostgres(ctx context.Context) (*pgxpool.Pool, error) {
 	dsn := os.Getenv("DATABASE_URL")
 	if dsn == "" {

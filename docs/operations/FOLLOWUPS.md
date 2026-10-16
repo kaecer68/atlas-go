@@ -2848,13 +2848,48 @@ PY
 
 ### FU-20260930-12 — `internal/stockpicker` 的 PG pool 每 tick 新建未關：資源隨 tick 累積（**pre-existing**）
 
-- **狀態**：`open`
+- **狀態**：`done`（2026-10-16；原敘述全數保留，處置見條文末）
 - **記錄日期**：2026-09-30
 - **來源**：PR #2186（批次 B dual-write）的**獨立審查**發現；審查者判定為 **pre-existing**（舊 `openPostgres…` 同款），**非該 PR 引入** ⇒ 當時不併入該 PR。
 - **事實**：`internal/stockpicker/daily_update.go`（經 `openPostgres…` 路徑）**每 tick 建立 pgxpool 但未 `Close`**；`stdlib.OpenDBFromPool` 的 `*sql.DB` wrapper 本身**無洩漏**（`MaxIdleConns(0)` ⇒ 連線逐操作還池）。
 - **風險**：長時間執行下連線／資源累積（與 pool 上限互動）；**目前無觀測指標** ⇒ 不易察覺。
 - **最小處置**：①tick 結束 `defer pool.Close()`（或改用長生命週期共享 pool）②加「pool 建立／關閉次數」可觀測讀數。
 - **查法（可重現）**：`grep -n "pgxpool.New\|NewPool\|defer .*Close" internal/stockpicker/daily_update.go` ⇒ 確認建立與關閉**不對稱**。
+
+- **完成於**：本 PR（`fix/20261016-dataintegrity`）
+
+**處置（2026-10-16）**
+
+1. **根因複驗（讀碼 ＋ 上游文件 ＋ 實測）**：
+   - 建立站點有**兩個**（原敘述只提了其中一條路徑）：`resolvePGDest` 的 derived pool（dual-write 路徑）
+     與 panel build 的 `openPostgres`（kill switch off 或 dry-run 路徑）。**兩者都沒有人關**。
+   - ★ **更正／補強原敘述**：舊碼唯一相關的 `defer func(){ _ = pgOutcomesDB.Close() }()` 關的是
+     `stdlib.OpenDBFromPool` 產生的 **`*sql.DB` wrapper**，不是 pool。pgx v5.9.2 的 `stdlib/sql.go`
+     對 `OpenDBFromPool` 明文寫著：*“Note that closing the returned \*sql.DB will not close the
+     \*pgxpool.Pool.”* ⇒ 「有 defer 看起來有收尾」正是洩漏能長期存在的原因。
+     （F-item 說 wrapper「本身無洩漏」是對的，但沒點出「關 wrapper ≠ 關 pool」。）
+   - **觸發頻率**：daily task `Interval: time.Hour` ＋ TimeGated（18:00 後）⇒ 18:00 後的每個 tick 都至少
+     走到一個建立站點。洩漏物 = pool 物件 ＋ 其 health-check goroutine ＋ 閒置連線（後者存活到
+     `MaxConnIdleTime`，預設 30 分鐘）。
+2. **修法（生命週期由 run 擁有，不用全域單例）**：新增 `poolOwnership`（`newPoolOwnership`／`adopt`／
+   `release`）並在 `RunDailyUpdate` 開頭 `defer poolOwner.release()`；兩個建立站點各自 `adopt` 自己開的 pool。
+   `release()` 做兩件事：關掉每一個 adopt 的 pool，並把**執行前**的 ledger 注入還原（`openPostgres` 仍照
+   WP4 慣例 `SetPostgresPool`；若只關不還原，會把「洩漏」換成「factory 指向已關閉的 pool」，讓後續所有
+   factory 建構的 store 硬失敗）。為此在 `internal/ledger` 新增唯讀 accessor `PostgresPool()`。
+   `resolvePGDest` 回傳的 pool 語意不變（只有它自己開的才非 nil ⇒ 注入的 handle 仍由呼叫端持有、不被關）。
+3. **實測（真 PG，throwaway 容器）**：以 `application_name` 標記本測試 run 的連線（僅本 run 的連線會被計數，
+   不受同 DB 其他行程影響），`pg_stat_activity` 計數在 run 返回後必須回到 0。修好後兩個站點各為 **0**；
+   突變（移除 `defer poolOwner.release()`）⇒ 同一 process 內第一個情境 **1**、第二個情境 **2**（累積）。
+   hermetic 亦紅（`pool 0 opened by the run is still open after it returned` ＋ 注入未還原）。
+4. **hermetic 覆蓋（不需 PG）**：`internal/testdb.UnconnectedPool`（既有的「不撥號的真 pool」helper）＋
+   兩個 seam（`openPostgresPool`、`guardPostgresTarget`——後者是兩個建立站點的**前置**，不 stub 就到不了站點）
+   ⇒ `TestRunDailyUpdateClosesTheDerivedPool`／`TestRunDailyUpdateClosesThePanelPool`／
+   `TestPoolOwnershipReleasesWhatItAdopted`／`TestPoolOwnershipRestoresNilInjection`。
+5. **已知限制**：
+   - 未加「pool 建立／關閉次數」的可觀測讀數（原敘述的最小處置②）⇒ 另案。
+   - hermetic 測試依賴兩個 seam；seam 只是把「不連線」變成可能，不改變生產路徑（生產值＝原函式）。
+   - `cmd/run-stockpicker-backtest` 等 CLI 每次執行自開自關 pool；同 process 內連續呼叫才會累積，
+     已由本修法覆蓋（每次呼叫都會關）。
 
 ### FU-20261012-01 — `LoadRegimeHistoryAll(ctx,400)` 的 `LIMIT 400` 會**靜默截斷**最舊的 regime 標籤
 
@@ -3252,7 +3287,7 @@ PY
 
 ### FU-20261016-07 — `mutation_briefs` **沒有 unique 鍵** ⇒ 重複執行會多列（回填目前以 DELETE+INSERT 規避）
 
-- **狀態**：`open`
+- **狀態**：`done`（2026-10-16；原敘述全數保留，處置見條文末）
 - **記錄日期**：2026-10-16
 - **來源**：Q2b2 T2（PR #2238）實作時發現，該 PR 以「先 DELETE 該 window_id 再 INSERT」使**回填**冪等，但未改 schema（建議另案）
 - **事實**：`mutation_briefs`（migration `000015`）**沒有 unique 約束** ⇒ `RecordMutationBrief` 仍是純 `INSERT` ⇒ 同一窗口重跑會**累積重複列**（`window_summaries` 側已有 `window_id` UNIQUE 並改 upsert ✓，兩邊語意不對稱）。
@@ -3260,9 +3295,46 @@ PY
 - **最小處置**：①為 `mutation_briefs` 加 unique 鍵（如 `(window_id)` 或 `(window_id, ...)`，需先清理既有重複）②把 `RecordMutationBrief` 改為與 `window_summaries` 一致的 upsert ③驗收：`SELECT window_id, count(*) FROM mutation_briefs GROUP BY window_id HAVING count(*) > 1` 必須 **0 列**（PR #2238 的回填驗收已含此查詢）。
 - **查法**：`psql -Atc "select indexdef from pg_indexes where tablename='mutation_briefs'"`；`psql -Atc "select window_id, count(*) from mutation_briefs group by window_id having count(*) > 1"`。
 
+- **完成於**：本 PR（`fix/20261016-dataintegrity`）
+
+**處置（2026-10-16）**
+
+1. **根因複驗（讀碼 ＋ 唯讀實測）**：`sql/migrations/000015` 的 `mutation_briefs` 只有**非唯一**索引
+   `idx_mutation_briefs_window_id`；同一 migration 的 `window_summaries` 則是 `window_id TEXT UNIQUE`
+   且 `RecordWindowSummary` 一向是 upsert ⇒ 兩半語意不對稱**成立**。
+   ★ **更正原敘述一處**：不只 PG —— `internal/ledger/sqlite_core.go` 的 `mutation_briefs` 是**同一個形狀**
+   （非唯一索引 ＋ 純 INSERT），所以「加唯一鍵」必須**兩邊一致**（同 FU-20261012-07 的陷阱），
+   不是只補 PG。另 `ledger.Store`（JSONL）的 `RecordMutationBrief` 一直是冪等（覆寫
+   `<windowID>-mutation-brief.json`）⇒ 唯一性是**檔案後端本來就有的語意**，不是新語意。
+2. **既有重複盤查（schema 變更的前置，唯讀、未刪任何資料）**：production PG `mutation_briefs` = **0 列**
+   （`ssh kmacmini ... docker exec atlas-postgres psql -U atlas -d atlas -At`）、production
+   `data/state/atlas.db` 的 `mutation_briefs` = **0 列**（`sqlite3` 讀 `cp` 出來的副本，原檔未開）
+   ⇒ **不可能有重複** ⇒ 加唯一鍵安全，無需先清理。
+3. **修法**：新增 `sql/migrations/000029_mutation_briefs_unique_window_id.{up,down}.sql`（up 只有一句
+   `CREATE UNIQUE INDEX IF NOT EXISTS ux_mutation_briefs_window_id ON mutation_briefs (window_id)`）＋
+   `sqlite_core.go` 對應一句（`CREATE ... IF NOT EXISTS` 每次 `InitSchema` 都執行 ⇒ 同時治好既有檔案）＋
+   PG／SQLite 兩邊 `RecordMutationBrief` 改 `INSERT ... ON CONFLICT (window_id) DO UPDATE`
+   （`$n`／`?` 雙方言同語意）＋ `cmd/migrate-data/windows.go` 移除已多餘的 DELETE-first 步驟
+   （呼叫端補償改成 schema 保證）。
+4. **失敗模式（刻意 fail loud、絕不刪資料）**：既有檔案若有重複 ⇒ `CREATE UNIQUE INDEX` 失敗並中止
+   `InitSchema`／遷移；PG 錯誤會指名重複鍵（scratch schema 實測：`Key (window_id)=(window-fu101607-upsert) is duplicated.`，
+   SQLSTATE 23505）。清理重複列是 **operator 的資料操作**（保留每 window_id 最新一列），本 migration 不代勞。
+   以 `TestInitSchemaLegacyDuplicatesFailLoudWithoutDeleting`（hermetic，並斷言列數不變）與
+   `TestMigration000029RefusesDuplicatesWithoutDeletingThem`（PG）釘住。
+5. **驗收**：hermetic（重複寫入 ⇒ 1 列且內容為第二次／新舊 schema 的索引存在且 unique／legacy 檔案被治好）
+   ＋ PG integration（二次 `RecordMutationBrief` ⇒ 1 列且 `data_json` 為第二次；raw 重複 INSERT 被拒）
+   ＋ `cmd/migrate-data` 回填 integration（重跑不累積；**原斷言「seed 重複 ⇒ 2 列」已改為「seed 重複 ⇒ 被拒」**，
+   因 schema 已不允許重複 —— 這是語意收緊，不是放寬）。
+6. **負向證明（突變 ⇒ 必紅）**：移除 SQLite 唯一索引 ⇒ 4 紅（含 `ON CONFLICT clause does not match any
+   PRIMARY KEY or UNIQUE constraint`）；PG 改回純 INSERT ⇒ 紅 `duplicate key value violates unique constraint
+   "ux_mutation_briefs_window_id" (SQLSTATE 23505)`；還原成 pre-fix（無索引 ＋ 純 INSERT）⇒ 紅
+   `mutation_briefs rows = 2, want 1 (second write must replace, not accumulate)`。
+7. **已知限制**：舊的非唯一索引 `idx_mutation_briefs_window_id` **刻意保留**（本 migration additive-only；
+   唯一索引已能服務同樣的查詢）。移除它屬外觀層面、可省略，另案。
+
 ### FU-20261016-08 — `PGFirstOutcomeStore` 的 `LoadOutcomes`／`LoadOutcomesFromSessions` **沒有 JSONL 降級**（與 summary 讀取不對稱）
 
-- **狀態**：`open`
+- **狀態**：`done`（2026-10-16；原敘述全數保留，處置見條文末）
 - **記錄日期**：2026-10-16
 - **來源**：Q2 第二批 unit B+C 遷移站點 3（`internal/calibration/calibrate.go` 的 darwinian 校準改讀 backend-aware store）時盤查
   `internal/ledger/pg_first_store.go` 發現；該 PR 以「呼叫端自備降級」繞過，未改 store 語意
@@ -3278,6 +3350,30 @@ PY
   並補 hermetic 測試（PG 錯誤 ⇒ 降級＋degraded；PG 成功回空 ⇒ 權威、不降級）；②或在 doc comment 明確寫
   「這兩個方法不降級，呼叫端自負」並以測試釘住該契約。
 - **查法**：`grep -n -A6 'func (s \*PGFirstOutcomeStore) Load' internal/ledger/pg_first_store.go`
+
+- **完成於**：本 PR（`fix/20261016-dataintegrity`）
+
+**處置（2026-10-16）**
+
+1. **根因複驗（讀碼）**：`internal/ledger/pg_first_store.go` 的 `LoadOutcomes`／`LoadOutcomesFromSessions`
+   確實直接 delegate 到 PG（無降級、無 `markDegraded`）。★ 同時確認這**不是設計選擇而是漏補**：同一個 store 的
+   `LoadAllSessionTrades` 早就補過同型降級，其註解明寫「SSOT P1-4 … otherwise a PG blip would fail the whole
+   report」⇒ 這兩支是同一個契約沒跟上。
+2. **修法**：兩支改成與 `LoadSessionSummaries` 同構 —— PG 先；**只有 PG 回錯誤**才降級到 JSONL 並
+   `markDegraded(true)`；PG 成功（含**空結果**）即權威、`markDegraded(false)`；沒有 JSONL 側時直接回錯；
+   兩側都失敗時錯誤訊息同時指名兩邊。並把這兩支從自稱 “the rest … delegates to PG (**write paths**)”
+   的區塊移到讀取區塊 —— 該註解本身是誤導來源（F-item 已指出）。
+3. **對稱性以測試釘住**：新增 `TestPGFirstOutcomeStore_ReadContractIsSymmetric`，對**全部 6 個讀取**
+   （`LoadSessionSummaries`／`LoadSessionOutcomes`／`LoadSessionScorecardOutcomes`／`LoadOutcomes`／
+   `LoadOutcomesFromSessions`／`LoadAllSessionTrades`）用同一 fixture 斷言三種情境行為一致
+   （PG 錯誤 ⇒ 降級並標 degraded；PG 可用但空 ⇒ 權威、不降級；無 fallback ⇒ 大聲失敗）。
+   另補 6 支單方法測試（含「降級後 PG 恢復 ⇒ 不再 degraded、`FallbackCount` 只算失敗的那次」）。
+4. **負向證明（突變 ⇒ 必紅）**：把 `LoadOutcomes` 還原成 `return s.pg.LoadOutcomes()` ⇒ 4 支測試紅
+   （含對稱性測試的 `LoadOutcomes: err = connection refused, want a JSONL fallback`）。
+5. **已知限制**：`internal/calibration` 的 `darwinianOutcomes` 自備的 flat-JSONL mirror 降級**刻意保留**
+   （store 失敗時仍可用；且那是「store 之外的第三來源」防線）。副作用是：store 內部降級後，呼叫端看到的仍是
+   **成功**，其 log 會標 `source=injected-store` 而不是 `explicit-jsonl-mirror` ⇒ 若日後需要更細的來源標註，
+   應在該處讀 `Degraded()`（本條刻意不改，避免超出範圍）。
 
 ### FU-20261016-09 — experiments 家族的 **result 檔案／window summary 仍是讀取契約**（本單元刻意保留，需另一單元收斂）
 
