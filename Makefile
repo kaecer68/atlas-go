@@ -597,6 +597,25 @@ ledger-seam-update:
 	@python3 scripts/ci/check_ledger_seam.py --root . --update
 	@echo "   → 請編輯 scripts/ci/ledger-seam-allowlist.json 填寫 reason（TODO 開頭會讓檢查變紅）"
 
+# ---- integration 路徑過濾器同步守門（FU-20261015-01，2026-10-16）----
+#
+#   ci-cd.yml 的 `integration` job 只在 `changes` 的 paths-filter 白名單命中時執行，
+#   job 內跑整個 `go test -tags=integration -p 1 ./...`。白名單漏列「有 //go:build
+#   integration 測試檔」的目錄 ⇒ 只改該目錄的 PR 讓 job 變 **skipping（不是 pass）**
+#   ⇒ 那些測試在 CI 從未被觸發（本機綠、CI 未驗）。守門比對「repo 內帶 integration tag
+#   的檔所在目錄」與白名單；例外必須逐條登錄理由（見 .py docstring）。
+#   make integration-filter-check     檢查 + hermetic 契約測試（~2s）
+#   make integration-filter-selftest  只跑契約測試（fixture，不碰 git／Go toolchain）
+.PHONY: integration-filter-check integration-filter-selftest
+
+integration-filter-selftest:
+	@echo "  → integration 過濾器同步守門契約測試（hermetic fixtures）"
+	@bash tests/scripts/test-integration-filter-sync.sh
+
+integration-filter-check: integration-filter-selftest
+	@echo "  → integration 路徑過濾器 vs 實際 integration 測試目錄"
+	@bash scripts/ci/check_integration_filter_sync.sh
+
 # ---- 合併結果驗證 + diff 衛生閘門（#1993，2026-09-26）----
 # FAIL（evil merge）：用 `git merge-tree --write-tree` 算「併進 main 之後長怎樣」，若會改掉 main
 #       上「本 PR 沒以普通 commit 引進」的內容 ⇒ 那是真的回退（唯一現實成因：落後分支在本地
@@ -1110,6 +1129,10 @@ ci-gate: embed-dirs
 	@echo "  → ledger store seam 守門（T1/S1：禁新增裸 ledger.NewStore；hermetic 契約測試）"
 	@bash tests/scripts/test-ledger-seam.sh
 	@bash scripts/ci/check_ledger_seam.sh
+	@echo "    ✅"
+	@echo "  → integration 路徑過濾器同步守門（FU-20261015-01：漏列目錄 ⇒ integration job 變 skipping）"
+	@bash tests/scripts/test-integration-filter-sync.sh
+	@bash scripts/ci/check_integration_filter_sync.sh
 	@echo "    ✅"
 	@echo "  → monitoring 單一設定樹自我測試（hermetic fixtures；PR 階段攔『改錯棵』）"
 	@bash tests/scripts/test-monitoring-single-source.sh

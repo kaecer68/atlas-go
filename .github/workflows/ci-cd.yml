@@ -489,6 +489,28 @@ jobs:
             - 'cmd/backfill-period-history-range/**'
             - 'cmd/backfill-outcome-period/**'
             - 'cmd/backfill-event-calendar/**'
+            # FU-20261015-01（2026-10-16 盤查）：以下目錄**有** `//go:build integration` 測試檔卻不在
+            # 白名單內 ⇒ 只改這些目錄的 PR 會讓本 job 變成 **skipping（不是 pass）**，那些測試因此
+            # 從未被觸發（本機跑得到 ⇒ 假安全）。守門：scripts/ci/check_integration_filter_sync.py
+            # （契約測試 tests/scripts/test-integration-filter-sync.sh），註冊於 `governance` job
+            # （無 paths filter）與 `make ci-gate`。
+            # repo 根目錄的 integration_test.go（Darwinian Weights／Superinvestor／PRISM 家族）。
+            # 注意 picomatch 無 matchBase ⇒ 裸樣式只匹配**根目錄**那一支，不是任何同名檔。
+            - 'integration_test.go'
+            # internal/apigateway/channel_status_integration_test.go（channel status store 契約）
+            - 'internal/apigateway/**'
+            # internal/calibration/pg_reader_integration_test.go（#2123：分數必須來自 PostgresHistoricalStore，
+            # 不是 job-local sqlite artifact）。
+            - 'internal/calibration/**'
+            # internal/fubonproxy/e2e_test.go（-fubon-port／preflight zombie reclaim 的 binary e2e）。
+            - 'internal/fubonproxy/**'
+            # internal/marketdata/sector_index_reader_real_test.go（RealFixture 讀取路徑）。
+            - 'internal/marketdata/**'
+            # 例外（豁免，理由必填；格式：`# integration-filter-exempt: <dir> — <理由>`，由守門解析）：
+            # cmd/atlas-mcp-setup/integration_test.go 已由 test-cmd-atlas job（無 paths filter）以
+            # `go test -tags=integration ./cmd/atlas-mcp-setup/` 在每個 code 變更上執行
+            # ⇒ 不必再觸發整個 integration suite（省一趟 13 分鐘）。
+            # integration-filter-exempt: cmd/atlas-mcp-setup — 已由 test-cmd-atlas job 逐 PR 執行該套件，不需再觸發整個 integration suite
             - 'migrations/**'
             - '**/*.sql'
 
@@ -582,6 +604,14 @@ jobs:
       run: |
         bash tests/scripts/test-branch-protection-known-checks.sh
         bash tests/scripts/test-generate-drift-coverage.sh
+
+    # integration 路徑過濾器同步守門（FU-20261015-01）。放在這個**無 paths filter** 的 job
+    # 是刻意的：若放進 `integration` job 自己，就等於「漏列目錄時守門也不會跑」。
+    # 兩者皆 hermetic（不連網、不跑 Go、不寫 repo），契約測試只讀 workflow YAML 與自帶 fixture。
+    - name: Verify integration path-filter sync (guard + hermetic contract test)
+      run: |
+        bash tests/scripts/test-integration-filter-sync.sh
+        bash scripts/ci/check_integration_filter_sync.sh
 
   # Operations gate (migrated from ci.yml per 2026-07-03 pipeline audit Phase 2)
   operations:
