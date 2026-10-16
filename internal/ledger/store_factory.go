@@ -30,6 +30,18 @@ func SetPostgresPool(pool *pgxpool.Pool) {
 	postgresPool = pool
 }
 
+// PostgresPool reports the pool currently injected by SetPostgresPool.
+//
+// It exists for the one caller that opens its OWN pool, installs it, and then
+// has to close the pool again when its run ends: the injection is process-wide,
+// so such a caller must capture the previous value and put it back, or it
+// leaves the factory pointing at a dead pool for every later store
+// (stockpicker.RunDailyUpdate — see poolOwnership there). Read-only: it must not
+// be used to mutate the injection.
+func PostgresPool() *pgxpool.Pool {
+	return postgresPool
+}
+
 // getSharedSQLiteDB returns a shared *sql.DB for the given path.
 // The DB is opened once per path, WAL mode is enabled, foreign keys
 // are enforced, and the ledger schema is initialized on the first call.

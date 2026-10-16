@@ -2599,13 +2599,48 @@ PY
 
 ### FU-20260930-12 — `internal/stockpicker` 的 PG pool 每 tick 新建未關：資源隨 tick 累積（**pre-existing**）
 
-- **狀態**：`open`
+- **狀態**：`done`（2026-10-16；原敘述全數保留，處置見條文末）
 - **記錄日期**：2026-09-30
 - **來源**：PR #2186（批次 B dual-write）的**獨立審查**發現；審查者判定為 **pre-existing**（舊 `openPostgres…` 同款），**非該 PR 引入** ⇒ 當時不併入該 PR。
 - **事實**：`internal/stockpicker/daily_update.go`（經 `openPostgres…` 路徑）**每 tick 建立 pgxpool 但未 `Close`**；`stdlib.OpenDBFromPool` 的 `*sql.DB` wrapper 本身**無洩漏**（`MaxIdleConns(0)` ⇒ 連線逐操作還池）。
 - **風險**：長時間執行下連線／資源累積（與 pool 上限互動）；**目前無觀測指標** ⇒ 不易察覺。
 - **最小處置**：①tick 結束 `defer pool.Close()`（或改用長生命週期共享 pool）②加「pool 建立／關閉次數」可觀測讀數。
 - **查法（可重現）**：`grep -n "pgxpool.New\|NewPool\|defer .*Close" internal/stockpicker/daily_update.go` ⇒ 確認建立與關閉**不對稱**。
+
+- **完成於**：本 PR（`fix/20261016-dataintegrity`）
+
+**處置（2026-10-16）**
+
+1. **根因複驗（讀碼 ＋ 上游文件 ＋ 實測）**：
+   - 建立站點有**兩個**（原敘述只提了其中一條路徑）：`resolvePGDest` 的 derived pool（dual-write 路徑）
+     與 panel build 的 `openPostgres`（kill switch off 或 dry-run 路徑）。**兩者都沒有人關**。
+   - ★ **更正／補強原敘述**：舊碼唯一相關的 `defer func(){ _ = pgOutcomesDB.Close() }()` 關的是
+     `stdlib.OpenDBFromPool` 產生的 **`*sql.DB` wrapper**，不是 pool。pgx v5.9.2 的 `stdlib/sql.go`
+     對 `OpenDBFromPool` 明文寫著：*“Note that closing the returned \*sql.DB will not close the
+     \*pgxpool.Pool.”* ⇒ 「有 defer 看起來有收尾」正是洩漏能長期存在的原因。
+     （F-item 說 wrapper「本身無洩漏」是對的，但沒點出「關 wrapper ≠ 關 pool」。）
+   - **觸發頻率**：daily task `Interval: time.Hour` ＋ TimeGated（18:00 後）⇒ 18:00 後的每個 tick 都至少
+     走到一個建立站點。洩漏物 = pool 物件 ＋ 其 health-check goroutine ＋ 閒置連線（後者存活到
+     `MaxConnIdleTime`，預設 30 分鐘）。
+2. **修法（生命週期由 run 擁有，不用全域單例）**：新增 `poolOwnership`（`newPoolOwnership`／`adopt`／
+   `release`）並在 `RunDailyUpdate` 開頭 `defer poolOwner.release()`；兩個建立站點各自 `adopt` 自己開的 pool。
+   `release()` 做兩件事：關掉每一個 adopt 的 pool，並把**執行前**的 ledger 注入還原（`openPostgres` 仍照
+   WP4 慣例 `SetPostgresPool`；若只關不還原，會把「洩漏」換成「factory 指向已關閉的 pool」，讓後續所有
+   factory 建構的 store 硬失敗）。為此在 `internal/ledger` 新增唯讀 accessor `PostgresPool()`。
+   `resolvePGDest` 回傳的 pool 語意不變（只有它自己開的才非 nil ⇒ 注入的 handle 仍由呼叫端持有、不被關）。
+3. **實測（真 PG，throwaway 容器）**：以 `application_name` 標記本測試 run 的連線（僅本 run 的連線會被計數，
+   不受同 DB 其他行程影響），`pg_stat_activity` 計數在 run 返回後必須回到 0。修好後兩個站點各為 **0**；
+   突變（移除 `defer poolOwner.release()`）⇒ 同一 process 內第一個情境 **1**、第二個情境 **2**（累積）。
+   hermetic 亦紅（`pool 0 opened by the run is still open after it returned` ＋ 注入未還原）。
+4. **hermetic 覆蓋（不需 PG）**：`internal/testdb.UnconnectedPool`（既有的「不撥號的真 pool」helper）＋
+   兩個 seam（`openPostgresPool`、`guardPostgresTarget`——後者是兩個建立站點的**前置**，不 stub 就到不了站點）
+   ⇒ `TestRunDailyUpdateClosesTheDerivedPool`／`TestRunDailyUpdateClosesThePanelPool`／
+   `TestPoolOwnershipReleasesWhatItAdopted`／`TestPoolOwnershipRestoresNilInjection`。
+5. **已知限制**：
+   - 未加「pool 建立／關閉次數」的可觀測讀數（原敘述的最小處置②）⇒ 另案。
+   - hermetic 測試依賴兩個 seam；seam 只是把「不連線」變成可能，不改變生產路徑（生產值＝原函式）。
+   - `cmd/run-stockpicker-backtest` 等 CLI 每次執行自開自關 pool；同 process 內連續呼叫才會累積，
+     已由本修法覆蓋（每次呼叫都會關）。
 
 ### FU-20261012-01 — `LoadRegimeHistoryAll(ctx,400)` 的 `LIMIT 400` 會**靜默截斷**最舊的 regime 標籤
 
