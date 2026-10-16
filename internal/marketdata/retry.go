@@ -130,7 +130,21 @@ func fetchWithRetry(ctx context.Context, client *http.Client, req *http.Request,
 			if bodyStr == "" {
 				bodyStr = "(empty body)"
 			}
-			return nil, fmt.Errorf("http status %d after %d attempts: %s", code, attempts, bodyStr)
+			// Secret hygiene: this error is the LAST chance to read what the
+			// upstream said (the response is closed below and the caller only
+			// sees the string), so it is also the last place a credential can
+			// leak. Upstreams echo credentials back in error bodies — FinMind
+			// returns `token_tail` on auth and quota errors — and the message
+			// travels to channel-health records and on-call logs, which are
+			// pasted into a public repository. Redact before embedding; the
+			// status code above and the upstream message below are what makes
+			// the error diagnosable, and both survive.
+			//
+			// Sanitizing here rather than in each caller is deliberate: by the
+			// time the error reaches a caller the raw body is already inside
+			// the string (and the body itself has been drained), so no caller
+			// can clean it up afterwards.
+			return nil, fmt.Errorf("http status %d after %d attempts: %s", code, attempts, redactUpstreamText(bodyStr))
 		}
 		wait := retryWait(cfg, attempt)
 		if ra := resp.Header.Get("Retry-After"); ra != "" {

@@ -103,18 +103,23 @@ func (c *FinMindClient) FetchTaiwan5SecIndex(ctx context.Context, date string) (
 		return nil, fmt.Errorf("finmind 5sec index: read body: %w", err)
 	}
 
-	return parseTaiwan5SecIndexResponse(body)
+	return parseTaiwan5SecIndexResponse(body, c.currentAPIKey())
 }
 
 // parseTaiwan5SecIndexResponse 將 API 回應的 JSON 位元組解析為結構化的指數資料。
-func parseTaiwan5SecIndexResponse(data []byte) ([]Taiwan5SecIndexBar, error) {
+//
+// secrets（可選）是呼叫端的憑證，交由 sanitizeFinMindBody 做字面遮蔽：上游的
+// `msg` 是自由文字，可能把 key 原文夾在訊息裡（見 FU-20260926-02）。
+func parseTaiwan5SecIndexResponse(data []byte, secrets ...string) ([]Taiwan5SecIndexBar, error) {
 	var raw raw5SecIndexResponse
 	if err := json.Unmarshal(data, &raw); err != nil {
 		return nil, fmt.Errorf("finmind 5sec index: decode response: %w", err)
 	}
 
 	if raw.Status != 200 {
-		return nil, fmt.Errorf("finmind 5sec index: API error: %s", raw.Msg)
+		// Secret hygiene, same as fetchDataset's "API error" arm: the upstream
+		// msg is free text and may carry the caller's credential verbatim.
+		return nil, fmt.Errorf("finmind 5sec index: API error: %s", sanitizeFinMindBody(raw.Msg, secrets...))
 	}
 
 	bars := make([]Taiwan5SecIndexBar, 0, len(raw.Data))
