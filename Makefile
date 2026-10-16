@@ -471,10 +471,40 @@ check-production-host:
 		exit 1; \
 	fi
 
-# `make ci` 的 glob 跳過清單：*task_liveness* 需要 --tasks（無參數即用法錯誤、刻意 fail-closed），
-# 它不是「掃 repo 型」檢查，而是由 .github/workflows/daily-maintenance.yml 帶參數呼叫。它的契約
-# （逐項判定 + workflow 契約）由 tests/scripts/test-check-task-liveness.sh 在 ci-gate 與 quality.yml
-# 的 daily-maintenance-contract job 以 hermetic（不連網）方式覆蓋 ⇒ 此處跳過是**有覆蓋**的跳過。
+# ── `make ci` 的三態（pass / skip / fail）＋ timeout 政策（FU-20260926-12）───────
+# 每一支檢查的結果**必須落在恰好一個**分類，收尾的判定也只認這三態：
+#   pass = rc 0
+#   skip = **明確列在下面 SKIP (declared) 清單**（每一項都必須寫出「誰來覆蓋它」）
+#   fail = 其他任何結束碼：timeout 124、被訊號帶走 130/143、找到但不可執行 126、找不到 127…
+# 為什麼 timeout **不能**算 skip（F-item FU-20260926-12 的根因）：舊寫法把 rc=124 只做
+# `skipped=$$((skipped+1))`，而收尾只檢查 `failed > 0` ⇒ 一支「永遠跑不完」的檢查（等網路／等鎖／
+# 等 docker）在閘門眼裡等於通過（false-green，#2011 家族）。現在 timeout 獨立計數，
+# 且**一律讓閘門回非 0**，訊息指名是哪一支、耗時多少秒。
+# 三態的取值邊界（刻意不對稱）：①skip 只能來自宣告清單，**不能**由執行結果推得；
+# ②timeout 是 fail 而不是 skip；③「0 支檢查被執行」也是 fail。
+# CI_SCRIPT_TIMEOUT 只調「多久算掛住」；它**不改變**「掛住 ⇒ 紅燈」的判準。
+CI_SCRIPT_TIMEOUT ?= 30
+# 個別檢查的較長預算（**已量測**的慢檢查，見下方 case；其餘一律用 CI_SCRIPT_TIMEOUT）。
+# 為什麼需要：`make ci` 會被 `ci-full`（pre-push）在 `go test -race` 之後以子 make 呼叫，機器負載
+# 高時同一支檢查的 wall-clock 可以差 2–4 倍。**實證**：2026-10-16 本 PR 的 pre-push 實跑，
+# `check_ledger_seam.sh` 空機 7.7s（冷啟動 19.2s）卻在該負載下吃滿 30s ⇒ 假紅（`ci-full` 因此失敗）。
+# 量測（空機、逐支 `/usr/bin/time -p`，2026-10-16；單位 ms）：
+#   check_secrets 13641／check_maturity 8287／check_ledger_seam 7713（冷 19000+）／check_shellcheck 7608，
+#   其餘 ≤ 4.0s（次高：sa12 4012、doc_ports 3917、inert_closure 3138）。取「空機 ≥ 5s」為放寬門檻
+#   （×4 負載餘裕仍 < 30s 者不必放寬）。
+# 規則（違反其一就不要加鍵）：①只放量測過的；②放寬是**加大預算**，不是取消判定——超時仍 rc=124 ⇒
+# 一樣紅、一樣印 elapsed；③不接受「為了讓紅燈變綠」而加鍵，真的不該在此跑的走 SKIP (declared)。
+CI_SCRIPT_TIMEOUT_SLOW ?= 120
+
+# 宣告式跳過清單（declared skip）—— 沒列在這裡的就一定要在預算內跑完：
+#   *data_naming*|*layer3_*|*markdown_links* → 慢（>CI_SCRIPT_TIMEOUT）⇒ `make ci-slow` 逐支（無 timeout）跑
+#   *critical_tasks* → `make ci-gate` 逐支明列跑（同一支腳本，無 timeout）
+#   *finmind_quota*  → runtime state 依賴（#1742）⇒ 開市前 `STRICT=1 make ci-quota`
+#   *task_liveness*  → 需 --tasks（無參數即用法錯誤、刻意 fail-closed）⇒ 由 .github/workflows/
+#                      daily-maintenance.yml 帶參數呼叫；契約（逐項判定 + workflow 契約）由
+#                      tests/scripts/test-check-task-liveness.sh 在 ci-gate 與 quality.yml 的
+#                      daily-maintenance-contract job 以 hermetic（不連網）方式覆蓋
+#   *frontend_dist*  → 本 target 開頭已用 `--diff origin/main...HEAD` 明列跑過（見下方註解）
 ci: check-production-host
 	@echo "🛡️  Running quick CI checks (slow scripts in 'make ci-slow')..."
 	# check_frontend_dist.sh is scoped to the branch diff here, NOT run by the
@@ -488,29 +518,54 @@ ci: check-production-host
 	# "did THIS branch forget to rebuild a dist it changed", which is the only
 	# question a pre-push CI can answer.
 	@bash scripts/ci/check_frontend_dist.sh --diff origin/main...HEAD
-	@failed=0; passed=0; skipped=0; \
+	@failed=0; passed=0; skipped=0; timedout=0; \
 	for script in scripts/ci/check_*.sh; do \
-		case "$$script" in *data_naming*|*layer3_*|*markdown_links*|*critical_tasks*|*finmind_quota*|*task_liveness*|*frontend_dist*) continue;; esac; \
-		if [ ! -f "$$script" ]; then continue; fi; \
-		echo "  → $$script"; \
-		if timeout 30 bash "$$script" > /dev/null 2>&1; then \
-			passed=$$((passed+1)); \
-		elif [ $$? -eq 124 ]; then \
-			echo "    ⏱️  TIMEOUT (>30s): $$script"; \
+		skip_reason=""; \
+		case "$$script" in \
+			*data_naming*|*layer3_*|*markdown_links*) skip_reason="慢檢查（>$(CI_SCRIPT_TIMEOUT)s）⇒ make ci-slow 逐支（無 timeout）跑";; \
+			*critical_tasks*) skip_reason="make ci-gate 逐支明列跑（同一支腳本，無 timeout）";; \
+			*finmind_quota*)  skip_reason="runtime state 依賴（#1742）⇒ STRICT=1 make ci-quota 開市前跑";; \
+			*task_liveness*)  skip_reason="需 --tasks 參數 ⇒ daily-maintenance.yml 帶參數呼叫；契約測試在 ci-gate";; \
+			*frontend_dist*)  skip_reason="本 target 開頭已用 --diff origin/main...HEAD 明列跑過";; \
+		esac; \
+		if [ -n "$$skip_reason" ]; then \
+			echo "  ⏭️  SKIP (declared): $$script — $$skip_reason"; \
 			skipped=$$((skipped+1)); \
+			continue; \
+		fi; \
+		if [ ! -f "$$script" ]; then continue; fi; \
+		script_timeout=$(CI_SCRIPT_TIMEOUT); \
+		case "$$script" in \
+			*/check_secrets.sh|*/check_maturity.sh|*/check_shellcheck.sh|*/check_ledger_seam.sh) script_timeout=$(CI_SCRIPT_TIMEOUT_SLOW);; \
+		esac; \
+		echo "  → $$script"; \
+		start=$$(date +%s); \
+		rc=0; timeout $$script_timeout bash "$$script" > /dev/null 2>&1 || rc=$$?; \
+		elapsed=$$(( $$(date +%s) - start )); \
+		if [ $$rc -eq 0 ]; then \
+			passed=$$((passed+1)); \
+		elif [ $$rc -eq 124 ]; then \
+			echo "    ⏱️  TIMEOUT (>$${script_timeout}s, elapsed=$${elapsed}s): $$script"; \
+			echo "       『掛住』不是『跳過』：它沒在預算內結束 ⇒ 閘門紅燈（FU-20260926-12）"; \
+			echo "       合法慢檢查請加進本 target 的 SKIP (declared) 清單或改用 make ci-slow，不要靠超時放行"; \
+			timedout=$$((timedout+1)); \
 		else \
-			echo "    ❌ FAILED: $$script"; \
+			echo "    ❌ FAILED (rc=$$rc, elapsed=$${elapsed}s): $$script"; \
 			failed=$$((failed+1)); \
 		fi; \
 	done; \
 	echo ""; \
-	echo "✅ CI: $$passed passed, ❌ $$failed failed, ⏱️  $$skipped timed out"; \
-	echo "    (slow scripts excluded — run 'make ci-slow' separately for those)"; \
+	echo "✅ CI: $$passed passed, ⏭️  $$skipped skipped (declared), ❌ $$failed failed, ⏱️  $$timedout timed out"; \
 	if [ $$passed -eq 0 ]; then \
 		echo "    ❌ 0 支檢查被執行（glob 沒對到 scripts/ci/check_*.sh？）⇒『什麼都沒跑』不是通過"; \
 		exit 1; \
 	fi; \
+	if [ $$timedout -gt 0 ]; then \
+		echo "    ❌ $$timedout 支檢查在各自的預算內未結束（rc=124）⇒ 掛住是 fail、不是 skip，閘門回非 0"; \
+		exit 1; \
+	fi; \
 	if [ $$failed -gt 0 ]; then exit 1; fi
+
 
 ci-quick: check-production-host
 	@echo "🛡️  Running fast CI checks only (<2s each)..."
@@ -1127,6 +1182,9 @@ ci-gate: embed-dirs
 	@echo "    ✅"
 	@echo "  → 母體執行真值盤查工具的契約測試（hermetic fixtures；判層 + mutation 自證；2026-09-27）"
 	@bash tests/scripts/test-verify-universe-run.sh
+	@echo "    ✅"
+	@echo "  → make ci 三態閘門契約測試（hermetic fixtures：掛住=紅／宣告式 skip=綠／mutation 自證；FU-20260926-12）"
+	@bash tests/scripts/test-ci-timeout-tri-state.sh
 	@echo "    ✅"
 	@echo "  → watchdog 重啟分類契約測試（hermetic：stub docker／假 HOME；8 case + mutation 自證；FU-20260930-10）"
 	@bash tests/scripts/test-watchdog-restart-classify.sh
