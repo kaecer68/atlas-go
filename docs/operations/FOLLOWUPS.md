@@ -4614,6 +4614,105 @@ log 目錄：`/tmp/fu29-logs/`；shim 目錄：`/tmp/fu29-emptyset-shim/`（假 
 ④ `check_data_catalog.sh` 的工具失敗仍走 **rc=1**（`-22` 的已落地契約），與①／② 的 `rc=2` 不同 —— 這是**刻意保留**的一致性取捨，不是遺漏；要統一需另開票連同 `-22` 的契約測試一起改。
 ⑤ 同型清單中的 `check_sa12_negative_evidence.sh` 之計數仍用 `grep … 2>/dev/null | wc -l`，但已有掃描面前置 ⇒ **本 PR 不動它**（改了只會製造無謂 diff）。
 
+### FU-20261016-30 — `scripts/openclaw/decide.sh` 的**假紅**：`set -e` ＋ 裸 `((checks_total++))` ⇒ 三項安全檢查**一項都還沒印**就中止（`Safety: N/M checks passed` 總結與 `--dry-run` 預覽全不印、rc=1）
+
+> **落點說明**：本條接 `-28` 之後。`-28` 的同型掃描表已**實跑點名**本檔（當時依 root 指示只列清單、不自配 ID）—— 本條就是該列的收斂；
+> `-28` 的內文（含其「已知限制 ④：本 PR 未修／建議另開票」）依 root 指示**一字未動**。
+> **行號基準**：「修前」一律指 `origin/main`（`91e72b12d`）；「修後」指本 PR 的 head。
+> **候選敘述核對**：候選寫 `scripts/openclaw/decide.sh:184-206` ⇒ **逐字成立**（行號、機制、症狀、與 `-28` 同根因皆相符），**無路徑更正**（repo 內亦無第二個同形檔，見同型掃描）。**唯一需更正的是「中止點」**（見下一項）。
+
+- **狀態**：`done`
+- **記錄日期**：2026-10-16 ／ **完成於**：2026-10-16 本 PR（`fix/20261016-decide-arith-false-red`）
+- **嚴重度**：**P1（假紅）** —— 與 `-28` 缺陷①（`scripts/ci/local-ci.sh`）**同根因、同形狀**：`set -e` 下算術命令的結束碼是「運算式是否為 0」。
+- **來源**：2026-10-16 root 指派的候選（同形假紅；前批車道已實跑複現）。本車道**獨立複現一次**（見 §0）才動手。
+
+- **★ F-item 敘述更正一處（動手前最小複現的結果）**：候選寫「腳本在**第一支檢查後**就中止」。
+  實測更精確、也**更嚴重**：中止點是 `((checks_total++))`（`origin/main:184`），它位在 **Check 1 的 `echo` 之前**
+  ⇒ 不是「跑完第一項才停」，而是**一項結論都沒印**（`Running safety checks...` 之後直接結束）。
+  其餘敘述（`:184,188,194,197,203,206` 皆為裸算術自增、`set -e` 下回傳 1、輸出停在 `Running safety checks...`、
+  後兩項檢查與 `--dry-run` 預覽全不跑、rc=1、與 `-28` 的 `local-ci.sh` 同根因）**逐字成立**。
+
+- **§0 最小複現（hermetic；**探針有鑑別力**：修前／修後結果必須不同）**
+  **機制最小式**：`bash -c 'set -e; n=0; echo BEFORE; ((n++)); echo AFTER'` ⇒ 只印 `BEFORE`、**`AFTER` 永不印**、`rc=1`；
+  換成 `n=$((n + 1))` ⇒ 印 `BEFORE` / `AFTER n=1`、`rc=0`。
+  **真檔（修前）逐字原文**：`cd <lane> && bash scripts/openclaw/decide.sh --promote exp-lane30 --reason "lane30 repro" --dry-run` ⇒
+  標頭 ＋ `Analyzing experiment result...` ＋ `Experiment Summary:`（Agent/Status/Baseline/Candidate/Improvement ＋ `✓ Candidate improves over baseline`）＋
+  **`Running safety checks...`**、然後**結束** ⇒ **rc=1**。
+  缺的三樣（**假紅的實害**）：① 三項檢查結論（`Experiment status:` / `Has candidate metrics` / `Reason provided`）全無；
+  ② 總結 `Safety: N/M checks passed` 永不印；③ `--dry-run` 的 `=== DRY RUN ===` 預覽永不印（＝使用者拿不到「將執行什麼」的預覽）。
+  **fixture**：`data/state/experiments/exp-lane30.json`（`{"id":"exp-lane30","status":"accepted","baseline_value":1.0,"candidate_value":1.5,"target_agent_id":"lane30-agent"}`）。
+
+- **根因（讀碼指名到行；修前 `origin/main`）**：`scripts/openclaw/decide.sh:7` 是 `set -e`；
+  `check_promotion_safety()`（`:175-220`）以 `local checks_passed=0` / `local checks_total=0`（`:180-181`）起算，
+  三項檢查的計數寫成裸算術自增 —— `((checks_total++))`（`:184,194,203`）、`((checks_passed++))`（`:188,197,206`）。
+  在 `set -e` 下，算術命令的結束碼是「運算式結果是否為 0」⇒ `checks_total=0` 時 `((checks_total++))` 的運算式值是
+  **舊值 0** ⇒ 回傳 **1** ⇒ shell 立刻結束。呼叫點 `execute_promote()` 的 `:233` 是**裸命令**（不在 `if`／`&&` 條件式內）
+  ⇒ `set -e` 真的生效（不是被條件語境吸收）。
+  **兩個形狀各別都是致命點**：`checks_total` 的三處在第一項檢查之前就會中止；`checks_passed` 的三處在
+  `[ "$status" = "accepted" ]` 成立時會中止（＝**三項全過的情境**也會死）。⇒ 只修一半沒有用（見負向證明 ⑥ 的突變）。
+
+- **影響量測（真檔；rc 一律從 log 讀，不掛在管線後讀 `$?`）**：
+
+  | 受測命令 | 修前 | 修後 |
+  |---|---|---|
+  | `decide.sh --promote exp-lane30 --reason "lane30 repro" --dry-run`（三項全過的 fixture） | 停在 `Running safety checks...`：**0/3** 項檢查、無總結、無 `=== DRY RUN ===` ⇒ **rc=1** | **3/3** 項檢查 ＋ `Safety: 3/3 checks passed` ＋ `=== DRY RUN ===` / `Would execute: go run ./cmd/promote-baseline -result data/state/experiments/exp-lane30.json` ⇒ **rc=0** |
+  | 同上，但 fixture `status=pending`（Check 1 未過） | rc=1（**但在 Check 1 之前就中止** ⇒ 看不出哪一項沒過） | **3/3** 項照跑 ＋ `Safety: 2/3 checks passed` ＋ `Warning: Not all safety checks passed` ⇒ **rc=1**（**fail-closed 不放寬**：真錯誤不被忽略） |
+  | `decide.sh --help` | rc=0 | rc=0（輸出與修前**逐位元組相同**，`cmp` 實測） |
+  | `decide.sh --bogus` | rc=1 | rc=1（輸出與修前**逐位元組相同**，`cmp` 實測） |
+  | `printf 'skip\n' \| decide.sh`（互動模式） | rc=0 | rc=0 |
+
+- **修法（本 PR）**：
+  **① `scripts/openclaw/decide.sh`**：六處裸算術自增改為**賦值形式**（結束碼恆為 0）——
+  `checks_total=$((checks_total + 1))`（原 `:184,194,203`）、`checks_passed=$((checks_passed + 1))`（原 `:188,197,206`）；
+  並在 `local checks_passed=0` 之前留下「為什麼不可用 `((VAR++))`」的註解與回歸守衛檔名（同 `scripts/ci/local-ci.sh` 的樣板）。
+  **`set -e` 保留**（未移除、未放寬任何斷言）；檢查未過的 `return 1`（`:216`）與 `Warning: Not all safety checks passed` **逐字保留**，
+  rc 語意不變（未過 ⇒ 1）。**未動 CLI 介面**（參數解析、互動模式、`--help` 全未改）。
+  **② 契約測試（新檔）`tests/scripts/test-decide-completes-all-checks.sh`**（hermetic：真檔逐位元組副本放進臨時假 repo 根 `$TMP/root/scripts/openclaw/`，
+  `PROJECT_ROOT` 由 `$SCRIPT_DIR/../..` 推導故可搬移；fixture 全受控；不碰真 repo、不跑 `go`、不連網）。
+  **③ `Makefile` `ci-gate`**：接在 `-28` 的 local-ci 契約測試之後加一步（`@bash tests/scripts/test-decide-completes-all-checks.sh`）＋一行說明。
+- **負向證明（每項都是「修前／修後結果不同」；log 皆實跑輸出）**：
+  **① 契約測試 `tests/scripts/test-decide-completes-all-checks.sh`（新檔；rc=0 ＝ ALL PASS）** ——
+  ① 抽取器自我斷言（副本 sha256 ＝ 真檔／`set -e` 仍在／總結錨點仍在）＋ 真檔靜態契約（`check_promotion_safety()` 內計數必須是賦值形式；
+  全檔**不得**再有裸 `((VAR++))` 形狀）；
+  ② 正常路徑 ⇒ rc=0 ＋ 三項檢查全跑 ＋ 總結逐字 `Safety: 3/3 checks passed` ＋ `=== DRY RUN ===`；
+  ③ 一項未過 ⇒ **三項照跑** ＋ `Safety: 2/3 checks passed` ＋ `Warning: Not all safety checks passed` ＋ **rc=1**（fail-closed 不變）；
+  ④ `--help` rc=0 且含 `Usage: `／未知選項 rc=1；
+  ⑤ **mutation 自證（鑑別力）**：六處計數改回裸形式（diff 恰 12 行 ＝ 6 行移除 ＋ 6 行新增）⇒ **假紅復現**（0/3 項檢查、無總結、無預覽、rc=1），
+  且 ② 的判準在該結果上**變紅** ⇒ ② 不是裝飾品；
+  ⑥ **第二形狀自證**：只把三處 `checks_passed` 改回裸形式（diff 恰 6 行）⇒ **只跑 1/3 項**、rc=1 ⇒ 兩種形狀各別都是致命點，不是「只修 `checks_total` 就好」。
+  **② 真檔層突變（打在行為行；`cp` 備份還原 ＋ sha256 逐位元組驗回）**：
+  對真檔 `scripts/openclaw/decide.sh` 施以 `sed`（六處 `VAR=$((VAR + 1))` → `((VAR++))`；`git diff` 行數實測 **12**（6 改動行），
+  註解內提及 `((checks_total++))` 的兩行**未**被改到 ⇒ 突變確實打在行為行），然後：
+  (a) 契約測試 **rc=1**，紅燈原文（逐字）
+  `FAIL: ① 受測計數不是賦值形式（checks_total=$((checks_total + 1))）⇒ 修前形狀回來了（FU-20261016-30 回歸？）`；
+  (b) 同一個突變後的**真檔本身**跑 `--promote exp-lane30 --reason "lane30 repro" --dry-run` ⇒ 輸出停在 `Running safety checks...`、**rc=1**（＝修前假紅**逐字復現**，與 §0 修前原文相同）。
+  最後 `cp` 還原並實測還原後 `sha256(real) = sha256(backup) = 3f6c88d265a24f5121ca784b52f0b79e689f35e5884b566762b5c5a422775838`（**逐位元組相等**；還原後契約測試再跑一次 rc=0）。
+
+- **同型掃描（只列清單，**不**配 ID；每一列都在本車道實跑／讀碼複驗過，行號基準＝ `origin/main` `91e72b12d`）**：
+
+  | 嚴重度 | 位置 | 為什麼是同型（本車道複驗方式） |
+  |---|---|---|
+  | P1（**本 PR 已修**） | `scripts/openclaw/decide.sh:184,188,194,197,203,206` | 本票主體（`set -e` ＋ 裸算術自增 ⇒ 假紅） |
+  | —（**掃描面 0 命中**） | 其餘 145 支 tracked shell 檔（`git ls-files '*.sh' '*.bash'` ＋ 有 `sh`/`bash` shebang 的檔案，共 146 支；其中 99 支帶 `set -e...`） | 以 `^[[:space:]]*\(\([[:space:]]*[A-Za-z_][A-Za-z0-9_]*[[:space:]]*(\+\+\|--)[[:space:]]*\)\)` 逐檔掃：**只有 `decide.sh` 命中**（其餘 0 處） |
+  | —（**掃描面 0 命中**） | 同 146 支中的「statement-form 算術命令」（`^[[:space:]]*\(\([^)]*\)\)[[:space:]]*$`，即 `((expr))` 當語句用 ⇒ 結果為 0 時也會回 1）與 `let` 語句 | 逐檔掃：**只有 `decide.sh` 的這 6 行**命中；`let` 0 處 |
+  | —（**掃描面 0 命中**） | `.github/workflows/**`、`Makefile` | `grep -rnE '\(\([A-Za-z_][A-Za-z0-9_]*\+\+\)\)'` ⇒ 0 處 |
+  | 參考（**已由 `-28` 記錄，本條不重複處理**） | `-28` 同型表內的其他「0 筆被檢查仍報成功」家族 | 與本條不同族（那些是**假綠**；本條是**假紅**）；`-28` 已知限制 ④ 點名的正是本檔，本條即其收斂 |
+
+  > 掃描指令與分母（本車道實跑）：`git ls-files` ＋ shebang 過濾得 **146** 支 shell 檔；`grep -cE '^[[:space:]]*set -[a-zA-Z]*e'` 得 **99** 支帶 `set -e`；
+  > 上述三種形狀（裸自增／statement-form／`let`）逐檔掃完僅 `decide.sh` 命中。
+
+- **已知限制**：
+  ① 契約測試證明的是**判定邏輯**（跑完三項才總結／總結內容／dry-run 預覽／rc 語意），**不**跑真正的 `go run ./cmd/promote-baseline`
+  ——非 dry-run 路徑（`:244-260` 的確認提示 ＋ `go run`）本車道**未實跑**，理由是它會碰 `data/state/baseline_policy.json` 與實驗狀態（紀律：不動生產資料）。
+  ② **檢查未過時 rc=1，因此 `--dry-run` 預覽仍不印**（`:233` 的裸呼叫 ＋ `check_promotion_safety` 的 `return 1` 在 `set -e` 下直接結束腳本）。
+  這是**既有設計**（fail-closed：未過的安全檢查必須讓流程停），依「不得放寬既有斷言／不得忽略真錯誤」**本 PR 未改**。
+  若日後要「未過也給預覽」，需先裁定 rc 語意（`-28` 缺陷①的修法也未動其呼叫端的失敗語意，取捨一致）。
+  ③ 真檔層突變會被契約測試 ①（靜態契約）先攔下，所以「行為層」的鑑別力證據來自：測試內 ⑤/⑥ 的分支突變（假紅／只跑 1/3 項，逐字附原文）
+  ＋ 突變後**真檔本身**的實跑（rc=1、停在 `Running safety checks...`）。三者互補，皆與修後結果不同。
+  ④ 同型掃描的邊界只到「`set -e` ＋ 算術命令（裸自增／statement-form／`let`）」這三種形狀；未做全語意掃描
+  （例如「外部命令失敗被 `set -e` 條件語境吸收」屬 `-28`／`-27` 家族的假綠面，不在本條範圍）。
+  ⑤ 本條**未動** `-28` 的內文（含其「已知限制 ④」仍寫「本 PR 未修」）—— 依 root 指示「不得動 18–29」；`-30` 即該 ④ 所指的收斂條目。
+
 ## 相關文件
 
 - [universe-scoring-ranked-zero-20260925.md](universe-scoring-ranked-zero-20260925.md)
