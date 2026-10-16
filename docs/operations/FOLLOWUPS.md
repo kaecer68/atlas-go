@@ -4261,6 +4261,98 @@ PY
   ④ 五支腳本仍接受**裸字** `json`（向後相容）。這不是「兩種拼法都留著」的疏忽，而是刻意的：
   裸字是目前唯一**確定有人用**的拼法（`constitution.yml` 修前靠它），移除會是行為變更；本 PR 只讓 `--json` 追平。
 
+### FU-20261016-28 — 「判定機制」的兩個**反向**缺陷：`local-ci.sh` 的假紅（`((PASS++))` ⇒ 第一支檢查後就中止）＋ `check_layer3_benchmarks.sh` 的假綠（全 SKIP ⇒ 照印 within threshold、rc=0）
+
+> **落點說明**：本條接 `-26` 之後 —— 撰寫時（2026-10-16）`-27` 尚未落 main，`-26` 是 main 上的最後一條。
+> **行號基準**：「修前」行號一律指 `origin/main`（`1b16537e9`）；「修後」指本 PR 的 head。
+> **路徑更正（見下）**：候選①寫的 `scripts/local-ci.sh` **不存在**，真檔是 `scripts/ci/local-ci.sh`。
+
+- **狀態**：`done`
+- **記錄日期**：2026-10-16 ／ **完成於**：2026-10-16 本 PR（`fix/20261016-judgement-gate-false-red-green`）
+- **嚴重度**：**P1（假紅）** ＋ **P1（假綠）** —— 兩者同屬「判定機制」病灶：假綠讓壞的檢查看起來是綠的；假紅則把**通過**的檢查報成失敗，誘導「無條件重跑」。
+- **來源**：2026-10-16 root 指派的兩項候選（①`local-ci.sh` 算術自增、②layer3 benchmarks 全 SKIP 仍回 0）。
+
+- **★ F-item 敘述更正一處（動手前先最小複現的結果，見 §0）**：候選①寫 `scripts/local-ci.sh:41,44`。**行號正確，但路徑不精確** ——
+  repo 內沒有 `scripts/local-ci.sh`（`find . -name 'local-ci*'` 只得 `./scripts/ci/local-ci.sh`；`bash scripts/local-ci.sh` ⇒ `No such file or directory`）。
+  本條全部以 **`scripts/ci/local-ci.sh`** 為準。候選①的**機制敘述逐字成立**（見 §0），候選②的機制敘述與行號（`:67-80,131`）亦**逐字成立**。
+
+- **§0 最小複現（hermetic；**探針有鑑別力**：修前／修後結果必須不同）**
+  **① 假紅**：`set -euo pipefail; PASS=0; run_check(){ if "$@"; then echo "✅ $*"; ((PASS++)); fi; }; run_check true; echo "AFTER"` ⇒ 只印 `✅ true`、**`AFTER` 永遠不印**、`rc=1`（`PASS=0` 時 post-increment 的運算式值是 0 ⇒ 算術命令結束碼 1 ⇒ `set -e` 結束 shell）。
+  **真檔（修前）逐字原文**：`cd <lane> && bash scripts/ci/local-ci.sh --quick` ⇒
+  `▶ gofmt formatting` / `✅ gofmt formatting passed` / **`rc=1`**（0.59s）—— 後續 5 支（go build／go vet／staticcheck／shellcheck／case-conflicts）**連跑都沒跑**、總結永不印。
+  **② 假綠**：真檔複製進空 fixture（腳本 `REPO_ROOT` 由 `BASH_SOURCE` 推導 ⇒ 落在 fixture），
+  `BENCHSTAT=/usr/bin/true bash scripts/ci/check_layer3_benchmarks.sh` ⇒ 7 行 `SKIP` ＋
+  `[layer3-bench] all benchmarks within 5% threshold (0 passed, 7 skipped)` ＋ **`rc=0`**。
+
+- **根因（逐項讀碼指名到行；修前 `origin/main`）**：
+  **① `scripts/ci/local-ci.sh:41,44`（假紅）**：`run_check()` 的計數寫成 `((PASS++))` / `((FAIL++))`；`set -euo pipefail`（`:10`）下
+  算術命令的結束碼是「運算式結果是否為 0」⇒ `PASS=0` 時回傳 1 ⇒ **第一支通過的檢查之後 shell 直接結束**。
+  症狀有三個可觀察面：後續檢查不跑、總結（`:159-166`）不印、**rc=1**。
+  影響面：這是 repo 文件（`AGENTS.md` §必跑的健康檢查／`docs/quickstart.md` 等）常引用的本機入口；假紅會讓使用者「重跑一次」，而重跑永遠一樣紅。
+  **② `scripts/ci/check_layer3_benchmarks.sh:67-80,131`（假綠）**：`:68-72` 與 `:77-81` 兩條 SKIP 路徑（`testdata/` 不存在／testdata 內沒有 `*_bench.txt`）都只 `SKIPPED++` 就 `continue`，
+  沒有任何「跑了幾支」的計數；`FAILED` 只在 `go test` 失敗（`:85-89`）或 benchstat 判 regression（`:113-117`）時變 1
+  ⇒ 全 SKIP 時 `FAILED=0`，`:131` 無條件印 `all benchmarks within ... threshold` 並以 **rc=0** 收尾
+  ⇒「一條 benchmark 都沒被比到」＝通過（與 `FU-20261016-24` 的 `ci-slow`／`-25` 的 orphan check 同族）。
+
+- **影響量測（真檔；rc 一律從 log 讀，不寫在管線後讀 `$?`）**：
+
+  | 受測命令 | 修前 | 修後 |
+  |---|---|---|
+  | `bash scripts/ci/local-ci.sh --quick`（lane 內） | 只印第 1 支（gofmt）⇒ **rc=1**、總結不印 | 6 支全跑 ⇒ `🎉 全部 6 項檢查通過`、**rc=0** |
+  | `check_layer3_benchmarks.sh`（空 fixture，全 SKIP） | `all benchmarks within 5% threshold (0 passed, 7 skipped)`、**rc=0** | `FAIL: 沒有任何 benchmark 被實際檢查 (executed=0/7 targets, 7 skipped) ⇒『一條都沒比到』不是通過（FU-20261016-28）`、**rc=1** |
+  | `check_layer3_benchmarks.sh`（真的跑 1 支，stub benchstat exit 0） | — | `executed=1/7 targets`、照印 `all benchmarks within ...`、**rc=0**（不誤紅） |
+  | `check_layer3_benchmarks.sh`（同上，stub benchstat exit 1） | — | `FAIL summary: executed=1/7 targets, ...` ＋ `one or more benchmarks regressed`、**rc=1**（原有牙齒未放寬） |
+
+- **修法（本 PR）**：
+  **① `scripts/ci/local-ci.sh`**：`((PASS++))` / `((FAIL++))` 改為 `PASS=$((PASS + 1))` / `FAIL=$((FAIL + 1))`（結束碼恆為 0），
+  並在原處留下「為什麼不可用 `((VAR++))`」的註解與回歸守衛檔名。**不忽略錯誤**：檢查失敗仍走 `else` 記 `FAIL`，
+  收尾 `if [ "$FAIL" -eq 0 ]` 決定 rc（跑完全部檢查才產生總結）。
+  **② `scripts/ci/check_layer3_benchmarks.sh`**：新增 `EXECUTED`（真的跑過 `go test -bench` 的 target 數）與 `TOTAL`；
+  `go test` 成功後 `EXECUTED=$((EXECUTED + 1))`；收尾 **fail-closed**：`executed=0` ⇒ 印
+  「沒有任何 benchmark 被實際檢查」並 **exit 1**；並在成功／失敗兩條 summary 都帶 `executed=X/N targets`（三態自述，與 `-24` 的 `ci-slow` 同語意）。
+  原有的成功訊息 `all benchmarks within ... threshold` **逐字保留**（既有輸出契約不變），檔頭 Exit codes 段同步補上 `executed=0` 的紅燈。
+  **③ 契約測試 ×2**（見負向證明）＋ **`Makefile` `ci-gate`** 各加一步（hermetic，不連網）。
+
+- **負向證明（每項都是「修前／修後結果不同」；log 皆實跑輸出）**：
+  **① 契約測試 `tests/scripts/test-local-ci-completes-all-checks.sh`**（逐字抽取真檔的 `run_check()` 與 `# ── Summary ──` 區塊進 hermetic driver；
+  抽取器自我斷言：抽不到函式／抽不到 Summary／計數非賦值形式／`FAIL -eq 0` 判定不見 ⇒ 立刻紅）。
+  6 案：② 4 支（1 支失敗）⇒ **4 支都跑完**且總結逐字 `💥 1 項檢查失敗，3 項通過`、rc=1；③ 全通過 ⇒ rc=0 ＋ `🎉 全部 4 項檢查通過`；
+  ④ 真檔靜態契約：`scripts/ci/local-ci.sh` 內 **0 處**裸 `((VAR++))`；⑤ **mutation 自證**：把兩處計數改回 `((PASS++))` ⇒ 只跑到第 1 支、無總結、rc=1（假紅復現），且 ② 的判準在此**變紅**。
+  **② 契約測試 `tests/scripts/test-layer3-bench-zero-executed.sh`**（真檔複製進 fixture；`BENCHSTAT` 用 stub、`LAYER3_BENCH_COUNT=1`、`GOPROXY=off`；target 清單由真檔內文推導）。
+  6 案：① 全 SKIP（無 target 目錄）⇒ 必紅；② 全 SKIP 第二條路徑（有 `testdata/` 無 baseline）⇒ 必紅；③ 真的跑 1 支 ⇒ rc=0 ＋ `executed=1/7 targets`（不誤紅）；
+  ④ benchstat 判 regression ⇒ rc=1（不放寬）；⑤ 真檔靜態契約（`EXECUTED=$((EXECUTED + 1))` 與 `if [ "${EXECUTED}" -eq 0 ]; then` 都在）；
+  ⑥ **mutation 自證**：`if [ "${EXECUTED}" -eq 0 ]; then` → `if false; then` ⇒ ① 的假綠**逐字復現**（`all benchmarks within 5% threshold (0 passed, 7 skipped)` ＋ rc=0），且 ① 的判準在此**變紅**。
+  **③ 真檔層突變（打在行為行；`cp` 備份還原 ＋ `sha256sum -c` 逐位元組驗回）**：
+  突變 A（`local-ci.sh`：`PASS=$((PASS + 1))`→`((PASS++))`、`FAIL=$((FAIL + 1))`→`((FAIL++))`，diff 恰 4 行）⇒ 守衛 **rc=1** ＋ 紅燈原文
+  `FAIL: 受測計數不是賦值形式（PASS=$((PASS + 1))）⇒ 修前形狀回來了（FU-20261016-28 回歸？）`；
+  突變 B（`check_layer3_benchmarks.sh`：fail-closed 判定→`if false`，diff 恰 2 行）⇒ 守衛 **rc=1** ＋ 紅燈原文
+  `FAIL: ① 全部 target SKIP 卻沒有紅（rc=0）——『一條都沒比到』不是通過（FU-20261016-28 未修？）`（同一次輸出內可見修前的假綠原文）；
+  兩次突變後 `cp` 還原，`sha256sum -c` 兩檔皆 `OK`（`local-ci.sh` = `a873799595f6…`、`check_layer3_benchmarks.sh` = `3d1d0f01b145…`）。
+
+
+- **同型掃描（只列清單，**不**配 ID；每一列都在本車道讀碼／實跑複驗過，行號基準＝ `origin/main`）**：
+
+  | 嚴重度 | 位置 | 為什麼是同型（本車道複驗方式） |
+  |---|---|---|
+  | **P1（未修，建議另開票）** | `scripts/openclaw/decide.sh:184,188,194,197,203,206` | `set -e`（`:7`）＋ 裸 `((checks_total++))`／`((checks_passed++))`（`checks_total=0` 起算）⇒ 與本票缺陷①**同形**。**本車道實跑**（真檔複製進 fixture ＋ 一筆 `data/state/experiments/EXP-1.json`）：`bash scripts/openclaw/decide.sh --promote EXP-1 --reason "fu28 probe" --dry-run` ⇒ 輸出停在 `Running safety checks...`、**`rc=1`**，`--dry-run` 的預覽與後兩項安全檢查全部不跑（呼叫點 `:233` 是**裸命令**，不在 `if`／`&&` 條件式內 ⇒ `set -e` 真的生效） |
+  | P1（**本 PR 已修**） | `scripts/ci/local-ci.sh:41,44` | 本票缺陷①（假紅） |
+  | P1（**本 PR 已修**） | `scripts/ci/check_layer3_benchmarks.sh:67-80,131` | 本票缺陷②（假綠） |
+  | P1（未修） | `scripts/ci/check_shellcheck.sh:33-37`、`:55-58` | 兩種「掃描面 0 ⇒ 通過」：沒裝 shellcheck ⇒ 印 warning 後 `exit 0`；`ROOTS` 內找不到任何 `*.sh` ⇒ 印 `No .sh files found` 後 `exit 0`。**本車道實跑**（空 fixture）⇒ `rc=0` ＋ `✅ shellcheck gate PASSED` |
+  | P2（未修） | `scripts/ci/check_docs_governance.sh:63-77` | 檢查 3（docs/ 根目錄未追蹤 `.md`）包在 `if git rev-parse --git-dir >/dev/null 2>&1` 內 ⇒ 不在 git work tree 時**整項靜默跳過**，收尾仍宣稱 `no untracked root .md`。**本車道實跑**（非 git 的空 fixture）⇒ `rc=0` ＋ 該宣稱 |
+  | P2（未修） | `scripts/ci/check_versions.sh:37-52` | `[[ -f "$f" ]] \|\| continue` ⇒ 掃描面可**靜默**縮到 0；`:54` 在 `DRIFT=0` 時無條件印 `✅ All ... are in sync`（本車道**讀碼**複驗；空 fixture 會先被 `:19-22` 的 VERSION 檢查擋紅，故「縮面」情境未以實跑重現 —— 如實標示） |
+  | P3（未修） | `scripts/ci/verify_factor_integrity.sh:86-91`（G8 GetWeights） | `if [ "$GW_CASES" -gt 0 ]; then pass … else pass "regime adjustments consolidated …"` ⇒ **兩種情況都 pass**（0 個 case 也算通過）。本車道讀碼複驗 |
+  | 非缺陷（**已複驗，勿改**） | `scripts/ci/check_migration-sql.sh`（`main()` 的 `if not files: return 1`） | 同族形狀但**已有 fail-closed**：空 fixture 實跑 ⇒ `rc=1` ＋ `error: no migration files found under sql/migrations` |
+  | 非缺陷（**已複驗，勿改**） | `scripts/ci/check_layer3_benchmarks.sh:100-107`（micro-benchmark 分支） | 本車道一度懷疑 `awk -F'\t'` 對 space-padded 的 Go 輸出無效（＝該豁免永遠不生效）；**逐字實測三種行**：`…\t 0.30 ns/op` ⇒ `micro=1`、`\t 30.00 ns/op` ⇒ `0`、`\t 1234567.00 ns/op` ⇒ `0` ⇒ 判定**正確**，非缺陷（誤判已撤回，未據此改碼） |
+
+  > 更廣的「0 筆被檢查仍報成功」家族盤點（25 列）見 `FU-20260926-12` 第 6 節；本票只列**本車道親自複驗**的站點，不重複枚舉。
+
+- **已知限制**：
+  ① **判準只擋「零支被執行」**：部分 target SKIP（例如只剩 1 支有 baseline）仍為綠 —— 與 `-24` 同一取捨（否則任何一次性改名都會把閘門染紅）。本 PR 未新增「missing>0 ⇒ 紅」。
+  ② `check_layer3_benchmarks.sh` 找 `benchstat` 的方式（沒裝 ⇒ `go install`，**會連網**）本 PR 未動；契約測試以 `BENCHSTAT` stub 隔離。
+  ③ `local-ci.sh` 的契約測試證明的是**判定邏輯**（計數形式／跑完 4 支才總結／rc 語意），不跑真 `go build`／`go vet`；真檔層的端到端證據是上面的 `--quick` 實跑（修前 1 支/rc=1 ⇒ 修後 6 支/rc=0）。
+  ④ **`scripts/openclaw/decide.sh` 的同形缺陷本 PR 未修**（root 指示同型掃描只列清單、不自配 ID）；建議另開票，處置與本票缺陷①相同（6 行機械改寫 ＋ 契約測試，並把裸 `((VAR++))` 靜態守衛推廣到該檔）。
+  ⑤ **本修法不會把真 repo 的閘門染紅**：`origin/main` 上 7 個 target 中有 3 支在 `testdata/` 內真的帶 baseline（`internal/config` 2、`cmd/atlas` 1、`internal/narrative` 1）⇒ `executed=3`（>0）走原本的成功路徑。
+  ⑥ `check_layer3_benchmarks.sh` 全 SKIP 現在會紅 ⇒ 在 `make ci-slow`（`-24`）內會走「某支 rc≠0 ⇒ 立即紅並指名腳本與 rc」那條路徑（訊息語意一致，無重複計數）。
 
 ## 相關文件
 

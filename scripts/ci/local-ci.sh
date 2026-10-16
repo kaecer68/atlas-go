@@ -36,12 +36,16 @@ run_check() {
   echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
   echo -e "${BLUE}▶ $name${NC}"
   echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  # 注意：這裡**不可以**寫成 `((PASS++))`。在 `set -e` 下，算術命令的結束碼是「運算式是否為 0」，
+  # 所以 `PASS=0` 時的 `((PASS++))` 會回傳 1 ⇒ 整個腳本在第一支**通過**的檢查之後就中止
+  # （後續檢查不跑、總結不印、rc=1 的假紅）。賦值形式 `VAR=$((VAR + 1))` 的結束碼恆為 0。
+  # 回歸守衛：tests/scripts/test-local-ci-completes-all-checks.sh（FU-20261016-28）。
   if "$@"; then
     echo -e "${GREEN}✅ $name passed${NC}"
-    ((PASS++))
+    PASS=$((PASS + 1))
   else
     echo -e "${RED}❌ $name FAILED${NC}"
-    ((FAIL++))
+    FAIL=$((FAIL + 1))
   fi
 }
 
