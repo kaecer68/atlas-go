@@ -903,6 +903,9 @@ func buildChannelContractRegistry() *ChannelContractRegistry {
 	// SourcePriority 一致。修正前契約宣告 TWSE 但 adapter 實際走
 	// FinMind:TaiwanDailyShortSaleBalances（契約與實作不符），且因 FinMind
 	// 日配額被其他消費者用完而使本通道 warn。
+	// 2026-10-16 (FU-20260929-02)：再加 TWSE TWT72U（借券餘額合計表，上市 +
+	// 上櫃）補上 sbl_borrow_balance 供給面欄位——三張表同屬 TWSE/TPEx，
+	// SourcePriority 不需改；FinMind fallback 沒有此欄，該欄此時為 null。
 	c = DefaultChannelContract("twse_sbl")
 	c.SourcePriority = []string{"TWSE", "TPEx", "FinMind"}
 	c.HealthSource = HealthSourceFileState

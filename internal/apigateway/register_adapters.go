@@ -384,9 +384,12 @@ func RegisterChannelAdapters(g *Gateway, workDir string, cfg config.Config, janu
 	// --- TWSE SBL (Securities Borrowing & Lending) — G02 live ---
 	// Primary source (fix/20260924-finmind-quota): TWSE「融券借券賣出餘額」
 	// TWT93U（上市）+ TPEx margin/sbl（上櫃）— official, keyless, zero FinMind
-	// quota. FinMind TaiwanDailyShortSaleBalances is wired as the FALLBACK
-	// only (first-party disabled or failing), because it shares the 14,400/day
-	// FinMind budget with every other FinMind consumer.
+	// quota. FU-20260929-02 adds TWSE TWT72U「證交所借券系統與證商/證金營業處所
+	// 借券餘額合計表」(上市 + 上櫃) as the source of sbl_borrow_balance（供給面）;
+	// before that the column was a placeholder that no path ever filled, so all
+	// 316k rows read 0. FinMind TaiwanDailyShortSaleBalances is wired as the
+	// FALLBACK only (first-party disabled or failing), because it shares the
+	// 14,400/day FinMind budget with every other FinMind consumer.
 	finmindKey := cfg.FinMindAPIKey
 	if finmindKey == "" {
 		finmindKey = config.GetSecret("FINMIND_API_KEY")
@@ -397,7 +400,7 @@ func RegisterChannelAdapters(g *Gateway, workDir string, cfg config.Config, janu
 	sblAdapter.SetStorageDir(filepath.Join(workDir, "data", "state", "sbl"))
 	g.registry.Register("twse_sbl", sblAdapter)
 	logging.Info("apigateway", "adapter_registered", "channel", "twse_sbl",
-		"source", "TWSE:TWT93U+TPEx:margin/sbl", "fallback", "FinMind:TaiwanDailyShortSaleBalances")
+		"source", "TWSE:TWT93U+TPEx:margin/sbl+TWSE:TWT72U", "fallback", "FinMind:TaiwanDailyShortSaleBalances")
 
 	// --- TDCC Equity Dispersion (集保股權分散) — G01 live ---
 	// Data source: FinMind TaiwanStockHoldingSharesPer (weekly 集保戶

@@ -3840,7 +3840,7 @@ export interface SBLStats {
   sbl_short_balance: number;
   sbl_short_volume: number;
   sbl_return_volume: number;
-  sbl_borrow_balance: number;
+  sbl_borrow_balance: number | null;
 }
 
 export interface Scorecard {

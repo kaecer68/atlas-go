@@ -29,6 +29,27 @@ package marketdata
 // SBLReturnVolume、當日餘額 → SBLShortBalance。索引以表頭名稱解析（不用硬
 // 編號），「當日餘額」取最後一次出現（前半是融資「今日餘額」，名稱不同，
 // 但仍以最後一次出現為準以防上游改名）。
+//
+// ── 供給面（借券餘額）＝ TWSE TWT72U（2026-10-16 新增，FU-20260929-02） ──
+//
+// 上面兩張表都沒有「借券餘額」（= 券源／供給面）欄位，只有「借券賣出餘額」
+// （需求面）。因此 SBLBorrowBalance 在 2026-10-15 前的全部 34 萬筆日檔中恆為
+// 0（placeholder，沒有任何路徑填過它）。官方有現成的免費序列：
+//
+//	TWSE exchangeReport/TWT72U「證交所借券系統與證商/證金營業處所借券餘額合計表」
+//	9 欄：0 證券代號 1 證券名稱 2 前日借券餘額(1)股 3 本日異動股借券(2)
+//	      4 本日異動股還券(3) 5 本日借券餘額股(4)=(1)+(2)-(3)
+//	      6 本日收盤價(5)單位：元 7 借券餘額市值單位：元(6)=(4)*(5) 8 市場別
+//
+// 該表同時涵蓋集中市場與櫃檯買賣中心（合計表），所以一天只要一個 call，且與
+// TWT93U 同主機、免 key、零 FinMind 配額。實測（2026-10-16）：
+//   - 2026-08-03..2026-10-16 共 52/52 個交易日，TWT93U 與 TWT72U **同日有無資料
+//     完全一致** ⇒ 只有 TWT72U 缺日代表「日報尚未齊備」，呼叫端視為該日無資料。
+//   - 2330 2026-09-16：借券餘額 59,693,000 ≥ 借券賣出餘額 14,684,514（供給 ≥ 需求）。
+//   - 該表會列出餘額為 0 的證券，但仍有證券只出現在 TWT93U/TPEx 而不在 TWT72U
+//     （2026-09-16 集中市場 1302 檔 vs 合計表 2070 檔，165 檔缺席且其借券賣出餘額
+//     全為 0）⇒「表上缺席」不可當成 0 寫入，只能留 nil（不可用）。詳見
+//     applyBorrowBalance。
 
 import (
 	"bytes"
@@ -52,6 +73,12 @@ import (
 const (
 	// twseSBLReportPath 是 TWSE「融券借券賣出餘額」（上市，全市場，一日一 call）。
 	twseSBLReportPath = "/exchangeReport/TWT93U"
+	// twseSBLBorrowReportPath 是 TWSE「證交所借券系統與證商/證金營業處所借券餘額
+	// 合計表」（上市 + 上櫃，全市場，一日一 call）——sbl_borrow_balance（借券餘額，
+	// 供給面）的唯一來源。TWT93U / TPEx margin/sbl 只有「借券賣出」半部，沒有這個欄位
+	// （2026-10-16 實測兩張表的 15 欄皆無「借券餘額」），所以 FU-20260929-02 的
+	// 全 0 不是「來源回 0」而是「從來沒有抓過這個序列」。
+	twseSBLBorrowReportPath = "/exchangeReport/TWT72U"
 	// tpexSBLReportPath 是 TPEx 同一張表（上櫃）。
 	tpexSBLReportPath = "/www/zh-tw/margin/sbl"
 	// tpexSBLBaseURL 是櫃買中心官網。constants 沒有 TPEx 常數（twse_sbl 是
@@ -71,6 +98,9 @@ const (
 	sblColSell    = "當日賣出"
 	sblColReturn  = "當日還券"
 	sblColBalance = "當日餘額"
+	// sblColBorrowPrefix 是 TWT72U 的借券餘額欄名前綴（實際表頭為
+	// 「本日借券餘額股(4)=(1)+(2)-(3)」，公式後綴屬上游文案，故用前綴比對）。
+	sblColBorrowPrefix = "本日借券餘額"
 )
 
 // twseSBLResponse 是 TWSE exchangeReport 系列的共同信封。
@@ -221,6 +251,66 @@ func parseSBLRows(fields []string, rows [][]string, date string) ([]SBLStats, bo
 	return out, true
 }
 
+// sblBorrowColumn 解析 TWT72U「本日借券餘額」的欄位索引。
+//
+// ok=false 代表表頭不符預期（0 個命中，或同一表頭出現兩次）——呼叫端必須回報
+// 錯誤，不可靜默產生空/錯資料。
+func sblBorrowColumn(fields []string) (int, bool) {
+	idx := -1
+	for i, f := range fields {
+		if !strings.HasPrefix(strings.TrimSpace(f), sblColBorrowPrefix) {
+			continue
+		}
+		if idx >= 0 {
+			return -1, false // 欄名重複 ⇒ 契約不符（無法判斷哪一欄才是借券餘額）
+		}
+		idx = i
+	}
+	return idx, idx >= 0
+}
+
+// parseSBLBorrowRows 把 TWT72U 的列轉成 symbol → 借券餘額（股）。
+//
+// 只收英數代號（濾掉「合計」等彙總列，該列的市場別為「整體市場」）。
+// ok=false 表示表頭不符預期。
+func parseSBLBorrowRows(fields []string, rows [][]string) (map[string]int64, bool) {
+	bal, ok := sblBorrowColumn(fields)
+	if !ok {
+		return nil, false
+	}
+	out := make(map[string]int64, len(rows))
+	for _, row := range rows {
+		if len(row) <= bal {
+			continue
+		}
+		sym := strings.TrimSpace(row[0])
+		if !isSBLStockID(sym) {
+			continue
+		}
+		out[sym] = sblAmount(row[bal])
+	}
+	return out, true
+}
+
+// applyBorrowBalance 把 TWT72U 的借券餘額併進既有列。
+//
+// 只有「TWT72U 表上確實有這個證券」的列才填值；表上沒有的證券保持 nil
+// （= 上游未提供，不可用），**不可填 0**：0 在本契約裡代表「上游明確回報
+// 餘額為 0」（TWT72U 會列出餘額 0 的證券，2026-09-16 例：8183 精星 0 股），
+// 而「未列出」只代表該證券不在這張表上（2026-09-16：TWT93U 1302 檔中有 165 檔
+// 不在 TWT72U，那些檔的借券賣出餘額全為 0）。把缺席當成 0 會把「不可得」寫成
+// 「已知為 0」，正是 FU-20260929-02 的原始病徵。
+func applyBorrowBalance(stats []SBLStats, borrow map[string]int64) {
+	for i := range stats {
+		v, ok := borrow[stats[i].Symbol]
+		if !ok {
+			continue
+		}
+		val := v
+		stats[i].SBLBorrowBalance = &val
+	}
+}
+
 // sblReportDate 正規化官方回傳的報告日期為 "2006-01-02"。官方格式為
 // "20260923"（TWSE/TPEx 頂層 date）；fallback 為請求日（"20060102" 或
 // "2006/01/02"）。
@@ -335,26 +425,55 @@ func (p *TWSESBLProvider) fetchSBLTPEx(ctx context.Context, dateStr string) ([]S
 	return stats, nil
 }
 
-// fetchSBLDayFirstParty 抓「一個報告日」的官方資料：上市 + 上櫃合併。
+// fetchSBLBorrowTWSE 取得「借券餘額」（TWT72U，上市 + 上櫃合計表）。
+//
+// found=false 代表上游對該日明確無資料（假日／尚未發布），不是錯誤。
+func (p *TWSESBLProvider) fetchSBLBorrowTWSE(ctx context.Context, dateStr string) (borrow map[string]int64, found bool, err error) {
+	rawURL := fmt.Sprintf("%s%s?response=json&date=%s", p.baseURL, twseSBLBorrowReportPath, dateStr)
+	body, ct, err := p.sblHTTPGet(ctx, p.limiter, rawURL)
+	if err != nil {
+		return nil, false, fmt.Errorf("twse_sbl: TWSE TWT72U %s: %w", dateStr, err)
+	}
+	var r twseSBLResponse
+	if err := DecodeJSON(bytes.NewReader(body), ct, &r); err != nil {
+		return nil, false, fmt.Errorf("twse_sbl: TWSE TWT72U %s decode: %w", dateStr, err)
+	}
+	if len(r.Data) == 0 {
+		// stat 為「很抱歉，沒有符合條件的資料!」或空資料（假日/未發布）。
+		return nil, false, nil
+	}
+	borrow, ok := parseSBLBorrowRows(r.Fields, r.Data)
+	if !ok {
+		return nil, false, fmt.Errorf("twse_sbl: TWSE TWT72U %s unexpected table layout: fields=%v", dateStr, r.Fields)
+	}
+	return borrow, true, nil
+}
+
+// fetchSBLDayFirstParty 抓「一個報告日」的官方資料：上市 + 上櫃合併，再補上借券餘額。
 //
 // 錯誤語意：
 //   - 兩家都失敗 → 回傳 joined error（真正的上游故障）。
 //   - 只有一家失敗 → 回傳另一家的資料 + warn log（部分覆蓋勝過整日缺資料）。
 //   - 兩家都無資料（假日/未發布）→ (nil, nil, nil)，由呼叫端決定是否回探。
+//   - 供給面（TWT72U 借券餘額）表頭不符預期或 HTTP 失敗 → 回傳錯誤（不可靜默把
+//     供給面留成 0）；該日報尚未發布（TWT93U 有資料但 TWT72U 沒有）→ (nil,nil,nil)，
+//     由呼叫端回探／下輪重試，以免落地一個供給面全 null 且日後不會被覆寫的日檔。
 func (p *TWSESBLProvider) fetchSBLDayFirstParty(ctx context.Context, day time.Time) ([]SBLStats, []string, error) {
 	twseDay := day.Format("20060102")
 	tpexDay := day.Format("2006/01/02")
 
 	var (
-		stats []SBLStats
-		srcs  []string
-		errs  []error
+		stats  []SBLStats
+		srcs   []string
+		errs   []error
+		twseOK bool
 	)
 	if s, err := p.fetchSBLTWSE(ctx, twseDay); err != nil {
 		errs = append(errs, err)
 	} else if len(s) > 0 {
 		stats = append(stats, s...)
 		srcs = append(srcs, "TWSE:TWT93U")
+		twseOK = true
 	}
 	if s, err := p.fetchSBLTPEx(ctx, tpexDay); err != nil {
 		errs = append(errs, err)
@@ -372,5 +491,24 @@ func (p *TWSESBLProvider) fetchSBLDayFirstParty(ctx context.Context, day time.Ti
 	if len(stats) == 0 {
 		return nil, nil, nil
 	}
-	return sortSBLStats(dedupeSBLStats(stats)), srcs, nil
+	merged := sortSBLStats(dedupeSBLStats(stats))
+	if !twseOK {
+		// 上市主機失敗（TWT93U）⇒ 同主機的 TWT72U 必然也不可得；此時維持既有的
+		// 「部分覆蓋」語意（回傳上櫃資料），供給面留 nil（不可用）並留下 warn。
+		logging.Warn("twse_sbl_provider", "first_party_borrow_unavailable", "day", twseDay,
+			"reason", "TWSE TWT93U failed, so the same-host TWT72U borrow balance is unavailable")
+		return merged, srcs, nil
+	}
+	borrow, found, err := p.fetchSBLBorrowTWSE(ctx, twseDay)
+	if err != nil {
+		return nil, nil, err
+	}
+	if !found {
+		// TWT93U 與 TWT72U 同日發布（2026-08-03..10-16 共 52/52 交易日一致）⇒
+		// TWT93U 有、TWT72U 沒有 = 今天的日報還沒齊備，整日視為無資料。
+		return nil, nil, nil
+	}
+	applyBorrowBalance(merged, borrow)
+	srcs = append(srcs, "TWSE:TWT72U")
+	return merged, srcs, nil
 }
