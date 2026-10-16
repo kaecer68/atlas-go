@@ -2981,7 +2981,7 @@ PY
 
 ### FU-20261016-08 — `PGFirstOutcomeStore` 的 `LoadOutcomes`／`LoadOutcomesFromSessions` **沒有 JSONL 降級**（與 summary 讀取不對稱）
 
-- **狀態**：`open`
+- **狀態**：`done`（2026-10-16；原敘述全數保留，處置見條文末）
 - **記錄日期**：2026-10-16
 - **來源**：Q2 第二批 unit B+C 遷移站點 3（`internal/calibration/calibrate.go` 的 darwinian 校準改讀 backend-aware store）時盤查
   `internal/ledger/pg_first_store.go` 發現；該 PR 以「呼叫端自備降級」繞過，未改 store 語意
@@ -2997,6 +2997,30 @@ PY
   並補 hermetic 測試（PG 錯誤 ⇒ 降級＋degraded；PG 成功回空 ⇒ 權威、不降級）；②或在 doc comment 明確寫
   「這兩個方法不降級，呼叫端自負」並以測試釘住該契約。
 - **查法**：`grep -n -A6 'func (s \*PGFirstOutcomeStore) Load' internal/ledger/pg_first_store.go`
+
+- **完成於**：本 PR（`fix/20261016-dataintegrity`）
+
+**處置（2026-10-16）**
+
+1. **根因複驗（讀碼）**：`internal/ledger/pg_first_store.go` 的 `LoadOutcomes`／`LoadOutcomesFromSessions`
+   確實直接 delegate 到 PG（無降級、無 `markDegraded`）。★ 同時確認這**不是設計選擇而是漏補**：同一個 store 的
+   `LoadAllSessionTrades` 早就補過同型降級，其註解明寫「SSOT P1-4 … otherwise a PG blip would fail the whole
+   report」⇒ 這兩支是同一個契約沒跟上。
+2. **修法**：兩支改成與 `LoadSessionSummaries` 同構 —— PG 先；**只有 PG 回錯誤**才降級到 JSONL 並
+   `markDegraded(true)`；PG 成功（含**空結果**）即權威、`markDegraded(false)`；沒有 JSONL 側時直接回錯；
+   兩側都失敗時錯誤訊息同時指名兩邊。並把這兩支從自稱 “the rest … delegates to PG (**write paths**)”
+   的區塊移到讀取區塊 —— 該註解本身是誤導來源（F-item 已指出）。
+3. **對稱性以測試釘住**：新增 `TestPGFirstOutcomeStore_ReadContractIsSymmetric`，對**全部 6 個讀取**
+   （`LoadSessionSummaries`／`LoadSessionOutcomes`／`LoadSessionScorecardOutcomes`／`LoadOutcomes`／
+   `LoadOutcomesFromSessions`／`LoadAllSessionTrades`）用同一 fixture 斷言三種情境行為一致
+   （PG 錯誤 ⇒ 降級並標 degraded；PG 可用但空 ⇒ 權威、不降級；無 fallback ⇒ 大聲失敗）。
+   另補 6 支單方法測試（含「降級後 PG 恢復 ⇒ 不再 degraded、`FallbackCount` 只算失敗的那次」）。
+4. **負向證明（突變 ⇒ 必紅）**：把 `LoadOutcomes` 還原成 `return s.pg.LoadOutcomes()` ⇒ 4 支測試紅
+   （含對稱性測試的 `LoadOutcomes: err = connection refused, want a JSONL fallback`）。
+5. **已知限制**：`internal/calibration` 的 `darwinianOutcomes` 自備的 flat-JSONL mirror 降級**刻意保留**
+   （store 失敗時仍可用；且那是「store 之外的第三來源」防線）。副作用是：store 內部降級後，呼叫端看到的仍是
+   **成功**，其 log 會標 `source=injected-store` 而不是 `explicit-jsonl-mirror` ⇒ 若日後需要更細的來源標註，
+   應在該處讀 `Degraded()`（本條刻意不改，避免超出範圍）。
 
 ### FU-20261016-09 — experiments 家族的 **result 檔案／window summary 仍是讀取契約**（本單元刻意保留，需另一單元收斂）
 
