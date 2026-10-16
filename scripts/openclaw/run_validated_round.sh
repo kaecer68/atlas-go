@@ -123,7 +123,14 @@ if [[ -f "${PROJECT_ROOT}/scripts/monitor/round_tracker.sh" ]]; then
   result="${status:-rejected}"
   
   # 提取 agent 和 mutation type
-  agent=$(echo "$brief_path" | grep -oP 'brief-\K[^-]+' || echo "unknown")
+  # 不用 grep -oP（`\K` 是 PCRE 专属；BSD grep 不支持 -P ⇒ macOS 上会静默变成 "unknown"）：
+  # 同义的纯 bash 写法，跨平台且少一次 fork。
+  agent="${brief_path#*brief-}"
+  if [[ "$agent" == "$brief_path" ]]; then
+    agent="unknown"
+  else
+    agent="${agent%%-*}"
+  fi
   mutation_type=$(cat "$brief_path" 2>/dev/null | jq -r '.mutation_type // "unknown"' || echo "unknown")
   
   # 计算改进值

@@ -1218,6 +1218,9 @@ ci-gate: embed-dirs
 	@echo "  → docs 斷鏈入口（check_doc_links.sh）契約測試：壞連結必紅／工具缺失 fail loud（hermetic；FU-20261016-18）"
 	@bash tests/scripts/test-check-doc-links.sh
 	@echo "    ✅"
+	@echo "  → data catalog 新鮮度（check_data_catalog.sh）契約測試：stale 必指名且不得假綠／工具 rc=2 fail loud（hermetic；FU-20261016-22）"
+	@bash tests/scripts/test-check-data-catalog.sh
+	@echo "    ✅"
 	@echo "  → 合併結果/ diff 衛生閘門自我測試（hermetic git fixtures；#1993）"
 	@bash tests/scripts/test-revert-guard.sh
 	@echo "    ✅"

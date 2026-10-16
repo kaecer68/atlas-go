@@ -3714,6 +3714,78 @@ PY
 - **事實**：`internal/stockpicker/daily_update_pool_integration_test.go` 用 `"../.."` 解析 repo 根以讀 `configs/parameters.json`，但呼叫點在 `t.Chdir(root)` **之後** ⇒ CI checkout 於 `/home/runner/work/atlas-go/atlas-go`（比 lane worktree 多一層）即失敗：`read parameters.json: open /home/runner/work/configs/parameters.json: no such file or directory`。**本機之所以綠，是因為 lane worktree 的 `../..` 剛好是主 clone（那裡有 `configs/parameters.json`）** ⇒ 典型本機假綠。已修（`48d3fa034`）：改為從 cwd 往上找 `go.mod`，並把解析出的路徑印進錯誤訊息。
 - **判準（建議）**：測試**不得**用固定相對層數定位 repo 根；一律「從 cwd 往上找 `go.mod`」，且失敗訊息必須**指名解析出來的路徑**。
 - **建議處置**：① 機械掃描 `*_test.go` 內 `"../.."`／`filepath.Join("..","..")` 之類的 repo-root 假設，逐筆判定 ② 若數量可觀，加一道守門（新測試**禁止**此形狀）③ 相關記憶：global `atlas_lane_test_cwd_traps_2026_10_16`（PR #2246 車道寫入）。
+
+### FU-20261016-22 — `check_data_catalog.sh` 的 stale 檢查在 macOS 上**永遠是綠的**（`grep -oP` ＋ 管線子殼）⇒ 5 條真 stale 被掩蓋
+
+- **狀態**：`done`
+- **記錄日期**：2026-10-16 ／ **完成於**：2026-10-16 本 PR（`fix/20261016-data-catalog-bsd-grep`）
+- **嚴重度**：**P1（閘門正在掩蓋真問題）** —— 與 `-18`／`-19` 同族（「閘門說謊」）。
+- **來源**：`FU-20261016-19` 的同型稽核（PR #2245 車道）點名 `scripts/ci/check_data_catalog.sh:143`；2026-10-16 root 指派本車道收斂。
+- **事實（修前碼點；2026-10-16 實測複現）**：
+  ① `scripts/ci/check_data_catalog.sh:143`（修前）`grep -oP '`data/[^`]+`' "$CATALOG_MD" 2>/dev/null | sed … | sort -u | while …`
+     —— **`-P` 是 GNU 專屬**：macOS 的 BSD grep 實測 `grep: invalid option -- P`、**rc=2、0 行**。
+  ② 同一行的 `2>/dev/null` 把 stderr 吞掉；而這條管線的**最後一段是 `while`（rc=0）**，
+     呼叫端的 `check_stale_entries || r3=$?` 又讓 **errexit 失效** ⇒ rc=2 全程被吞（`set -o pipefail` 救不到）。
+  ③ `| while` 讓迴圈跑在**管線子殼**內 ⇒ 就算真的命中，`found_any=1` 也回不到父殼。
+  ⇒ 三者相乘：`:160-162` 的 `[ "$found_any" -eq 0 ] ⇒ log_pass "catalog 中無 stale entries"` **無條件成立**。
+  同族（本 PR 一併修）：`:184`／`:222`（修前）`md_mtime=$(stat … 2>/dev/null || echo "0")` ⇒ stat 失敗
+  兩個 mtime 都填 `0` ⇒ `diff=0` ⇒ 印「catalog 版本同步」；`:118`／`:138` 的 `grep -q … 2>/dev/null`
+  把「工具壞掉」與「查無」混為一談。
+- **影響量測（修前，main clone，唯讀）**：同一 pattern 改 `-E` ⇒ **45 條資料路徑中 5 條 stale**；
+  舊版仍印 `[PASS] catalog 中無 stale entries`／`檢查結果: 5/5 通過`／**rc=0**。
+  即：`make ci-gate`（→ `ci-quick` 逐支跑本腳本）在 macOS 上對這 5 條**完全無感**。
+- **被掩蓋的 5 條 stale（逐條查證；修好後的正確輸出見本 PR 驗證段）**：
+
+  | catalog 條目（`docs/data-catalog.md`） | 為何 stale（2026-10-16 查證） |
+  |---|---|
+  | `data/test_returns.json`（`:458`） | 曾是 tracked 檔（`07a3f85f7` 新增），已於 `5423edb8d` **刪除**；`git ls-files` = 0、`*.go` 內 0 引用 ⇒ 條目是孤兒（`check_data_catalog.sh` 的 `priority_paths` 也還列著它） |
+  | `data/state/strategy_techniques/`（`:209`） | 路徑**已搬移**：生產路徑是 `data/seeds/strategy_techniques.json`（tracked，`cmd/atlas/main.go:2507` 讀取）⇒ 條目指向的舊目錄從未存在 |
+  | `data/state/swarm_training/`（`:276`） | 條目**自己寫著**「Archived (deleted 2026-08-14)」，卻仍用現役段落的標題形態 ⇒ 檢查無法區分「已封存」與「現役」 |
+  | `data/state/swarm_latest.json`（`:178`） | 生產者 `internal/swarm/` 已於 `db9412c3` 移除（`ls internal/swarm` ⇒ No such file or directory）、`*.go` 內 0 引用、`.gitignore` 亦未涵蓋 ⇒ 條目描述的是不存在的生產者 |
+  | `data/state/metalearner_state.json`（`:258`） | 同上（`:281` 自述與 `swarm_latest.json` 同時刪除）；`*.go` 內唯一引用是 `internal/metalearning/metalearning_test.go:12` 寫 `t.TempDir()` ⇒ **無生產者** |
+- **修法（本 PR；只動 `scripts/ci/`，未動任何 catalog／資料內容）**：
+  ① 抽取改 **POSIX ERE `grep -oE`**（BSD／GNU 皆支援），並**不再導掉 stderr**；
+  ② `grep` 的 rc 顯式判定：`rc>1` ⇒ **fail loud**（工具錯誤被吞就是本票的病根）；
+  ③ 掃描結果先落暫存檔、再**逐行讀檔**（不用 `| while`）⇒ `found_any`／計數留在同一個殼，
+     並補 `sort -u` 去重與其 rc 判定；
+  ④ **掃到 0 條路徑 ⇒ fail loud**（堵「0 行 ⇒ 判通過」這條路，舊版正是走它）；
+  ⑤ `find`（`:126`／`:252` 修前）與 `stat` 的 rc 一律接起來；新增 `log_tool_fail` 與 `TOOL_FAILURES`，
+     **工具／環境錯誤不受 `--warn-only` 抑制**（warn-only 只能壓抑資料發現，不能讓「檢查跑不成」變成通過）；
+  ⑥ 各檢查改為「有 log_fail／log_tool_fail 就不算通過」⇒ `檢查結果: N/5 通過` 不再說謊
+     （舊版有違規仍印 5/5）；
+  ⑦ 新增 `--strict`（stale 由警告升為違規）。**預設維持 WARN**：`[ ! -e ]` 判的是「**這棵工作樹**有沒有」，
+     而乾淨 checkout 實測 45 條中 **37 條**不存在（`data/state/**` 是 runtime 產物、被 `.gitignore` 排除）
+     ⇒ 直接改硬紅會在 CI 造出 30+ 條假紅、並讓 pre-push 在 catalog 清乾淨前**永遠紅**；
+  ⑧ 同型順手修：`scripts/openclaw/run_validated_round.sh:126` 的 `grep -oP 'brief-\K[^-]+'`
+     （BSD grep 上靜默退化成 `agent="unknown"`）改純 bash 參數展開，語意等價（`abc-20260101.md` ⇒ `abc`）。
+- **負向證明（hermetic fixture；`tests/scripts/test-check-data-catalog.sh`，18 斷言，已納入 `make ci-gate`）**：
+  fixture catalog 含 1 條 stale ⇒ ① 舊版印 `[PASS] catalog 中無 stale entries`＋rc=0（**假綠原文**）／
+  ② 新版**不再**印該 PASS，且必須指名路徑與計數（`發現 1 條 stale entry（已掃描 4 條`）／
+  ③ `--strict` ⇒ **rc=1** 且紅燈指明路徑（`[FAIL] 發現 1 條 stale entry（已掃描 4 條）— --strict 模式視為違規`）／
+  ④ 同 fixture 補上該檔 ⇒ 回綠（證明 ①有鑑別力）＋ `--strict` 對乾淨 catalog 仍 rc=0（擋「一律紅」過度修正）／
+  ⑤ **測試自證**：把 `found_any` 在判定處強制歸零（＝模擬子殼回不來）⇒ ① 的斷言**必紅**／
+  ⑥ PATH shim 讓 `grep -oE` 回 rc=2 ⇒ **rc=1**、輸出含 `grep rc=2`（且 `--warn-only` 下亦 rc=1）／
+  ⑦ catalog 0 條路徑 ⇒ rc=1／⑧ `data/state/` 讀不到（`find` rc≠0）⇒ rc=1／
+  ⑨ 把 `-oE` 突變回 `-oP`：BSD ⇒ fail loud（rc=1、報 `grep rc=2`），GNU ⇒ 亦不得印 PASS／
+  ⑩ 靜態返祖守衛（可執行行內不得再有 `grep -…P`）＋呼叫者 repo HEAD／index 不變。
+- **建議處置（catalog 內容變更一律只提案、本 PR 未執行）**：
+  ① `data/test_returns.json` ⇒ 刪條目，或還原檔案（若測試真的需要）；同時清 `priority_paths` 內的同名項；
+  ② `data/state/strategy_techniques/` ⇒ 路徑改為 `data/seeds/strategy_techniques.json`（或改指目錄，若日後改回目錄形態）；
+  ③ `data/state/swarm_training/`／`swarm_latest.json`／`metalearner_state.json` ⇒ 併入封存段（或刪條目），
+     並把「Archived」標記升級成**結構化欄位**（例如 `**狀態** | Archived`），讓檢查能區分現役與封存；
+  ④ 中長期：catalog 條目需要「tracked vs runtime」分類，`quality.yml` 的 `data-catalog` job 才有條件
+     從 `--warn-only` 升級（該 job 的 TODO「2 週觀察期後升 hard fail」已逾期；升級前必須先清 ①–③）。
+- **同型掃描（只列清單，**不**配 ID）**：`grep -oP` 全 repo 共 3 檔 —— `.github/workflows/quality.yml:771,774`
+  （ubuntu runner ⇒ GNU grep，**非缺陷**，列而不修）、`scripts/openclaw/run_validated_round.sh:126`（本 PR 修）、
+  本檔（本 PR 修）。管線子殼丟值形狀另 5 檔（`check_case_conflicts.sh:65`／`check_field_contract.sh:147`／
+  `check_strategy_path.sh:88`／`verify_factor_integrity.sh:46`／`check_frontend_dist.sh:103,117`）逐條判讀 ⇒
+  皆以「stdout 收集」或「只輸出、不帶計數回父殼」使用，**不是**同型缺陷。其餘 `2>/dev/null`／`|| true`
+  家族沿用 `FU-20261016-19` 的 145 處清單，本 PR 只處理本檔（grep／find／stat）。
+- **已知限制**：① stale 預設仍 `WARN`（見修法⑦），`--strict` **尚未**接進任何 workflow；
+  ② `docs/data-maturity-standard.md` §6 描述的是另一套（maturity 欄位有效性／一致性）**從未實作**的檢查
+  ⇒ 文件與實作漂移，本 PR 未動；③ `ls -A` 的空目錄跳過（本檔 2 處）仍吞錯（讀不到目錄時會靜默跳過該目錄）；
+  ④ `check_catalog_sync` 的「mtime 差 120s」判準本身是弱訊號，本 PR 只修其假綠面、未改判準。
+
 ## 相關文件
 
 - [universe-scoring-ranked-zero-20260925.md](universe-scoring-ranked-zero-20260925.md)
