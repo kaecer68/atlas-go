@@ -22,12 +22,22 @@ import (
 type Config struct {
 	WorkDir   string
 	LedgerDir string
+	// StoreBackend and SQLitePath are the store-selection inputs the taskexec
+	// runners need to build a backend-aware store (Q2 batch 2 unit A). They are
+	// carried here for the same reason LedgerDir is: taskRunnerConfig builds the
+	// runners' config.Config, and a dropped field silently sends the runner to
+	// the factory's default (jsonl) — which on a postgres deployment writes the
+	// experiment lifecycle where no PG reader looks.
+	StoreBackend string
+	SQLitePath   string
 }
 
 func NewConfig(cfg config.Config) Config {
 	return Config{
-		WorkDir:   cfg.WorkDir,
-		LedgerDir: cfg.LedgerDir,
+		WorkDir:      cfg.WorkDir,
+		LedgerDir:    cfg.LedgerDir,
+		StoreBackend: cfg.StoreBackend,
+		SQLitePath:   cfg.SQLitePath,
 	}
 }
 
@@ -184,8 +194,10 @@ func InitTaskManager(ctx context.Context, pool *pgxpool.Pool, cfg Config) *taske
 // (L1, fixed 2026-10-16). The field-parity test below pins the mapping.
 func taskRunnerConfig(cfg Config) config.Config {
 	return config.Config{
-		WorkDir:   cfg.WorkDir,
-		LedgerDir: cfg.LedgerDir,
+		WorkDir:      cfg.WorkDir,
+		LedgerDir:    cfg.LedgerDir,
+		StoreBackend: cfg.StoreBackend,
+		SQLitePath:   cfg.SQLitePath,
 	}
 }
 

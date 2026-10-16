@@ -239,3 +239,113 @@ func TestPostgresLedgerStore_SessionExperimentKeepsExistingSessionID(t *testing.
 		t.Fatalf("session_id = %v, want pgsqltest-sess-first (existing value wins)", sessionID)
 	}
 }
+
+// Q2 batch 2 unit A: the status transition must land in the experiments row.
+//
+// Before this unit RecordExperiment used ON CONFLICT DO NOTHING, so the first
+// record written for an experiment_id won forever. Production therefore carried
+// 894 rows with accepted <> 0 = 0 — a permanent "0% acceptance rate" produced by
+// the writer, not by the pipeline. The JSONL store it mirrors is append-only
+// with last-write-wins folding (LatestExperimentStatusByID), and these tests
+// pin that the single-row PostgreSQL table now matches that semantics.
+//
+// Real PostgreSQL is required: ON CONFLICT DO UPDATE, which target row wins, and
+// the UNIQUE index on experiment_id are engine behaviour.
+func TestPostgresLedgerStore_ExperimentTransitionIsApplied(t *testing.T) {
+	pool := connectTestPG(t)
+	cleanupExperimentTestRows(t, pool)
+	store := NewPostgresLedgerStore(pool)
+	ctx := context.Background()
+
+	planned := domain.ExperimentRecord{
+		ID:            "pgsqltest-exp-transition",
+		TargetAgentID: "pgsqltest-agent",
+		MutationType:  "prompt_tightening",
+		Status:        domain.ExperimentPlanned,
+		WindowStart:   time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC),
+	}
+	if err := store.RecordExperiment(planned); err != nil {
+		t.Fatalf("RecordExperiment (planned): %v", err)
+	}
+
+	accepted := planned
+	accepted.Status = domain.ExperimentAccepted
+	accepted.WindowStart = time.Date(2026, 9, 25, 0, 0, 0, 0, time.UTC)
+	if err := store.RecordExperiment(accepted); err != nil {
+		t.Fatalf("RecordExperiment (accepted transition): %v", err)
+	}
+
+	var acceptedFlag int
+	var ts, briefJSON string
+	if err := pool.QueryRow(ctx,
+		`SELECT accepted, timestamp, mutation_brief_json FROM experiments WHERE experiment_id = $1`, planned.ID,
+	).Scan(&acceptedFlag, &ts, &briefJSON); err != nil {
+		t.Fatalf("select experiment row: %v", err)
+	}
+	if acceptedFlag != 1 {
+		t.Fatalf("accepted = %d, want 1 (the transition must be applied)", acceptedFlag)
+	}
+	if want := accepted.WindowStart.Format("2006-01-02T15:04:05Z07:00"); ts != want {
+		t.Fatalf("timestamp = %q, want %q (the row carries the newest record's window)", ts, want)
+	}
+	var roundTripped domain.ExperimentRecord
+	if err := json.Unmarshal([]byte(briefJSON), &roundTripped); err != nil {
+		t.Fatalf("unmarshal stored record: %v", err)
+	}
+	if roundTripped.Status != domain.ExperimentAccepted {
+		t.Fatalf("stored record status = %s, want accepted", roundTripped.Status)
+	}
+
+	// One row, not two: the table stays a per-experiment status row.
+	var rows int
+	if err := pool.QueryRow(ctx,
+		`SELECT count(*) FROM experiments WHERE experiment_id = $1`, planned.ID,
+	).Scan(&rows); err != nil {
+		t.Fatalf("count rows: %v", err)
+	}
+	if rows != 1 {
+		t.Fatalf("experiments rows for %s = %d, want 1", planned.ID, rows)
+	}
+}
+
+// TestPostgresLedgerStore_TransitionKeepsSessionID is the guard rail on the
+// upsert above: session_id is owned by RecordSessionExperiment, so a
+// session-less transition must not clear it (a "replace the whole row" upsert
+// would silently recreate the 894/894 NULL defect of FU-20261016-03).
+func TestPostgresLedgerStore_TransitionKeepsSessionID(t *testing.T) {
+	pool := connectTestPG(t)
+	cleanupExperimentTestRows(t, pool)
+	store := NewPostgresLedgerStore(pool)
+	ctx := context.Background()
+
+	rec := domain.ExperimentRecord{
+		ID:            "pgsqltest-exp-transition-session",
+		TargetAgentID: "pgsqltest-agent",
+		MutationType:  "prompt_tightening",
+		Status:        domain.ExperimentPlanned,
+		WindowStart:   time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC),
+	}
+	if err := store.RecordSessionExperiment(domain.ReplaySession{ID: "pgsqltest-sess-transition"}, rec); err != nil {
+		t.Fatalf("RecordSessionExperiment: %v", err)
+	}
+
+	accepted := rec
+	accepted.Status = domain.ExperimentAccepted
+	if err := store.RecordExperiment(accepted); err != nil {
+		t.Fatalf("RecordExperiment (transition): %v", err)
+	}
+
+	var sessionID *string
+	var acceptedFlag int
+	if err := pool.QueryRow(ctx,
+		`SELECT session_id, accepted FROM experiments WHERE experiment_id = $1`, rec.ID,
+	).Scan(&sessionID, &acceptedFlag); err != nil {
+		t.Fatalf("select row: %v", err)
+	}
+	if sessionID == nil || *sessionID != "pgsqltest-sess-transition" {
+		t.Fatalf("session_id = %v, want pgsqltest-sess-transition (a transition must not clear the link)", sessionID)
+	}
+	if acceptedFlag != 1 {
+		t.Fatalf("accepted = %d, want 1", acceptedFlag)
+	}
+}

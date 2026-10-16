@@ -28,23 +28,21 @@
     "  · cmd/backtest-window CLI 改走 ledger.NewFullStore(cfg) 並依 ATLAS_STORE_BACKEND 開池注入",
     "    （postgres 缺 DSN ⇒ 明確錯誤，不降級寫 JSONL）。",
     "  直接站點 27 → 23、總筆數 35 → 31。experiments 家族 11 筆（需先統一寫者）與刻意 JSONL 者",
-    "  （cmd/migrate-jsonl-to-sqlite、cmd/experimental/**）本單元不動。"
+    "  （cmd/migrate-jsonl-to-sqlite、cmd/experimental/**）本單元不動。",
+    "2026-10-16 Q2 第二批 unit A（experiments 家族的寫者統一 ＋ 讀取端收斂）遷移 10 筆：",
+    "  · cmd/atlas/main.go 的 auto_experiment judge 與 auto_propose 背景任務；cmd/run-experiment、",
+    "    cmd/judge-experiment 兩支 CLI（皆新增 store resolver：postgres 缺 DSN ⇒ 明確錯誤、不降級寫 JSONL）；",
+    "    internal/experiment/auto.go ×3（執行器 store、兩處 expiry 寫入）；internal/taskexec 的 run/judge runner；",
+    "    internal/monitoring/api/experiment 的 admin judge（新增可選 seam，nil ⇒ 顯式 jsonl）。",
+    "  以上一律改走 ledger.NewExperimentFamilyStore(cfg)：record/status 半走部署後端（生產＝PG），",
+    "  result 半（<LedgerDir>/experiments/<id>.json）仍寫檔案——那是 judge/inbox/diff/promoter 的內部契約。",
+    "  同一單元把兩支關聯式 store 的 RecordExperiment 由 DO NOTHING 改為針對性 upsert（狀態轉移必須落地）。",
+    "  直接站點 23 → 13（allowlist 31 → 21 筆）。刻意保留 JSONL 者：cmd/migrate-jsonl-to-sqlite、",
+    "  cmd/experimental/**；其餘 13 筆屬 session/summary/live/backtest 家族，不在本單元範圍。"
   ],
   "version": 2,
   "targets": {
     "ledger.NewStore": [
-      {
-        "file": "cmd/atlas/main.go",
-        "line": 896,
-        "snippet": "judge := experiment.NewJudge(ledger.NewStore(cfg.LedgerDir).(ledger.ExperimentStore), cfg.ReplayDataPath, cfg.BaselinePolicyPath)",
-        "reason": "cmd/atlas 的 judge-experiment 路徑：以 LedgerDir 直建 JSONL store 餵 experiment.NewJudge（實驗判定只讀本機 experiment 檔案）；不在本 PR（T1）範圍，遷移列入未竟清單"
-      },
-      {
-        "file": "cmd/atlas/main.go",
-        "line": 2087,
-        "snippet": "store := ledger.NewStore(cfg.LedgerDir)",
-        "reason": "cmd/atlas 的 auto_propose 背景任務以 LedgerDir 直建 JSONL store 記錄 ExperimentRecord（實驗提案，屬 experiments 家族，唯一寫者待 T3 裁決）；同檔的 window_backtest 任務已於 Q2b2 T2 改走 ledger.NewFullStore(cfg)"
-      },
       {
         "file": "cmd/atlas/reconcile_task.go",
         "line": 94,
@@ -88,46 +86,10 @@
         "reason": "experimental harness（janus-backtest）三處以顯式 ledgerDir 直建 JSONL store；遷移價值低"
       },
       {
-        "file": "cmd/judge-experiment/main.go",
-        "line": 47,
-        "snippet": "store := ledger.NewStore(cfg.LedgerDir)",
-        "reason": "獨立 CLI cmd/judge-experiment 以 cfg.LedgerDir 直建 JSONL store 餵 judge；不在本 PR（T1）範圍"
-      },
-      {
         "file": "cmd/migrate-jsonl-to-sqlite/main.go",
         "line": 66,
         "snippet": "jsonStore := ledger.NewStore(sourceAbs)",
         "reason": "JSONL by design：遷移工具的 source 端就是 JSONL（目標才是 sqlite），不可改成 backend-aware factory"
-      },
-      {
-        "file": "cmd/run-experiment/main.go",
-        "line": 32,
-        "snippet": "store := ledger.NewStore(cfg.LedgerDir)",
-        "reason": "獨立 CLI cmd/run-experiment 以 cfg.LedgerDir 直建 JSONL store 餵 experiment.NewExecutor；不在本 PR（T1）範圍"
-      },
-      {
-        "file": "internal/experiment/auto.go",
-        "line": 114,
-        "snippet": "store := ledger.NewStore(cfg.Config.LedgerDir)",
-        "reason": "experiment auto 以 cfg.Config.LedgerDir 直建 JSONL store；不在本 PR（T1）範圍"
-      },
-      {
-        "file": "internal/experiment/auto.go",
-        "line": 344,
-        "snippet": "store := ledger.NewStore(ledgerDir)",
-        "reason": "experiment auto 兩處以顯式 ledgerDir 直建 JSONL store；不在本 PR（T1）範圍"
-      },
-      {
-        "file": "internal/experiment/auto.go",
-        "line": 395,
-        "snippet": "store := ledger.NewStore(ledgerDir)",
-        "reason": "experiment auto 兩處以顯式 ledgerDir 直建 JSONL store；不在本 PR（T1）範圍"
-      },
-      {
-        "file": "internal/monitoring/api/experiment/handlers.go",
-        "line": 203,
-        "snippet": "judge := experiment.NewJudge(ledger.NewStore(h.LedgerDir).(ledger.ExperimentStore), replayPath, h.BaselinePath)",
-        "reason": "experiment API 的 judge 路徑以 h.LedgerDir 直建 JSONL store；不在本 PR（T1）範圍"
       },
       {
         "file": "internal/monitoring/api/risk/handlers.go",
@@ -143,7 +105,7 @@
       },
       {
         "file": "internal/monitoring/dashboard_api.go",
-        "line": 1945,
+        "line": 1957,
         "snippet": "store = ledger.NewStore(a.ledgerDir)",
         "reason": "RegisterPerformanceRoutes 在 NewReportOutcomeStore 失敗時的 fallback（同一分支已 logging.Error）；已知降級路徑，非新增站點"
       },
@@ -158,18 +120,6 @@
         "line": 144,
         "snippet": "return ledger.NewStore(s.LedgerDir)",
         "reason": "LiveService.summariesStore fallback（History 未設時才走到）；production 已由 SSoT provider 覆蓋，但仍是同類殘留，應後續遷移"
-      },
-      {
-        "file": "internal/taskexec/runners.go",
-        "line": 63,
-        "snippet": "store := ledger.NewStore(cfg.LedgerDir)",
-        "reason": "taskexec run-experiment runner 以 cfg.LedgerDir 直建 JSONL store（L1 修好 LedgerDir 傳遞後才指到正確目錄）；未走 factory"
-      },
-      {
-        "file": "internal/taskexec/runners.go",
-        "line": 136,
-        "snippet": "judge := experiment.NewJudge(ledger.NewStore(cfg.LedgerDir).(ledger.ExperimentStore), cfg.ReplayDataPath, cfg.BaselinePolicyPath)",
-        "reason": "taskexec judge-experiment runner 以 JSONL store 餵 judge；不在本 PR（T1）範圍"
       }
     ],
     "service.NewLiveService": [
@@ -201,7 +151,7 @@
     "service.NewBacktestService": [
       {
         "file": "internal/monitoring/dashboard_api.go",
-        "line": 1906,
+        "line": 1918,
         "snippet": "svc := service.NewBacktestService(cfg)",
         "reason": "RegisterBacktestRoutes：建構後由 PR #2233 以 svc.WithStore(ledger.NewReportOutcomeStore(cfg)) 注入 backend-aware store（dashboard_api.go:1917-1921）；未注入時 BacktestService.summariesStore() 落到 ledger.NewStore(s.cfg.LedgerDir)（service/backtest.go:60）。本 PR 另在其後為 signals 端點注入 FullStore"
       }

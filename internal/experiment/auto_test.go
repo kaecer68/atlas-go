@@ -123,7 +123,10 @@ func TestToCandidate_EmptyRegistry(t *testing.T) {
 
 func TestLoadOldestPendingExperiment_NoFile(t *testing.T) {
 	dir := t.TempDir()
-	result := loadOldestPendingExperiment(dir)
+	result, err := loadOldestPendingExperiment(nil, dir)
+	if err != nil {
+		t.Fatalf("loadOldestPendingExperiment: %v", err)
+	}
 	if result != nil {
 		t.Errorf("expected nil when no experiments.jsonl, got %v", result)
 	}
@@ -139,7 +142,10 @@ func TestLoadOldestPendingExperiment_NoPlanned(t *testing.T) {
 	}
 	writeExperimentJSONL(t, path, records)
 
-	result := loadOldestPendingExperiment(dir)
+	result, err := loadOldestPendingExperiment(nil, dir)
+	if err != nil {
+		t.Fatalf("loadOldestPendingExperiment: %v", err)
+	}
 	if result != nil {
 		t.Errorf("expected nil when no planned experiments, got %v", result)
 	}
@@ -156,7 +162,10 @@ func TestLoadOldestPendingExperiment_FindsPlanned(t *testing.T) {
 	}
 	writeExperimentJSONL(t, path, records)
 
-	result := loadOldestPendingExperiment(dir)
+	result, err := loadOldestPendingExperiment(nil, dir)
+	if err != nil {
+		t.Fatalf("loadOldestPendingExperiment: %v", err)
+	}
 	if result == nil {
 		t.Fatal("expected to find planned experiment, got nil")
 	}
@@ -178,7 +187,10 @@ func TestLoadOldestPendingExperiment_SkipsEmptyTarget(t *testing.T) {
 	}
 	writeExperimentJSONL(t, path, records)
 
-	result := loadOldestPendingExperiment(dir)
+	result, err := loadOldestPendingExperiment(nil, dir)
+	if err != nil {
+		t.Fatalf("loadOldestPendingExperiment: %v", err)
+	}
 	if result == nil {
 		t.Fatal("expected to find exp-2, got nil")
 	}
@@ -192,7 +204,10 @@ func TestLoadOldestPendingExperiment_InvalidJSON(t *testing.T) {
 	path := filepath.Join(dir, "experiments.jsonl")
 	os.WriteFile(path, []byte("not valid json\n"), 0o644)
 
-	result := loadOldestPendingExperiment(dir)
+	result, err := loadOldestPendingExperiment(nil, dir)
+	if err != nil {
+		t.Fatalf("loadOldestPendingExperiment: %v", err)
+	}
 	if result != nil {
 		t.Errorf("expected nil for invalid JSON, got %v", result)
 	}

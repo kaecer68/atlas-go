@@ -1898,6 +1898,18 @@ func (a *DashboardAPI) RegisterExperimentRoutes(mux *http.ServeMux) {
 		LedgerDir:    a.ledgerDir,
 		WorkDir:      a.workDir,
 	}
+	// Q2 batch 2 unit A: the admin judge (/api/experiment/judge) used a raw JSONL
+	// store, so on production it evaluated through a store that had none of the
+	// family's records (they are written to PostgreSQL) and wrote its verdict
+	// where no PG reader looked. Inject the backend-aware family store; an init
+	// failure leaves the seam nil so the handler keeps its explicit-JSONL
+	// fallback rather than refusing to serve (same shape as
+	// RegisterPerformanceRoutes / RegisterBacktestRoutes).
+	if store, err := ledger.NewExperimentFamilyStore(config.Normalize(config.Load())); err == nil {
+		handlers.Store = store
+	} else {
+		logging.Warn("dashboard", "experiment_store_init_failed", logging.Err(err))
+	}
 	handlers.RegisterRoutes(mux)
 }
 

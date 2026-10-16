@@ -675,21 +675,38 @@ func scanPGTrades(rows pgx.Rows) ([]domain.TradeRecord, error) {
 // ------------------------------------------------------------------
 
 // RecordExperiment writes an experiment record to the global experiments table.
+//
+// Q2 batch 2 unit A (2026-10-16): the conflict clause is a targeted UPDATE, not
+// DO NOTHING. experiments.experiment_id is UNIQUE, so the write-once version of
+// this method — combined with the fact that the auto-experiment pipeline
+// (internal/experiment/auto.go) reached this store only after this unit — meant
+// the table could never carry a status transition: the first record written for
+// an id won forever, so production reported 894 rows with `accepted <> 0` = 0,
+// i.e. a permanent "0% acceptance rate" that was an artifact of the writer, not
+// a measurement. The JSONL store it mirrors is append-only with last-write-wins
+// folding (LatestExperimentStatusByID), so the single-row table now matches that
+// semantics: the newest record for an id is the row.
+//
+// session_id is deliberately NOT in the UPDATE list. The session link is owned
+// by RecordSessionExperiment (which fills it only when empty — see
+// FU-20261016-03); a session-less record write must never clear it.
+//
+// The #1780 concern (a duplicate experiment_id must not raise a duplicate-key
+// ERROR during a restart stampede) is preserved: ON CONFLICT DO UPDATE never
+// errors on a repeated id either.
 func (s *PostgresLedgerStore) RecordExperiment(record domain.ExperimentRecord) error {
 	briefJSON, err := json.Marshal(record)
 	if err != nil {
 		return fmt.Errorf("marshal mutation brief: %w", err)
 	}
 	ctx := context.Background()
-	// #1780: ON CONFLICT DO NOTHING — the auto-experiment pipeline retries the
-	// same experiment_id across status transitions and (before #1774 was
-	// fixed) across task failures; a duplicate key error here surfaced as a
-	// PG ERROR every ~2min during the restart stampede. First write wins;
-	// later transitions are append-only via RecordPromptExperimentResult.
 	_, err = s.pool.Exec(ctx, `
 		INSERT INTO experiments (experiment_id, mutation_brief_json, accepted, timestamp)
 		VALUES ($1, $2, $3, $4)
-		ON CONFLICT (experiment_id) DO NOTHING
+		ON CONFLICT (experiment_id) DO UPDATE SET
+			mutation_brief_json = EXCLUDED.mutation_brief_json,
+			accepted = EXCLUDED.accepted,
+			timestamp = EXCLUDED.timestamp
 	`, record.ID, string(briefJSON), boolToInt(record.Status == domain.ExperimentAccepted),
 		record.WindowStart.Format("2006-01-02T15:04:05Z07:00"))
 	if err != nil {

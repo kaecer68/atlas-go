@@ -405,10 +405,19 @@ func (s *SQLiteOutcomeStore) LoadAllSessionTrades() ([]domain.TradeRecord, error
 // FU-20261016-03: experiment_id is UNIQUE and the pipeline legitimately retries
 // the same id (see the #1780 note on PostgresLedgerStore.RecordExperiment), so
 // a bare INSERT raised a constraint violation that the caller discarded. This
-// now mirrors the PostgreSQL write with ON CONFLICT DO NOTHING: first write
-// wins, later transitions are append-only via RecordPromptExperimentResult.
-// Backend parity matters here — the two stores must not disagree on whether a
-// repeated experiment_id is an error.
+// mirrors the PostgreSQL write as a targeted upsert; backend parity matters
+// here — the two stores must not disagree on whether a repeated experiment_id
+// is an error, nor on what the row means.
+//
+// Q2 batch 2 unit A (2026-10-16): the clause updates the record instead of
+// DO NOTHING. Write-once meant this table could not carry a status transition
+// (→ running → accepted/rejected/expired), so an acceptance rate read from
+// `accepted` was structurally 0 regardless of what the pipeline actually did.
+// The JSONL store is append-only with last-write-wins folding
+// (LatestExperimentStatusByID); this single-row table now matches it.
+//
+// session_id is not in the UPDATE list on purpose: it is owned by
+// RecordSessionExperiment, which fills it only when it is still empty.
 func (s *SQLiteOutcomeStore) RecordExperiment(record domain.ExperimentRecord) error {
 	briefJSON, err := json.Marshal(record) // mutation brief fields embedded in record
 	if err != nil {
@@ -419,7 +428,10 @@ func (s *SQLiteOutcomeStore) RecordExperiment(record domain.ExperimentRecord) er
 		`
 		INSERT INTO experiments (experiment_id, mutation_brief_json, accepted, timestamp)
 		VALUES (?, ?, ?, ?)
-		ON CONFLICT (experiment_id) DO NOTHING`,
+		ON CONFLICT (experiment_id) DO UPDATE SET
+			mutation_brief_json = excluded.mutation_brief_json,
+			accepted = excluded.accepted,
+			timestamp = excluded.timestamp`,
 		record.ID,
 		string(briefJSON),
 		record.Status == domain.ExperimentAccepted,
