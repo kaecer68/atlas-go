@@ -1077,7 +1077,7 @@
 
 ### FU-20260926-12 — `make ci` 把「掛住（timeout 124）」算成 skipped ⇒ 閘門回 0（**已可複現**，未修）
 
-- **狀態**：`open`
+- **狀態**：`done`（2026-10-16 落地；原敘述全數保留，處置見條文末）
 - **記錄日期**：2026-09-26
 - **來源（可重現）**：`Makefile:409-429`（`ci:` target 的 `for script in scripts/ci/check_*.sh` 迴圈）。
   取**同一個迴圈形狀**（只把 glob 換成 fixture、`timeout 30` 縮成 `1`）：
@@ -1118,6 +1118,146 @@
      `passed -eq 0` 守衛）⇒ 一起改會製造衝突與「兩個 false-green 混在一起」的審查困難。
 - **驗收條件**：在 `scripts/ci/` 放一支 `sleep 31` 的 `check_*.sh` ⇒ `make ci` 必須回非 0
   （或至少在 timeout 發生時讓 job 變紅），且正常情況下 `skipped` 不增加。
+
+**處置（2026-10-16，分支 `fix/20261016-ci-timeout-tri-state`）**
+
+**1. 根因（實測複現；判定邏輯指名到行）**
+
+判定邏輯在 `Makefile` 的 `ci: check-production-host` recipe。修正前（`origin/main` `c3398813b`）的逐字內容：
+
+```make
+	if timeout 30 bash "$$script" > /dev/null 2>&1; then \
+		passed=$$((passed+1)); \
+	elif [ $$? -eq 124 ]; then \          # ← Makefile:498：掛住（rc 124）
+		skipped=$$((skipped+1)); \        # ← Makefile:500：只進 skipped
+	else \
+		failed=$$((failed+1)); \
+	fi; \
+	...
+	if [ $$failed -gt 0 ]; then exit 1; fi   # ← Makefile:513：收尾只看 failed
+```
+
+兩點必須寫清楚，否則後人會「修錯地方」：
+
+* `elif [ $$? -eq 124 ]` 讀到的**確實是 `timeout` 的 124**（本線以最小案例實測：fixture 的
+  `sleep 5` 被 `timeout 1` 中斷時，訊息正確印出 `TIMEOUT (>1s)` ⇒ 讀到的 rc 就是 124），
+  不是 `$?` 被別的命令蓋掉。**這是「政策」缺陷，不是「讀錯結束碼」缺陷**。
+* `skipped` 這個計數器在迴圈裡**從來沒有代表真正的跳過**：真正被跳過的（`case` 白名單）是
+  直接 `continue`，**不計數**。所以「1 timed out」與「1 skipped」在舊碼裡是同一件事。
+
+**2. F-item 敘述的三處更正（原文其餘精確）**
+
+* ★ **「`make ci` 是本機與 GH Actions 都會跑的閘門」不正確**。實測 `grep -rn 'make ci' .github/workflows/`
+  **0 命中**（只有兩處**註解**提到 `ci-gate`）；GitHub Actions 是**逐支**呼叫 `scripts/ci/check_*.sh`
+  （`grep -rn 'scripts/ci/check_' .github/workflows/ | wc -l` = **41**）。⇒ 爆炸半徑是**本機／pre-push**，
+  不是 GH required check（與 `scripts/ci/check_sa12_negative_evidence.sh` 檔頭既有記載一致）。
+  缺陷本身不因此降級：`make ci` 是 `Makefile:206` 明示的「PR 前必跑」，且是 `ci-full` 尾端實際會跑的 glob。
+* **行號第三次搬移**：F-item 寫 `Makefile:409-429` ⇒ 未修版實際是 `491-513`（`ci:` 497）⇒ 修好後
+  `ci:` 在 497、recipe 到 552（再加預算覆寫後到 566）。本條目內文不再逐處改行號（改也很快過期），
+  一律以 **target 名 `ci:`** 定位。
+* **F-item 未提的兩點**：① `ci-gate` **不跑** `check_*.sh` 的 glob（它逐支明列）⇒ 只動文件的
+  docs-only push 只過 `ci-gate`，**glob 獨有的 12 支**（實測：`check_atlas_mcp_docs_consistency`／
+  `check_channel_index`／`check_design_tokens`／`check_doc_ports`／`check_docsgen_filter_sync`／
+  `check_jev_eval`／`check_maturity`／`check_no_duplicate_preflight`／`check_sa12_negative_evidence`／
+  `check_secrets`／`check_shellcheck`／`check_versions`）在該情境**完全不會跑**；
+  ② F-item 的三個修法建議（①124 計入 failed／②skipped>0 也非 0／③明列慢檢查）已被本 PR 的
+  「宣告式 skip ＋ 個別預算覆寫」取代 —— 取捨（「合法慢檢查誤紅」）**不是靠放寬判定解決**，見第 3、4 節。
+
+**3. 修法（三態明確化；`make ci` recipe 重寫）**
+
+* **pass** = `rc 0`；**skip** = **只**能來自 target 內的 `SKIP (declared)` 清單（每一項附「誰來覆蓋它」）；
+  **fail** = 其他任何結束碼（124 timeout、130/143 訊號、126/127 執行失敗）。
+* `timeout` 的 rc 改為**獨立計數** `timedout`，且收尾新增 `if [ $$timedout -gt 0 ]; then … exit 1; fi`
+  ⇒ **掛住一律紅**，訊息逐字附「哪一支」與 `elapsed=<秒>`。
+* 原本 `case … continue` 的 7 個樣式改成**宣告式 skip**並印出理由（逐項覆蓋來源見 recipe 上方註解）：
+  `data_naming`/`layer3_*`/`markdown_links` ⇒ `make ci-slow`；`critical_tasks` ⇒ `ci-gate` 逐支；
+  `finmind_quota` ⇒ `make ci-quota`；`task_liveness` ⇒ `daily-maintenance.yml` 帶參數；`frontend_dist` ⇒ 本 target 開頭已 `--diff` 跑過。
+  ⇒ **正常跳過仍是綠**（沒有「一律紅」），而「掛住」不再能冒充跳過。
+* 移除脆弱的 `elif [ $$? -eq 124 ]` 形式，改為 `rc=0; timeout … || rc=$$?;` 後才判定（repo 既有樣板
+  `scripts/ci/negative-proof-lib.sh:negproof_expect` 同形）。
+* 新增 `CI_SCRIPT_TIMEOUT ?= 30`：只調「多久算掛住」，**不改變**「掛住 ⇒ 紅燈」的判準。
+* **個別檢查的預算覆寫 `CI_SCRIPT_TIMEOUT_SLOW ?= 120`**（F-item 建議③，且**先量再改**）：
+  只套在**空機量測 ≥ 5s** 的四支 —— `check_secrets` 13.6s／`check_maturity` 8.3s／
+  `check_ledger_seam` 7.7s（冷啟動 19.2s）／`check_shellcheck` 7.6s；其餘一律 30s。
+  **放寬的是預算、不是判定**：超時仍 rc=124、仍紅、仍印 `elapsed=`。這不是預防性放水 ——
+  它是第 4 節 E 列（pre-push 真實失敗）逼出來的。
+
+**4. 驗收（rc 一律從 log 讀，非管線後讀 `$?`）**
+
+新增臨時 fixture `scripts/ci/check_zz-hang-probe.sh`（`sleep 31`，**未 commit、驗完已刪**）跑真的 `make ci`：
+
+| # | 情境 | log 末段 | rc |
+|---|---|---|---|
+| A | 未修（`origin/main` Makefile）、無 fixture | `CI: 35 passed, ❌ 0 failed, ⏱️ 0 timed out` | **0** |
+| B | 未修、有 `sleep 31` | `CI: 35 passed, ❌ 0 failed, ⏱️ 1 timed out` | **0 ← false-green（複現）** |
+| C | 已修、有 `sleep 31` | `⏱️ TIMEOUT (>30s, elapsed=30s): scripts/ci/check_zz-hang-probe.sh` ＋ `❌ 1 支檢查在 30s 內未結束（rc=124）` | **2 ← 紅** |
+| D | 已修、無 fixture | `CI: 35 passed, ⏭️ 8 skipped (declared), ❌ 0 failed, ⏱️ 0 timed out` | **0（正常情況不誤紅）** |
+| E | **真實 pre-push**（`git push` 的 hook → `make ci-full` → 子 make `make ci`） | `⏱️ TIMEOUT (>30s, elapsed=30s): scripts/ci/check_ledger_seam.sh` ⇒ `CI: 34 passed, ⏭️ 8 skipped (declared), ❌ 0 failed, ⏱️ 1 timed out` ⇒ `make[1]: *** [ci] Error 1` ⇒ `❌ pre-push: make ci-full FAILED.` | **push 被擋下（rc=1）** |
+| F | 加預算覆寫後重跑同一條 pre-push | （見 PR 的回報；`ci-gate` ＋ `ci-full` 皆須通過） | 待填 |
+
+**E 列是本次修法最重要的一筆證據**，兩種讀法都成立：
+①**修法在真實路徑上生效** —— 舊碼會讓同一條 pre-push 直接放行，新碼把它擋下來了；
+②**也暴露了新的假紅風險** —— `check_ledger_seam.sh` 空機 7.7s（冷 19.2s），在 `ci-full` 的
+`go test -race` 尾端負載下吃滿 30s（`elapsed=30s` 是它自己的訊息，不是猜的）。
+⇒ 這是 F-item 早就警告的取捨（「①/② 都可能讓合法慢檢查在高負載機器上誤紅 ⇒ 要先有 timeout 預算的量測」），
+處置就是第 3 節的 `CI_SCRIPT_TIMEOUT_SLOW`（量測後放寬那四支），**不是**回頭放寬判定。
+
+**5. 契約測試與負向證明（突變 ⇒ 必紅）**
+
+新增 `tests/scripts/test-ci-timeout-tri-state.sh`（**逐字抽取真檔 recipe** 進 hermetic fixture 執行；
+抽取器本身有「空集合／錨點漂移／缺 timeout 獨立計數／缺預算覆寫 ⇒ 紅」的自我斷言），納入 `make ci-gate`。
+覆蓋 9 案：掛住=紅（含同一行指名腳本＋`elapsed=`）／訊號=紅且不誤標 TIMEOUT／宣告式 skip=綠
+**且被跳過的腳本真的沒被執行**（marker 檔不存在）／正常=綠且計數行逐字相符／非 0=紅且帶 rc／
+glob 空集合=紅／**預算覆寫=清單內放寬後綠、放寬後仍超時則紅**（覆寫沒有開新的假綠路徑）／mutation 自證。
+
+負向證明（真的動檔 ⇒ 守衛必紅 ⇒ `cp` 還原並以 sha256 驗回）：
+
+* 突變 1（**忠實的舊行為**）：`timedout=$$((timedout+1))` → `skipped=$$((skipped+1))`
+  ＋ `if [ $$timedout -gt 0 ]` → `if [ 0 -gt 0 ]`（diff 4 行）⇒ 守衛紅：
+  `FAIL: ci recipe 沒有「timeout 獨立計數」（FU-20260926-12 回歸？）`、`GUARD_RC=1`。
+* 突變 2（**保留文字錨點、只改判定**：`if [ $$timedout -gt 0 ]` → `timedout=0; if [ $$timedout -gt 0 ]`）
+  ⇒ 走的是行為層斷言，守衛紅：`FAIL: ① 掛住的檢查讓 make ci 回 0（FU-20260926-12 未修：false-green）`、`GUARD_RC=1`。
+* 還原：`cp` 回備份 ⇒ `sha256sum Makefile` = `d7191eae140081d0cc8e2ec6e0df9a59fa1fe76f9f84e63aa052eb8b6c0d17e5`
+  （與修好版逐字相同）⇒ 守衛回綠 `GUARD_RC=0`。
+
+**6. 同型盤點（業主要求；本 PR **只修第 1 列**，其餘僅列出並附 file:line，建議由 root 另配 F-item）**
+
+判準：不需要「檔案被改名／刪除」這種前提，只要環境或輸入異常（工具不存在、flag 不支援、指令失敗、
+掛住）就回 0，且輸出看不出「其實沒檢查」。逐字原文與完整 25 列（P0=3／P1=14／P2=8）見本 lane 的稽核交付
+（`fix-20261016-ci-timeout-tri-state` 的 `.audit/`，**未 commit**）。下表只列要點，且**每一列本線都自己
+複驗過**（不是轉述）：
+
+| 嚴重度 | 位置 | 為什麼是「閘門說謊」（本線複驗方式） |
+|---|---|---|
+| **P0** | 本條目（`Makefile` `ci:`） | 基準缺陷，本 PR 已修（A–F 列） |
+| **P0** | `scripts/ci/check_doc_links.sh:20,25` | 用 BSD grep 不支援的 `-rnP`，又 `2>/dev/null` 吞掉錯誤 ⇒ 行程替換 **0 行** ⇒ 永遠印 `✅ All links OK` 並 exit 0。**本線複驗**：`grep -rnP '\[.*?\]\([^http#].*?\.md[#\)]' docs/ --include='*.md'` ⇒ stdout 0 行、`rc=2`；同一 pattern 換 `-E` ⇒ **328 行**。**對照組**：真正在掃的 `check_markdown_links.sh` 在同一棵樹印 `Checked 274 link + 359 bare path = 633 reference(s)`、`rc=0`（本線實測） |
+| **P0** | `scripts/ci/check_frontend_dist.sh:170,178-181` | **本線複驗逐字**：`:170` `changed=$(git diff --name-only "$RANGE" 2>/dev/null \|\| true)`、`:178-180` 印「diff 未含 … — 跳過 dist 檢查」、`:181 exit 0` ⇒ `git diff` 失敗（RANGE 打錯／不在 git work tree）與「真的沒改前端」**輸出完全相同**，而這正是 pre-push 用來擋「改了前端卻沒重建 dist」的閘門 |
+| P1 | `Makefile` `ci-slow` | 清單逐字明列（檔案被改名就整支不跑），且**無計數、無「0 支被執行 ⇒ 紅」守衛** |
+| P1 | `Makefile:46-51` ＋ `.githooks/pre-push:180` | `git diff origin/main...HEAD 2>/dev/null \| grep -qE …` 失敗 ⇒ 判為 docs-only ⇒ `ci-full` 靜默跳過 |
+| P1 | `scripts/ci/check_case_conflicts.sh:49-85` | **本線複驗逐字**：`if $STRICT; then` 區塊內**只印 WARNING、沒有 `exit 1`**（全檔唯一的 `exit 1` 在 `:42`，判的是另一件事：case-conflict pairs）⇒ `quality.yml:190` 的 `--strict` 不會因非 snake_case 而紅 |
+| P1 | `scripts/ci/check_field_contract.sh:160-167` | 非 `--strict`（本機兩個入口都不帶）⇒ `UNKNOWN_COUNT>0` 只 WARNING ⇒ 永遠 0 |
+| P1 | `scripts/ci/check_shellcheck.sh:33-37,55-57` | 沒裝 shellcheck ⇒ `exit 0`（`make ci` 把它 `>/dev/null 2>&1` ⇒ 連 warning 都看不到） |
+| P1 | `scripts/ci/check_versions.sh:38,54` | **本線複驗逐字**：`[[ -f "$f" ]] \|\| continue` ⇒ TARGETS 清單中的檔案不存在就**靜默縮小掃描面**；`:54` 在 `DRIFT=0` 時無條件印 `✅ All … in sync` ⇒ 掃描面可以縮到 0 仍回綠 |
+| P1 | `scripts/ci/check_maturity.sh:80-83` | **本線複驗逐字**：`if [ "$found_any" -eq 0 ]; then … log_pass "所有 ${count} 個 Go package 都有 doc.go"` ⇒ 掃到 0 個 package 也印「通過」 |
+| P1 | `scripts/ci/check_strategy_path.sh:131,136` | **本線複驗逐字**：`SR_DEFENSIVE_COUNT=$(grep -cE … \|\| true)`：`sector_rotator.go` 不存在 ⇒ 變數為**空字串** ⇒ `[ "" -gt 0 ]` 失敗 ⇒ 走 else 的 `log_pass`（「單一來源」的假安心） |
+| P1 | `scripts/ci/check_atlas_mcp_docs_consistency.sh:71-75`、`check_commit_messages.sh:40`、`check_jev_eval.sh:35-39`、`check_layer3_benchmarks.sh:105-107`、`check_frontend_imports.sh:87-89`、`verify_factor_integrity.sh:86-91` | 同一族（掃描面靜默縮小／訊號被計成通過）；逐字原文見稽核交付 |
+| 假紅（反方向） | `scripts/ci/local-ci.sh:41,44` | **本線複驗**：`set -e` 下 `((PASS++))` 在 `PASS=0` 時回傳 1 ⇒ **腳本在第一支檢查後就中止**（最小重現：`set -euo pipefail; P=0; f(){ true; ((P++)); }; f; echo reached` ⇒ 只印 `ok`、`rc=1`，「reached」永遠不印）。同族殘留見 `docs/operations/remediation-manifest.md` E22 |
+
+**7. 已知限制**
+
+* **30s 預算是量測後才放寬的，不是先驗保證**：量測是**空機逐支計時**（方法與數值寫在 `Makefile`
+  `CI_SCRIPT_TIMEOUT_SLOW` 上方註解）；負載係數取 4× 當餘裕（E 列實證 `check_ledger_seam` 在
+  `ci-full` 負載下是 0.39×餘裕都撐不住），**不是**實測上限。若未來有新檢查在負載下超過預算，
+  症狀是**可診斷的紅燈**（附 `elapsed=`），處置是補量測後加鍵或改列 declared-skip。
+* **`ci` 開頭那條明列的 `check_frontend_dist.sh --diff …` 沒有 timeout**：掛住時 `make ci` 會**原地停住**
+  （可見的 hang，不是假綠）⇒ 未納入本次修法。
+* **第 6 節的 P0/P1 未修**：`check_doc_links.sh` 與 `check_frontend_dist.sh` 兩條要各自一個主題
+  （一個是 grep 可攜性、一個是「失敗的跳過」要與「合法的跳過」分離），混進本 PR 會讓審查失焦；
+  建議另開 F-item（ID 交由 root 配發，避免與他線撞號）。
+* `docs/operations/remediation-manifest.md` 的 E3 列與「已對帳」表仍寫「他線已登記 ⇒ 本表不重複派遣」，
+  現在已過期；本 PR **未動該檔**（避開 E1 在飛的 `Makefile`／`quality.yml` 佔用），請 root 併入時一併更新。
+
+---
 
 ---
 
