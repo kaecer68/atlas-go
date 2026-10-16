@@ -601,7 +601,23 @@ jobs:
       with:
         fetch-depth: 0
     - name: Check semantic commit messages
-      run: bash ./scripts/ci/check_commit_messages.sh "origin/${{ github.base_ref }}" "HEAD"
+      # `github.base_ref` is EMPTY on push events (and `github.event.before` is
+      # all-zeros on a fresh branch), so the range used to be "origin/..HEAD":
+      # git could not resolve it, the gate swallowed the failure and printed
+      # ✅ rc=0 (FU-20261016-27; visible in every push run's log). Pick a range
+      # that resolves, and let the script exit 2 (fail loud) if none does.
+      env:
+        BASE_REF: ${{ github.base_ref }}
+        BEFORE_SHA: ${{ github.event.before }}
+      run: |
+        base="origin/${BASE_REF}"
+        if [ -z "${BASE_REF}" ]; then
+          base="${BEFORE_SHA}"
+          if ! git rev-parse --verify --quiet "${base}^{commit}" >/dev/null 2>&1; then
+            base="HEAD~1"
+          fi
+        fi
+        bash ./scripts/ci/check_commit_messages.sh "${base}" "HEAD"
 
   # Governance gate (migrated from ci.yml per 2026-07-03 pipeline audit Phase 2)
   governance:

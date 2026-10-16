@@ -551,6 +551,17 @@ run_empty_stdin_is_content_push_test() {
 # 1b. In the real tree Gate 1c (`check_frontend_dist.sh --diff origin/main...HEAD`,
 # fixed 2026-10-16 in FU-20261016-19) fails loud on the very same git failure —
 # the two are backstops for each other, and neither may rely on the other.
+#
+# 2026-10-16 (FU-20261016-27): Gate 0b (`check-binary-freshness.sh --host-only
+# --diff-base origin/main`) is a THIRD backstop and now refuses on the very same
+# failure too, and it runs FIRST (Gate 0b is before Gate 1). The seam below is
+# therefore narrowed to the `git diff` call SHAPE this scenario is about —
+# `git diff --name-only <range>` with NO pathspec, i.e. what ci-full-trigger.sh:59
+# and check_frontend_dist.sh:182 use. Gate 0b passes `-- "${BUILD_INPUT_PATHS[@]}"`
+# and is left working here, so the classification gate can still be reached;
+# Gate 0b's own fail-closed proof lives in the `--diff-base` cases of
+# tests/scripts/test-binary-freshness-guard.sh. Narrowing the seam (rather than
+# relaxing an assertion) keeps every assertion below byte-identical.
 run_diff_failure_is_not_docs_only_test() {
   local dir repo out rc rc_ctl out_ctl real_git
   dir=$(mktemp -d)
@@ -571,14 +582,22 @@ run_diff_failure_is_not_docs_only_test() {
   grep -Fq -- "ci-full" "$dir/make.log" && fail "control: docs-only push ran ci-full" || true
   : >"$dir/make.log"
 
-  # Seam: shadow only `git diff`; everything else delegates to the real git.
+  # Seam: shadow `git diff` WITHOUT a pathspec (the classifier's call shape);
+  # everything else — including Gate 0b's `git diff … -- <pathspec>` and all
+  # non-diff subcommands — delegates to the real git.
   real_git=$(command -v git)
   mkdir -p "$dir/gitdiffshim"
   cat >"$dir/gitdiffshim/git" <<EOF
 #!/usr/bin/env bash
 if [ "\${1:-}" = "diff" ]; then
-  echo "fatal: injected git diff failure (FU-20261016-21 test seam)" >&2
-  exit 128
+  has_pathspec=0
+  for arg in "\$@"; do
+    [ "\$arg" = "--" ] && has_pathspec=1
+  done
+  if [ "\$has_pathspec" -eq 0 ]; then
+    echo "fatal: injected git diff failure (FU-20261016-21 test seam)" >&2
+    exit 128
+  fi
 fi
 exec "$real_git" "\$@"
 EOF
@@ -588,6 +607,12 @@ EOF
   test "$rc" -eq 128 || fail "seam: shimmed git diff should exit 128, got $rc"
   rc=0; ( cd "$repo" && PATH="$dir/gitdiffshim:$PATH" git rev-parse HEAD >/dev/null 2>&1 ) || rc=$?
   test "$rc" -eq 0 || fail "seam: shimmed git must still pass rev-parse through (got $rc)"
+  # …and prove the narrowing is real: the pathspec shape (Gate 0b's call) still
+  # reaches the real git. Without this the seam could silently become "fail every
+  # git diff", i.e. Gate 0b would refuse first again and this scenario would fail
+  # for a reason unrelated to Gate 1b (FU-20261016-27).
+  rc=0; ( cd "$repo" && PATH="$dir/gitdiffshim:$PATH" git diff --name-only HEAD~1...HEAD -- '*.go' >/dev/null 2>&1 ) || rc=$?
+  test "$rc" -eq 0 || fail "seam: the pathspec shape (Gate 0b) must still pass through the shim, got $rc"
 
   run_hook "$dir" "$repo" "" "$dir/gitdiffshim"
   out=$HOOK_OUT

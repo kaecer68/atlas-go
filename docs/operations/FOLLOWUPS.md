@@ -4261,6 +4261,140 @@ PY
   ④ 五支腳本仍接受**裸字** `json`（向後相容）。這不是「兩種拼法都留著」的疏忽，而是刻意的：
   裸字是目前唯一**確定有人用**的拼法（`constitution.yml` 修前靠它），移除會是行為變更；本 PR 只讓 `--json` 追平。
 
+### FU-20261016-27 — 「閘門說謊」三連：三支 `scripts/ci` 腳本把「工具／環境失敗」與「真的沒有問題」混為一談（range 不可解析／`git diff` 失敗／空集合 ⇒ 照印通過）
+
+> **落點說明**：本條接 `-26` 之後（`-18`…`-26` 的內文在此次新增中**逐位元組未動**，見負向證明段第 4 點）。
+> **行號基準**：本條「修前」行號一律指 `origin/main`（`1b16537e9`）；「修後」指本 PR 的 head。
+
+- **狀態**：`done`
+- **記錄日期**：2026-10-16 ／ **完成於**：2026-10-16 本 PR（`fix/20261016-gate-lies`）
+- **嚴重度**：**P1 ×3**（閘門說謊；第 1 項且**已在 production CI log 逐字可證**）。
+- **來源**：上級稽核候選三項 ＋ 本車道逐項最小複現；同族見 `-18`／`-19`／`-21`／`-22`／`-24`／`-25`／`-26`。
+
+#### ★ F-item 敘述更正／補充（本車道複現後改寫；這些比原敘述更精確）
+
+- **① 第 3 項的檔案路徑錯了**：不是 `scripts/ci/check-binary-freshness.sh`（**該路徑不存在**），
+  而是 **`scripts/check-binary-freshness.sh`**；`:216` 的逐字同型**成立**。本條以此檔為準。
+- **② 第 1 項比敘述更嚴重（不是「會發生」，是「正在發生」）**：push 事件下 `github.base_ref` 是**空字串**
+  ⇒ `ci-cd.yml:604` 傳進去的 base 是 `origin/`。真實 CI 證據（`gh run view --log --job 116952715846`，
+  run `38894838258`＝`main` 的 push，conclusion `success`）逐字：
+  `🔍 Checking commit messages from origin/..HEAD for semantic format...` ＋ `✅ All commit messages follow semantic format`。
+  ⇒ 這條不是理論路徑，**每一次 push 到 `main`/`develop` 都在空跑**。因此本 PR 一併修了呼叫端（見修法①）。
+- **③ 第 2 項的「檔頭宣告 `exit 3` 全檔不存在」成立**：修前全檔只出現 `exit 0`／`exit 1`／`exit 2`
+  （`grep -nE 'exit [0-9]' scripts/ci/frontend_smoke.sh`），檔頭 `:27` 的 `#   3 = diff 解析失敗` 是**死的宣告**。
+- **④ 第 3 項的因果要更正**：該檔 `:212-215` **已經**有「`--diff-base` 不是 commit ⇒ `exit 2`」的前置守衛
+  ⇒「ref 不可解析」那半**本來就會紅**。真正的假綠是**守衛抓不到的那一半**：ref 用 `${DIFF_BASE}^{commit}`
+  **驗得到**，但 `${DIFF_BASE}...HEAD` **算不出 merge base**（shallow clone／無共同祖先的歷史）
+  ⇒ `git diff` rc=128。**判準因此是「`rev-parse --verify` 通過 ≠ `A...HEAD` 可用」**，兩者必須分開驗。
+
+#### 根因（逐項讀碼指名到行；修前基準 `1b16537e9`）
+
+三處是**同一個根因**的三個實例：`git` 失敗時 stdout **空**，而「真的沒有問題」的 stdout **也是空**
+（空 range／空 diff／無 build input 變更）⇒ 在管線輸出上**逐字相同**，再加 `2>/dev/null` 把 `fatal:`
+吞掉 ⇒ 兩者不可區分，一律落到「通過」分支。
+
+- **① `scripts/ci/check_commit_messages.sh:40`**：
+  `done < <(git log --no-merges --format="%H %s" "$BASE..$HEAD" 2>/dev/null || true)`
+  ⇒ 迴圈 0 圈 ⇒ `HAS_ERRORS=false` ⇒ `:47` 印 `✅ All commit messages follow semantic format`、`rc=0`。
+- **② `scripts/ci/frontend_smoke.sh:93`**：
+  `CHANGED=$(git diff --name-only "$BASE_REF"...HEAD 2>/dev/null || true)`
+  ⇒ `CHANGED` 空 ⇒ `:94-95` 印 `No diff (empty commit or base==HEAD)` ⇒ `:150-153` 印 `→ SKIP` ＋ `Smoke gate skipped`、`rc=0`。
+  （`:82` 的 `git rev-parse --verify "$BASE_REF"` **通過**才算走到這裡 ⇒ 這條路徑擋不住「ref 在、`A...HEAD` 不可用」。）
+- **③ `scripts/check-binary-freshness.sh:216`**：
+  `changed=$(git diff --name-only "${DIFF_BASE}...HEAD" -- "${BUILD_INPUT_PATHS[@]}" 2>/dev/null || true)`
+  ⇒ 落到 `:217-221` 印 `ℹ no build input changed … → host binary freshness not required for this push` ＋ `✓`、`rc=0`
+  （＝ pre-push **Gate 0b** 靜默放行）。此處被 `-21` §6 列為同型而當時未改，本 PR 收斂。
+
+#### 影響量測（修前 vs 修後；同一輸入、同一 fixture；rc 一律從 log 讀，不在管線後讀 `$?`）
+
+fixture：`/tmp/fu27-gate-truth/np-orphan`（`main` 與 `work` **無共同祖先**：`git checkout --orphan`；`work` 上**確實改了 `client_web/page.js`**）、
+`/tmp/fu27-gate-truth/np-plain`（`main`→`work`，`work` 只改一個 `docs/` 下的說明檔）；舊版＝`git show origin/main:<path>`。log 在 `/tmp/fu27-gate-truth/negproof/`。
+
+| # | 輸入 | 修前（`origin/main` 版） | 修後（本 PR） |
+|---|---|---|---|
+| ① | `check_commit_messages.sh origin/does-not-exist HEAD` | **rc=0**、`✅ All commit messages follow semantic format` | **rc=2**、`fatal: ambiguous argument 'origin/does-not-exist..HEAD' …` ＋ `❌ commit-message check FAILED — git 無法解析 range '…' (git rc=128)` |
+| ② | `frontend_smoke.sh main`（無 merge base） | **rc=0**、`No diff (empty commit or base==HEAD)` ＋ `→ SKIP` ＋ `Smoke gate skipped (no relevant changes)` | **rc=3**、`fatal: main...HEAD: no merge base` ＋ `[err] 無法用 git 解析 diff range 'main...HEAD'（git rc=128）⇒ 無法推導要 smoke 的頁面` |
+| ③ | `check-binary-freshness.sh --host-only --diff-base main`（無 merge base） | **rc=0**、`ℹ no build input changed in main...HEAD → host binary freshness not required for this push` ＋ `✓` | **rc=2**、`fatal: main...HEAD: no merge base` ＋ `ERROR: git diff could not resolve 'main...HEAD' (git rc=128)` ＋ `freshness is NOT skipped (fail loud, FU-20261016-27)` |
+| ① | 正常：`np-plain` 的 `main..HEAD`（合法訊息） | rc=0、`✅ …` | **rc=0、輸出與修前逐位元組相同** |
+| ② | 正常：`np-plain` 的 docs-only diff | rc=0、`Smoke gate skipped` | **rc=0**、多 1 行 `SMOKE_RESULT=SKIP (no relevant changes)`（見修法②的取捨） |
+| ③ | 正常：`np-plain` 的 `--diff-base HEAD~1`（真無 build input） | rc=0、`ℹ no build input changed in HEAD~1...HEAD …` | **rc=0、逐位元組相同** |
+| ③ | 正常：`np-plain` 不帶 `--diff-base`（`--host-only`） | rc=0、`✓ ALL BINARIES FRESH` | **rc=0、逐位元組相同** |
+
+#### 修法（`check_commit_messages.sh` 是 pre-push／CI 的**合規閘門** ⇒ 合法訊息必須照過，不得改成一律紅）
+
+- **① `check_commit_messages.sh`**：顯式接住 `git log` 的 rc（`COMMITS=$(…) || LOG_RC=$?`）、**不導掉 stderr**
+  （`fatal:` 要讓操作者看到）、失敗印明確訊息並 **`exit 2`**；檔頭補上「退出碼」契約（`0`／`1`／`2`）。
+  `exit 2` 的選擇＝與 `ci-full-trigger.sh`（`-21`）的「無法判定」同碼，且與 `1`（真的有訊息不合規）互斥。
+  **空 range 仍 rc=0**（`HEAD HEAD` 這種「真的沒有 commit 要檢查」維持綠燈；已列為 scenario4）。
+- **① 呼叫端 `ci-cd.yml` 的 `commitlint` step**：push 事件沒有 `base_ref` ⇒ 改用 `github.event.before`，
+  不可解析（新分支＝全 0）則退 `HEAD~1`；三條路徑本機模擬皆 rc=0 且印出**真的** range
+  （`<sha>..HEAD`／`HEAD~1..HEAD`／`origin/main..HEAD`）。**不改呼叫端的話，本修法會讓 `main` 的 push pipeline 假紅**。
+- **② `frontend_smoke.sh`**：同上顯式接 rc、不導 stderr、失敗印明確訊息並 **`exit 3`**。
+  **選「實作 `exit 3`」而非「移除宣告」的理由**：檔頭 `:27` 的 `3 = diff 解析失敗` 自 2026-08-24 起就寫著，
+  且 `1`（smoke 真的抓到前端問題）／`2`（build/server 起不來）都已被佔用 ⇒ 用 `3` 才能讓呼叫端分辨三種失敗；
+  移除宣告等於承認「無法判定」與「smoke 失敗」不可區分。另新增 **`SMOKE_RESULT=SKIP` / `SMOKE_RESULT=PASS`**
+  機器可讀標記（`F-item` 要求「SKIP 必須可與 PASS 區分」；`rc` 兩者都是 0 是既有契約，不動）。
+  **保留**「`BASE_REF` 不存在 ⇒ 全量 smoke」的既有升級（那是**超集**、不是假綠，且已用 scenario5 釘住它不得落入 rc=3）。
+- **③ `check-binary-freshness.sh`**：同上顯式接 rc、不導 stderr、失敗印明確訊息並 **`exit 2`**
+  （與同檔既有的「`--diff-base` 不可解析 ⇒ 2」同一狀態、與 `ci-full-trigger.sh` 同風格），檔頭補退出碼；
+  另把 `-h|--help` 的 `sed -n '2,40p'` 改成「印到第一行非註解為止」（原寫法在本 PR 加長檔頭後會**截斷說明**又**多印一行程式碼**；
+  同型修法先例見 `scripts/agent-guard.sh` 的 E23）。
+
+#### 負向證明（每項都「同輸入 ⇒ 修前假綠原文 ≠ 修後紅燈原文」；log 皆為實跑輸出）
+
+1. **假綠 vs 紅燈**：見上方「影響量測」表的 ①／②／③ 三列 —— 修前 `rc=0` ＋ 逐字「通過／SKIP／不需要判斷」文案，
+   修後 `rc=2/3/2` ＋ 逐字指名 range 與 `git rc=128`。**兩者不同**（sha 也不同）。
+2. **突變（受測腳本還原成 `origin/main` 版）⇒ 契約測試必紅**（各檔逐位元組 sha256 見下）：
+   | # | 突變（受測檔還原成修前） | 突變後 sha256（=`origin/main` 版） | 測試 rc | 紅燈原文（逐字，節錄） |
+   |---|---|---|---|---|
+   | ① | `scripts/ci/check_commit_messages.sh` | `74d17bf5a78b…1f4fcae69` | `tests/scripts/test-commit-message-gate.sh` **rc=1** | `FAIL: scenario3: unresolvable range must exit 2 (fail loud), got 0: 🔍 Checking commit messages from origin/does-not-exist..HEAD for semantic format...` |
+   | ② | `scripts/ci/frontend_smoke.sh` | `9ab1a2235325…9a99941a57d6d` | `tests/scripts/test-frontend-smoke-diff-gate.sh` **rc=1** | `FAIL: scenario3: unresolvable range must exit 3, got 0: …Computing diff against main…` |
+   | ③ | `scripts/check-binary-freshness.sh` | `f234d1a45c77…f9b229e6` | `tests/scripts/test-binary-freshness-guard.sh` **rc=1** | `FAIL: (d) an injected git failure must exit 2, got 0: checking binaries against HEAD=…` |
+   三條 FAIL 的 `got 0` **就是修前的假綠**（探針有鑑別力）。
+3. **還原以 `cp` ＋ sha256 逐位元組驗回**（不用 `git checkout --`）：`cp <bak> <file>` 後
+   `shasum -a 256 -c` **OK**（三檔逐位元組相等；修好版 sha256：`24961f0f19c3…ff6c135`／`bcd32ce28f84…c135974a`／`d5c2a806781d…69fb9b`）
+   ⇒ 三支契約測試回綠（`test-commit-message-gate.sh` rc=0／`test-frontend-smoke-diff-gate.sh` rc=0／`test-binary-freshness-guard.sh` rc=0）。
+4. **合併前複驗（區段逐位元組比對）**：`docs/operations/FOLLOWUPS.md` 的改動是**純插入**（`git diff --numstat` ⇒ `N insertions / 0 deletions`），
+   且 `-18`…`-26` 的區段以 `git show origin/main:…` vs `git show HEAD:…` 抽出**逐位元組相同**（唯一號檢查／連結檢查／`ci-gate` 都抓不到「把別條內文搬走」）。
+
+#### 新增契約測試（hermetic；皆已掛進 `make ci-gate`）
+
+- **`tests/scripts/test-commit-message-gate.sh`（7/7）**：合法訊息仍過（rc=0）／不合規訊息 rc=1 且指名 hash／
+  range 不可解析 rc=2 且不得印通過／**可解析的空 range 仍 rc=0**（不得退化成一律紅）／
+  git 失敗 seam rc=2／**mutation 自證**（把修前管線形狀逐字套在同一 fixture ⇒ rc=0 ＋ `✅` ＝ 假綠再現）／
+  靜態接線（不得再出現 `… 2>/dev/null || true` 的 git-log 管線；`ci-cd.yml` 不得再只傳 `origin/${{ github.base_ref }}`）。
+- **`tests/scripts/test-frontend-smoke-diff-gate.sh`（7/7）**：docs-only diff 真 skip（rc=0 ＋ `SMOKE_RESULT=SKIP`）／
+  空 diff 仍 skip／**無 merge base ⇒ rc=3 且指名 range、不得出現 SKIP**／git 失敗 seam rc=3／
+  `BASE_REF` 不存在 ⇒ 全量 smoke 升級（**不得**誤用 rc=3）／mutation 自證／靜態接線（`exit 3` 已實作且仍被文件宣告）。
+  全部只走「diff 解析／決策」段 ⇒ 不建前端、不跑 atlas binary、不開 Playwright、不連網。
+- **`tests/scripts/test-binary-freshness-guard.sh` 新增 `run_diff_base_tests`（沿用既有 harness）**：
+  (a) 真無 build input ⇒ rc=0 且印既有 skip 文案／(b) 真的動到 build input ⇒ 確實進入判定（不得再印 skip）／
+  **(c) 無 merge base ⇒ rc=2 且指名 range、不得印 skip、不得印 `ALL BINARIES FRESH`**／(d) git 失敗 seam rc=2／
+  (e) 既有「`--diff-base` 不可解析 ⇒ rc=2」不回歸／(f) mutation 自證／(g) 靜態（不得再有 fail-open 管線、必須有 `DIFF_RC`）。
+
+#### 同型掃描（只列清單，**不**配 ID；本車道複現者標「已複現」，其餘為讀碼判定）
+
+| 嚴重度 | 位置 | 形狀 | 判讀 |
+|---|---|---|---|
+| **P2（未修；已複現）** | `scripts/ci/check_data_naming.sh:155,159` | `find data/ -type d 2>/dev/null \| filter \| wc -l` ⇒ tool 失敗＝空集合 ⇒ `[PASS] 所有 0 個目錄命名符合 snake_case` ＋ `5/5 通過` rc=0 | 注入 `find` 失敗 seam：逐字印 `[PASS] 所有 0 個目錄命名符合 snake_case (R1, R8)`、`檢查結果: 5/5 通過`、`rc=0`（**與「真的沒違規」逐字不可區分**） |
+| **P2（本車道 rebase 後已由同日 `-28` 修掉；不再是未修項）** | `scripts/ci/check_layer3_benchmarks.sh:66-81,131` | `baselines=$(find … 2>/dev/null)` 空 ⇒ `SKIP`；全數 skip 仍印 `all benchmarks within … threshold (0 passed, N skipped)`、rc=0（**無「0 支真的跑過 ⇒ 紅」守衛**） | 與 `-24`（`ci-slow` 0 支 ⇒ 原本也是綠）同族；**2026-10-16 同日 `-28`（PR [#2257](https://github.com/kaecer68/atlas-go/pull/2257)）已落 main 補上 `executed=0 ⇒ 紅`**（本車道 rebase 後複核該檔 `:142-146` 確有該守衛）⇒ 本車道**不重複處理**，僅保留此列為同型掃描紀錄 |
+| **P2（未修；讀碼）** | `scripts/ci/validate_json_schemas.sh:211` | `find … 2>/dev/null \| wc -l` 失敗 ⇒ 0 ⇒ 跳過 session schema 檢查；`:220-222` 仍可印 `log_pass` | 同族（工具失敗 ⇒ 少檢查 ⇒ 通過） |
+| **P2（未修；讀碼）** | `scripts/ci/check_data_catalog.sh:163,309` | `[ -z "$(ls -A "$dir" 2>/dev/null)" ]` ⇒ `ls` 失敗＝「空目錄」⇒ `continue`；`:34` 的 `VIOLATIONS=0` 分支亦同源（`-26` 已修同檔的 `grep -oP` 與 tool rc=2） | 同族；`ls` 失敗 ⇒ 少報違規 ⇒ 偏向綠 |
+| **P3（未修；讀碼）** | `scripts/ci/check_maturity.sh:111` | `count=$(grep -c "Maturity:" "$docfile" 2>/dev/null) \|\| true` ⇒ 讀檔失敗 ⇒ `count` 空 ⇒ 既非「缺少」也非「多個」⇒ 不報違規 | 實務上難到達（檢查 1 已先擋 `doc.go` 不存在）；仍屬同族 |
+| **P3（未修；讀碼）** | `scripts/ci/verify_factor_integrity.sh:77-79` | `grep` 蒐集失敗 ⇒ `POS_COUNT` 不符 ⇒ 走 `warn`（**不影響 rc**） | 同族但方向是「差異 ⇒ 只警告」；同檔 G8（`:83-84`）的 `0 case ⇒ fail` 反而是**正確的** fail-closed 樣板 |
+| **已有防護（非缺陷）** | `scripts/ci/check_followups_unique_ids.sh:34-42` | `grep -c .` 失敗 ⇒ `COUNT=0` ⇒ **明示 `exit 1`** 並寫「不要讓它靜默退化成永遠 PASS 的空檢查」 | 這是**正面樣板**：空集合必須自己紅燈 |
+| **反向（空集合 ⇒ 紅；非假綠）** | `.githooks/pre-push:245`（Gate 3 zero-diff）、`.githooks/pre-commit:12`（`staged_files`） | `git diff … 2>/dev/null` 失敗 ⇒ 空 ⇒ 前者印「zero file diff」**exit 1**；後者 `set -e` 於賦值即中止 | pre-push Gate 3 已複現為**誤紅**（被 Gate 1c 先擋）；pre-commit 已實測 rc=128（fail-closed）⇒ **不同類**，列出以免日後再被誤列為同型 |
+
+#### 已知限制
+
+① 三支腳本**只驗「range 是否可解析」**，不驗基準新鮮度（`origin/main` 過期不算失敗）—— 這與 `-21` 的已知限制同源，未擴大處理。
+② `check_commit_messages.sh` 的無參數預設仍是 `HEAD~1`：在 **shallow clone（depth 1）或 root commit 的 repo** 會 **rc=2**（＝誠實的「無法判定」）。
+   本機 full clone 不受影響；`make ci`（glob）與 `make ci-quick` 走的就是這條，已實測 rc=0。
+③ `frontend_smoke.sh` 的 `rc=3` 需要呼叫端自行判斷；`quality.yml` 只當「非 0 ⇒ 紅」（符合預期），目前**沒有**把 3 當 skip 的呼叫端。
+④ `check-binary-freshness.sh` 另有兩處**刻意軟**的路徑**未動**：`LAST_BUILD_COMMIT` 取不到時退 `HEAD`（本就 fail-closed）與
+   `bin/** 不存在 ⇒ (skipping)`（fresh worktree 的既有設計，`-26` 亦以註解明示）。
+⑤ 同型清單原列四條 P2：**三條未修**（未被指派；本 PR 只收斂被指名的三處 ＋ 其呼叫端），第四條（`check_layer3_benchmarks.sh` 全 SKIP）已由同日 `-28` 落 main 修掉（見同型表該列註記）。
+
 ### FU-20261016-28 — 「判定機制」的兩個**反向**缺陷：`local-ci.sh` 的假紅（`((PASS++))` ⇒ 第一支檢查後就中止）＋ `check_layer3_benchmarks.sh` 的假綠（全 SKIP ⇒ 照印 within threshold、rc=0）
 
 > **落點說明**：本條接 `-26` 之後 —— 撰寫時（2026-10-16）`-27` 尚未落 main，`-26` 是 main 上的最後一條。

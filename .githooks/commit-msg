@@ -36,7 +36,8 @@ if [ -z "$scope" ]; then
   exit 0
 fi
 
-# CI rule (scripts/ci/check_commit_messages.sh line 27):
+# CI rule (the PATTERN in scripts/ci/check_commit_messages.sh; the line number is
+# deliberately not quoted — it moves whenever that header grows):
 #   scope must match ^[a-z0-9][a-z0-9._,\/-]*$
 # i.e. start with lowercase-letter-or-digit, followed by any of
 # lowercase-letter, digit, '.', '_', ',', '/', '-'.
