@@ -1293,6 +1293,12 @@ ci-gate: embed-dirs
 	@echo "  → 死旗標契約測試（--json ≡ 裸 json／未知旗標 rc=2／jev 薄殼轉發／zero-metric 有呼叫端；hermetic；FU-20261016-26）"
 	@bash tests/scripts/test-dead-flag-contract.sh
 	@echo "    ✅"
+	@echo "  → local-ci 判定機制契約測試（hermetic：第一支通過後不得中止／總結必須印；FU-20261016-28）"
+	@bash tests/scripts/test-local-ci-completes-all-checks.sh
+	@echo "    ✅"
+	@echo "  → layer3 benchmarks 判定機制契約測試（hermetic：全 SKIP ⇒ 必紅／正常不誤紅；FU-20261016-28）"
+	@bash tests/scripts/test-layer3-bench-zero-executed.sh
+	@echo "    ✅"
 	@echo "  → fast CI scripts"
 	@$(MAKE) --no-print-directory ci-quick
 	@echo ""

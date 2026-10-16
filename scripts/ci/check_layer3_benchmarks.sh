@@ -16,8 +16,10 @@
 #   ./scripts/ci/check_layer3_benchmarks.sh
 #
 # Exit codes:
-#   0  — no regression beyond threshold
+#   0  — at least one target was actually benchmarked AND no regression beyond threshold
 #   1  — benchmark regression detected OR benchstat unavailable after install
+#        OR no target was actually benchmarked (executed=0; see the fail-closed
+#        summary below — FU-20261016-28: 「一條都沒比到」不是通過)
 
 set -euo pipefail
 
@@ -64,6 +66,11 @@ trap 'rm -rf "$TMPDIR"' EXIT
 FAILED=0
 SKIPPED=0
 PASSED=0
+# EXECUTED = 真的跑過 `go test -bench` 的 target 數（SKIP 不算）。
+# 全部 target 都 SKIP ⇒ executed=0 ⇒ 收尾必須紅：與 FU-20261016-24（`ci-slow`）同一判準
+#「0 筆被實際檢查 ⇒ 不是通過」。FU-20261016-28。
+EXECUTED=0
+TOTAL=${#TARGETS[@]}
 
 for target in "${TARGETS[@]}"; do
     if [ ! -d "${target}/testdata" ]; then
@@ -89,6 +96,7 @@ for target in "${TARGETS[@]}"; do
         FAILED=1
         continue
     fi
+    EXECUTED=$((EXECUTED + 1))
 
     # Strip non-benchmark chatter so benchstat can diff cleanly.
     grep -E '^(Benchmark|goos|goarch|pkg|cpu)' "${current}" > "${current}.filtered" || true
@@ -123,9 +131,19 @@ for target in "${TARGETS[@]}"; do
 done
 
 if [ "${FAILED}" -ne 0 ]; then
-    echo "[layer3-bench] FAIL summary: ${PASSED} passed, ${FAILED} failed, ${SKIPPED} skipped" >&2
+    echo "[layer3-bench] FAIL summary: executed=${EXECUTED}/${TOTAL} targets, ${PASSED} passed, ${FAILED} failed, ${SKIPPED} skipped" >&2
     echo "[layer3-bench] one or more benchmarks regressed" >&2
     exit 1
 fi
 
+# fail-closed：一條 benchmark 都沒真的跑（每個 target 都因為 testdata/ 不存在或沒有
+# *_bench.txt baseline 而 SKIP）⇒ 這不是「全部在門檻內」，而是「什麼都沒比到」。
+# 修前：這種情況仍印 `all benchmarks within 5% threshold (0 passed, 7 skipped)` 且 rc=0
+# （FU-20261016-28 的假綠；判準與 FU-20261016-24 的 `executed=0 ⇒ 紅` 一致）。
+if [ "${EXECUTED}" -eq 0 ]; then
+    echo "[layer3-bench] FAIL: 沒有任何 benchmark 被實際檢查 (executed=0/${TOTAL} targets, ${SKIPPED} skipped) ⇒『一條都沒比到』不是通過（FU-20261016-28）" >&2
+    exit 1
+fi
+
+echo "[layer3-bench] summary: executed=${EXECUTED}/${TOTAL} targets, ${PASSED} passed, ${SKIPPED} skipped"
 echo "[layer3-bench] all benchmarks within ${ALPHA_PCT}% threshold (${PASSED} passed, ${SKIPPED} skipped)"
