@@ -3894,6 +3894,61 @@ PY
   ② `docs/data-maturity-standard.md` §6 描述的是另一套（maturity 欄位有效性／一致性）**從未實作**的檢查
   ⇒ 文件與實作漂移，本 PR 未動；③ `ls -A` 的空目錄跳過（本檔 2 處）仍吞錯（讀不到目錄時會靜默跳過該目錄）；
   ④ `check_catalog_sync` 的「mtime 差 120s」判準本身是弱訊號，本 PR 只修其假綠面、未改判準。
+### FU-20261016-24 — `Makefile` 的 `ci-slow`：四支候選慢檢查**全部不存在**仍印 `✅ ci-slow complete` 且 rc=0（無計數、無「0 支 ⇒ 紅」守衛）
+
+> **落點說明**：本條接 `-22` 之後 —— 撰寫時（2026-10-16）`-23` 尚未落 main（它在 `fix/20261016-case-conflicts-strict` 車道內），
+> 而該車道的插入點與本條相同 ⇒ 兩條合併時第二條會撞一小段衝突，保留兩者即可。
+> **行號基準**：本條「修前」行號一律指 `origin/main`（`148e6df2d`）的 `Makefile`；本 PR 使 `ci-slow` 之後的行號整體位移。
+
+- **狀態**：`done`
+- **記錄日期**：2026-10-16 ／ **完成於**：2026-10-16 本 PR（`fix/20261016-ci-slow-zero-counter`）
+- **嚴重度**：**P1（閘門說謊）** —— 與 `FU-20260926-12`（`make ci` 把 timeout 算成 skip）／`FU-20261016-18`（`check_doc_links.sh` 永不紅）／`-22`（`check_data_catalog.sh` 在 macOS 永遠綠）同族。
+- **來源**：`FU-20261016-19` 的同型稽核（PR #2245 車道）第 6 節 P1 列「`Makefile` `ci-slow`：清單逐字明列（檔案被改名就整支不跑），且**無計數、無『0 支被執行 ⇒ 紅』守衛**」；2026-10-16 root 指派本車道收斂。
+- **根因（讀碼指名到行；修前 `Makefile:713-724`）**：
+  ① `:715-718` 候選清單是**逐字明列**的四支（`check_data_naming.sh`／`check_layer3_benchmarks.sh`／`check_layer3_snapshots.sh`／`check_markdown_links.sh`）；
+  ② `:719` 唯一的判定是 `if [ -f "$$script" ]` ⇒ 檔案不存在就**靜默跳過**（無 else、無訊息）；
+  ③ `:723` `done` 之後**沒有任何計數**，`:724` 無條件 `@echo "✅ ci-slow complete"`。
+  ⇒ 四支全部不存在時迴圈 body 一次都沒進去，收尾照印 complete、**rc=0**（「什麼都沒跑」＝通過）。
+  ⚠️ 觸發不需要惡意：腳本被改名／搬到別的路徑，或在**非 repo 根目錄**跑 `make -f <repo>/Makefile ci-slow`
+  （`[ -f "$$script" ]` 判的是 **CWD 相對路徑**）。
+  ❗ **F-item 敘述更正一處**：它寫「檔案被改名就整支不跑」，讀起來像「單支缺失即假綠」。實測**假綠那一格是「全部不存在」**
+  （單支缺失時其餘照跑，且任何一支 rc≠0 仍會紅）⇒ 本 PR 的判準因此是「**executed=0 ⇒ 紅**」，不是「missing>0 ⇒ 紅」。
+- **影響量測（修前；真檔 Makefile ＋ 空 fixture；2026-10-16 本車道實跑）**：
+  `cd /tmp/fu24-cislow-fixture-empty && make -f <origin/main 的 Makefile> ci-slow` ⇒ 只印
+  `🛡️  Running slow CI checks …`／`✅ ci-slow complete`，**rc=0**（逐字原文見本 PR 驗證段；log 檔 `/tmp/fu24-cislow-prefix.log`）。
+  `ci-slow` 由 `ci-full`（`Makefile:1309` 子 make）與 `make ci` 的慢檢查分工引用 ⇒ 等於在最強本機閘門上留一格「什麼都沒跑也算過」。
+- **修法（本 PR；只動 `Makefile` 的 `ci-slow` target ＋ 新增契約測試；`ci:` 段的三態區塊 `FU-20260926-12` **未動**）**：
+  ① 迴圈內新增 `total`／`executed`／`missing` 計數；`[ ! -f ]` 改為先印
+  `⏭️  MISSING: <script> — 清單內宣告的慢檢查不存在（被改名／搬走／工作目錄不對？）` 再 `missing++`（不再靜默）；
+  ② 收尾印 `✅ ci-slow: <executed>/<total> 支慢檢查被執行、<missing> 支不存在`（三態自述，N 與 M 都印出來）；
+  ③ 新增 fail-closed：`executed=0` ⇒ 印「沒有任何慢檢查被執行 (executed=0/N, missing=M) ⇒『什麼都沒跑』不是通過（FU-20261016-24）」並 `exit 1`；
+  ④ **部分缺失不紅**（`missing>0` 只印訊息）：正常 checkout 四支都在、不誤紅；
+  ⑤ 任何一支 rc≠0 ⇒ 立即紅並把 `rc` 印在**同一行**（保留舊版 fail-fast，不放寬），中止時附「已完成 x/N 支、y 支不存在」。
+- **負向證明（hermetic；新增 `tests/scripts/test-ci-slow-zero-counter.sh`，已納入 `make ci-gate`）**：逐字抽取真檔 recipe 進 fixture 執行
+  （抽取器自我斷言：空集合／缺 `executed` 計數／缺 `missing` 計數／缺 fail-closed 收尾 ⇒ 立刻紅；清單由 recipe 內文推導，不寫死）。
+  ① 0 支候選腳本 ⇒ **rc=2**、印「沒有任何慢檢查被執行」與 `0/4 支被執行、4 支不存在`、**不再印 complete**；
+  ② 正常（4 支都在且 exit 0）⇒ **rc=0** ＋ 計數行 `4/4 支慢檢查被執行、0 支不存在` 逐字相符 ＋ 照印 complete（不誤紅）；
+  ③ 部分缺失（3/4）⇒ **rc=0**（不誤紅）＋ 指名 `check_markdown_links.sh` 為 MISSING；
+  ④ 清單內某支 `exit 3` ⇒ rc=2、同一行含 `check_data_naming.sh` 與 `FAILED (rc=3`；
+  ⑤ 真檔一致性：recipe 宣告的 4 個檔名在 repo 內都存在；
+  ⑥ **mutation 自證**：(a) `if [ $$executed -eq 0 ]; then` → `if false; then` ⇒ **rc=0 且重現 `✅ ci-slow complete`（false-green 復現）**，
+  而 ① 的判準在該結果上**變紅**；(b) `missing=$$((missing+1))` → `:` ⇒ 計數行說謊（宣稱 0 支不存在），① 的計數斷言在該結果上**變紅**。
+- **同型掃描（只列清單，**不**配 ID；每一列都在本車道讀碼／實跑複驗過，行號基準＝ `origin/main`）**：
+
+  | 嚴重度 | 位置 | 為什麼是同型（本車道複驗方式） |
+  |---|---|---|
+  | P1 | `Makefile:1346-1370`（`ci-full` 的 orphan artifact check；迴圈起 `:1348`） | `for f in $$(git ls-files)`：`git ls-files` 失敗 ⇒ 命令替換為**空集合** ⇒ 迴圈不執行 ⇒ `ORPHANS=""` ⇒ 印 ✅。與 `FU-20261016-21`「git 失敗被當成空集合」**同一根因**，且位於 `ci-full` 尾端（無計數、無「掃了 0 個檔 ⇒ 紅」） |
+  | P1 | `scripts/ci/check_layer3_benchmarks.sh:67-80,131` | 全部 target 走 `SKIP`（`testdata/` 不存在或無 `*_bench.txt` baseline）⇒ `FAILED=0` ⇒ 收尾印 `all benchmarks within 5% threshold (0 passed, 7 skipped)` ＋ **rc=0** ⇒「一條都沒比到」也是綠（與 `-22` 已列的 `:105-107` 是**不同**片段） |
+  | ✅ 反例（**已正確**，勿改） | `Makefile:606-610`（`ci-quick`） | 同一形狀但**已有守衛**：`[ ! -f "$$script" ]` ⇒ 印「清單中的 … 不存在（改名／搬移？）⇒ 少跑一支不能算通過」＋ `failed++` ⇒ 紅。本票的判準**比它寬**（見已知限制 ①） |
+  | 列而不修 | `Makefile:1141-1146`（`test-scripts`） | `for t in tests/scripts/*.sh`（`:1143`）逐支跑、無計數，**但複驗後不是假綠**：glob 未命中時 `/bin/sh` 把字面 pattern 傳給 `bash` ⇒ rc=127 ⇒ 走 `\|\| { … exit 1; }` **fail-closed**（另註：此 target 為 opt-in，不在 `ci-gate`） |
+- **已知限制**：
+  ① 本修法只擋「**零支**被執行」；**單支缺失**仍只是訊息（判準刻意取 `executed=0`，理由見根因段末）。`ci-quick` 對同一形狀採「missing ⇒ 紅」（同型表末列）
+  ⇒ 若 root 要統一，需先有「這支腳本被合法移除／改名」的宣告機制（否則任何一次性改名都會把閘門染紅）；本 PR **未**做這個升級。
+  ② 清單仍是逐字明列（改名要人工同步）：第 ⑤ 條只保證「測試跑的時候清單內的檔名存在」，**不保證清單完整**（新寫了一支慢檢查卻沒加進來時看不出來）。
+  ③ `ci-slow` 仍**無 timeout**（這幾支本來就慢，維持原設計）。
+  ④ **環境前置（非本票缺陷，但會誤導驗收）**：全新 worktree 內直接跑 `make ci-slow`，`check_layer3_benchmarks.sh` 會因
+  `cmd/atlas` 的 `embed` pattern 找不到 `client_web/dist`／`admin_web/dist` 而紅（`pattern all:dist: no matching files found`）
+  ⇒ 需先 `make embed-dirs`（`ci-gate` 已有此 prerequisite，`ci-full` 因此不受影響；standalone `make ci-slow` 會踩到）。
 
 ## 相關文件
 

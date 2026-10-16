@@ -710,17 +710,45 @@ revert-guard: revert-guard-selftest
 	@echo "  → 合併結果驗證 + diff 衛生檢查（#1993）"
 	@bash scripts/ci/check_revert_guard.sh
 
+# ---- 慢速檢查（逐支、無 timeout；清單為逐字明列的 declared slow checks）----
+# FU-20261016-24（2026-10-16）：舊版只做 `[ -f "$$script" ]` 存在性判斷 ⇒ 清單內**四支全部
+#   不存在**時（腳本被改名／搬到別的路徑／在非 repo 根目錄跑 make）迴圈 body 一次都沒進去，
+#   收尾仍照印 `✅ ci-slow complete` 且 **rc=0** ⇒「什麼都沒跑」被當成通過（閘門說謊）。
+#   實測（修前，真檔 Makefile）：`cd <空目錄> && make -f <repo>/Makefile ci-slow` ⇒ 只印 2 行、
+#   rc=0；契約測試與兩段原文見 tests/scripts/test-ci-slow-zero-counter.sh。
+# 三態判定（與 `ci:` 同紀律，但不引入 timeout —— 這幾支本來就慢）：
+#   executed = 真的跑完且 rc=0 的支數；missing = 清單內找不到檔案的支數；total = 清單長度。
+#   **executed=0 ⇒ 紅**（訊息逐字說明「沒有任何慢檢查被執行」）；missing>0 一律逐支印出，
+#   但「部分缺失」**不**紅 —— 正常 checkout 四支都在，不誤紅（missing 只是可診斷的訊號）。
+#   任何一支 rc≠0 ⇒ 立即紅（保留舊版的 fail-fast，不放寬）。
 ci-slow:
 	@echo "🛡️  Running slow CI checks (data_naming/layer3/markdown_links)..."
-	@for script in scripts/ci/check_data_naming.sh \
+	@executed=0; missing=0; total=0; \
+	for script in scripts/ci/check_data_naming.sh \
 	              scripts/ci/check_layer3_benchmarks.sh \
 	              scripts/ci/check_layer3_snapshots.sh \
 	              scripts/ci/check_markdown_links.sh; do \
-		if [ -f "$$script" ]; then \
-			echo "  → $$script"; \
-			bash $$script || exit 1; \
+		total=$$((total+1)); \
+		if [ ! -f "$$script" ]; then \
+			echo "  ⏭️  MISSING: $$script — 清單內宣告的慢檢查不存在（被改名／搬走／工作目錄不對？）"; \
+			missing=$$((missing+1)); \
+			continue; \
 		fi; \
-	done
+		echo "  → $$script"; \
+		rc=0; bash "$$script" || rc=$$?; \
+		if [ $$rc -ne 0 ]; then \
+			echo "    ❌ FAILED (rc=$$rc): $$script"; \
+			echo "    ❌ ci-slow 中止：已完成 $$executed/$$total 支、$$missing 支不存在（本支 rc=$$rc 結束）"; \
+			exit 1; \
+		fi; \
+		executed=$$((executed+1)); \
+	done; \
+	echo ""; \
+	echo "✅ ci-slow: $$executed/$$total 支慢檢查被執行、$$missing 支不存在"; \
+	if [ $$executed -eq 0 ]; then \
+		echo "    ❌ 沒有任何慢檢查被執行 (executed=$$executed/$$total, missing=$$missing) ⇒『什麼都沒跑』不是通過（FU-20261016-24）"; \
+		exit 1; \
+	fi
 	@echo "✅ ci-slow complete"
 
 # #1742 P1: FinMind 每日 quota 檢查（runtime state 依賴，不進預設 make ci）。
@@ -1227,6 +1255,9 @@ ci-gate: embed-dirs
 	@echo "    ✅"
 	@echo "  → make ci 三態閘門契約測試（hermetic fixtures：掛住=紅／宣告式 skip=綠／mutation 自證；FU-20260926-12）"
 	@bash tests/scripts/test-ci-timeout-tri-state.sh
+	@echo "    ✅"
+	@echo "  → make ci-slow 計數守衛契約測試（hermetic fixtures：0 支 ⇒ 紅／部分缺失不誤紅／mutation 自證；FU-20261016-24）"
+	@bash tests/scripts/test-ci-slow-zero-counter.sh
 	@echo "    ✅"
 	@echo "  → watchdog 重啟分類契約測試（hermetic：stub docker／假 HOME；8 case + mutation 自證；FU-20260930-10）"
 	@bash tests/scripts/test-watchdog-restart-classify.sh
