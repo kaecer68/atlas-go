@@ -450,7 +450,10 @@ jobs:
           integration:
             - 'internal/db/**'
             - 'internal/repository/**'
-            - 'internal/storage/**'
+            # `internal/storage/**` 於 2026-10-16（FU-20261015-01 反向清理）移除：該目錄**沒有任何** gated 測試檔，
+            # 且以 `go list -deps -test -tags=integration` 對 25 個 gated 套件量測 ⇒ **0/25** 個依賴閉包
+            # 內含它（相對：`internal/testdb` 19/25、`internal/config` 17/25 ⇒ 兩者保留）。
+            # 留著只是讓 storage-only PR 多跑一趟 ~14 分鐘（實測 806s）的 integration suite。
             - 'internal/ledger/**'
             - 'internal/liveness/**'
             - 'internal/testdb/**'
@@ -479,7 +482,10 @@ jobs:
             # tools_stock_winrate_pg_integration_test.go（PG/SQLite 逐列一致 + 唯讀釘子）。
             - 'cmd/atlas-mcp/**'
             - 'cmd/migrate-data/**'
-            - 'cmd/run-stockpicker-backtest/**'
+            # `cmd/run-stockpicker-backtest/**` 於 2026-10-16（FU-20261015-01 反向清理）移除：無 gated 測試檔，
+            # 且以 `grep -rn '<該路徑>' --include=*.go` 查證 ⇒ **沒有任何 Go 檔 import 它**（CLI；
+            # 面板邏輯已於 PR 2e 移到 `internal/stockpicker`，後者已在白名單內）。符合本段註解
+            # 「只在該 cmd 已有 PG integration 測試時才加進來（否則只是空跑）」的規則。
             - 'cmd/backfill-futures-bars/**'
             # 同規則：#2126 的 quotes range 回補 CLI（PG integration 測試同 PR 一併附上）。
             - 'cmd/backfill-quotes-range/**'
@@ -518,7 +524,12 @@ jobs:
             # `go test -tags=integration ./cmd/atlas-mcp-setup/` 在每個 code 變更上執行
             # ⇒ 不必再觸發整個 integration suite。
             # integration-filter-exempt: cmd/atlas-mcp-setup — 已由 test-cmd-atlas job 逐 PR 執行該套件，不需再觸發整個 integration suite
-            - 'migrations/**'
+            # `migrations/**` 於 2026-10-16（FU-20261015-01 反向清理）移除：**repo 內不存在 top-level
+            # `migrations/`**（真目錄是 `sql/migrations/`，56 個檔全是 `.sql`，由下面的 `**/*.sql` 涵蓋）
+            # ⇒ 此 glob 匹配不到任何路徑（死條目）。注意它與 `sql/migrations/**` 是**不同路徑**，
+            # 從來沒有保護過真的 migrations 目錄（「名稱相似 ≠ 有保護」）。
+            # 同一條 glob 在 `code` filter **保留**：該 filter 沒有 `**/*.sh`、也沒有萬用 fallback ⇒
+            # 移除會讓「未來有人建 `migrations/foo.sh`／`migrations/*.py`」不再觸發 `code`（真盲區）。
             - '**/*.sql'
 
   integration:
