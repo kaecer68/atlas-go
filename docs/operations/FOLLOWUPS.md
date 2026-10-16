@@ -3591,6 +3591,41 @@ PY
 
 ---
 
+
+### FU-20261016-18 — `check_doc_links.sh` **永遠不紅**（BSD grep 無 `-rnP` ＋ 吞錯）⇒ 死閘門
+
+- **狀態**：`open`
+- **記錄日期**：2026-10-16
+- **嚴重度**：**P0（閘門說謊）** —— 不需任何前提，只要環境或輸入異常就會回 0，且輸出**看不出「其實沒檢查」**。
+- **來源**：`FU-20260926-12` 修復時（PR #2245）的同型唯讀稽核（25 列，P0=3），root 已**獨立複驗**。
+- **事實（碼點）**：`scripts/ci/check_doc_links.sh:20` `done < <(grep -rnP '\[.*?\]\([^http#].*?\.md[#\)]' docs/ --include="*.md" 2>/dev/null | grep -v ".git/")`；`:25` `echo "  ✅ All links OK"`。
+- **根因**：macOS 的 BSD grep **沒有 `-P`**（實測 `grep -rnP … docs/` ⇒ `grep: invalid option -- P`，rc=2），而 `2>/dev/null` 把錯誤吞掉 ⇒ 行程替換區塊 **0 行** ⇒ `FAILED` 恆 0 ⇒ 永遠印 `✅ All links OK` 且 exit 0。同一 pattern 改用 `-E` 在本 repo 命中 37 行 ⇒ 這個「All links OK」是**從未掃過任何連結**的空判決。
+- **★ root 獨立複驗（2026-10-16）**：對 `docs/operations/README.md` 追加一條指向 `https://definitely-not-exists-xyz.invalid/x.md` 的連結 ⇒ 腳本仍印 `✅ All links OK`、**rc=0** ✗（該檔已還原）。
+- **爆炸半徑**：本檔**不在任何 GitHub workflow 內**（GH 只跑 `scripts/ci/check_markdown_links.sh`，該支正常：633 reference(s)）⇒ 在 macOS 上這支檢查在**任何路徑**都是空的；`make ci` 的 glob 會跑到它（`Makefile` 的 ci 段）、`make ci-gate` 與 pre-push → ci-gate 亦然。
+- **建議處置**：① 讓它真的能偵測壞連結（BSD 相容寫法或委派既有可用的 `check_markdown_links.sh` —— 需先判斷兩者是否重複，避免雙重維護）② **工具錯誤不得被吞**（非 0/1 退出碼必須 fail loud）③ **負向證明**：fixture 含一條壞連結 ⇒ 必須紅 ④ 同型掃描全 `scripts/ci/**`。
+- **已派工**：2026-10-16 車道（root 指定，目標 PR 需改 `FOLLOWUPS` 本條為 `done` 並附處置）。
+
+### FU-20261016-19 — `check_frontend_dist.sh` 的 `git diff … || true` ⇒ **pre-push 的 dist 閘門可被靜默放行**
+
+- **狀態**：`open`
+- **記錄日期**：2026-10-16
+- **嚴重度**：**P0（閘門說謊）** —— 與 `-18` 同族。
+- **來源**：同上（PR #2245 同型稽核）。
+- **事實（碼點）**：`scripts/ci/check_frontend_dist.sh:170` `changed=$(git diff --name-only "$RANGE" 2>/dev/null || true)`；`:179` `echo "  ℹ️  diff 未含 admin_web/client_web/shared_web 檔案 — 跳過 dist 檢查"`；`:181` `exit 0`。
+- **根因**：`git diff` 失敗（RANGE 打錯／不在 git work tree／ref 不可解）⇒ `changed` 為空 ⇒ `trigger=0` ⇒ 印「跳過 dist 檢查」＋`✅ nothing to check` 並 `exit 0`。**合法跳過與失敗跳過的輸出無法區分**，而這條路徑正是 pre-push 專門用來擋「分支改了前端卻沒重建 dist」的閘門 ⇒ 它會回 0 **放行舊 dist**。
+- **爆炸半徑**：`Makefile:45`（pre-push）、`Makefile` 的 `make ci` 段。
+- **建議處置**：① **根因優先**：先實測複現「git diff 失敗 ⇒ 回 0／顯示 OK」② 把「失敗」與「無變更」**分離**（失敗 fail loud 且帶可診斷訊息）③ **負向證明**：注入失敗 ⇒ 必紅；正常兩條路徑行為不變 ④ 同型掃描 `scripts/ci/**` 與 `Makefile` 的 `|| true`／`2>/dev/null`／`set +e` 形狀。
+- **已派工**：2026-10-16 車道（root 指定）。
+
+### FU-20261016-20 — 測試以固定相對層數（`"../.."`）解析 module root ⇒ **lane 本機假綠、CI 紅**
+
+- **狀態**：`open`
+- **記錄日期**：2026-10-16
+- **嚴重度**：P1（假綠類，已實際造成一次 CI 紅與一輪重跑）。
+- **來源**：`FU-20260930-12` 實作時（PR #2246）由 **CI 抓到、本機抓不到**；root 已記錄。
+- **事實**：`internal/stockpicker/daily_update_pool_integration_test.go` 用 `"../.."` 解析 repo 根以讀 `configs/parameters.json`，但呼叫點在 `t.Chdir(root)` **之後** ⇒ CI checkout 於 `/home/runner/work/atlas-go/atlas-go`（比 lane worktree 多一層）即失敗：`read parameters.json: open /home/runner/work/configs/parameters.json: no such file or directory`。**本機之所以綠，是因為 lane worktree 的 `../..` 剛好是主 clone（那裡有 `configs/parameters.json`）** ⇒ 典型本機假綠。已修（`48d3fa034`）：改為從 cwd 往上找 `go.mod`，並把解析出的路徑印進錯誤訊息。
+- **判準（建議）**：測試**不得**用固定相對層數定位 repo 根；一律「從 cwd 往上找 `go.mod`」，且失敗訊息必須**指名解析出來的路徑**。
+- **建議處置**：① 機械掃描 `*_test.go` 內 `"../.."`／`filepath.Join("..","..")` 之類的 repo-root 假設，逐筆判定 ② 若數量可觀，加一道守門（新測試**禁止**此形狀）③ 相關記憶：global `atlas_lane_test_cwd_traps_2026_10_16`（PR #2246 車道寫入）。
 ## 相關文件
 
 - [universe-scoring-ranked-zero-20260925.md](universe-scoring-ranked-zero-20260925.md)
