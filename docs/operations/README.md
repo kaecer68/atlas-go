@@ -23,6 +23,8 @@
 |------|------|
 | [l2-4-runbook.md](l2-4-runbook.md) | L2.4 觀察窗口操作手冊 |
 | [wave9-runbook.md](wave9-runbook.md) | Wave 9 observability 系統 runbook |
+| [channel-health-runbook.md](channel-health-runbook.md) | 通道資料陳舊／抓取延遲／健康狀態／錯誤率（`ChannelDataStale` / `ChannelFetchLatencyHigh` / `ChannelHealthStatusError` / `ChannelHighErrorRatePerChannel`） |
+| [llm-annotator-runbook.md](llm-annotator-runbook.md) | 失敗歸因 LLM 呼叫（burn rate／斷路器／無流量；**含「這個家族現在休眠」的實證**） |
 
 > 已移至 .omo/：`l2-4-observation-log.md`（.omo/evidence/）、`l2-4-followup.md`（.omo/manifests/）
 | [mcp-deploy.md](mcp-deploy.md) | atlas-mcp server 部署手冊 |

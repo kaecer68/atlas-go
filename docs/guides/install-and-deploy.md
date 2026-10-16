@@ -386,9 +386,17 @@ grep -E "LLM_.*_API_KEY" ~/.config/atlas-go/.env
 
 You're trying to manually edit a generated file. The `pre-commit` Phase 5 will block this. Read `shared_web/AGENTS.md` "Generated Files" and edit the corresponding Go struct instead.
 
-### `make ci` hangs on a particular script
+### `make ci` reports `TIMEOUT` on a particular script
 
-Some scripts (e.g., `check_data_naming.sh`, `check_layer3_benchmarks.sh`) take 30+ seconds. `make ci` has a 30s per-script timeout — if a script exceeds that, it's skipped. Use `make ci-slow` to run them individually with no timeout.
+`make ci` gives every `scripts/ci/check_*.sh` a per-script budget (`CI_SCRIPT_TIMEOUT`, default 30s). A script that runs past its budget is reported on one line — `⏱️ TIMEOUT (>30s, elapsed=Ns): <script>` — and it **fails the gate**. A hang is not a skip (FU-20260926-12: the old build counted it as `skipped` and still exited 0).
+
+Pick the right fix for the actual cause:
+
+1. **The script is legitimately slow** (e.g. `check_data_naming.sh`, `check_layer3_benchmarks.sh`): those are already in the target's `SKIP (declared)` list; `make ci-slow` runs them one by one with no timeout. A new slow script belongs in that declared list (with a reason) or in `make ci-slow` — do not raise the limit just to turn the gate green.
+2. **The script is slow only under load** (it finishes on an idle box, but `make ci` runs at the end of `ci-full`, right after `go test -race`): it gets an explicit longer budget from `CI_SCRIPT_TIMEOUT_SLOW` (default 120s), used only by checks listed in the recipe with a measured duration. Four qualify today (`check_secrets`, `check_maturity`, `check_ledger_seam`, `check_shellcheck`). Measure first (`/usr/bin/time -p bash scripts/ci/<script>` on an idle box) — a longer budget is a bigger number, never a bypass: past it the check still goes red with `rc=124`.
+3. **The script is really hung** (waiting on network, a lock, or docker): fix the script. Only declared skips exit 0.
+
+`CI_SCRIPT_TIMEOUT=60 make ci` raises the budget for every script when you want to find out whether a slow script finishes; it does not change the "hang ⇒ red" rule.
 
 ### `docker compose up` fails with "port already in use"
 

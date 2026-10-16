@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -188,110 +187,22 @@ var ErrIPBanned = fmt.Errorf("finmind: ip banned by upstream (rate limit)")
 // so a mis-parse never unblocks early.
 const finmindIPBanDefaultRetryAfterSec = 1020
 
-// finmindRedacted replaces secret material in anything derived from an
-// upstream response before it reaches a log line, an error string, or the
-// on-disk quota state.
-const finmindRedacted = "[REDACTED]"
-
-// finmindSecretJSONKeys lists the upstream JSON fields that carry secret
-// material. FinMind echoes a fragment of the caller's API key back on auth
-// and quota errors — `{"msg":"Token is illegal.","status":400,
-// "token_tail":"...abc"}` and, observed in production 2026-09-26, on the 402
-// quota response as well. Any code path that surfaces raw upstream text must
-// run it through sanitizeFinMindBody first, otherwise a token fragment lands
-// in channel-health records, error strings and logs.
-var finmindSecretJSONKeys = []string{
-	"token_tail",
-	"token",
-	"api_key",
-	"apikey",
-	"authorization",
-	"access_token",
-	"password",
-}
-
-// finmindSecretKeyRe matches the `"key": "value"` shape of the fields above in
-// bodies that do not parse as JSON (truncated bodies — the 512-byte cap can
-// cut an envelope in half — HTML error pages, plain text). The whole pair,
-// key included, is replaced: the field NAME is dropped too, so a log line or
-// an error string can never be mistaken for a place to look for the value.
-var finmindSecretKeyRe = regexp.MustCompile(`(?i)"?(?:token_tail|token|api_key|apikey|authorization|access_token|password)"?[\s]*[:=][\s]*("[^"]*"|[^",}\s]+)`)
-
-// sanitizeFinMindBody removes secret material from a raw upstream body.
+// sanitizeFinMindBody removes secret material from a raw FinMind body before
+// it reaches a log line, an error string or the on-disk quota state.
 //
-// It redacts (a) JSON object members whose key is listed in
-// finmindSecretJSONKeys — recursively, so nested envelopes are covered — and
-// (b) any literal occurrence of the API keys passed in secrets. The literal
-// rule only applies to values of at least 8 bytes: shorter strings would
-// mangle unrelated text (a 1-byte key would gut every message), and real
-// FinMind tokens are JWT-sized. Bodies shorter than that bound are still
-// covered by the field redaction above.
+// FinMind echoes a fragment of the caller's API key back on auth and quota
+// errors — `{"msg":"Token is illegal.","status":400,"token_tail":"...abc"}`
+// and, observed in production 2026-09-26 02:10Z, on the 402 quota response as
+// well. Every code path that surfaces raw upstream text must run it through
+// this function first, otherwise a token fragment lands in channel-health
+// records, error strings and logs.
 //
-// The result keeps everything an operator needs ("Token is illegal.",
-// "Requests reach the upper limit") while dropping the credential fragment.
+// The redaction itself lives in redact.go (redactUpstreamText) because the
+// same sink class exists in every provider of this package; this wrapper keeps
+// the FinMind-named entry point its callers and tests already use, and adds
+// the client's own credential to the literal scrub.
 func sanitizeFinMindBody(body string, secrets ...string) string {
-	out := scrubFinMindJSONSecrets(body)
-	for _, s := range secrets {
-		if len(s) >= 8 {
-			out = strings.ReplaceAll(out, s, finmindRedacted)
-		}
-	}
-	return out
-}
-
-// scrubFinMindJSONSecrets redacts the known secret fields in body, preferring
-// a structural (JSON) rewrite and falling back to a textual scrub.
-func scrubFinMindJSONSecrets(body string) string {
-	var decoded any
-	if err := json.Unmarshal([]byte(body), &decoded); err == nil {
-		if !redactFinMindSecretsInValue(decoded) {
-			return body
-		}
-		if reencoded, err := json.Marshal(decoded); err == nil {
-			return string(reencoded)
-		}
-		return body
-	}
-	return finmindSecretKeyRe.ReplaceAllString(body, finmindRedacted)
-}
-
-// redactFinMindSecretsInValue walks a decoded JSON value and DROPS every
-// object member whose key is secret-looking (the member is removed, not merely
-// masked, so the field name cannot hint at where to look). Reports whether
-// anything changed.
-func redactFinMindSecretsInValue(v any) bool {
-	changed := false
-	switch node := v.(type) {
-	case map[string]any:
-		for k, child := range node {
-			if isFinMindSecretKey(k) {
-				delete(node, k)
-				changed = true
-				continue
-			}
-			if redactFinMindSecretsInValue(child) {
-				changed = true
-			}
-		}
-	case []any:
-		for _, child := range node {
-			if redactFinMindSecretsInValue(child) {
-				changed = true
-			}
-		}
-	}
-	return changed
-}
-
-// isFinMindSecretKey reports whether a JSON member key carries secret material.
-func isFinMindSecretKey(key string) bool {
-	normalized := strings.ToLower(strings.TrimSpace(key))
-	for _, secret := range finmindSecretJSONKeys {
-		if normalized == secret {
-			return true
-		}
-	}
-	return false
+	return redactUpstreamText(body, secrets...)
 }
 
 // finmindUpstreamQuotaReason renders the reason stored with the upstream quota
