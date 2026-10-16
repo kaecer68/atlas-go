@@ -515,8 +515,25 @@ func CalibrateDarwinianWithStore(ie *config.InferenceEngine, n int, cfg *config.
 			}
 		}
 
-		dailyRiskVol := agentVols[int(float64(len(agentVols))*0.75)] / math.Sqrt(252)
+		// Sample adequacy (FU-20260930-09). The enclosing floor for this whole
+		// section is len(agentSharpes) >= 3, and the upper quartile below is
+		// taken at nearest-rank index int(0.75*n) of the sorted vols — which IS
+		// the largest sample for n <= 4. An estimate that equals the sample
+		// maximum is not a percentile: a single agent's volatility alone sets
+		// the threshold, and installing it means no agent at or below the
+		// sample maximum is above it. Measured on a four-agent fixture, moving
+		// ONE agent's daily volatility 0.008 -> 0.050 moved the written
+		// threshold 0.0082 -> 0.0513 (and the row stayed inside the band below,
+		// so the band does not cover this case).
+		//
+		// The floor is derived from the estimator (the estimated rank must have
+		// at least one observation above it), not picked as a policy: any
+		// stricter statistical adequacy floor is a threshold-policy decision for
+		// the owner and is deliberately NOT applied here.
+		riskVolRank := int(float64(len(agentVols)) * 0.75)
+		dailyRiskVol := agentVols[riskVolRank] / math.Sqrt(252)
 		beforeRiskVol := cfg.Darwinian.RiskVolatilityThreshold.Value
+		sampleSupportsRank := riskVolRank < len(agentVols)-1
 
 		// Sane band for a DAILY volatility threshold (issue #2169).
 		//
@@ -540,9 +557,27 @@ func CalibrateDarwinianWithStore(ie *config.InferenceEngine, n int, cfg *config.
 			maxDailyRiskVolatility = 0.25
 		)
 		outOfBand := dailyRiskVol < minDailyRiskVolatility || dailyRiskVol > maxDailyRiskVolatility
-		writeRiskVol := !outOfBand && math.Abs(dailyRiskVol-beforeRiskVol) > 0.001
+		writeRiskVol := sampleSupportsRank && !outOfBand && math.Abs(dailyRiskVol-beforeRiskVol) > 0.001
 
-		if outOfBand {
+		if !sampleSupportsRank {
+			// Do NOT write. Same contract as the band skip below: the overlay
+			// persists only CHANGED leaves, so Before == After leaves the SSOT
+			// and the overlay untouched while the reason stays visible in the
+			// calibration report and in the log. Writing the value instead would
+			// publish the most volatile agent's own volatility as the risk
+			// threshold.
+			logging.Warn("calibration", "darwinian_risk_volatility_insufficient_sample",
+				logging.FInt("agents", len(agentVols)),
+				logging.FInt("percentile_rank", riskVolRank),
+				logging.FStr("computed_daily_volatility", fmt.Sprintf("%.6f", dailyRiskVol)),
+				logging.FStr("action", "value NOT written; the upper-quartile rank is the sample maximum"))
+			res.Parameters = append(res.Parameters, CalibratedParameter{
+				Path: "darwinian.risk_volatility_threshold", Before: beforeRiskVol, After: beforeRiskVol,
+				Method: "skipped_insufficient_sample", Confidence: 0, SampleSize: len(agentVols),
+				CalibrationNotes: fmt.Sprintf("upper-quartile rank %d of %d agents is the sample maximum (computed daily volatility %.6f); a percentile needs at least one observation above its rank; not written",
+					riskVolRank, len(agentVols), dailyRiskVol),
+			})
+		} else if outOfBand {
 			// Do NOT write. Nothing is lost by recording the value here: the
 			// overlay persists only CHANGED leaves, so Before == After keeps the
 			// SSOT and the overlay untouched while the reason stays visible in the
