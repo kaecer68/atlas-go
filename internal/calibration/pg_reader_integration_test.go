@@ -4,6 +4,11 @@ package calibration
 
 // #2123 的 PG 端到端證據：分數必須來自 **PostgresHistoricalStore**（生產形狀），
 // 而不是 job-local sqlite artifact。
+//
+// CI 觸發契約：本檔由 `.github/workflows/ci-cd.yml` 的 `integration:` 路徑過濾器的
+// `- 'internal/calibration/**'` 觸發（job 內跑整個 `go test -tags=integration ./...`）。
+// 兩邊必須一致：過濾器漏掉本目錄時，只改本目錄的 PR 會讓該 job 變成 **skipping（不是 pass）**
+// ⇒ 本檔在 CI 從不會被觸發。守門：scripts/ci/check_integration_filter_sync.py（FU-20261015-01）。
 
 import (
 	"context"
