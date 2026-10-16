@@ -1535,7 +1535,7 @@
 
 ### FU-20260927-04 — **12 處** `runbook_url` 指向 `wiki.internal`（DNS **NXDOMAIN**）：其中 **5 處**在 repo 內沒有對應 runbook
 
-- **狀態**：`open`
+- **狀態**：`done`（2026-10-16 收斂；**盤點敘述有更正**，處置見條文末）
 - **記錄日期**：2026-09-27
 - **事實（我實查,全部可重現）**：
   - `grep -rn 'wiki.internal' monitoring/` ⇒ **12 處**。
@@ -1558,9 +1558,48 @@
 
 ---
 
+## 處置（2026-10-16，PR 本車道）
+
+### A. 盤點更正（權威清單以機械式盤點為準，F-item 敘述有 3 處不精確）
+
+1. **`repo 內共 13 處`，不是 12 處**。F-item 的「12 處」是 `grep -rn 'wiki.internal' monitoring/`
+   的數；repo 全掃（tracked 檔）另有 **1 處**在 `docs/operations/loki-deployment.md:205`
+   （Loki LogQL 規則的**設計預覽**，`monitoring/rules/loki/` 不存在 ⇒ 不是執行期規則）。
+2. **標題的「其中 5 處在 repo 內」與內文分類不符**：12 處**全部**在 repo 內；
+   「**7／5**」是**依告警家族**的切法（channel-health 7 處／llm-annotator 5 處），不是「repo 內／外」。
+3. **行號已過期**：`channel_health_latent_staleness.yml` 現為
+   `:36`（`ChannelDataStale`）／`:54`（`ChannelFetchLatencyHigh`）／`:74`／`:90`／`:106`／`:122`
+   （`ChannelHealthStatusError` ×4），F-item 記的 `:22／:40／:60／:76／:92／:108` 是舊版。
+4. **「repo 外的 7 處」不存在**。repo 外唯一命中是 Mac Mini 的
+   `~/workspace/atlas-monitoring/rules/`（**9 處**），那是 **iMac 時代殘留樹、不是掛載源**
+   （`check_monitoring_single_source.sh` 的 R1/R3 正是為它而寫；生產容器掛的是 repo 的 `monitoring/`）
+   ⇒ 刻意**不動**，只回報。生產 checkout（`~/workspace/atlas`，Mac Mini）是同一 repo 的舊 HEAD
+   （12 處），部署後自然收斂。
+
+### B. 修法（不換成另一個猜的網址；每個目標都先確認存在，且**內容涵蓋該告警的處置**）
+
+| 原本（死鏈） | 新目標 | 依據 |
+|---|---|---|
+| `channel_health_latent_staleness.yml` 6 處 ＋ `wave9_channel_individual_health.yml` 1 處（7 處） | **新建** `docs/operations/channel-health-runbook.md` | 4 條告警逐條 triage（症狀／影響／診斷／緩解／升級）＋ 契約感知 `overage` 語意；原 `wave9-runbook.md` §3.3 只涵蓋 `atlas_channel_health_errors_total`，直接指它會重演「看起來修好」 |
+| `llm_annotator_alerts.yml` 5 處 | **新建** `docs/operations/llm-annotator-runbook.md` | repo 內原本沒有 llm-annotator 的處置文件；新檔 §1 記載「該家族在生產**沒有生產者**」的實證（另開 FU-20261016-10） |
+| `docs/operations/loki-deployment.md:205` | `docs/operations/local-deploy.md`（既有） | 該 4 條 LogQL 規則**尚未在 repo 落地**（沒有 `monitoring/rules/loki/`）⇒ 不為預覽造 runbook；指向既有的服務重啟／回滾手冊，並在該行註明「實作時應改指專屬 panic runbook」 |
+
+### C. 驗收（附原文；指令與 rc 一律從 log 讀）
+
+- `grep -rn 'wiki.internal' monitoring/` ⇒ **rc=1（0 命中）**。
+- `python3 scripts/ci/check_monitoring_single_source.py` ⇒ `R4 runbook_url 目標：OK`、`✅ PASS`、**rc=0**
+  （唯一警告是既有的 `atlas_container_liveness_alerts.yml:167` 指向 `monitoring/prometheus.yml`，非本票範圍）。
+- **生產實證（2026-10-16 唯讀查詢）**：Prometheus `/api/v1/alerts` 當下 firing 的
+  `ChannelDataStale{channel="tej"}` 的 `runbook_url` annotation **就是** `https://wiki.internal/runbooks/channel-data-stale`
+  ⇒ 本票講的「事件當下 runbook 是死的」是**當日可重現**的事實，不是推論。
+- 12 個新目標逐條人工複核：8 條 channel-health 規則 → 新 runbook 的 §3／§4／§5／§6 逐條對應到規則名；
+  5 條 llm-annotator → §3／§4／§5 逐條對應（並附「這 5 條目前休眠」）。
+
+---
+
 ### FU-20260927-05 — `scripts/ci/check_monitoring_single_source.py` 可再加 **R4：`runbook_url` 必須指到存在且對應的文件**（只建議,未實作）
 
-- **狀態**：`open`
+- **狀態**：`done`（2026-10-16 實作 R4；處置見條文末）
 - **記錄日期**：2026-09-27
 - **來源**：本日的 replay 告警工作（#2063／#2066／`FU-20260927-03`／`FU-20260927-04`）暴露的同一道縫：
   `runbook_url` 是**唯一沒有人守的欄位**（#2066 是一次人工修;12 處死鏈仍在）。
@@ -1577,6 +1616,49 @@
     （實作需 owner 確認佔用;且在 `FU-20260927-04` 收斂前就把外部 URL 設成 fail,會讓 gate 立刻紅）。
 - **驗收條件**：故意把一條 `runbook_url` 改成 `.../blob/main/docs/operations/`（目錄）⇒ 檢查 **exit 1**;
   12 處 `wiki.internal` 的既定狀態下 ⇒ **只 warn、不 FAIL**（且有自我測試,不可退化成永遠 PASS）。
+
+## 處置（2026-10-16，PR 本車道）
+
+### A. R4 的取捨（照 F-item 的界線：外部不可離線證明 ⇒ 預設 warn，可設定）
+
+- **FAIL（離線可證）**：指向**本 repo** 的 `runbook_url` 必須是 `/blob/<ref>/<path>` 的**檔案** URL，
+  且 `<path>` 在 repo 內**存在**、**不是目錄**；`/tree/…`、`/issues/N`、`/blob/main/`（只指目錄）
+  一律 FAIL——驗收條件要求的「改成 `.../blob/main/docs/operations/` ⇒ exit 1」正是這一條。
+  另外：值不是 http(s) 絕對 URL、host 不合法、host 不是完整網域名稱且不在白名單內 ⇒ FAIL。
+- **WARN（不影響 rc，但**一定印出**；`--quiet` 也印）**：外部 host 不在白名單內、
+  in-repo 目標不是 `.md`（runbook 應是散文）、in-repo blob 的 ref 不是 `main`。
+- **可設定、不需改程式**：白名單檔 `scripts/ci/monitoring-runbook-allowlist.json`
+  （`external_hosts` ＋ `external_policy: warn|fail`），或 CLI `--strict-external`。
+  **為什麼預設 warn**：外部 URL 不做 DNS／HTTP 檢查（CI 連外會製造新的 flake，
+  同 repo 已有 `check_jev_contract.sh` 的實證 `FU-20260926-21`）⇒「外部目標是否真的活著」
+  不是離線可證的命題，設成 FAIL 只會製造誤紅。**為什麼 warning 不能是隱形的**：
+  警告若被 `--quiet` 吃掉，這條政策就退化成「永遠 PASS」，故實作把警告印在 verdict 之外。
+- **本 repo 的識別**：用 `git remote get-url origin` 推導 `owner/repo`（CI checkout 目錄名是 `atlas-go`、
+  本機 worktree 名是 `fix-…` ⇒ **不能**用目錄 basename），推導不到才用常數 `kaecer68/atlas-go`。
+  推導失敗的失效方向是「自家 URL 被當成外部」⇒ 只 warn，不會誤紅。
+
+### B. 自測與負向證明（都在既有 CI job 內，**未新增 CI job**；也未動 `.github/workflows/ci-cd.yml`（該檔為另一車道佔用））
+
+- `tests/scripts/test-monitoring-single-source.sh`：**26 項**（原 10 項 ＋ R4 的 16 項：
+  存在／缺檔／目錄／tree／issue 連結／非 http scheme／無 scheme／非完整 host ⇒ FAIL；
+  未知外部 host ＋ 非 .md 目標 ⇒ PASS ＋ `[R4-W]`；`--strict-external` 與白名單 `policy=fail` ⇒ FAIL；
+  白名單命中 ⇒ 無警告；**mutation 自證**：停用 R4 判定 ⇒ 目錄 fixture 由紅轉綠，還原後必須回紅）。
+- `scripts/ci/monitoring-single-source-negative-proof.sh`：新增第二個 fixture
+  `monitoring/rules/__negtest__.yml`（`runbook_url` 指向不存在的檔）＋ `[R4]` 規則 id 斷言
+  ⇒ 證明「擋下它的是 R4」。`tests/scripts/test-negative-proofs.sh` 的規則層 mutation
+  同步擴到 R4（否則只停 R2/R3 時 R4 仍會擋下 fixture，掩蓋 E7 要證明的形狀）⇒ **38 項 PASS**。
+- CI：`monitoring-single-source` job 既有三步（check ＋ self-test ＋ negative proof）**不必改**即涵蓋 R4；
+  `make ci-gate` 的 `ci-quick` 也會跑 check 本體。
+
+### C. 驗收（rc 皆從 log 讀）
+
+- 全 repo 掃描：`✅ monitoring-single-source PASS`、**rc=0**。
+- 突變（把一條 `runbook_url` 改成不存在的路徑）：**rc=1**，紅燈原文
+  `❌ [R4] monitoring/rules/__negtest__.yml:6 — 目標檔案在 repo 內不存在：docs/operations/__negtest_missing__.md（…）`；
+  以 `cp` 備份 ＋ sha256 還原（負向證明的 fixture 由腳本 `rm` 還原，非 `git checkout`）。
+- `docs/operations/FOLLOWUPS.md` 本條與 `FU-20260927-04` 一併改 `done`；`check_followups_unique_ids.sh` rc=0。
+
+---
 
 ### FU-20260927-06 — `AtlasReplayJsonlBehindCsv` 的門檻以**日曆天**計，但修後的真實落後是**1 個交易日** ⇒ 常態下每週約 96% 相位會 firing
 
@@ -2991,6 +3073,40 @@ PY
 - **查法**：`grep -n 'os.ReadFile\|filepath.Glob' internal/experiment/{judge,find,auto}.go`；
   `grep -n 'ExperimentsJSONL' internal/experiment/evolution_health.go`；
   `grep -rn 'TryPromoteFromPath\|PromoteResult(' --include='*.go' cmd internal | grep -v _test`。
+
+### FU-20261016-10 — llm-annotator 的 9 條告警建在**沒有生產者**的指標家族上 ⇒ 綠燈是「假的安心」（5 條帶 `runbook_url`）
+
+- **狀態**：`open`（**只登記，未改規則**：改規則＝改對外契約與 Grafana 引用，需 owner 定案）
+- **記錄日期**：2026-10-16
+- **來源**：`FU-20260927-04` 的 runbook 收斂（本車道）。為 llm-annotator 寫 runbook 時必須回答
+  「值班照著查會看到什麼」，一查才發現**查不到任何東西**。
+- **事實（三項互相印證：程式碼唯一呼叫點 ＋ router 設定 ＋ 生產唯讀查詢）**：
+  1. **唯一生產者**：`llm_annotator_requests_total` 只在 `internal/llm_annotator/annotator.go`
+     的 `KimiClient.recordOutcome` 發射，而它只被 `KimiClient.Annotate` 呼叫。
+  2. **`Annotate` 已不在線上 annotate 路徑**（issue #1897）：`POST /api/strategies/{id}/annotate`
+     走 `llm.Router` 的 `RouterAnnotator`（`cmd/atlas/annotator_wiring.go`）；legacy `KimiClient`
+     只保留一個用途 —— `GET /api/llm_annotator/cost` 的**唯讀用量來源**。
+     `configs/llm_router.yaml` 檔頭逐字寫明 `kimi — … NOT in any chain since ADR-012 addendum 4`；
+     `failure_attribution` 鏈是 `minimax → deepseek → mock`（legacy client 註冊成 `ProviderKimi`，
+     不在任何鏈內）。router 自己發的是另一族：`llm_client_requests_total`、
+     `llm_router_fallback_triggered_total`（#1926 才接上）。
+  3. **生產實證（2026-10-16 唯讀 Prometheus 查詢）**：`count(llm_annotator_requests_total)` ⇒ **空集合**；
+     同日 `count(llm_router_fallback_triggered_total)` ⇒ `2`（router 那族是活的）。
+- **風險（兩種都不吵，所以沒人會發現）**：
+  - 空集合下 `sum(rate(...)) == 0` **不成立**（不是 0，是沒有樣本）⇒ `LLMAnnotatorNoTraffic` 不會 fire；
+    burn-rate 的 recording 規則無輸入 ⇒ 也不會有任何 ratio。**9 條告警（含 4 條 `error_category` 的）
+    既不會響、也不提供保護**，但在 Grafana／規則清單上與其他告警長得一樣。
+  - 真正的失敗歸因健康訊號（fallback 觸發、鏈被走完）**沒有專屬告警** ⇒ 現在是「有指標、沒規則」
+    與「有規則、沒指標」各佔一半。
+- **最小處置（選項，需 owner 定案）**：①**退役**這 9 條（判準寫在規則檔內，說明生產者不存在）；
+  ②把 burn rate 改指 router 的 `llm_client_requests_total`／`llm_router_fallback_triggered_total`
+  （別名／對照表要進 Grafana）；③若確定要保留 legacy 路徑，必須顯式接回 `/annotate`（＝撤 #1897，另案）。
+  三者都**不得**只調門檻或加 silence —— 那會讓「沒有保護力」變成「看起來有保護力」。
+- **查法**：`docker exec atlas-go curl -s localhost:18080/metrics | grep -c '^llm_annotator_requests_total'`；
+  Prometheus `count(llm_annotator_requests_total)`；`grep -rn 'llm_annotator_requests_total' --include='*.go' internal cmd`；
+  `grep -n 'kimi' configs/llm_router.yaml`。
+- **相關**：`docs/operations/llm-annotator-runbook.md` §1（同一組事實的 runbook 版）；
+  `monitoring/rules/llm_annotator_alerts.yml` 檔頭註解。
 
 ---
 

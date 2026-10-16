@@ -1,3 +1,9 @@
+# channel_health_latent_staleness.yml — 通道陳舊／抓取延遲／健康狀態告警
+#
+# 2026-10-16（FU-20260927-04）：本檔 6 個 `runbook_url` 原本指向一個
+# **DNS 已不存在**的內部 wiki 主機（NXDOMAIN）⇒ 事件當下 runbook 是死的。
+# 改指 repo 內的 `docs/operations/channel-health-runbook.md`
+#（該檔涵蓋本檔全部 4 條規則的 triage）。守門：`scripts/ci/check_monitoring_single_source.py` R4。
 groups:
   - name: channel_health_latent_staleness
     rules:
@@ -33,7 +39,7 @@ groups:
           description: |
             Channel {{ $labels.channel }} data staleness exceeds its freshness contract by {{ $value | humanizeDuration }}.
             建議檢查該通道的自動排程是否仍在運行，或資料源是否中斷。
-          runbook_url: "https://wiki.internal/runbooks/channel-data-stale"
+          runbook_url: "https://github.com/kaecer68/atlas-go/blob/main/docs/operations/channel-health-runbook.md"
 
       - alert: ChannelFetchLatencyHigh
         # 2026-09-03 告警降噪：day_trading / market_volume /
@@ -51,7 +57,7 @@ groups:
           description: |
             Channel {{ $labels.channel }} last fetch latency was {{ $value }} seconds.
             可能原因：上游 API 回應變慢、rate limit、或網路不穩。
-          runbook_url: "https://wiki.internal/runbooks/channel-fetch-latency-high"
+          runbook_url: "https://github.com/kaecer68/atlas-go/blob/main/docs/operations/channel-health-runbook.md"
 
       # R4 (#1877): health samples are emitted by tasks with different
       # intervals, so a single generic `for: 5m` is too short for 1h/6h/24h
@@ -71,7 +77,7 @@ groups:
           description: |
             Channel {{ $labels.channel }} health status is error.
             請檢查 channel_health.json 中的 last_error 與 AlertStore 中的 data_gap / channel_health 警報。
-          runbook_url: "https://wiki.internal/runbooks/channel-health-status-error"
+          runbook_url: "https://github.com/kaecer68/atlas-go/blob/main/docs/operations/channel-health-runbook.md"
 
       - alert: ChannelHealthStatusError
         expr: atlas_channel_health_status{channel=~"^(exchange_rate|finmind|fubon|fugle|taiex_index|taifex_daily|twse_insider|twse_replay)$"} == 2
@@ -87,7 +93,7 @@ groups:
           description: |
             Channel {{ $labels.channel }} health status is error.
             請檢查 channel_health.json 中的 last_error 與 AlertStore 中的 data_gap / channel_health 警報。
-          runbook_url: "https://wiki.internal/runbooks/channel-health-status-error"
+          runbook_url: "https://github.com/kaecer68/atlas-go/blob/main/docs/operations/channel-health-runbook.md"
 
       - alert: ChannelHealthStatusError
         expr: atlas_channel_health_status{channel="geopolitical_taiwan"} == 2
@@ -103,7 +109,7 @@ groups:
           description: |
             Channel {{ $labels.channel }} health status is error.
             請檢查 channel_health.json 中的 last_error 與 AlertStore 中的 data_gap / channel_health 警報。
-          runbook_url: "https://wiki.internal/runbooks/channel-health-status-error"
+          runbook_url: "https://github.com/kaecer68/atlas-go/blob/main/docs/operations/channel-health-runbook.md"
 
       - alert: ChannelHealthStatusError
         expr: atlas_channel_health_status{channel="tsmc_revenue"} == 2
@@ -119,4 +125,4 @@ groups:
           description: |
             Channel {{ $labels.channel }} health status is error.
             請檢查 channel_health.json 中的 last_error 與 AlertStore 中的 data_gap / channel_health 警報。
-          runbook_url: "https://wiki.internal/runbooks/channel-health-status-error"
+          runbook_url: "https://github.com/kaecer68/atlas-go/blob/main/docs/operations/channel-health-runbook.md"

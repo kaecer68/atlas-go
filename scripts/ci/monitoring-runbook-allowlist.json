@@ -1,0 +1,13 @@
+{
+  "_comment": [
+    "R4 runbook_url 的外部 host 白名單（scripts/ci/check_monitoring_single_source.py）。",
+    "只影響『不在本 repo』的 URL；指向本 repo 的 /blob/<ref>/<path> 一律 fail-closed（存在性可離線證明）。",
+    "external_hosts：已知且允許的外部 host（小寫、不含 scheme）。未列出者依 external_policy 處置。",
+    "external_policy：warn（預設，只印警告）或 fail（升為違規）。CLI --strict-external 可臨時覆寫為 fail。",
+    "為什麼預設 warn：外部 URL 不做 DNS/HTTP 檢查（CI 連外會製造新的 flake，見 FU-20260926-21），",
+    "所以『外部目標是否真的活著』不是離線可證的命題；把它變成 FAIL 只會製造誤紅。",
+    "現況：2026-10-16 收斂 FU-20260927-04 之後，monitoring/rules/ 內已沒有外部 host 的 runbook_url。"
+  ],
+  "external_hosts": [],
+  "external_policy": "warn"
+}
