@@ -3465,6 +3465,34 @@ PY
 - **建議（未實作）**：待 `-15` 落地後套用；`atlas-mcp` 的 `fullURL` 需要 URL 遮蔽器。
 - **驗收條件**：同 `-14`（假憑證不得出現在 CLI 的錯誤輸出）。
 
+### FU-20261016-17 — `internal/marketdata` 的 integration 測試在 CI **確定性 SKIP** ⇒ 該目錄目前是「白名單豁免」、零 CI 覆蓋
+
+- **狀態**：`open`
+- **記錄日期**：2026-10-16
+- **來源**：`FU-20261015-01` 的收斂（PR [#2244](https://github.com/kaecer68/atlas-go/pull/2244)）＋ 新守門 `scripts/ci/check_integration_filter_sync.py` 的豁免機制
+- **事實**：
+  - `internal/marketdata/sector_index_reader_real_test.go`（該目錄唯一帶 `//go:build integration` 的檔）在 CI **確定性 SKIP**：
+    實測 run `38831941034` 第 24353-24354 行逐字
+    `sector_index_reader_real_test.go:46: sector_index dir present but no parseable data for window` ＋
+    `--- SKIP: TestSectorIndexReader_ReadRange_RealFixture (0.00s)`；**同一現象在 PR #2244 的兩次 integration job 亦重現**
+    （`internal/marketdata` 分別 `ok 77.028s`／`78.293s`，各自內含同一個 SKIP）。
+  - 成因是**設計**：fixture 位於 repo 根 `data/state/sector_index`（**gitignored**），`findSectorIndexDataDir` 只認
+    **repo 根自己**的路徑（刻意不探 checkout 的父目錄，見該檔 2026-08-23 的 CI 契約註解）⇒ 無 fixture 即 SKIP、永不 FAIL。
+  - 因此 PR #2244 **沒有**把 `internal/marketdata/**` 補進 `integration:` 白名單，而是登錄**豁免**（理由必填）：
+    `# integration-filter-exempt: internal/marketdata — 唯一 integration 測試在 CI 確定性 SKIP（repo 根 data/state 為 gitignored）⇒ 觸發只多花 ~14 分鐘而零覆蓋`。
+    判準：補白名單的代價是**每個 marketdata PR** 多跑一趟 integration suite（實測 806s／820s／864s），
+    而該目錄是近期最熱的（近 3 個月 **185 個檔案**異動）⇒ 花 14 分鐘買到**零覆蓋**。
+- **風險**：`internal/marketdata` 的 sector_index 讀取路徑目前**沒有任何 CI 守護**（只有本機有真資料時才驗得到）
+  ⇒ 回歸可長期潛伏。與 `FU-20261015-01` 同族，但型態是「有 tag 卻 SKIP」，靠 `paths-filter` 補白名單**救不到**。
+- **最小處置（真解，未實作）**：把 `TestSectorIndexReader_ReadRange_RealFixture` 改成**合成 fixture**
+  （`t.TempDir()` 造最小 `sector_indices_*.json`，斷言 schema 與 backfill 不變量），
+  或把最小 fixture **納入版本控制**（放 repo 內非 gitignored 的路徑）；二者皆可讓該測試在 CI 真的驗到東西。
+- **何時該改回補白名單（判準）**：該測試在**乾淨 checkout** 上**不再 SKIP**（即 CI 真的驗到東西）時 ⇒
+  把 `# integration-filter-exempt: internal/marketdata — …` 換成 `- 'internal/marketdata/**'`。
+  守門會直接轉綠；**只刪豁免、不補條目**會被守門抓成 `uncovered` 紅燈（刻意設計，避免兩件事只做一半）。
+- **查法**：`bash scripts/ci/check_integration_filter_sync.sh`（應顯示 `⏭️ internal/marketdata ← exempt：…`）；
+  `go test -tags=integration -run TestSectorIndexReader_ReadRange_RealFixture -v ./internal/marketdata/`（本機有真資料時才會真的跑）。
+
 ---
 
 ## 相關文件
