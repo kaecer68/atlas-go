@@ -31,6 +31,11 @@
 
      理由留空（只有 `—` 後面沒字）⇒ 紅燈。豁免必須是**活的**（該目錄仍有 integration 測試）
      ⇒ 站點消失後沒刪豁免 = 紅燈（stale）；豁免與白名單同時涵蓋同一目錄 = 紅燈（矛盾）。
+     理由必填就是為了讓「為什麼可以不觸發」能被 review。目前已登錄的兩類實例：
+       (a) `cmd/atlas-mcp-setup`：該套件已由 `test-cmd-atlas` job（無 paths filter、~95s）逐 PR 執行
+           ⇒ 再拉整個 integration suite（實測 864s／820s）只是空跑。
+       (b) `internal/marketdata`：唯一的 integration 測試在 CI **確定性 SKIP**（fixture 在
+           gitignored 的 repo 根 `data/state`）⇒ 觸發買到的是零覆蓋。
 
 反向（白名單有條目、但沒有任何 integration 測試檔）**只報告、不紅燈**：那些條目可能是
 integration 測試的相依套件（例：`internal/testdb` 被 `*_integration_test.go` import），

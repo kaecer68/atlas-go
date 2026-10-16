@@ -504,12 +504,19 @@ jobs:
             - 'internal/calibration/**'
             # internal/fubonproxy/e2e_test.go（-fubon-port／preflight zombie reclaim 的 binary e2e）。
             - 'internal/fubonproxy/**'
-            # internal/marketdata/sector_index_reader_real_test.go（RealFixture 讀取路徑）。
-            - 'internal/marketdata/**'
             # 例外（豁免，理由必填；格式：`# integration-filter-exempt: <dir> — <理由>`，由守門解析）：
+            # internal/marketdata：唯一的 integration 測試 sector_index_reader_real_test.go 在 CI
+            # **確定性 SKIP**（找的是 repo 根的 data/state/sector_index，該路徑 gitignored；檔案自身
+            # 的 CI 契約註解即載明「never fail CI on missing data」）。實測：run 38831941034 的
+            # integration log 第 24353-24354 行 = `sector_index dir present but no parseable data
+            # for window` + `--- SKIP: TestSectorIndexReader_ReadRange_RealFixture (0.00s)`。
+            # 補進白名單只會讓每個 marketdata PR 多跑一趟 ~14 分鐘（實測 864s／820s）而**零覆蓋**，
+            # 且該目錄是近期最熱的（近 3 個月 185 個檔案異動）。要真覆蓋必須先把該測試改成合成
+            # fixture（另案），不是靠觸發。
+            # integration-filter-exempt: internal/marketdata — 唯一 integration 測試在 CI 確定性 SKIP（repo 根 data/state 為 gitignored）⇒ 觸發只多花 ~14 分鐘而零覆蓋
             # cmd/atlas-mcp-setup/integration_test.go 已由 test-cmd-atlas job（無 paths filter）以
             # `go test -tags=integration ./cmd/atlas-mcp-setup/` 在每個 code 變更上執行
-            # ⇒ 不必再觸發整個 integration suite（省一趟 13 分鐘）。
+            # ⇒ 不必再觸發整個 integration suite。
             # integration-filter-exempt: cmd/atlas-mcp-setup — 已由 test-cmd-atlas job 逐 PR 執行該套件，不需再觸發整個 integration suite
             - 'migrations/**'
             - '**/*.sql'

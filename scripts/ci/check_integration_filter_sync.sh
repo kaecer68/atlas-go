@@ -9,7 +9,10 @@
 # （本機跑得到 ⇒ 假安全）。FU-20261015-01。
 #
 # 判準（唯一權威）：來源是「repo 內帶 integration tag 的檔所在目錄」（可由檔案推導），
-# 不是人工清單、也不是檔名慣例；例外必須逐條登錄且附理由（見 .py 的 docstring）。
+# 不是人工清單、也不是檔名慣例；例外（豁免）必須逐條登錄且附理由——目前兩類實例：
+#   (a) 該目錄的測試已由另一個無 paths filter 的 job 執行（cmd/atlas-mcp-setup）；
+#   (b) 該目錄的測試在 CI 確定性 SKIP ⇒ 觸發只多花時間而零覆蓋（internal/marketdata）。
+# 見 .py 的 docstring。
 #
 # 實作：scripts/ci/check_integration_filter_sync.py（純 Python3；不執行 Go、不連網、不改檔）
 # 回歸測試：tests/scripts/test-integration-filter-sync.sh（hermetic fixtures + mutation 自證）
