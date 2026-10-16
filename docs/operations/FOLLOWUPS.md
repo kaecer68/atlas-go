@@ -2750,8 +2750,11 @@ PY
 
 ### FU-20260930-09 — `darwinian.risk_volatility_threshold` 的**樣本下限過鬆**（`>= 4` ⇒ N=4 時 p75 ＝ 最大值 ⇒ 離群可穿透）
 
-- **狀態**：`open`
+- **狀態**：`done`
 - **記錄日期**：2026-09-30
+- **完成於**：2026-10-16 `7c3d44477`（PR [#2259](https://github.com/kaecer68/atlas-go/pull/2259) squash）
+  — **只改程式碼層的「樣本不足語意」**（**不動任何既有生產值** ✓）；提高下限／改穩健統計量／改百分位插值法
+  三者屬**閾值政策** ⇒ 只提案（見下「未做」）✓
 - **來源**：`#2169`（`risk_volatility_threshold` 與 SSOT 差 19×）的定位調查（lane B 實查 ✓）
 - **現況**：`internal/calibration/calibrate.go:369` 的樣本下限**僅 `>= 4`**；`：223` 另有 `SharpeMinSampleSize` 需求
   ⇒ 當 N=4 時，**p75 恰等於最大值** ⇒ 單一離群樣本可直接決定輸出 ✗
@@ -2762,6 +2765,46 @@ PY
   ② 或在輸出側附**信賴度／n** 欄位，低樣本時**不寫入**（與 `#2169` 的 guard-band 風格一致 ✓）
   ⚠️ 提高下限＝**值變更**（可能改變其他鍵的輸出）⇒ 需標註／授權 ✓
 - **查法（可重現）**：`grep -n '>= 4' internal/calibration/calibrate.go`；或 `go run ./cmd/calibrate-parameters --module=darwinian --dry-run` 觀察 `n=` 欄位 ✓
+
+- **★ 根因更正（2026-10-16 實查；唯讀讀碼 ＋ fixture 實測）**：
+  ① **原本的 guard 指認有誤** ✗ —— `risk_volatility_threshold` **不受** `>= 4` 管；真正包住它的是同層的
+     `len(agentSharpes) >= 3`（該區塊開頭）。`>= 4` 管的是**另一個鍵** `darwinian.volatility_penalty_multiplier`：
+     n=4 時 `highVolIdx = int(4*0.75) = 3` 即**最大值索引** ⇒ 其 `av > agentVols[highVolIdx]` 選不到任何 agent
+     ⇒ 該區塊在 n=4 **恆為 no-op**（實測：n=4 無 `volatility_penalty_multiplier` 條目／n=5、6 有 ⇒ 假下限）。
+     行號亦已漂移（原記 369／223 ⇒ 現為 452／315）✓
+  ② **核心主張成立、且比原敘述更寬** ✓：取樣索引是 `int(0.75*n)` ⇒ **n=3 與 n=4 時該索引都等於最大值索引**
+     ⇒ 小樣本時「p75」不是百分位，而是**最波動那一個 agent 自己的波動** ⇒
+     且裝上去等於「沒有任何 agent 會超過它」⇒ `internal/portfolio/darwinian_weights.go:653` 的
+     risk-multiplier 分支對整個 bottom tier 都失效 ✓
+- **實測（fixture：4 agent × 20 筆報酬）**：σ = 0.002／0.004／0.006／**0.05** ⇒ 修前寫出
+  **0.051298917604257706**（恰為第 4 個 agent 自己的日波動 `0.05*sqrt(20/19)`）；
+  只把該 agent 的 σ 改回 **0.008**（其餘不動）⇒ 寫出值變 **0.0082078268166812345**（**6.25×**）✓
+  ⇒ **單一 agent 決定輸出** ✓；同一離群在 **N=5** 時不影響輸出（0.0082078268166812345）⇒ 邊界確為 5 ✓
+  ★ 0.051299 **落在既有 sanity band [0.0005, 0.25] 內** ⇒ `#2169` 的 band **攔不到**這個案例 ✓
+- **處置（PR 見上）**：新增 `sampleSupportsRank := riskVolRank < len(agentVols)-1` ——**由估計量本身導出**
+  （百分位的秩上方必須至少還有一個觀測 ⇒ `int(0.75*n)` 約定下最小樣本 = **5**），不滿足時**不寫入**並記一筆
+  `method=skipped_insufficient_sample`（`After == Before` ⇒ overlay 零變更 ✓；notes 記秩／n／算得值 ✓；
+  log `darwinian_risk_volatility_insufficient_sample` ✓）⇒ 與同區塊 `skipped_out_of_band` 同一契約 ✓
+  - **樣本充足時逐位元組不變** ✓：6-agent fixture 修前後同為 `percentile_based`／`After=0.001581138830084191`
+    （測試把該值釘死，防止日後改動估計量而靜默漂移 ✓）
+  - **負向證明**：把守衛改成恆真（＝修前行為）⇒ 新測試必紅，紅燈原文
+    `agents=4 rank=3 max_rank=3 method=percentile_based after=0.051299` ✓（`cp` 還原 ＋ sha256 逐位元組相等 ✓）
+- **未做（待業主決定，屬閾值政策 ✗）**：① 下限再提高到「統計充足」的門檻（例 `n>=20`）；
+  ② 小樣本改用穩健統計量（中位數／MAD）；③ 百分位改線性內插或 Tukey hinges
+  ⇒ 三者都會**改變樣本充足時的既有值**或需決定政策 ⇒ 依「財務參數改值只提案」**不自行改動** ✓
+- **同型掃描清單**（僅盤點；**未自配 ID**，待 root 分配）：`internal/calibration/calibrate.go`
+  `:270` `hit_rate_high_threshold`（p75；下限僅 3 agent ⇒ n=3/4 時＝最高命中率）、
+  `:271` `hit_rate_low_threshold`（p25 ⇒ n<=3 時＝最低命中率）、
+  `:343` `top_quartile_multiplier`（0.67 ⇒ n=3 時＝最大 Sharpe）、
+  `:423` `bottom_quartile_multiplier`（0.25 ⇒ n<=3 時＝最小 Sharpe）、
+  `:452` `volatility_penalty_multiplier` 的 `>= 4` 假下限（見根因更正①）、
+  `:402` `lookback_days`／`ema_alpha` 由 `count` 驅動且**完全無下限**（`if count > 0` ⇒ 1 個 agent 即可改兩個鍵）、
+  `:654` `CalibrateFactor` 的 p90（只有 `len>0` ⇒ n<=10 時 p90＝最大值）、
+  `internal/industry/threshold_calibrator.go:113-115` P25／P50／P75（只有 `len(growths)>0` ⇒
+  n=1 時三值相同、n<=3 時 P25＝min／P75＝max）✓
+  （未受影響的對照：`:363` `volatility_penalty_threshold` 走**中位數** ⇒ 同型風險較低 ✓）
+- **查法（新增；含反例與邊界）**：`grep -n 'sampleSupportsRank\|>= 4' internal/calibration/calibrate.go`；
+  `go test ./internal/calibration/ -run 'RiskVol' -v`（4-agent 反例 ＋ 樣本充足釘值 ＋ 邊界表）✓
 
 ---
 
