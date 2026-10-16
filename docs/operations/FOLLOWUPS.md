@@ -928,7 +928,7 @@
 
 ### FU-20260926-13 — `empty_universe`（Step 1 就 0 檔）在 Prometheus 面**完全沒有訊號**：整條 pipeline 不動任何 counter
 
-- **狀態**：`open`
+- **狀態**：`done`（2026-10-16 收斂；**盤點敘述有更正**：訊號面已於 2026-09-27 落地，本 PR 修的是殘留的排查指引，處置見條文末）
 - **記錄日期**：2026-09-26
 - **來源**：本輪缺陷收斂批次（代號 **A2**）；SSOT＝**PR #2026 的缺陷收斂 manifest（docs/operations/remediation-manifest.md）**（該檔隨 #2026 併入 main，故刻意不加反引號以免 markdown-links 誤判）。
   本票在該 manifest §2/§3 **未列**（最接近的 §3 E11 是「`symbols_excluded` 無排除原因細分」，主題不同）
@@ -953,6 +953,132 @@
 - **驗收條件**：生產上「Step 1 就 0 檔」當日必須有一條**真陽性**告警（或至少一個會前進的 series）；
   **負對照**：`SymbolsBuilt > 0` 的正常執行不得觸發；且「整條 pipeline 沒跑」（同族缺口 (b)）
   不得被本票的規則誤報成 `empty_universe`（兩者需要相反的 triage）。
+
+**處置（2026-10-16，分支 `fix/20261016-empty-universe-signal`）**
+
+**1. 根因查證：F-item 的核心敘述已過期 —— metrics 面的靜默在 2026-09-27 就關閉了；本票真正剩下、值得修的缺陷是「第 7 條告警叫值班的人去 grep 一條不可能存在的日誌」**
+
+F-item 寫於 2026-09-26（worktree `81e4fe62`），**隔天**（PR **#2065**，`91cd0564d`，2026-09-27）整個
+`atlas_universe_*` 告警面就從「counter 增量」改成「pipeline 自己的 verdict 輸出族」。逐條核對：
+
+| F-item 的事實（2026-09-26） | 實測（2026-10-16，`origin/main` `f9d49ba6d`） |
+|---|---|
+| early-return 在 `universe_scheduler.go:751-754`，寫在 `gatheredCounter.Add` **之前** | 同一個 early-return，行號搬到 **`:849-851`**；「這條路徑不動任何 counter」**仍成立**（見第 2 節） |
+| snapshot 的 `quotes_status="not_attempted"` 是唯一機器可讀標記、**未曝露成指標** | **已曝露**：`atlas_universe_last_run_outcome{outcome="universe_empty"}`、`last_run_symbols_gathered` 等 verdict 族（`internal/monitoring/metrics/universe_run.go`），由 `BuildUniverse` 的**單一 `defer`** 發佈 ⇒ 每個退出路徑都經過 |
+| 規則檔 `:207-210` 與 `:233` 自述「全部規則（新舊）都不覆蓋 `empty_universe`：需要 Go 端新增心跳指標」 | **兩段文字都已不存在**；第 7 條 `AtlasUniverseEmptyUniverse`（`:497`）就是它，而檔尾「已知限制」清單已不含它 |
+| 缺口被 `atlas_universe_scoring_gaps_test.yml:436`（負向對照 3：六條都不 firing）刻意釘住 | 該檔已擴充成 **504 個 case**；第 7 條另有**真陽性** case F（`atlas_universe_scoring_test.yml`：「F 母體為空(gathered=0):只有第 7 條 firing」） |
+
+⇒ F-item 的「為何先開票、不實作」那三處動工清單（① 指標面 ② alert rule ③ promtool 測試）**全部已完成**。
+**本票不得**再照它新增指標或心跳（業主本 session 亦明令不得自行新增 heartbeat）。
+
+**2. 最小複現（fixture：Step 1 回 0 檔；證明「counter 面等同什麼都沒發生」、而輸出面有真陽性）**
+
+用既有 fixture 跑**真的** `BuildUniverse`（`deps.Tree`/`Mapper`/`Substrate` 全設 nil ⇒ `gatherAllSymbols` 回 0 檔），
+接線與生產相同（`SetOnInc(CollectorOnInc(c))` → `SetRunVerdictSink(GaugeSink(c))` → `WarmUp()`）：
+
+* **counter 面**：跑完後 `/metrics` 的每一條 `atlas_universe_*_total` **都仍是 `0.000000`**
+  （61 條 `atlas_universe_*` series 全部與 WarmUp 之後、任何一輪跑之前的畫面逐字相同）
+  ⇒ 「跑了但 Step 1 是空的」在 counter 面**與「什麼都沒發生」不可區分**。F-item 的這個觀察**正確**，
+  而且它**不可能**用 counter 修好：對 counter `Add(0)` 在 Prometheus 語意下不可觀測，該 family 又已被 `WarmUp()`
+  建立 ⇒ 唯一可行的訊號面就是 verdict gauge（2026-09-27 選對了）。
+* **輸出（verdict）面**：同一輪之後多出三條會動的 series ——
+  `atlas_universe_last_run_valid{stage="daily"} 1`、
+  `atlas_universe_last_run_symbols_gathered{stage="daily"} 0`、
+  `atlas_universe_last_run_outcome{outcome="universe_empty",stage="daily"} 1`
+  ⇒ 第 7 條的判定式（`valid == 1` AND `gathered == 0`）成立 ⇒ **真陽性**。
+* **日誌面**：這條路徑**只印一行** ——
+  `level=WARN msg=ranked_not_trustworthy reason=empty_universe symbols_built=0 symbols_filtered=0 quotes_status=not_attempted component=universe_scheduler`
+  （`markRankedUntrustworthy`，`universe_scheduler.go:230`）。
+
+⇒ F-item 的「Prometheus 面完全沒有訊號」**已不成立**。剩下的真缺陷在**排查指引**：
+第 7 條叫值班的人 `grep -E 'symbols_gathered|universe.*population'`，並說「Step 1 的
+`symbols_gathered count=0` 是本條的直接日誌證據」（`monitoring/rules/atlas_universe_scoring_alerts.yml:533-536`），
+但 `logging.Info("universe_scheduler", "symbols_gathered", …)` 寫在
+`if result.SymbolsBuilt == 0 { return }` **之後** ⇒ 那行**永遠不會**是 `count=0`。
+實測（同一支 fixture，只切空／不空）：**空的執行 `symbols_gathered` 命中 0 次；健康的執行命中 1 次（`count=2`）**。
+⇒ 照指引 grep 的人只會撈到**前一輪健康的** `count=1599`（或什麼都沒有），而告警說 `gathered=0`
+—— 這正是本票「真陽性 + 正確 triage」驗收條件裡缺的那一半。
+
+**3. 修法（最小；只換掉指引，不動 metrics、不動判定式）**
+
+* `monitoring/rules/atlas_universe_scoring_alerts.yml`：第 7 條 `description` 的「先查什麼」第 2 步
+  `grep -E 'symbols_gathered|universe.*population'` → `grep 'ranked_not_trustworthy.*reason=empty_universe'`，
+  並明寫**為什麼不要 grep `symbols_gathered`**（它寫在 early-return 之後）＋本次實測數字。
+* `monitoring/tests/atlas_universe_scoring_test.yml`：case F 的 `exp_annotations.description` **同步**
+  （promtool 逐字比對 annotation ⇒ 只改一邊必紅）。
+* 新增 `internal/monitoring/universe_empty_universe_log_test.go`：把上面那兩個事實**釘成測試**
+  （空的路徑**必須**有 `reason=empty_universe` 的 WARN、**不得**有 `symbols_gathered`；非空的執行相反）。
+  這條負向斷言就是「有人日後把那行 Info 移到 early-return 之前」時會紅的那一條。
+* **沒有動**：任何 `expr`／labels／`for:`、任何 Go 生產程式、任何 metrics 命名（護欄：不新增 heartbeat）。
+* 兩檔文字檔合計 `10 insertions(+), 6 deletions(-)`；沒有搬動任何其他條目的內文（見第 5 節的區段比對）。
+
+**4. 驗收（rc 一律從 log 檔讀，不在管線後讀 `$?`）**
+
+| # | 指令 | 結果 | rc |
+|---|---|---|---|
+| A | `promtool check rules monitoring/rules/*.yml`（`prom/prometheus:v3.14.0`） | `SUCCESS: 11 rules found`（`atlas_universe_scoring_alerts.yml`） | **0** |
+| B | `promtool test rules monitoring/tests/*.yml`（修後） | 全部 `SUCCESS` | **0** |
+| C | `go test ./internal/monitoring/... -count=1` | `ok` × 29 套件 | **0** |
+| D | 突變版 `promtool test rules`（見第 5 節 M-A） | `FAILED: name: F 母體為空…` | **1** |
+| E | 突變版 `go test -run TestBuildUniverseEmptyUniverseLogEvidence`（見第 5 節 M-B） | `FAIL` | **1** |
+| F | `make ci-gate`（**先 commit 再跑**，其 drift check 用 `git diff --exit-code -- '*.go'`） | 尾端逐字 `✅ ci-gate passed — 可以 push`；`CI-quick: 15 passed, ❌ 0 failed` | **0** |
+
+**5. 負向證明（突變打在行為行 ⇒ 必紅；`cp` 還原並以 sha256 證明逐位元組相等）**
+
+* **M-A（規則層：把「偵測空母體」這件事拿掉）**
+  `monitoring/rules/atlas_universe_scoring_alerts.yml` 第 504 行（第 7 條 expr 的**行為行**）
+  `…last_run_symbols_gathered{stage=~"daily|weekly"}) == 0` → `== 2`
+  （`grep -c` 確認該字串在檔案內**恰命中 1 次**，`git diff` 確認改到的是 expr 行）。
+  `promtool test rules monitoring/tests/*.yml` ⇒ **rc=1**，逐字：
+  `FAILED:` / `    name: F 母體為空(gathered=0):只有第 7 條 firing,` /
+  `    alertname: AtlasUniverseEmptyUniverse, time: 1h,` ⇒ `got:[]`。
+  **這證明第 7 條的 fixture 有鑑別力**（修前／修後同一個輸入得到不同的結論）。
+  還原：`cp` 回備份 ⇒ `sha256` = `31abf0931f678b90bcca0c8861078d7a1c27b54d3f7bf388d9b97f520a3bee96`，與突變前**逐位元組相同**。
+* **M-B（程式層：把 `symbols_gathered` 移到 early-return 之前）**
+  `internal/monitoring/universe_scheduler.go` 把 `logging.Info(… "symbols_gathered" …)` 整段搬到
+  `if result.SymbolsBuilt == 0 { … }` 之前。`go test -run TestBuildUniverseEmptyUniverseLogEvidence` ⇒ **rc=1**，逐字：
+  `` `symbols_gathered` is written after the SymbolsBuilt == 0 early return, so it must not appear on this path ``
+  ＋捕獲到的兩行日誌（`msg=symbols_gathered count=0` 與 `msg=ranked_not_trustworthy reason=empty_universe`）。
+  還原：`sha256` = `ec485ffe8fb3479f1b84ab79b4b22e226e1956c0c905cda8255a0a3f447dd191`，與突變前**逐位元組相同**。
+* **正常情況（非空 universe）不得觸發**：第 2 節的「健康執行」對照組（`symbols_built=2`、
+  `reason=""`、`symbols_gathered count=2`）；promtool 端同時有 case A/B/C/D/E/G/H/I 等**18 個**
+  `AtlasUniverseEmptyUniverse: exp_alerts: []` 的負向對照（含「剛重啟、這個 process 還沒跑過」的 valid=0 形狀）。
+
+**6. 合併前的區段比對（FOLLOWUPS.md 是共享檔；`ci-gate`／唯一號檢查抓不到「搬走別條內文」）**
+
+`git diff docs/operations/FOLLOWUPS.md` 逐段核對：本 PR 對該檔只有 **(a) 本條 `狀態` 行改寫** 與
+**(b) 本條條文末新增本節**，其餘條目**逐位元組未動**（diff 內刪除行只有 1 行 `- **狀態**：`open``）。
+
+**7. 同型盤點（業主要求；**只列清單**，本 PR 不動）**
+
+`BuildUniverse` 七個階段的「輸入為空 ⇒ 該階段什麼都不動」逐階段核對，**現在只剩一處在 metrics 面沒有專屬訊號**：
+
+| 階段 | 空的形狀 | 現在的訊號 | 判定 |
+|---|---|---|---|
+| Step 1 gather | 0 檔 | 第 7 條 ＋ verdict 族 ＋ WARN | 覆蓋（本票） |
+| Step 2 industry filter | 全滅 | 第 5 條 `AtlasUniverseEmptyFiltered` ＋ WARN `reason=empty_filtered` | 覆蓋 |
+| Step 3 quotes | provider 沒接／錯誤／空／partial／mock | 第 3 條（`ranked_trustworthy=0` 且 gathered/filtered>0）＋ `quotes_errors_total{error_type}` | 覆蓋 |
+| Step 4 screening | 全部被拒 | 第 2 條 `AtlasUniverseScreeningAllRejected`（`screened_passed==0`） | 覆蓋 |
+| Step 5 risk exclusion | 全部 excluded | 第 1 條 `AtlasUniverseRankedZero`（`ranked==0` 且 `trustworthy==1`） | 覆蓋，但**沒有專屬 outcome 值**（`last_run_outcome=ok` 而 ranked=0）⇒ triage 只能靠組合條件 |
+| Step 6 narrative scrape | 0 事件（無錯誤） | 只有 Info `narrative_scrape_ok events=0`；`narrative_events_scraped_total` **不動**；**無規則** | **同型殘留（metrics 面無訊號）**；要修需先有可區分「市場沒新聞」與「解析器對不上」的 reason，屬新設計 |
+| Step 7 寫入 | 寫入失敗 | 第 10／11 條（`snapshot_persisted`／`registry_persisted`） | 覆蓋 |
+
+另兩處**查證後不列為缺口**：`universe_coverage_check` 任務的 `coverage_*` counter 面雖然沒有規則，
+但同一個任務會用 `monitor.Alert(... "universe_coverage")` 發內部告警（`cmd/atlas/main.go:2322-2331`，
+含 `coverage_below_threshold`／`artifact_stale`／`population_smaller_than_built`）；
+每日／每週排程 closure 的「非觸發分鐘 ⇒ 靜默 return」是設計（由第 8 條心跳覆蓋）。
+
+**8. 已知限制**
+
+* 本 PR **未**在生產驗收（護欄：不動 production）。第 7 條在生產是否真的載入、以及「Step 1 就 0 檔」的
+  實際發生頻率，需部署後以 `curl -s localhost:18080/metrics | grep '^atlas_universe_last_run_'`
+  與 `curl -s localhost:9090/api/v1/rules | grep -o 'AtlasUniverseEmptyUniverse'` 確認。
+* 第 7 條的 `for: 30m` 語意不變：一個空的 verdict 會在下一次成功執行前**持續** firing（「verdict 不會自己過期」，
+  與第 8 條分工），本 PR 不動它。
+* `docs/operations/universe-scoring-ranked-zero-20260925.md:351` 與同檔 FU-20260925-02 的
+  「`empty_universe` 仍不覆蓋」**也**是同一批過期敘述（該檔 §6.2 開頭的 2026-09-25 更新橫幅與 `:61` 已載明
+  2026-09-27 落地）；本票**不動別條條目**，僅在此記錄，建議由 root 另配一次敘述收斂。
+* 第 6 節 Step 6 的殘留（narrative 0 事件）本 PR 只列出，未修（需要新的 reason 語意，屬跨檔功能新增）。
 
 ---
 
