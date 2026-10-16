@@ -535,7 +535,7 @@
 
 - **狀態**：`done`
 - **記錄日期**：2026-09-26
-- **完成於**：2026-10-16（branch `fix/20261016-finmind-body-scrub`，見該 PR 說明）。
+- **完成於**：2026-10-16，PR [#2243](https://github.com/kaecer68/atlas-go/pull/2243)（branch `fix/20261016-finmind-body-scrub`）。
 - **根因查證（2026-10-16；先查證再動手 ⇒ 原敘述部分已過期）**：
   - ① **已修：#2006 的 `sanitizeFinMindBody()` 蓋住了 `fetchDataset` 的兩條 sink** —— 非 200 的
     `logging.Warn("finmind","fetch_non_2xx","body",safeBody,…)` 與 402/403/其他 status 的錯誤字串
@@ -3150,7 +3150,7 @@ PY
 
 - **狀態**：`open`
 - **記錄日期**：2026-10-16
-- **來源**：`FU-20260926-02` 的同型掃描（本 PR 實作時以 `grep` 掃全 repo 的 body/error 組合後登記；**刻意不在該 PR 修**，見該 PR 說明）。
+- **來源**：`FU-20260926-02` 的同型掃描（PR [#2243](https://github.com/kaecer68/atlas-go/pull/2243) 實作時以 `grep` 掃全 repo 的 body/error 組合後登記；**刻意不在該 PR 修**，見該 PR 說明）。
 - **事實（程式碼；`internal/marketdata/tej_provider.go`）**：
   - `:188`／`:260` `params.Set("api_key", c.apiKey)` ⇒ `:194`／`:267` 把憑證編進 **request URL**。
   - `:203`／`:276` `fmt.Errorf("tej http request: %w", err)` —— `err` 來自 `http.Client.Do`，是 `*url.Error`，
@@ -3174,7 +3174,7 @@ PY
 
 - **狀態**：`open`
 - **記錄日期**：2026-10-16
-- **來源**：同 `FU-20260926-02` 的同型掃描。
+- **來源**：同 `FU-20260926-02` 的同型掃描（PR [#2243](https://github.com/kaecer68/atlas-go/pull/2243) 實作時的掃描結果）。
 - **事實（程式碼）**：
   - `internal/live/twse_adapter.go:207`／`:271`／`:322` —— 委託、狀態、取消三條路徑都把
     `strings.TrimSpace(string(respBody))` **原文**放進 `fmt.Errorf("… API error status=%d body=%s")`。
@@ -3194,7 +3194,7 @@ PY
 
 - **狀態**：`open`
 - **記錄日期**：2026-10-16
-- **來源**：同 `FU-20260926-02` 的同型掃描。
+- **來源**：同 `FU-20260926-02` 的同型掃描（PR [#2243](https://github.com/kaecer68/atlas-go/pull/2243) 實作時的掃描結果）。
 - **事實（程式碼）**：
   - `internal/llm/clients/base.go:191` `fmt.Errorf("http status %d: %s", resp.StatusCode, truncateForError(respBody))`
     —— 只做**長度**限制（200 bytes），沒有任何欄位遮蔽。
@@ -3214,7 +3214,7 @@ PY
 
 - **狀態**：`open`
 - **記錄日期**：2026-10-16
-- **來源**：同 `FU-20260926-02` 的同型掃描（本 PR 只修 FinMind 家族 ＋ 共用的 `retry.go`，**刻意不動其他 provider**）。
+- **來源**：同 `FU-20260926-02` 的同型掃描（PR [#2243](https://github.com/kaecer68/atlas-go/pull/2243) 只修 FinMind 家族 ＋ 共用的 `retry.go`，**刻意不動其他 provider**）。
 - **事實（程式碼；2026-10-16 掃描，非測試檔中「把 body 原文以 `%s` 併進 error」的站點）**：
   `twse_openapi.go:310`／`:503`、`twse_mi_index.go:262`、`fugle_client.go:336`（`X-API-KEY` 走 header，
   但 body 未遮蔽）、`taifex_provider.go:149`／`:284`、`taifex_institutional.go:74`、`tpex_daily_close.go:162`、
@@ -3234,7 +3234,7 @@ PY
 
 - **狀態**：`open`
 - **記錄日期**：2026-10-16
-- **來源**：`FU-20260926-02` 修復時的架構觀察。
+- **來源**：`FU-20260926-02`（PR [#2243](https://github.com/kaecer68/atlas-go/pull/2243)）修復時的架構觀察。
 - **事實**：本 PR 的 `redactUpstreamText` 定義在 `internal/marketdata/redact.go`，是**未匯出**的套件內函式
   ⇒ `internal/llm`、`internal/live`、`cmd/*` 都拿不到，只能各自複製一份清單（`FU-20260926-01/-09` 的
   「三份 14400」正是同一種病：同一個知識有多份副本，就會漂移）。另外**沒有任何 URL／query 遮蔽器**：
@@ -3253,7 +3253,7 @@ PY
 
 - **狀態**：`open`
 - **記錄日期**：2026-10-16
-- **來源**：同 `FU-20260926-02` 的同型掃描。
+- **來源**：同 `FU-20260926-02` 的同型掃描（PR [#2243](https://github.com/kaecer68/atlas-go/pull/2243) 實作時的掃描結果）。
 - **事實（程式碼）**：`cmd/macrobackfill/main.go:266`／`:270`／`:273`、
   `cmd/backfill-macro-history/main.go:351`、`cmd/fetch-historical/main.go`、
   `cmd/fetch-historical-capital-flow/main.go`、`cmd/backfill-taifex-oi-v2/main.go:464`（`%.160s` 只截長度）、
