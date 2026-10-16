@@ -16,6 +16,11 @@
 #   8. dist holding only embed-dirs' `.keep` placeholder → exit 1 (never built)
 #   9. files outside the esbuild source trees (tests/, smoke/) → not stale
 #  10. stale failure names the offending source file + the newest dist file
+#  11. --diff with a range git CANNOT resolve → exit 1 (never the
+#      "nothing to check" skip), naming the range
+#  12. seam: git itself failing (any cause, not just a bad range) → exit 1
+#  13. a VALID range whose diff is genuinely empty → still skip (exit 0):
+#      the fix must not turn the legitimate skip into a blanket red
 set -euo pipefail
 
 # git hooks (pre-push/pre-commit) export GIT_DIR, and any throwaway fixture repo
@@ -216,6 +221,75 @@ scenario10_stale_report_names_the_file() {
   echo "  ✓ scenario10: failure names the source file and the dist file"
 }
 
+# ── 2026-10-16: "git diff failed" must never be reported as "no frontend change"
+#
+# Both outcomes produce an empty file list, so `changed=$(git diff … || true)`
+# (with 2>/dev/null on top) made them identical and the gate returned 0 — i.e. it
+# said "nothing to check" for a push whose dist was provably stale. Scenarios 11
+# and 12 pin the fail-loud side; scenario 13 pins the other side (a genuinely
+# empty diff still skips), so the fix cannot degrade into "always red".
+
+scenario11_unresolvable_range_fails_loud() {
+  local tmp; tmp=$(new_fixture); trap 'rm -rf "$tmp"' RETURN
+  make_frontend "$tmp" admin_web stale
+  echo '// src2' >"$tmp/admin_web/static/js/app.js"
+  touch -t 202501020000 "$tmp/admin_web/static/js/app.js"
+  git -C "$tmp" add -A && git -C "$tmp" commit -qm "feat(web): admin change on a stale dist"
+  # Precondition of this scenario: the range below MUST be unresolvable, otherwise
+  # the test would silently degrade into "scenario5 passes again".
+  if git -C "$tmp" rev-parse --verify -q origin/main >/dev/null; then
+    fail "scenario11: fixture unexpectedly resolves origin/main — range is not unresolvable"
+  fi
+  # Control: the same tree with a resolvable range is red (the dist really is stale).
+  local ctl=0
+  bash "$tmp/scripts/ci/check_frontend_dist.sh" --diff main~1...HEAD >/dev/null 2>&1 || ctl=$?
+  [ "$ctl" -eq 1 ] || fail "scenario11: control range should exit 1 (stale dist), got $ctl"
+  local out rc=0
+  out=$(bash "$tmp/scripts/ci/check_frontend_dist.sh" --diff origin/main...HEAD 2>&1) || rc=$?
+  [ "$rc" -eq 1 ] || fail "scenario11: unresolvable range must exit 1, got $rc: $out"
+  printf '%s\n' "$out" | grep -q "nothing to check" && \
+    fail "scenario11: unresolvable range was reported as 'nothing to check': $out"
+  printf '%s\n' "$out" | grep -qF "origin/main...HEAD" || \
+    fail "scenario11: failure must name the unusable range, got: $out"
+  echo "  ✓ scenario11: unresolvable --diff range fails loud (exit=1, names the range)"
+}
+
+scenario12_git_failure_is_not_no_change() {
+  local tmp; tmp=$(new_fixture); trap 'rm -rf "$tmp"' RETURN
+  make_frontend "$tmp" admin_web stale
+  echo '// src2' >"$tmp/admin_web/static/js/app.js"
+  touch -t 202501020000 "$tmp/admin_web/static/js/app.js"
+  git -C "$tmp" add -A && git -C "$tmp" commit -qm "feat(web): admin change on a stale dist"
+  # Seam: the RANGE is valid here — git itself fails (no git binary, not a work
+  # tree, GIT_DIR pointing elsewhere: #1927's class). Only `git` is shadowed.
+  local fake="$tmp/fakebin"
+  mkdir -p "$fake"
+  printf '#!/usr/bin/env bash\necho "fatal: injected git failure (test seam)" >&2\nexit 128\n' >"$fake/git"
+  chmod +x "$fake/git"
+  local out rc=0
+  out=$(PATH="$fake:$PATH" bash "$tmp/scripts/ci/check_frontend_dist.sh" --diff main~1...HEAD 2>&1) || rc=$?
+  [ "$rc" -eq 1 ] || fail "scenario12: git failure must exit 1 (not git's 128, not 0), got $rc: $out"
+  printf '%s\n' "$out" | grep -q "nothing to check" && \
+    fail "scenario12: git failure was reported as 'nothing to check': $out"
+  printf '%s\n' "$out" | grep -q "128" || \
+    fail "scenario12: failure should report git's status, got: $out"
+  echo "  ✓ scenario12: injected git failure fails loud (exit=1, reports git rc)"
+}
+
+scenario13_valid_empty_range_still_skips() {
+  local tmp; tmp=$(new_fixture); trap 'rm -rf "$tmp"' RETURN
+  make_frontend "$tmp" admin_web stale
+  git -C "$tmp" add -A && git -C "$tmp" commit -qm "chore: fixture"
+  # `--diff HEAD` resolves and its diff is genuinely empty: the legitimate skip
+  # must stay green (a blanket red would push operators to --no-verify).
+  local out rc=0
+  out=$(bash "$tmp/scripts/ci/check_frontend_dist.sh" --diff HEAD 2>&1) || rc=$?
+  [ "$rc" -eq 0 ] || fail "scenario13: resolvable empty diff must skip (exit 0), got $rc: $out"
+  printf '%s\n' "$out" | grep -q "nothing to check" || \
+    fail "scenario13: expected the skip message, got: $out"
+  echo "  ✓ scenario13: resolvable but empty diff still skips (exit=0)"
+}
+
 echo "=== test-check-frontend-dist.sh ==="
 scenario1_fresh_passes
 scenario2_stale_fails
@@ -227,4 +301,7 @@ scenario7_generated_files_ignored
 scenario8_placeholder_only_dist_fails
 scenario9_non_build_inputs_ignored
 scenario10_stale_report_names_the_file
-echo "✅ test-check-frontend-dist.sh PASSED (10/10)"
+scenario11_unresolvable_range_fails_loud
+scenario12_git_failure_is_not_no_change
+scenario13_valid_empty_range_still_skips
+echo "✅ test-check-frontend-dist.sh PASSED (13/13)"
