@@ -171,15 +171,39 @@ if ! bash scripts/ci/check_frontend_dist.sh --diff origin/main...HEAD 2>&1; then
 fi
 
 # Code change? (docs-only diffs skip ci-full — ci-gate suffices)
+# 2026-10-16 (FU-20261016-21): the classification now lives in ONE place —
+# scripts/ci/ci-full-trigger.sh, which Makefile's `pre-push` target calls too.
+# What it replaced here: `git diff --name-only origin/main...HEAD 2>/dev/null |
+# grep -qE …`. A FAILING git (range unresolvable, no merge base, git missing)
+# writes nothing to stdout — byte-for-byte what "this diff touches no code"
+# writes — so the else-branch claimed docs-only and ci-full was skipped in
+# silence. Measured 2026-10-16: unresolvable range ⇒ git rc=128, outside a work
+# tree ⇒ rc=129, shallow clone without a merge base ⇒ rc=128; the pipeline
+# returned rc=1 (= "docs-only") in all three. Same shape as E4: a gate that
+# turns green because it could not run.
+# The two copies had also already DIVERGED: `|^configs/` (PR #2176, 2026-09-30)
+# was added to this hook only, so `make pre-push` — documented as "同 hook 邏輯"
+# — still skipped ci-full for a configs-only change. Sharing one script removes
+# that whole class of drift.
+# The code-vs-docs judgement (and why ALL of configs/ counts as a value change)
+# is documented in scripts/ci/ci-full-trigger.sh.
 code_changed=0
-# configs/ 全目錄皆為「值／治理」檔（parameters*.json、monitor_limits.json、stress_index_weights.json、
-# sector_symbols.json、etf_metadata.json、portfolio_allocation.json、agents.json、llm_router.yaml、
-# methodology_rules.yaml、realtime.yaml、parameters/ 目錄、constitution 讀的 allowed_env_vars.md）
-# ⇒ 其變更會改行為，必須與程式碼同級（跑 ci-full），不得歸為 docs-only。只納 parameters* 會漏掉
-# monitor_limits.json 等同為值變更的檔，故以整個 configs/ 為準。
-if git diff --name-only origin/main...HEAD 2>/dev/null | grep -qE '\.(go|ts|tsx|js|jsx|vue|py|sh|c|cpp|h)$|(^|/)Makefile$|Dockerfile|docker-compose|\.github/|\.githooks/|^configs/'; then
-  code_changed=1
-fi
+trigger_rc=0
+bash scripts/ci/ci-full-trigger.sh origin/main...HEAD || trigger_rc=$?
+case "$trigger_rc" in
+  0) code_changed=1 ;;
+  1) code_changed=0 ;;
+  *)
+    echo ""
+    echo "❌ pre-push: 無法判定 diff 是否含程式碼變更（ci-full-trigger rc=${trigger_rc}）— push refused (fail-closed)."
+    echo "   原因：Gate 1b 用 origin/main...HEAD 決定要不要跑 ci-full；diff 取不到時，"
+    echo "   「工具失敗」與「真的只改文件」的輸出完全相同 ⇒ 會靜默跳過 ci-full。"
+    echo "   修復：確認 range 可解析（git fetch origin main && git rev-parse origin/main），"
+    echo "         或明示繞過：git push --no-verify"
+    echo ""
+    exit 1
+    ;;
+esac
 
 mode="${PRE_PUSH_FULL:-auto}"
 if [ "$mode" = "never" ]; then

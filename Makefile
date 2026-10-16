@@ -37,17 +37,35 @@ endif
 #   ci-gate  (~30s)   永遠執行：gofmt/build/vet/generate-drift/ci-quick
 #   ci-full  (~5-8min) 僅當 diff 含程式碼變更時執行：lint/staticcheck/test/race/coverage
 #   目的：在本地先抓出 CI 會失敗的問題，避免 push→CI-fail 往返浪費
+#   ★「要不要跑 ci-full」的判定只有一份實作：scripts/ci/ci-full-trigger.sh
+#     （本 target 與 .githooks/pre-push 都呼叫它）。退出碼：0=含程式碼變更／
+#     1=真的 docs-only（可跳過 ci-full）／2=git 失敗 ⇒ fail loud（見下方 else 分支）。
+#     修前兩邊各寫一份 `git diff … 2>/dev/null | grep -qE …`，兩個後果：
+#       (a) git 失敗（range 不可解析／無 merge base／git 缺失）的 stdout 是空的，
+#           與「真的只改文件」逐字相同 ⇒ 被判 docs-only ⇒ **ci-full 靜默跳過**
+#           （FU-20261016-21；與 E4、FU-20261016-19 同族）。
+#       (b) 兩份 pattern 已分歧：`|^configs/`（PR #2176）只進了 hook ⇒ `make pre-push`
+#           在只改 configs/** 的 push 上仍跳過 ci-full。共用一支即消滅此類漂移。
 #   手動用法：make pre-push            （同 hook 邏輯：auto）
 #             PRE_PUSH_FULL=always make pre-push   （強制全量）
 #             PRE_PUSH_FULL=never  make pre-push   （只跑 ci-gate）
 pre-push: ci-gate
 	@echo ""
 	@bash scripts/ci/check_frontend_dist.sh --diff origin/main...HEAD
-	@if git diff --name-only origin/main...HEAD 2>/dev/null | grep -qE '\.(go|ts|tsx|js|jsx|vue|py|sh|c|cpp|h)$$|(^|/)Makefile$$|Dockerfile|docker-compose|\.github/|\.githooks/'; then \
+	@trigger_rc=0; \
+	bash scripts/ci/ci-full-trigger.sh origin/main...HEAD || trigger_rc=$$?; \
+	if [ "$${trigger_rc}" -eq 0 ]; then \
 		echo "🧪 diff 含程式碼變更 → 跑 make ci-full (~5-8 min)..."; \
-		$(MAKE) ci-full; \
-	else \
+		$(MAKE) ci-full || exit 1; \
+	elif [ "$${trigger_rc}" -eq 1 ]; then \
 		echo "ℹ️  docs-only diff — ci-gate 已足夠（ci-full 跳過）"; \
+	else \
+		echo ""; \
+		echo "❌ make pre-push: 無法判定 diff 是否含程式碼變更（ci-full-trigger rc=$${trigger_rc}）"; \
+		echo "   「取不到 diff」不等於「只改文件」⇒ 不以 docs-only 放行（fail loud）。"; \
+		echo "   修復：git fetch origin main && git rev-parse origin/main 之後重跑。"; \
+		echo ""; \
+		exit 1; \
 	fi
 
 
@@ -1169,8 +1187,9 @@ ci-gate: embed-dirs
 	@echo "  → binary freshness guard contract tests（唯一 hermetic 的 tests/scripts 測試；見 #1927）"
 	@bash tests/scripts/test-binary-freshness-guard.sh
 	@echo "    ✅"
-	@echo "  → pre-push 閘門契約測試（E4 fail-closed fetch ＋ FU-20260926-15 host binary 新鮮度；hermetic fixtures）"
+	@echo "  → pre-push 閘門契約測試（E4 fail-closed fetch ＋ FU-20260926-15 host binary 新鮮度 ＋ FU-20261016-21 git 失敗≠docs-only；hermetic fixtures）"
 	@bash tests/scripts/test-prepush-gates.sh
+	@bash tests/scripts/test-ci-full-trigger.sh
 	@echo "    ✅"
 	@echo "  → embed-dirs 契約測試（hermetic：只用 mktemp 目錄，不建 git worktree）"
 	@bash tests/scripts/test-embed-dirs.sh

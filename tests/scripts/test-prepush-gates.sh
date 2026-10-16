@@ -30,6 +30,7 @@ unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_OBJECT_DIRECTORY GIT_COMMON_DIR \
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
 HOOK="$ROOT/.githooks/pre-push"
 CHECK="$ROOT/scripts/check-binary-freshness.sh"
+TRIGGER="$ROOT/scripts/ci/ci-full-trigger.sh"
 
 fail() {
   echo "FAIL: $*" >&2
@@ -183,6 +184,10 @@ install_fixture_hook() {
   mkdir -p "$repo/.githooks" "$repo/scripts/ci"
   cp "$HOOK" "$repo/.githooks/pre-push"
   cp "$CHECK" "$repo/scripts/check-binary-freshness.sh"
+  # The hook delegates the code-vs-docs classification to this shared script
+  # (FU-20261016-21); without it in the fixture every hook scenario would fail
+  # for the wrong reason.
+  cp "$TRIGGER" "$repo/scripts/ci/ci-full-trigger.sh"
   cat >"$repo/scripts/ci/check_frontend_dist.sh" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
@@ -193,6 +198,7 @@ EOF
   # pass while the real gate is broken.
   cmp -s "$HOOK" "$repo/.githooks/pre-push" || fail "fixture hook copy drifted from $HOOK"
   cmp -s "$CHECK" "$repo/scripts/check-binary-freshness.sh" || fail "fixture checker copy drifted from $CHECK"
+  cmp -s "$TRIGGER" "$repo/scripts/ci/ci-full-trigger.sh" || fail "fixture classifier copy drifted from $TRIGGER"
 }
 
 # run_hook <dir> <repo> [refspecs] → HOOK_RC / HOOK_OUT (combined stdout+stderr)
@@ -201,12 +207,14 @@ EOF
 # feeds a PIPE (never the caller's terminal), so omitting it means "Git gave the
 # hook no refspec information" — the case the classification must fail closed on.
 run_hook() {
-  local dir=$1 repo=$2 refspecs=${3-} stdin_text=""
+  # 4th arg = extra PATH entry prepended before the stub dir (test seams that must
+  # shadow only ONE command, e.g. a `git` that fails `diff` but nothing else).
+  local dir=$1 repo=$2 refspecs=${3-} path_prefix=${4-} stdin_text=""
   install_fixture_hook "$repo"
   [ -z "$refspecs" ] || stdin_text=$(printf '%s\n' "$refspecs")
   HOOK_RC=0
   HOOK_OUT=$(cd "$repo" && printf '%s' "$stdin_text" | env \
-      PATH="$dir/stub:$PATH" \
+      PATH="${path_prefix}${path_prefix:+:}$dir/stub:$PATH" \
       FAKE_MAKE_LOG="$dir/make.log" \
       FAKE_DOCKER_LOG="$dir/docker.log" \
       FAKE_FRONTEND_LOG="$dir/frontend.log" \
@@ -530,6 +538,77 @@ run_empty_stdin_is_content_push_test() {
   grep -Fq -- "ci-gate" "$dir/make.log" || fail "(e) empty-stdin push did not run ci-gate: $(cat "$dir/make.log")"
 }
 
+# ── FU-20261016-21: a FAILING `git diff` must not be read as "docs-only" ───
+# Before this fix the classification was
+#     if git diff --name-only origin/main...HEAD 2>/dev/null | grep -qE '…'; then …
+# so a git failure produced empty stdout — byte-for-byte what "this diff touches
+# no code" produces — and ci-full was skipped with the reassuring line
+# "docs-only diff — ci-gate 已足夠". This scenario injects a `git` that fails
+# ONLY the `diff` subcommand (fetch/rev-parse/merge-base still work, so the hook
+# reaches Gate 1b) and requires the hook to refuse, loudly.
+#
+# The fixture's frontend-dist check is a stub that exits 0, which isolates Gate
+# 1b. In the real tree Gate 1c (`check_frontend_dist.sh --diff origin/main...HEAD`,
+# fixed 2026-10-16 in FU-20261016-19) fails loud on the very same git failure —
+# the two are backstops for each other, and neither may rely on the other.
+run_diff_failure_is_not_docs_only_test() {
+  local dir repo out rc rc_ctl out_ctl real_git
+  dir=$(mktemp -d)
+  trap 'rm -rf "$dir"' RETURN
+  build_fixture "$dir"
+  seed_main
+  add_docs_commit            # content that genuinely IS docs-only — the disguise
+  repo=$FIX_REPO
+
+  # Control first: the same fixture without the injection pushes clean and takes
+  # the docs-only path. Without this, the red below could come from a broken
+  # fixture rather than from the injected failure.
+  run_hook "$dir" "$repo"
+  rc_ctl=$HOOK_RC; out_ctl=$HOOK_OUT
+  test "$rc_ctl" -eq 0 || fail "control: docs-only push was blocked without any injection: $out_ctl"
+  printf '%s\n' "$out_ctl" | grep -Fq -- "docs-only diff" || \
+    fail "control: the un-injected docs-only push did not report the docs-only path: $out_ctl"
+  grep -Fq -- "ci-full" "$dir/make.log" && fail "control: docs-only push ran ci-full" || true
+  : >"$dir/make.log"
+
+  # Seam: shadow only `git diff`; everything else delegates to the real git.
+  real_git=$(command -v git)
+  mkdir -p "$dir/gitdiffshim"
+  cat >"$dir/gitdiffshim/git" <<EOF
+#!/usr/bin/env bash
+if [ "\${1:-}" = "diff" ]; then
+  echo "fatal: injected git diff failure (FU-20261016-21 test seam)" >&2
+  exit 128
+fi
+exec "$real_git" "\$@"
+EOF
+  chmod +x "$dir/gitdiffshim/git"
+  # The seam must not be a no-op: prove the shim itself fails `diff` and only that.
+  rc=0; ( cd "$repo" && PATH="$dir/gitdiffshim:$PATH" git diff --name-only HEAD~1...HEAD >/dev/null 2>&1 ) || rc=$?
+  test "$rc" -eq 128 || fail "seam: shimmed git diff should exit 128, got $rc"
+  rc=0; ( cd "$repo" && PATH="$dir/gitdiffshim:$PATH" git rev-parse HEAD >/dev/null 2>&1 ) || rc=$?
+  test "$rc" -eq 0 || fail "seam: shimmed git must still pass rev-parse through (got $rc)"
+
+  run_hook "$dir" "$repo" "" "$dir/gitdiffshim"
+  out=$HOOK_OUT
+  test "$HOOK_RC" -ne 0 || \
+    fail "pre-push allowed a push whose ci-full classification could not be evaluated (FU-20261016-21 fail-open regression): $out"
+  printf '%s\n' "$out" | grep -Fq -- "無法判定 diff 是否含程式碼變更" || \
+    fail "(FU-20261016-21) refusal does not name the unusable classification: $out"
+  printf '%s\n' "$out" | grep -Fq -- "ci-full-trigger rc=2" || \
+    fail "(FU-20261016-21) refusal does not report the classifier's exit code: $out"
+  printf '%s\n' "$out" | grep -Fq -- "fail-closed" || \
+    fail "(FU-20261016-21) refusal does not say fail-closed: $out"
+  # The lying branch must be gone: no "docs-only" claim, and ci-full was skipped
+  # only because the push was refused (it must not have been REACHED at all).
+  printf '%s\n' "$out" | grep -Fq -- "docs-only diff" && \
+    fail "(FU-20261016-21) a failing git was still reported as a docs-only diff: $out" || true
+  grep -Fq -- "ci-full" "$dir/make.log" && \
+    fail "(FU-20261016-21) ci-full ran/claimed for an unevaluable diff: $(cat "$dir/make.log")" || true
+  grep -Fq -- "ci-gate" "$dir/make.log" || \
+    fail "(FU-20261016-21) refusal happened before ci-gate: $(cat "$dir/make.log")"
+}
+
 # ── static contract: the wiring itself ─────────────────────────────────────
 line_of() { grep -Fn -- "$2" "$1" | head -n 1 | cut -d: -f1; }
 
@@ -612,6 +691,7 @@ run_stale_host_binary_test
 run_fresh_host_binary_test
 run_docs_only_test
 run_config_only_requires_ci_full_test
+run_diff_failure_is_not_docs_only_test
 run_mixed_config_docs_requires_ci_full_test
 run_no_host_binaries_test
 run_override_test
