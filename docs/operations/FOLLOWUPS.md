@@ -4038,6 +4038,86 @@ PY
   `cmd/atlas` 的 `embed` pattern 找不到 `client_web/dist`／`admin_web/dist` 而紅（`pattern all:dist: no matching files found`）
   ⇒ 需先 `make embed-dirs`（`ci-gate` 已有此 prerequisite，`ci-full` 因此不受影響；standalone `make ci-slow` 會踩到）。
 
+### FU-20261016-25 — `Makefile` 的 `ci-full` orphan artifact check：`git ls-files` 失敗 ⇒ 清單空集合 ⇒ 照印 ✅ 且 rc=0（與「真的沒有 orphan」混為一談）
+
+- **狀態**：`done`（2026-10-16 收斂；處置與證據見條文末）
+- **記錄日期**：2026-10-16 ／ **完成於**：2026-10-16 本 PR（`fix/20261016-cifull-orphan-git-fail`）
+- **嚴重度**：**P1（閘門說謊）** —— 與 `FU-20261016-21`（`ci-full` 觸發判定把「git 失敗」當成「docs-only」）**同一根因**；與 `-18`／`-19`／`-22`／`-24` 同族。
+- **來源**：`FU-20261016-24` 的同型掃描表 P1 列（`Makefile:1346-1370`，該列寫「迴圈起 `:1348`」）。
+  ❗ **行號基準更正（不是敘述過期）**：該表行號基準＝ `origin/main` `148e6df2d`；本條落點的 `origin/main` 已是
+  `d9b9c8be8`（`-23`／`-24` 兩支 lane 先後合併）⇒ 同一段碼整體位移 **+34 行**，現在是 `Makefile:1380-1421`
+  （`@echo "  → orphan artifact check"` 起、`for f in $$(git ls-files)` 在 `:1382`）。敘述本身
+  （「git 失敗 ⇒ 空集合 ⇒ 印通過」）**實測成立**（見下方負向證明），不是過期敘述。
+- **根因（讀碼指名到行；行號基準＝ `origin/main` `d9b9c8be8`）**：
+  ① `:1382`／`:1389`／`:1392` 三處都用 `for f in $$(git ls-files …)` 當迴圈清單 —— 清單來自**命令替換**，而 git 失敗時它是**空集合**；
+  ② 空集合與「這個 repo 真的沒有 orphan artifact」在輸出上**逐字相同**（迴圈 body 一次都沒進去）；
+  ③ 收尾 `:1395` 只判 `[ -n "$$ORPHANS" ]`，空 ⇒ 不進 `if` ⇒ `:1401` 照印 `✅`、**rc=0**。
+  ⇒ 觸發不需要惡意：不在 git work tree（例如在別的工作目錄跑 `make -f <repo>/Makefile ci-full`）、git 不在 `PATH`、
+  或任何讓 `git ls-files` 非 0 的環境 ⇒ 這道檢查**在任何路徑都是綠的**。它在 `ci-full` 尾端
+  （`ci-gate`／`ci-constitution` 之後的最後幾步）⇒ 等於在最強本機閘門上留一格「沒掃到東西也算過」。
+- **★ 同支 recipe 的第二個缺口（稽核敘述未涵蓋；本車道讀碼＋實測發現，一併收斂）**：`:1384` `ft=$$(file "$$f" 2>/dev/null)`
+  —— 環境沒有 `file(1)`（精簡容器／`PATH` 被裁）時 `ft` 是**空字串** ⇒ `case` 不命中 ⇒ 二進位 orphan
+  **一條都偵測不到**，而且**照樣印 ✅、rc=0**。二進位偵測正是這道檢查的主要目的 ⇒ 同一形狀（工具失敗被當成「沒有」），
+  且比 git 那條**更容易在真實環境成立**（不需要動 git）。
+- **修法（本 PR；只動 `ci-full` 的 orphan check 段 ＋ 新增契約測試；`ci:` 三態區塊（`FU-20260926-12`）與 `ci-slow` 計數守衛（`FU-20261016-24`）**未動**）**：
+  ① 三次 `git ls-files` 改為**顯式接 rc**（`TRACKED=$$(git ls-files) || git_rc=$$?;`，帶 pattern 的另兩個同樣），
+     並在跑任何判定**之前**先判 `if [ $$git_rc -ne 0 ]` ⇒ 印出 git 的 rc ＋「『清單取不到（空集合）』不等於
+     『沒有 orphan artifact』⇒ 不以通過放行」＋修復提示，然後 `exit 1`（**fail loud**）；
+  ② 三個迴圈改吃抽出來的清單（`$$TRACKED`／`$$TRACKED_PID`／`$$TRACKED_OUT`）⇒ 「被檢清單」與「判定所用的清單」同一份；
+  ③ 補 `command -v file >/dev/null 2>&1 || { … exit 1; }`（fail-closed；訊息明說「偵測工具缺失 ≠ 沒有 orphan」）；
+  ④ **真的沒有 orphan ⇒ 行為逐字不變**（仍印 `✅`、仍 rc=0；`[ -n "$$ORPHANS" ]` 判定未動、訊息未改）；
+  ⑤ **既有斷言未放寬**：`*.pid`／`*.out` ⇒ 紅 ＋ `[PID]`／`[COVERAGE]`；tracked 二進位 ⇒ 紅 ＋ `[BINARY]`（見下表 ⑤⑥）。
+- **負向證明（hermetic；新增 `tests/scripts/test-ci-full-orphan-git-fail.sh`，已納入 `make ci-gate`）**：
+  測試**逐字抽取真檔 Makefile 的該段 recipe**（錨點＝ `@echo "  → orphan artifact check"` 到其後第一個
+  `@echo "    ✅"`）再包成 fixture 執行 —— 抄一份的話 Makefile 改了測試還在驗舊行為（同 `-24`／ci-timeout 的理由）。
+  抽取器自我斷言：空集合／缺 `|| git_rc=$$?`／缺 fail-closed 判定／缺 `command -v file` ⇒ **立刻紅**。
+  同一輸入的**修前／修後對照**（rc 一律從 log 讀，不經管線；`make` 失敗碼 2 ＝ recipe `exit 1`）：
+
+  | # | 輸入（同一 fixture） | 修前 | 修後 |
+  |---|---|---|---|
+  | ① | 真 git、但 CWD 不是 repo | `fatal: not a git repository …`（×3）＋ `    ✅`、**rc=0** | `❌ … git ls-files 失敗（rc=128）…`、**rc=2** |
+  | ② | PATH 注入失敗的 git（shim ⇒ 128） | `fatal: simulated git failure`（×3）＋ `    ✅`、**rc=0** | `❌ …（rc=128）…`、**rc=2** |
+  | ③ | PATH 內完全沒有 git（⇒ 127） | `/bin/sh: git: No such file or directory`（×3）＋ `    ✅`、**rc=0** | `❌ …（rc=127）…`、**rc=2** |
+  | ④ | 正常 repo、無 orphan | `    ✅`、rc=0 | `    ✅`、rc=0（逐字不變） |
+  | ⑤ | tracked `*.pid`／`*.out` | `[PID] …`／`[COVERAGE] …`、rc=2 | rc=2（逐字不變） |
+  | ⑥ | tracked 二進位（`/bin/ls`） | `[BINARY] …`、rc=2 | rc=2（逐字不變） |
+  | ⑦ | 真 repo、git 正常、`PATH` 內沒有 `file(1)` | `    ✅`、**rc=0**（二進位偵測整段失效） | `❌ … 找不到 file(1) …`、**rc=2** |
+
+  ①的**修前假綠原文**逐字為 `  → orphan artifact check` ＋ 三行 `fatal: not a git repository (or any of the parent
+  directories): .git` ＋ `    ✅`（rc=0）；②③ 另外用 shim 把 git 的 rc **固定在 128／127**，讓「訊息同一行帶上 rc」
+  這個斷言有鑑別力（用真 git 只能保證「非 0」，rc 值隨環境變）。所有失敗情境都另加「輸出**不得**出現 `    ✅`」的判準。
+  **突變自證（探針的鑑別力）**：(a) `[ $$git_rc -ne 0 ]` → `[ 0 -ne 0 ]` ⇒ ①的假綠復現（**rc=0 ＋ `    ✅`**），
+  而 ①的判準在該結果上**變紅**；(b) `command -v file >` → `true >` ⇒ ⑦的假綠復現（rc=0 ＋ ✅），⑦的判準在該結果上
+  **變紅**。兩個突變都以 `diff | grep -c '^[<>]'` 斷言各改到 2 行（含 `-`／`+` 各一）⇒ 確認改的是**行為行**，
+  避開「突變改到註解／文件 ⇒ 誤判測試沒牙齒」的假結論。
+  **真檔樹突變（本車道實跑，非只跑測試）**：把真檔 `Makefile` 的該段 recipe 換回 `origin/main` 版（保留本 PR 的註解行，
+  只換行為行）⇒ `bash tests/scripts/test-ci-full-orphan-git-fail.sh` **rc=1**，紅燈原文
+  `FAIL: orphan check 沒有顯式接 git 的 rc（FU-20261016-25 回歸？）`；`cp` 還原後
+  `sha256(Makefile)=8cc1d2c45929570ef8709eef88216d33d2d1a64046b65ee54a612fb845782e0c` 與突變前**逐位元組相等**
+  （`shasum -a 256 -c -` ⇒ `Makefile: OK`）⇒ 測試 **rc=0**（`ALL PASS`）。
+- **同型掃描（只列清單，**不**配 ID；每一列都在本車道讀碼／實跑複驗過，並標明複驗方式；行號基準＝ `origin/main` `d9b9c8be8`）**：
+
+  | 種類 | 位置 | 形狀與本車道的複驗 |
+  |---|---|---|
+  | **P1 候選（同形狀，本 PR 未修）** | `scripts/ci/check_commit_messages.sh:40` | `done < <(git log --no-merges --format="%H %s" "$BASE..$HEAD" 2>/dev/null \|\| true)`：range 不可解析 ⇒ 迴圈 0 圈 ⇒ `HAS_ERRORS=false` ⇒ 收尾印 `✅ All commit messages follow semantic format`。**實跑**：`bash scripts/ci/check_commit_messages.sh does-not-exist-xyz HEAD` ⇒ 逐字印 `✅ All commit messages follow semantic format`、**rc=0** |
+  | **P1 候選（同形狀，本 PR 未修）** | `scripts/ci/frontend_smoke.sh:93` | `CHANGED=$(git diff --name-only "$BASE_REF"...HEAD 2>/dev/null \|\| true)` ⇒ 空 ⇒ `:151-154` 印 `No relevant frontend mapped from diff → SKIP` ＋ `Smoke gate skipped (no relevant changes)`、**rc=0**（`-19` 修的是另一支 `check_frontend_dist.sh`，本檔未被涵蓋）。**實跑**：hermetic repo（`main` 存在、但與 `HEAD` 無 merge base）⇒ `No diff (empty commit or base==HEAD)`／`SKIP`／**rc=0** |
+  | 反例（**已 fail-closed，勿改**） | `scripts/ci/check_case_conflicts.sh:45` | `TRACKED_FILES=$(git ls-files)` 看似同形狀，但檔頭 `set -euo pipefail` ⇒ git 失敗**立即中止**。**實跑**：`PATH=<git shim 128> bash scripts/ci/check_case_conflicts.sh` ⇒ **rc=128**、不印 `✅`（失敗很大聲；只是沒有診斷訊息） |
+  | 反例（**已 fail-closed，勿改**） | `scripts/ci/check_doc_ports.sh:68` | `TOTAL_FILES=$(git -C "$REPO_ROOT" ls-files \| wc -l \| tr -d ' ')` ＋ `pipefail` ⇒ git 的 128 仍會傳出、`set -e` 中止（不是被 `wc`／`tr` 的 0 蓋掉）。**實跑**：同 shim ⇒ **rc=128**；`:86` 的 `git grep … \|\| true` 在該情境**不可達** |
+  | 反例（fail-closed，但訊息誤導） | `Makefile:1195-1199`（`ci-gate` 的 generate drift check） | `git diff --exit-code … 2>/dev/null \|\| { echo ❌ 生成檔案過期; exit 1; }`：git 失敗也走紅（**不放行**），但把「git 壞了」講成「生成檔案過期」 |
+  | 相關但方向相反（fail-open） | `Makefile:1012-1014`／`:1069-1071`（`rebuild-atlas`／`rebuild-cron` 的 linked-worktree 拒絕） | `[ "$$(git rev-parse --git-dir)" != "$$(git rev-parse --git-common-dir)" ]`：git 失敗 ⇒ **兩邊都是空字串** ⇒ 判為相等 ⇒ **不**執行 `exit 1`（該拒絕時放行）。同屬「工具失敗被當成一個合法結果」，但後果是**放行**而非「印通過」，且 CWD 必須是 repo 才走得到 ⇒ 嚴重度較低 |
+  | 反例（已正確，勿改） | `Makefile:1262-1264`（本 PR 在 `ci-gate` 新增的契約測試） | 抽取器自我斷言 ＋ 精確 rc 斷言；真檔樹突變實測必紅（見上） |
+
+  ⇒ 兩列 **P1 候選**與本條同根因且**本 PR 未修**（本車道只收斂 `ci-full` 這一段；是否配 ID／派工由 root 決定）。
+- **已知限制**：
+  ① 本修法擋的是「**清單取不到**」與「**偵測工具缺失**」兩件事。`file(1)` **存在但對某個檔案執行失敗**
+     （rc≠0 ⇒ `ft` 為空）仍會被當成「不是二進位」—— 該路徑沒有逐檔 rc 斷言（逐檔判會讓「幾千個檔裡有一個
+     怪檔名」直接紅）；本 PR **未**做這個升級。
+  ② `TRACKED_PID`／`TRACKED_OUT` 的成員**不檢查本地檔案是否存在**（原行為：只信 git index，檔案不在本地也照列）⇒ 未動。
+  ③ 三次 `git ls-files` 現在都跑在守衛**之前**（原本散在各自迴圈頭）⇒ 失敗時的輸出順序變成「三行 fatal」集中在
+     守衛訊息之前（見負向證明的逐字原文）；成本差異可忽略。
+  ④ `git ls-files` 成功但輸出含**需要引號的怪檔名**（`core.quotePath` 預設把非 ASCII 檔名加上引號）時，
+     原本與現在都用未加引號的 `for f in …` 展開 ⇒ 這類檔名的二進位判定本來就不可靠（**原有**限制，本 PR 未改）。
+
 ## 相關文件
 
 - [universe-scoring-ranked-zero-20260925.md](universe-scoring-ranked-zero-20260925.md)
