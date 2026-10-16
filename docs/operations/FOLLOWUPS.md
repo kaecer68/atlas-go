@@ -3607,7 +3607,7 @@ PY
 
 ### FU-20261016-19 — `check_frontend_dist.sh` 的 `git diff … || true` ⇒ **pre-push 的 dist 閘門可被靜默放行**
 
-- **狀態**：`open`
+- **狀態**：`done`
 - **記錄日期**：2026-10-16
 - **嚴重度**：**P0（閘門說謊）** —— 與 `-18` 同族。
 - **來源**：同上（PR #2245 同型稽核）。
@@ -3616,6 +3616,34 @@ PY
 - **爆炸半徑**：`Makefile:45`（pre-push）、`Makefile` 的 `make ci` 段。
 - **建議處置**：① **根因優先**：先實測複現「git diff 失敗 ⇒ 回 0／顯示 OK」② 把「失敗」與「無變更」**分離**（失敗 fail loud 且帶可診斷訊息）③ **負向證明**：注入失敗 ⇒ 必紅；正常兩條路徑行為不變 ④ 同型掃描 `scripts/ci/**` 與 `Makefile` 的 `|| true`／`2>/dev/null`／`set +e` 形狀。
 - **已派工**：2026-10-16 車道（root 指定）。
+- **處置（2026-10-16 完成；本 PR）**：
+  - **根因（已在同批實測複現）**：`git diff` 失敗時 stdout 為空 ⇒ `|| true` 抹掉回傳碼、`2>/dev/null` 抹掉 git 的
+    `fatal:` ⇒「指令失敗」與「真的沒改前端」**輸出逐字相同**。同一棵 fixture（dist 真的 stale）：
+    `--diff main~1...HEAD` ⇒ `❌ admin_web: dist 過期 …` **rc=1**；`--diff origin/main...HEAD`（不可解析）⇒
+    `ℹ️ diff 未含 … 跳過 dist 檢查` ＋ `✅ nothing to check` **rc=0**；原始 git rc=128（`fatal: ambiguous argument …`）。
+    其他可觸發的 rc≠0：找不到 merge base（128）、不在 git work tree（129）、git 不存在（127）。
+  - **修法**：顯式接 `git diff` 的 rc（`changed=$(git diff --name-only "$RANGE") || diff_rc=$?`）、**不再導掉 stderr**
+    （診斷要靠 git 自己的 `fatal:`）、rc≠0 時印出 range 與 git rc 並 `exit 1`；真的無變更仍 `exit 0`（**未**改成「一律紅」）。
+  - **驗收**：`tests/scripts/test-check-frontend-dist.sh` ⇒ `PASSED (13/13)`。新增情境：11（range 不可解析 ⇒ rc=1、
+    輸出**不得**含 `nothing to check`、必須印出 range；同 fixture 的 control range 仍 rc=1）、
+    12（seam：PATH 注入失敗的 `git`，range 本身合法 ⇒ rc=1 並回報 git rc）、13（可解析但 diff 為空 ⇒ 仍 rc=0）。
+    `bash -n`／`shellcheck -S warning`（兩檔）rc=0；`test-prepush-gates.sh`、`test-ci-timeout-tri-state.sh` rc=0；`make ci-gate` rc=0。
+  - **負向證明**：把修好的兩行換回舊行為（`… 2>/dev/null || true` ＋ `if [ 0 -ne 0 ]`）⇒ 測試**紅在 scenario11**，
+    紅燈原文即假綠輸出（`ℹ️ diff 未含 …`／`✅ nothing to check`，rc=0）；`cp` 還原後
+    `sha256=99298adb…e3647047` 與修好版**逐位元組相等** ⇒ 13/13 回綠。反向突變（`if [ "$diff_rc" -ne 99 ]`＝「一律紅」）
+    ⇒ **scenario4 紅**（證明測試同時擋下過度修正）。
+  - **同型掃描（只列不修；ID 交 root 分派）**：`scripts/ci/**` ＋ `Makefile` 共 **145 處**（判準：環境／輸入異常仍回 0
+    或印「通過」，且輸出看不出「其實沒檢查」；A=同型 25／B=fail-closed 13／C=樣式分類 107）。與本條**同型且已逐條判讀**者：
+    `frontend_smoke.sh:93`（`rev-parse` 前檢只擋「ref 不存在」；沒有 merge base 時 `git diff` rc=128 被吞 ⇒ 0 page ⇒
+    `Smoke gate skipped` rc=0）、`check_commit_messages.sh:40`（`BASE` 不可解析 ⇒ 0 commit ⇒ 印
+    「✅ All commit messages follow semantic format」）、`check_data_catalog.sh:143`（`grep -oP` 在 BSD grep rc=2 被吞 ⇒
+    掃 0 行 ⇒ `log_pass "catalog 中無 stale entries"`）、`check_doc_ports.sh:86,90`（`git grep` 失敗 ⇒ 0 違規 ⇒ `pass`，
+    且掃描數來自另一條 `git ls-files`，訊息會誤導）、`check_design_tokens.sh:33-35`、`zero-metric-guard.sh:49`、
+    `check_no_duplicate_preflight.sh:58,63`、`check_layer3_snapshots.sh:53,75,79`；已登記於 `-18` 或 `FU-20260926-12 §6`
+    者不重複列。
+  - **已知限制**：① 本條只修「失敗被誤判為無變更」這條**語意**，未動 `--diff` 的**範圍**語意（範圍問題曾由 PR #2215 修）；
+    ② `tests/scripts/test-check-frontend-dist.sh` 仍只由 `make test-scripts`（opt-in）執行、未進 `ci-gate`／`quality.yml`
+    ⇒ 情境 11–13 在 CI **不會**自動跑（CI 接線僅建議、本 PR 未動 workflow）；③ 同型掃描範圍限 `scripts/ci/**` ＋ `Makefile`。
 
 ### FU-20261016-20 — 測試以固定相對層數（`"../.."`）解析 module root ⇒ **lane 本機假綠、CI 紅**
 
