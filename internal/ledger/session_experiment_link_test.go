@@ -117,7 +117,15 @@ func TestSQLiteRecordSessionExperiment_StoreFailureIsReturnedAndCounted(t *testi
 
 // TestSQLiteRecordExperiment_RepeatedIDIsNotAnError pins backend parity with
 // PostgreSQL (#1780): experiment_id is retried by design, so a repeat is not an
-// error and the first write wins.
+// error.
+//
+// Q2 batch 2 unit A (2026-10-16) changed the second half of that contract from
+// "first write wins" to "last write wins". Write-once made the row unable to
+// carry a status transition, so `accepted` was structurally 0 no matter what
+// the pipeline did — production read that as a 0% acceptance rate. The JSONL
+// store is append-only with last-write-wins folding
+// (LatestExperimentStatusByID), so last-write-wins is the parity target, not
+// first-write-wins. The repeat must still not error.
 func TestSQLiteRecordExperiment_RepeatedIDIsNotAnError(t *testing.T) {
 	store, db := newSQLiteExperimentStoreForLink(t)
 	rec := linkTestRecord("exp-repeat")
@@ -137,7 +145,30 @@ func TestSQLiteRecordExperiment_RepeatedIDIsNotAnError(t *testing.T) {
 	).Scan(&accepted); err != nil {
 		t.Fatalf("select accepted: %v", err)
 	}
-	if accepted.Int64 != 0 {
-		t.Fatalf("accepted = %d, want 0 (first write wins, DO NOTHING)", accepted.Int64)
+	if accepted.Int64 != 1 {
+		t.Fatalf("accepted = %d, want 1 (the accepted transition must land)", accepted.Int64)
+	}
+}
+
+// TestSQLiteRecordExperiment_TransitionDoesNotClearSessionID is the guard rail
+// on the upsert above: the session link is owned by RecordSessionExperiment, so
+// a later session-less record write for the same id must update the record
+// without wiping the link (a bare "replace the row" upsert would silently
+// re-create the 894/894 NULL defect of FU-20261016-03).
+func TestSQLiteRecordExperiment_TransitionDoesNotClearSessionID(t *testing.T) {
+	store, db := newSQLiteExperimentStoreForLink(t)
+	rec := linkTestRecord("exp-transition-keeps-session")
+	if err := store.RecordSessionExperiment(domain.ReplaySession{ID: "session-A"}, rec); err != nil {
+		t.Fatalf("RecordSessionExperiment: %v", err)
+	}
+
+	accepted := rec
+	accepted.Status = domain.ExperimentAccepted
+	if err := store.RecordExperiment(accepted); err != nil {
+		t.Fatalf("RecordExperiment (status transition): %v", err)
+	}
+
+	if got := storedSessionID(t, db, rec.ID); !got.Valid || got.String != "session-A" {
+		t.Fatalf("session_id = %+v, want session-A (a status transition must not clear the link)", got)
 	}
 }

@@ -29,6 +29,14 @@ type AutoExperimentConfig struct {
 	Config   config.Config
 	Monitor  AutoExperimentMonitor
 	Promoter *AutoJudgePromoter
+	// Store is the experiments-family store (see
+	// ledger.NewExperimentFamilyStore) used for every read
+	// and write this pipeline performs. Optional seam: nil ⇒ built from Config,
+	// which resolves cfg.Config.StoreBackend exactly like production does
+	// (jsonl when unset, so tests and JSONL deployments keep the previous
+	// behavior byte-for-byte). Injection exists so a test can pin that the
+	// pipeline really routes through the supplied store.
+	Store ledger.FullStore
 }
 
 func AutoExperiment(ctx context.Context, cfg AutoExperimentConfig) error {
@@ -36,10 +44,19 @@ func AutoExperiment(ctx context.Context, cfg AutoExperimentConfig) error {
 		return fmt.Errorf("AutoExperiment: System must not be nil")
 	}
 
+	store, err := resolveAutoExperimentStore(cfg)
+	if err != nil {
+		// Fail loudly instead of continuing: silently falling back to JSONL on a
+		// postgres deployment writes the lifecycle where no PG reader looks
+		// (the failure mode scripts/ci/check_ledger_seam.py exists for).
+		return err
+	}
+	cfg.Store = store
+
 	// Drain hygiene: expire stale planned records before picking a candidate.
 	// The ledger is append-only and historically never marked digested items,
 	// so the backlog grew unbounded (fix manifest #D01).
-	if expired, err := ExpireStalePlanned(cfg.Config.LedgerDir, stalePlannedTTL); err != nil {
+	if expired, err := ExpireStalePlannedWithStore(store, cfg.Config.LedgerDir, stalePlannedTTL); err != nil {
 		logging.Warn("experiment", "expire_stale_failed", logging.Err(err))
 	} else if expired > 0 {
 		logging.Info("experiment", "stale_planned_expired", "count", expired)
@@ -48,7 +65,7 @@ func AutoExperiment(ctx context.Context, cfg AutoExperimentConfig) error {
 	// Drain hygiene: expire abandoned "running" experiments whose latest
 	// record is older than the TTL (audit A5: stuck running holds the
 	// auto-judge pipeline hostage forever).
-	if expired, err := ExpireStaleRunning(cfg.Config.LedgerDir, staleRunningTTL); err != nil {
+	if expired, err := ExpireStaleRunningWithStore(store, cfg.Config.LedgerDir, staleRunningTTL); err != nil {
 		logging.Warn("experiment", "expire_stale_running_failed", logging.Err(err))
 	} else if expired > 0 {
 		logging.Info("experiment", "stale_running_expired", "count", expired)
@@ -56,7 +73,12 @@ func AutoExperiment(ctx context.Context, cfg AutoExperimentConfig) error {
 
 	// First, check if there are pending experiments from the daily pipeline that
 	// haven't been tested yet. Process the oldest one to close the feedback loop.
-	if pending := loadOldestPendingExperiment(cfg.Config.LedgerDir); pending != nil {
+	if pending, err := loadOldestPendingExperiment(store, cfg.Config.LedgerDir); err != nil {
+		// A store read failure must not be answered with the frozen JSONL file
+		// (that is the split this unit removes): report and skip the drain step,
+		// then fall through to the normal candidate selection.
+		logging.Warn("experiment", "pending_experiments_unreadable", logging.Err(err))
+	} else if pending != nil {
 		candidate := pending.toCandidate(cfg.System.GetRegistry())
 		if candidate != nil {
 			logging.Info("experiment", "processing_pending",
@@ -111,8 +133,11 @@ func runExperimentForCandidate(_ context.Context, cfg AutoExperimentConfig, cand
 		return fmt.Errorf("write brief: %w", err)
 	}
 
-	store := ledger.NewStore(cfg.Config.LedgerDir)
-	executor := NewExecutor(store.(ledger.FullStore), cfg.Config.BaselinePolicyPath)
+	store, err := resolveAutoExperimentStore(cfg)
+	if err != nil {
+		return err
+	}
+	executor := NewExecutor(store, cfg.Config.BaselinePolicyPath)
 	result, runErr := executor.Run(briefPath, cfg.Config.ReplayDataPath)
 	if runErr != nil {
 		if cfg.Monitor != nil {
@@ -147,10 +172,13 @@ func runExperimentForCandidate(_ context.Context, cfg AutoExperimentConfig, cand
 		// judge looks in. Naming the backend (instead of relying on the
 		// ledger.NewStore default) keeps a postgres deployment from silently
 		// writing the window somewhere the judge cannot see — the same
-		// convention as autobacktest.NewSignalEngineFromDir. Converging this
-		// sibling onto the backend-aware window store requires moving the
-		// judge's read too, which belongs to the experiments-writer decision
-		// (Q2 batch 2, T3).
+		// convention as autobacktest.NewSignalEngineFromDir.
+		//
+		// Q2 batch 2 unit A (2026-10-16) made the experiments-writer decision
+		// this note used to defer to, and kept the window summary on the file
+		// contract: experiment.Judge still reads it by path, so converging this
+		// sibling requires moving the judge's read in the same change. The gap is
+		// registered as FU-20261016-09 (result file + window summary readers).
 		windowStore, storeErr := ledger.NewFullStore(config.Config{
 			StoreBackend: "jsonl",
 			LedgerDir:    baseDir,
@@ -168,7 +196,7 @@ func runExperimentForCandidate(_ context.Context, cfg AutoExperimentConfig, cand
 			"sessions", summary.SessionCount)
 	}
 
-	judge := NewJudge(store.(ledger.ExperimentStore), cfg.Config.ReplayDataPath, cfg.Config.BaselinePolicyPath)
+	judge := NewJudge(store, cfg.Config.ReplayDataPath, cfg.Config.BaselinePolicyPath)
 	judged, judgeErr := judge.Evaluate(expPath)
 	if judgeErr != nil {
 		return fmt.Errorf("judge experiment: %w", judgeErr)
@@ -183,6 +211,13 @@ func runExperimentForCandidate(_ context.Context, cfg AutoExperimentConfig, cand
 
 	// Close the planned→tested feedback loop: append the actual experiment result
 	// to the ledger so the inbox shows real values instead of "待測試".
+	//
+	// WindowStart/WindowEnd are carried over from the judged result (the judge
+	// fills them from the window summary). This write is the only place that
+	// records the accepted/rejected transition, and the stores derive the
+	// experiments row's `timestamp` column from WindowStart — leaving it zero
+	// would make every transitioned row look like 0001-01-01 once the status
+	// table is upserted rather than written once (Q2 batch 2 unit A).
 	resultRec := domain.ExperimentRecord{
 		ID:                   candidate.Experiment.ID,
 		TargetAgentID:        candidate.Agent.ID,
@@ -194,9 +229,19 @@ func runExperimentForCandidate(_ context.Context, cfg AutoExperimentConfig, cand
 		BaselineMonetaryNTD:  judged.Experiment.BaselineMonetaryNTD,
 		CandidateMonetaryNTD: judged.Experiment.CandidateMonetaryNTD,
 		AcceptanceMetric:     candidate.Experiment.AcceptanceMetric,
+		WindowStart:          judged.Experiment.WindowStart,
+		WindowEnd:            judged.Experiment.WindowEnd,
 	}
 	if err := store.RecordExperiment(resultRec); err != nil {
-		logging.Warn("experiment", "ledger_update_failed", logging.Err(err))
+		// ERROR, not WARN: this single write is what carries the accepted flag
+		// into the status table. Losing it silently is how production ended up
+		// reporting a 0% acceptance rate (FU-20261016-04). The pipeline still
+		// continues — the promotion decision has already been made and recorded
+		// elsewhere — but the failure must be visible.
+		logging.Error("experiment", "ledger_update_failed",
+			"experiment_id", resultRec.ID,
+			"status", string(status),
+			logging.Err(err))
 	}
 
 	if status == domain.ExperimentAccepted {
@@ -306,8 +351,25 @@ const staleRunningTTL = stalePlannedTTL
 // ExpireStalePlanned appends an "expired" record for every planned
 // experiment whose oldest record is older than maxAge. Append-only semantics
 // are preserved (no rewrite); readers folding by ID see the new status.
+//
+// store == nil keeps the pre-migration behavior (read experiments.jsonl); the
+// live pipeline passes the deployment's store instead, so it expires the same
+// records it will later write the transition to. See
+// ledger.LoadExperimentRecords for why a store-backed read is the only one that
+// sees the live stream on a postgres deployment.
 func ExpireStalePlanned(ledgerDir string, maxAge time.Duration) (int, error) {
-	records := ledger.ExperimentsJSONL(ledgerDir)
+	return ExpireStalePlannedWithStore(nil, ledgerDir, maxAge)
+}
+
+// ExpireStalePlannedWithStore is ExpireStalePlanned through an optional store.
+// The write half goes through the same store: writing an expiry to JSONL while
+// the pipeline reads PostgreSQL (or the reverse) would leave the transition
+// invisible to the reader that needs it.
+func ExpireStalePlannedWithStore(store ledger.FullStore, ledgerDir string, maxAge time.Duration) (int, error) {
+	records, err := ledger.LoadExperimentRecords(store, ledgerDir)
+	if err != nil {
+		return 0, err
+	}
 	latest := ledger.LatestExperimentStatusByID(records)
 	firstRec := make(map[string]domain.ExperimentRecord)
 	for _, rec := range records {
@@ -341,13 +403,35 @@ func ExpireStalePlanned(ledgerDir string, maxAge time.Duration) (int, error) {
 	if len(toExpire) == 0 {
 		return 0, nil
 	}
-	store := ledger.NewStore(ledgerDir)
+	writer, err := expireWriter(store, ledgerDir)
+	if err != nil {
+		return 0, err
+	}
 	for _, rec := range toExpire {
-		if err := store.RecordExperiment(rec); err != nil {
+		if err := writer.RecordExperiment(rec); err != nil {
 			return 0, fmt.Errorf("expire %s: %w", rec.ID, err)
 		}
 	}
 	return len(toExpire), nil
+}
+
+// expireWriter resolves the store the expiry transition is appended to.
+// store == nil falls back to an EXPLICIT jsonl factory for the caller's ledger
+// directory — the same JSONL file ledger.NewStore(ledgerDir) used to target, so
+// the no-store callers keep their behavior exactly, while the backend is named
+// instead of left to a default (the ledger seam guard's contract).
+func expireWriter(store ledger.FullStore, ledgerDir string) (ledger.FullStore, error) {
+	if store != nil {
+		return store, nil
+	}
+	jsonlStore, err := ledger.NewFullStore(config.Config{
+		StoreBackend: "jsonl",
+		LedgerDir:    ledgerDir,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("expire experiments (jsonl): %w", err)
+	}
+	return jsonlStore, nil
 }
 
 // ExpireStaleRunning appends an "expired" record for every experiment whose
@@ -357,7 +441,16 @@ func ExpireStalePlanned(ledgerDir string, maxAge time.Duration) (int, error) {
 // Append-only semantics are preserved (no rewrite); readers folding by ID
 // see the new status.
 func ExpireStaleRunning(ledgerDir string, maxAge time.Duration) (int, error) {
-	records := ledger.ExperimentsJSONL(ledgerDir)
+	return ExpireStaleRunningWithStore(nil, ledgerDir, maxAge)
+}
+
+// ExpireStaleRunningWithStore is ExpireStaleRunning through an optional store
+// (read and write halves both). See ExpireStalePlannedWithStore.
+func ExpireStaleRunningWithStore(store ledger.FullStore, ledgerDir string, maxAge time.Duration) (int, error) {
+	records, err := ledger.LoadExperimentRecords(store, ledgerDir)
+	if err != nil {
+		return 0, err
+	}
 	latest := ledger.LatestExperimentStatusByID(records)
 	firstRec := make(map[string]domain.ExperimentRecord)
 	for _, rec := range records {
@@ -392,9 +485,12 @@ func ExpireStaleRunning(ledgerDir string, maxAge time.Duration) (int, error) {
 	if len(toExpire) == 0 {
 		return 0, nil
 	}
-	store := ledger.NewStore(ledgerDir)
+	writer, err := expireWriter(store, ledgerDir)
+	if err != nil {
+		return 0, err
+	}
 	for _, rec := range toExpire {
-		if err := store.RecordExperiment(rec); err != nil {
+		if err := writer.RecordExperiment(rec); err != nil {
 			return 0, fmt.Errorf("expire running %s: %w", rec.ID, err)
 		}
 	}
@@ -416,8 +512,18 @@ func experimentRecordIsOld(rec domain.ExperimentRecord, cutoff time.Time) bool {
 // loadOldestPendingExperiment reads the experiments ledger to find the oldest
 // planned experiment that hasn't been tested yet. Resolution is last-write-wins
 // per experiment ID, so digested items are never re-picked (fix manifest #D01).
-func loadOldestPendingExperiment(ledgerDir string) *pendingExperiment {
-	records := ledger.ExperimentsJSONL(ledgerDir)
+//
+// store == nil keeps the pre-migration behavior (experiments.jsonl); the live
+// pipeline passes the deployment's store, because the planned records are
+// written by the replay pipeline through the backend-aware store
+// (internal/orchestrator/system.go) and are therefore in PostgreSQL on
+// production, not in the file (FU-20261016-04: the file stopped at
+// 2026-10-13T23:39Z while PostgreSQL kept receiving rows).
+func loadOldestPendingExperiment(store ledger.FullStore, ledgerDir string) (*pendingExperiment, error) {
+	records, err := ledger.LoadExperimentRecords(store, ledgerDir)
+	if err != nil {
+		return nil, err
+	}
 	latest := ledger.LatestExperimentStatusByID(records)
 	for _, rec := range records {
 		if rec.Status != domain.ExperimentPlanned || rec.TargetAgentID == "" {
@@ -432,9 +538,19 @@ func loadOldestPendingExperiment(ledgerDir string) *pendingExperiment {
 			Skill:         rec.Skill,
 			MutationType:  rec.MutationType,
 			BaselineValue: rec.BaselineValue,
-		}
+		}, nil
 	}
-	return nil
+	return nil, nil
+}
+
+// resolveAutoExperimentStore returns the injected store when the caller set
+// one, and builds the family store from cfg.Config otherwise (Config.StoreBackend
+// unset ⇒ jsonl, i.e. the previous behavior).
+func resolveAutoExperimentStore(cfg AutoExperimentConfig) (ledger.FullStore, error) {
+	if cfg.Store != nil {
+		return cfg.Store, nil
+	}
+	return ledger.NewExperimentFamilyStore(cfg.Config)
 }
 
 // LoadPendingExperiments returns all pending experiment results from the

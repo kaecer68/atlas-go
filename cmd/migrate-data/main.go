@@ -51,6 +51,9 @@ func run() error {
 		migrateStockpicker       = flag.Bool("stockpicker", false, "Migrate stock_signal_outcomes + stock_win_rate from SQLite atlas.db into the PG tables created by migrations 000018/000019")
 		migrateWindows           = flag.Bool("windows", false, "Migrate backtest window summaries + mutation briefs from <LedgerDir>/windows JSONL into PG (explicit production backfill: not part of -all; requires -expect-db)")
 		windowsDir               = flag.String("windows-dir", "", "Source directory for -windows; defaults to <LedgerDir>/windows")
+		migrateExperiments       = flag.Bool("experiments", false, "Migrate experiment records + prompt experiment results from <LedgerDir>/experiments.jsonl and <LedgerDir>/experiments/*.json into PG (explicit production backfill: not part of -all; requires -expect-db)")
+		experimentsDir           = flag.String("experiments-dir", "", "Source directory for -experiments; defaults to <LedgerDir>/experiments")
+		experimentsJSONL         = flag.String("experiments-jsonl", "", "Source experiments.jsonl for -experiments; defaults to <LedgerDir>/experiments.jsonl")
 		expectDB                 = flag.String("expect-db", "", "assert the postgres database name before migrations (e.g. atlas); aborts with the actual current_database on mismatch (M12 target guard)")
 		dryRun                   = flag.Bool("dry-run", false, "-stockpicker only: compute and print expected migration volumes + source/target digests without writing")
 		outcomesSQLiteSessions   = flag.Bool("outcomes-sqlite-sessions", false, "Backfill SQLite session-scoped outcomes (session_id != '') preserving session_id (A01)")
@@ -74,6 +77,12 @@ func run() error {
 	// Other modes keep their legacy behavior (guard applies only when
 	// -expect-db is provided).
 	if err := requireMigrateTargetAssertion(*migrateStockpicker, *migrateWindows, *expectDB); err != nil {
+		return err
+	}
+	// -experiments joins that family (see requireExperimentsTargetAssertion in
+	// experiments.go): the JSONL-side experiment backfill writes production
+	// rows, so it refuses to run without an explicit target assertion too.
+	if err := requireExperimentsTargetAssertion(*migrateExperiments, *expectDB); err != nil {
 		return err
 	}
 
@@ -224,6 +233,18 @@ func run() error {
 		}
 		if err := migrateWindowsData(ctx, pool, dir); err != nil {
 			return fmt.Errorf("migrate windows: %w", err)
+		}
+	}
+
+	// Deliberately NOT part of -all, for the same reason as -windows: backfilling
+	// the pre-migration experiment history is an explicit production data
+	// operation, and -all must keep working on a deployment whose experiments
+	// directory is empty or absent. Requires -expect-db (see
+	// requireExperimentsTargetAssertion).
+	if *migrateExperiments {
+		dir, jsonlPath := experimentSourcePaths(stateDir, *experimentsDir, *experimentsJSONL)
+		if err := migrateExperimentsData(ctx, pool, dir, jsonlPath); err != nil {
+			return fmt.Errorf("migrate experiments: %w", err)
 		}
 	}
 

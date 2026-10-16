@@ -51,6 +51,31 @@ type Handlers struct {
 	BaselinePath string
 	LedgerDir    string
 	WorkDir      string
+	// Store is the experiments-family store used by the admin judge
+	// (HandleJudge). Optional seam (Q2 batch 2 unit A): nil ⇒ an explicit JSONL
+	// factory over LedgerDir, i.e. the behavior before the seam existed, so
+	// struct-literal construction in tests keeps working unchanged.
+	Store ledger.ExperimentStore
+}
+
+// experimentStore returns the store the admin judge evaluates through.
+//
+// The backend is named explicitly ("jsonl") rather than left to a default so a
+// JSONL answer is never a silent consequence of a missing injection — that is
+// the contract scripts/ci/check_ledger_seam.py enforces for ledger.NewStore
+// call sites, and this fallback must not reintroduce the raw constructor.
+func (h *Handlers) experimentStore() (ledger.ExperimentStore, error) {
+	if h.Store != nil {
+		return h.Store, nil
+	}
+	store, err := ledger.NewFullStore(config.Config{
+		StoreBackend: "jsonl",
+		LedgerDir:    h.LedgerDir,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("experiment store: %w", err)
+	}
+	return store, nil
 }
 
 // RegisterRoutes mounts experiment lifecycle endpoints.
@@ -200,7 +225,11 @@ func (h *Handlers) HandleJudge(r *http.Request) (int, any) {
 	}
 
 	replayPath := config.GetReplayDataPath(h.WorkDir)
-	judge := experiment.NewJudge(ledger.NewStore(h.LedgerDir).(ledger.ExperimentStore), replayPath, h.BaselinePath)
+	store, err := h.experimentStore()
+	if err != nil {
+		return http.StatusInternalServerError, map[string]string{"error": err.Error()}
+	}
+	judge := experiment.NewJudge(store, replayPath, h.BaselinePath)
 	result, err := judge.Evaluate(resultPath)
 	if err != nil {
 		return http.StatusInternalServerError, map[string]string{"error": fmt.Sprintf("judge failed: %v", err)}

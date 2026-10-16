@@ -586,6 +586,11 @@ func run(args []string, deps appDeps) error {
 	rt, err := bootstrap.InitRuntime(context.Background(), bootstrap.Config{
 		WorkDir:   cfg.WorkDir,
 		LedgerDir: cfg.LedgerDir,
+		// Q2 batch 2 unit A: the taskexec experiment runners build a
+		// backend-aware store from this carrier, so the backend selector has to
+		// travel with it (a missing value silently resolves to jsonl).
+		StoreBackend: cfg.StoreBackend,
+		SQLitePath:   cfg.SQLitePath,
 	})
 	if err != nil {
 		return fmt.Errorf("initialize runtime: %w", err)
@@ -893,7 +898,19 @@ func run(args []string, deps appDeps) error {
 		}
 		autoRollback := scheduler.NewAutoRollback(nil, dwMgr, agentHealthMgr)
 		healthMonitor := scheduler.NewSystemHealthMonitor(dwMgr, agentHealthMgr)
-		judge := experiment.NewJudge(ledger.NewStore(cfg.LedgerDir).(ledger.ExperimentStore), cfg.ReplayDataPath, cfg.BaselinePolicyPath)
+		// Q2 batch 2 unit A: the auto-judge promoter's judge used a raw JSONL
+		// store. Production writes the family's records through the
+		// backend-aware store (PostgreSQL), so this judge both wrote its
+		// verdicts where no PG reader looked and read its DSR trial history
+		// (LoadTrialSharpes) from a directory the writers no longer fill.
+		// experiment.NewStore resolves the deployment's backend, and
+		// additionally mirrors the result files the path-based readers (inbox,
+		// diff, promoter, FindLatestExperiment) still consume.
+		experimentStore, err := ledger.NewExperimentFamilyStore(cfg)
+		if err != nil {
+			return fmt.Errorf("experiment store: %w", err)
+		}
+		judge := experiment.NewJudge(experimentStore, cfg.ReplayDataPath, cfg.BaselinePolicyPath)
 		autoJudgePromoter := experiment.NewAutoJudgePromoter(judge, baselineMgr).
 			WithMaturityTracker(maturityTracker).
 			WithPromotionRecorder(autoRollback)
@@ -2056,8 +2073,23 @@ func run(args []string, deps appDeps) error {
 				Interval: 24 * time.Hour,
 				Enabled:  true,
 				Task: func(ctx context.Context) error {
+					// Q2 batch 2 unit A: resolve the family store once. The
+					// backlog gate and the proposal writes must see and write the
+					// SAME backend: planned records are created by the replay
+					// pipeline through the backend-aware store, so a gate that
+					// counts experiments.jsonl under-reports the backlog on a
+					// postgres deployment (the file stopped 2026-10-13T23:39Z
+					// while PostgreSQL kept receiving rows).
+					store, err := ledger.NewExperimentFamilyStore(cfg)
+					if err != nil {
+						return fmt.Errorf("experiment store: %w", err)
+					}
 					// Backlog gate: don't pile proposals onto a full queue (#D01 cap).
-					if n := ledger.CountUnresolvedPlanned(cfg.LedgerDir); n >= 100 {
+					records, err := ledger.LoadExperimentRecords(store, cfg.LedgerDir)
+					if err != nil {
+						return fmt.Errorf("auto_propose backlog gate: %w", err)
+					}
+					if n := ledger.CountUnresolvedPlannedIn(records); n >= 100 {
 						logging.Warn("auto_propose", "backlog_full_skip", "unresolved", n)
 						return nil
 					}
@@ -2084,7 +2116,6 @@ func run(args []string, deps appDeps) error {
 							"agents_scanned", outcome.AgentsScanned,
 							"no_trigger", outcome.NoTrigger)
 					}
-					store := ledger.NewStore(cfg.LedgerDir)
 					for _, prop := range proposals {
 						if err := store.RecordExperiment(domain.ExperimentRecord{
 							ID:            fmt.Sprintf("auto-propose-%s-%d", prop.AgentID, time.Now().Unix()),

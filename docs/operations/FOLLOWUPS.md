@@ -2789,6 +2789,17 @@ PY
   `cmd/*` 獨立 CLI 與 `cmd/experimental/*` 可最後（後者是顯式目錄的實驗 harness）②每遷移一處就刪
   allowlist 對應條目（stale 條目刻意紅燈，這是刻意的耦合）③站點清空後另開一個 PR 加 `Deprecated:`
   並把 allowlist 縮到 0（此時 `make ledger-seam-check` 應報 `0 個裸 ledger.NewStore`）。
+- **2026-10-16 Q2 第二批 unit A（experiments 家族，11 站點名單）進度**：直建站點再降到 **13**
+  （allowlist 21 筆；`bash scripts/ci/check_ledger_seam.sh` rc=0），本單元刪掉 **10 筆**：
+  `cmd/atlas/main.go` 的 `auto_experiment` judge（896）與 `auto_propose`（2087）、
+  `internal/experiment/auto.go` ×3（執行器 store 114、`ExpireStalePlanned`/`ExpireStaleRunning` 的
+  344／395）、`internal/monitoring/api/experiment/handlers.go` 的 admin judge（203）、
+  `internal/taskexec/runners.go` 的 run/judge runner（63／136）、`cmd/run-experiment`（32）、
+  `cmd/judge-experiment`（47）。**注意：任務書寫「11 站點、23 → 12」，實際 allowlist 內屬本家族的是
+  10 筆（`auto.go:344` 與 `:395` 是同一筆 allowlist 條目涵蓋兩處；`cmd/atlas/main.go:2082` 與守門
+  看到的 2087 是同一處的行號漂移）⇒ 實測 23 → 13。**
+  剩下 13 筆全部屬其他家族（session/summary/live/backtest 的 fallback）或刻意 JSONL
+  （`cmd/migrate-jsonl-to-sqlite`、`cmd/experimental/**`）。**「不加 `Deprecated:`」的結論不變。**
 - **2026-10-16 Q2b2 T2（window 家族）進度**：直建站點由 32 降到 **27**（allowlist 40 → 35 筆），
   遷移清單亦記在 `scripts/ci/ledger-seam-allowlist.json` 的 `_doc`：
   `internal/autobacktest/runner.go` ×2（`NewRunner`／`NewRunnerWithEventBus` 改走 `NewFullStore`）、
@@ -2824,7 +2835,7 @@ PY
 
 ### FU-20261016-04 — T3（experiments 讀取端切 PG）的**前置條件**與**驗收判準必須更正**
 
-- **狀態**：`open`
+- **狀態**：`done`（2026-10-16 Q2 第二批 unit A 落地；原敘述全數保留，處置見條文末）
 - **記錄日期**：2026-10-16
 - **來源**：同上 T3 查證；root 已複驗關鍵讀數
 - **事實**：
@@ -2835,6 +2846,35 @@ PY
 - **必須更正的驗收判準**：T3 原定「`max(timestamp)` 追上當天」**結構上永遠不可能成立**（該欄位是寫入 − 20 天）⇒ 應改用①依 `experiment_id` 尾碼換算的寫入時間、或②新增明確的 `recorded_at` 欄、或③比對 `prompt_experiment_results` 的列數成長。
 - **T3 的正確順序**：**先統一寫者**（讓 live pipeline 把**完整生命週期**寫進 PG，或把 JSONL 的 `exec-`／`auto-`／`eval_metrics` 遷入 PG），**再切讀取端**；否則會製造假指標。
 - **查法**：`psql -Atc "select experiment_id, to_timestamp(substring(experiment_id from '[0-9]+$')::bigint) as written_at, timestamp as window_start from experiments where experiment_id like 'exp-%' order by 2 desc limit 3"`；`psql -Atc "select count(*), count(*) filter (where accepted<>0) from experiments"`；`psql -Atc "select count(*) from prompt_experiment_results"`。
+
+**處置（2026-10-16，Q2 第二批 unit A）**
+
+1. **先統一寫者（本單元的核心）**。新增 `ledger.NewExperimentFamilyStore(cfg)`：
+   - **record/status 半**（`ExperimentRecord`：planned → running → accepted/rejected/expired）改走**部署宣告的
+     後端**（生產＝PG）。家族原本只有 replay pipeline 走 backend-aware store，實驗執行／判定
+     （`internal/experiment/auto.go`、`cmd/run-experiment`、`cmd/judge-experiment`、`cmd/atlas` 的
+     judge／auto_propose、`internal/taskexec` 的兩個 runner）直建 JSONL ⇒ PG 只拿到 planned 半條。
+   - **result 半**（`PromptExperimentResult`）在非 jsonl 後端時**雙寫**：PG 的
+     `prompt_experiment_results`（DSR gate 的 `LoadTrialSharpes` 讀它）＋
+     `<LedgerDir>/experiments/<id>.json`（judge／inbox／diff／promoter／`FindLatestExperiment`
+     仍以檔案路徑為契約 —— 見 FU-20261016-09）。jsonl 後端時兩者同一個 store ⇒ 一次寫入，
+     行為與遷移前逐字相同。
+2. **修掉讓「生命週期寫不進 PG」的寫入語意**：`PostgresLedgerStore.RecordExperiment` 與
+   `SQLiteOutcomeStore.RecordExperiment` 由 `ON CONFLICT DO NOTHING` 改為**針對性 upsert**
+   （只更新 `mutation_brief_json` / `accepted` / `timestamp`，`session_id` 不動）。先前的
+   「first write wins」使 `accepted` 結構上恆為 0，這正是「假接受率 0%」的**直接成因**；JSONL store
+   本來就是 append-only ＋ 最後一筆勝出（`LatestExperimentStatusByID`）⇒ 單列關聯式表現在與它同語意。
+   `internal/experiment/auto.go` 寫入的 judged 紀錄同時補上 `WindowStart/WindowEnd`
+   （否則轉移後的列 `timestamp` 會退化成 `0001-01-01`）。
+3. **再切讀取端**：那 10 個建構站點改走該 factory（可選 seam ＋ 注入；nil ⇒ 顯式 jsonl）。
+   同單元另修掉「讀 experiments.jsonl 的 record 讀者」與寫者分裂的問題：新增
+   `ledger.LoadExperimentRecords(store, ledgerDir)`（store 優先；**store 錯誤不得靜默回退檔案**；
+   並把兩後端相反的順序正規化成「最舊優先」），`auto.go` 的 pending 選擇與兩個 expiry 都改走它。
+4. **回填工具**（本 PR 提供、**未執行**）：`cmd/migrate-data -experiments`（JSONL 側；SQLite 側另有
+   既有的 `-experiments-sqlite`）。上線順序 **先回填、再部署**：PG 可用但空不會回退，未回填就部署
+   會讓讀取端看到半份資料。指令與驗收查詢見 PR body（驗收**不可**用 `max(timestamp)`）。
+5. **仍未 PG 化**：result 檔案的**讀者**、window summary（T2 的 FU-20261016-05 例外）、
+   `evolution_health` 的 `lastProposalActivity` ⇒ 另開 FU-20261016-09。
 
 ---
 
@@ -2920,6 +2960,39 @@ PY
   並補 hermetic 測試（PG 錯誤 ⇒ 降級＋degraded；PG 成功回空 ⇒ 權威、不降級）；②或在 doc comment 明確寫
   「這兩個方法不降級，呼叫端自負」並以測試釘住該契約。
 - **查法**：`grep -n -A6 'func (s \*PGFirstOutcomeStore) Load' internal/ledger/pg_first_store.go`
+
+### FU-20261016-09 — experiments 家族的 **result 檔案／window summary 仍是讀取契約**（本單元刻意保留，需另一單元收斂）
+
+- **狀態**：`open`
+- **記錄日期**：2026-10-16
+- **來源**：Q2 第二批 unit A（experiments 家族寫者統一 ＋ 讀取端收斂）實作時確認；守門與 allowlist 同 FU-20261016-01
+- **事實（讀碼，非推測）**：`<LedgerDir>/experiments/<experiment_id>.json`（`PromptExperimentResult`）
+  不是 JSONL 後端的副產品，而是**整個家族以檔案路徑為介面的內部契約**。仍然只有檔案路徑的讀者：
+  - `experiment.Judge.Evaluate(resultPath)`（`judge.go` 的 `loadExperimentResult`）——活的生產路徑。
+  - `experiment.FindLatestExperiment`（`find.go`）與 `experiment.LoadPendingExperiments`（`auto.go`，掃目錄）。
+  - `AutoJudgePromoter.TryPromoteFromPath(expPath)`、`baseline.Manager.PromoteResult(expPath)`。
+  - `monitoring/api/experiment` 的 `HandleInbox`（掃目錄）與 `HandleDiff`（讀單檔）。
+  另有 window summary：judge 以 `windowSummaryPath`／`loadWindowSummary` 讀
+  `<狀態目錄>/windows/<windowID>.json`，其寫者是 `auto.go` 的「judge 前即時補算」
+  （T2 的 FU-20261016-05 已裁定維持顯式 JSONL）。
+  還有 `evolution_health.lastProposalActivity`／`lastJudgeActivity` 讀 `experiments.jsonl` 與
+  `experiments/*.json` 算「最後活動時間」——在 record 半已 PG 化的部署上，`lastProposalActivity`
+  會讀到凍結的檔案（生產實測該檔停在 2026-10-13T23:39Z，而 PG 寫到 2026-10-15）。
+- **風險**：
+  - ①本單元因此**不能**讓 result 只寫 PG（那會讓上面所有 reader 一次全瞎）⇒ 以雙寫維持；
+    雙寫的副作用是「檔案與 PG 可能短暫不一致」，且檔案清理／輪替沒有 owner。
+  - ②`evolution_health` 的 proposal 活動時間在 PG 部署上是**安靜讀到過期值**（同 T1 的失效模式家族），
+    會讓 `no_proposal_activity_in_24h` 這類判定失真。
+- **最小處置**：
+  - ①把 `Judge` 的 result 入口改成「記憶體 result ＋ 可選 store 讀取」，讓 `Evaluate(path)` 變成
+    薄包裝（`auto.go` 已經持有 result，可直接傳）；再逐一把 inbox／diff／promoter 換成 store 讀取。
+  - ②`evolution_health` 的兩個 `last*Activity` 改走 `ledger.LoadExperimentRecords(store, dir)`。
+  - ③window summary 與 result 檔案雙寫的**移除條件**：上述 reader 全部 store 化之後。
+- **查法**：`grep -n 'os.ReadFile\|filepath.Glob' internal/experiment/{judge,find,auto}.go`；
+  `grep -n 'ExperimentsJSONL' internal/experiment/evolution_health.go`；
+  `grep -rn 'TryPromoteFromPath\|PromoteResult(' --include='*.go' cmd internal | grep -v _test`。
+
+---
 
 ## 相關文件
 

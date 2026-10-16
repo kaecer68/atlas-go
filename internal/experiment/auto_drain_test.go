@@ -32,7 +32,10 @@ func TestLoadOldestPendingExperiment_SkipsResolved(t *testing.T) {
 		domain.ExperimentRecord{ID: "exp-b-1700000002", TargetAgentID: "agent-b", Status: domain.ExperimentPlanned},
 		domain.ExperimentRecord{ID: "exp-a-1700000001", TargetAgentID: "agent-a", Status: domain.ExperimentRejected},
 	)
-	got := loadOldestPendingExperiment(dir)
+	got, err := loadOldestPendingExperiment(nil, dir)
+	if err != nil {
+		t.Fatalf("loadOldestPendingExperiment: %v", err)
+	}
 	if got == nil {
 		t.Fatal("expected a pending experiment, got nil")
 	}
@@ -48,7 +51,9 @@ func TestLoadOldestPendingExperiment_AllResolved(t *testing.T) {
 		domain.ExperimentRecord{ID: "exp-a-1700000001", TargetAgentID: "agent-a", Status: domain.ExperimentPlanned},
 		domain.ExperimentRecord{ID: "exp-a-1700000001", TargetAgentID: "agent-a", Status: domain.ExperimentAccepted},
 	)
-	if got := loadOldestPendingExperiment(dir); got != nil {
+	if got, err := loadOldestPendingExperiment(nil, dir); err != nil {
+		t.Fatalf("loadOldestPendingExperiment: %v", err)
+	} else if got != nil {
 		t.Fatalf("expected nil (all resolved), got %+v", got)
 	}
 }
@@ -75,7 +80,9 @@ func TestExpireStalePlanned(t *testing.T) {
 	if got := ledger.CountUnresolvedPlanned(dir); got != 1 {
 		t.Fatalf("unresolved after expiry = %d, want 1 (only the fresh one)", got)
 	}
-	if got := loadOldestPendingExperiment(dir); got == nil || got.ID != fmt.Sprintf("exp-fresh-%d", fresh) {
+	if got, err := loadOldestPendingExperiment(nil, dir); err != nil {
+		t.Fatalf("loadOldestPendingExperiment: %v", err)
+	} else if got == nil || got.ID != fmt.Sprintf("exp-fresh-%d", fresh) {
 		t.Fatalf("oldest pending after expiry = %+v", got)
 	}
 }

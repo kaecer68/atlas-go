@@ -60,8 +60,11 @@ func (r *runExperimentRunner) Run(ctx context.Context, req SubmitRequest, sink E
 		Message:   "executing experiment",
 	})
 
-	store := ledger.NewStore(cfg.LedgerDir)
-	executor := experiment.NewExecutor(store.(ledger.FullStore), cfg.BaselinePolicyPath)
+	store, err := ledger.NewExperimentFamilyStore(cfg)
+	if err != nil {
+		return fmt.Errorf("run experiment: %w", err)
+	}
+	executor := experiment.NewExecutor(store, cfg.BaselinePolicyPath)
 	result, err := executor.Run(briefPath, cfg.ReplayDataPath)
 	if err != nil {
 		return fmt.Errorf("run experiment: %w", err)
@@ -133,7 +136,11 @@ func (r *judgeExperimentRunner) Run(ctx context.Context, req SubmitRequest, sink
 	default:
 	}
 
-	judge := experiment.NewJudge(ledger.NewStore(cfg.LedgerDir).(ledger.ExperimentStore), cfg.ReplayDataPath, cfg.BaselinePolicyPath)
+	store, err := ledger.NewExperimentFamilyStore(cfg)
+	if err != nil {
+		return fmt.Errorf("judge experiment: %w", err)
+	}
+	judge := experiment.NewJudge(store, cfg.ReplayDataPath, cfg.BaselinePolicyPath)
 	result, err := judge.Evaluate(resultPath)
 	if err != nil {
 		return fmt.Errorf("judge experiment: %w", err)
