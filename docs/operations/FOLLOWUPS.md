@@ -533,9 +533,28 @@
 
 ### FU-20260926-02 — FinMind 錯誤回應回帶 `token_tail`，而 log 與錯誤字串**原文照抄**整段 body
 
-- **狀態**：`open`
+- **狀態**：`done`
 - **記錄日期**：2026-09-26
-- **事實（程式碼）**：`internal/marketdata/finmind_client.go:373-381` 在非 200 時讀 body（上限 512B）並
+- **完成於**：2026-10-16，PR [#2243](https://github.com/kaecer68/atlas-go/pull/2243)（branch `fix/20261016-finmind-body-scrub`）。
+- **根因查證（2026-10-16；先查證再動手 ⇒ 原敘述部分已過期）**：
+  - ① **已修：#2006 的 `sanitizeFinMindBody()` 蓋住了 `fetchDataset` 的兩條 sink** —— 非 200 的
+    `logging.Warn("finmind","fetch_non_2xx","body",safeBody,…)` 與 402/403/其他 status 的錯誤字串
+    （`finmind_client.go` 目前已不是原敘述所寫的 `:373-381`／`:395`，行號已漂移）。原敘述的
+    「log 與錯誤字串原文照抄」在本條寫下時為真，**在 #2006 之後已不成立**。本 PR 補上當時缺的
+    **log 斷言**（`finmind_secret_redaction_test.go` 用 slog 擷取 400／402／403 三種 body）。
+  - ② **仍有兩條未遮蔽的 sink（本 PR 修正）**：
+    - `internal/marketdata/retry.go` 的 `fetchWithRetry`，429/5xx 用盡嘗試次數後把**原文 body**
+      放進 `fmt.Errorf("http status %d after %d attempts: %s", …)` 後回傳；FinMind 的 `fetchDataset`
+      把它包成 `finmind: http request: %w` ⇒ 這條 body **從未經過 `sanitizeFinMindBody`**（#2006 漏了它）。
+      同一支 sink 由 fugle／twse_openapi／twse_mi_index／export／tpex／taifex 共用。
+    - `internal/marketdata/finmind_intraday.go` 的 `parseTaiwan5SecIndexResponse`：200 且 `status != 200`
+      時把上游自由文字 `raw.Msg` **原文**組進 error（`fetchDataset` 的孿生分支有遮蔽，這條沒有）。
+  - ③ **遮蔽器本身兩個洞（本 PR 的語料測試抓出並修正）**：#2006 的 `finmindSecretKeyRe` 後援路徑
+    （body 無法 JSON 解析時）對兩種形狀無效 —— (a) **引號未閉合**的值（512B 讀取上限把
+    `"token_tail":"FAKE-…` 切在半途，`"[^"]*"` 不能匹配、`[^",}\s]+` 又不能起頭於引號）；
+    (b) `Authorization: Bearer <憑證>` 這種 header dump（只遮掉 `Bearer`，憑證留在後面）。
+    兩者都已由 `redact.go` 的新 pattern 覆蓋，並以語料測試釘住。
+- **原敘述（2026-09-26，保留決策痕跡）**：`finmind_client.go:373-381` 在非 200 時讀 body（上限 512B）並
   `logging.Warn("finmind", "fetch_non_2xx", "body", bodyStr, …)` **原文進 log**；
   `:395` 再把同一段 body 併進錯誤字串（`fmt.Errorf("finmind: %w: %s", ErrQuotaExhausted, bodyStr)`）
   ⇒ 一路帶進 channel health／BTM task 的錯誤訊息。
@@ -543,11 +562,19 @@
   `internal/marketdata/finmind_client_extra_test.go:924-929`
   `{"msg":"Token is illegal.","status":400,"token_tail":"...stale-key"}`）；root 在生產 402 回應上**實測看到 `token_tail`**。
   尾碼可利用性低（本 repo 為 PUBLIC，log 也可能被貼進 PR／issue），但它是**機密片段**，不應出現在 log／錯誤訊息／貼文。
-- **建議（未實作）**：① 寫 log 與組錯誤字串之前**遮蔽已知敏感鍵**（至少 `token_tail`；用白名單比黑名單安全）；
-  ② 保留可診斷性：遮蔽後仍要能分辨「token 失效」與「配額耗盡」（例：只留尾 2 碼）；
-  ③ 業主**評估輪替 FinMind token**（非緊急）。
-- **驗收條件**：以含 `token_tail` 的 fixture 驅動 fetch ⇒ log 與 error **皆不含**原值；
-  負對照：`msg`／`status` 仍完整可見（不得為了遮蔽而讓錯誤不可診斷）。
+- **處置（2026-10-16 落地）**：
+  - ① 遮蔽器提升為**共用**：新增 `internal/marketdata/redact.go` 的 `redactUpstreamText(body, secrets...)`
+    （JSON 成員整段刪除 ＋ 字面憑證取代，兩條規則並存），`sanitizeFinMindBody` 改為薄包裝 ⇒ 同一族
+    新增 sink 不必再複製一份清單；成員清單由 `TestUpstreamSecretJSONKeys_Coverage` 釘住（刪一個 key ⇒ 紅燈）。
+  - ② `retry.go` 在組字串前套用遮蔽（並註解為何必須在此層做：body 已被 drain＋close，呼叫端拿不到原文）。
+  - ③ `finmind_intraday.go` 的 `parseTaiwan5SecIndexResponse` 收 variadic `secrets`（既有測試呼叫端不受影響），
+    由 `FetchTaiwan5SecIndex` 傳入 `currentAPIKey()`。
+  - ④ 負向證明：突變（移除兩處遮蔽）⇒ 新測試紅燈；`cp` 備份還原並以 `shasum -a 256` 驗回（見 PR 說明）。
+- **驗收條件（已達成）**：以含 `token_tail` 的 fixture 驅動 fetch ⇒ log 與 error **皆不含**原值；
+  負對照：`msg`／`status` 仍完整可見。實測：`go test ./internal/marketdata/ -run HidesTokenFragment`
+  與 `-run SinkCorpus` 全綠；`TestFinMindClient_Non2xx_LogLineHidesTokenFragment` 對 400／402／403 三種 body
+  同時斷言「不含 fixture 憑證／`token_tail`」與「含狀態碼＋上游訊息」。
+- **未做（另立條目）**：機密片段仍可從**非 FinMind** 的 provider 進 log／error ⇒ 見 `FU-20261016-11`～`-16`。
 
 ---
 
@@ -1077,7 +1104,7 @@
 
 ### FU-20260926-12 — `make ci` 把「掛住（timeout 124）」算成 skipped ⇒ 閘門回 0（**已可複現**，未修）
 
-- **狀態**：`open`
+- **狀態**：`done`（2026-10-16 落地；原敘述全數保留，處置見條文末）
 - **記錄日期**：2026-09-26
 - **來源（可重現）**：`Makefile:409-429`（`ci:` target 的 `for script in scripts/ci/check_*.sh` 迴圈）。
   取**同一個迴圈形狀**（只把 glob 換成 fixture、`timeout 30` 縮成 `1`）：
@@ -1118,6 +1145,146 @@
      `passed -eq 0` 守衛）⇒ 一起改會製造衝突與「兩個 false-green 混在一起」的審查困難。
 - **驗收條件**：在 `scripts/ci/` 放一支 `sleep 31` 的 `check_*.sh` ⇒ `make ci` 必須回非 0
   （或至少在 timeout 發生時讓 job 變紅），且正常情況下 `skipped` 不增加。
+
+**處置（2026-10-16，分支 `fix/20261016-ci-timeout-tri-state`）**
+
+**1. 根因（實測複現；判定邏輯指名到行）**
+
+判定邏輯在 `Makefile` 的 `ci: check-production-host` recipe。修正前（`origin/main` `c3398813b`）的逐字內容：
+
+```make
+	if timeout 30 bash "$$script" > /dev/null 2>&1; then \
+		passed=$$((passed+1)); \
+	elif [ $$? -eq 124 ]; then \          # ← Makefile:498：掛住（rc 124）
+		skipped=$$((skipped+1)); \        # ← Makefile:500：只進 skipped
+	else \
+		failed=$$((failed+1)); \
+	fi; \
+	...
+	if [ $$failed -gt 0 ]; then exit 1; fi   # ← Makefile:513：收尾只看 failed
+```
+
+兩點必須寫清楚，否則後人會「修錯地方」：
+
+* `elif [ $$? -eq 124 ]` 讀到的**確實是 `timeout` 的 124**（本線以最小案例實測：fixture 的
+  `sleep 5` 被 `timeout 1` 中斷時，訊息正確印出 `TIMEOUT (>1s)` ⇒ 讀到的 rc 就是 124），
+  不是 `$?` 被別的命令蓋掉。**這是「政策」缺陷，不是「讀錯結束碼」缺陷**。
+* `skipped` 這個計數器在迴圈裡**從來沒有代表真正的跳過**：真正被跳過的（`case` 白名單）是
+  直接 `continue`，**不計數**。所以「1 timed out」與「1 skipped」在舊碼裡是同一件事。
+
+**2. F-item 敘述的三處更正（原文其餘精確）**
+
+* ★ **「`make ci` 是本機與 GH Actions 都會跑的閘門」不正確**。實測 `grep -rn 'make ci' .github/workflows/`
+  **0 命中**（只有兩處**註解**提到 `ci-gate`）；GitHub Actions 是**逐支**呼叫 `scripts/ci/check_*.sh`
+  （`grep -rn 'scripts/ci/check_' .github/workflows/ | wc -l` = **41**）。⇒ 爆炸半徑是**本機／pre-push**，
+  不是 GH required check（與 `scripts/ci/check_sa12_negative_evidence.sh` 檔頭既有記載一致）。
+  缺陷本身不因此降級：`make ci` 是 `Makefile:206` 明示的「PR 前必跑」，且是 `ci-full` 尾端實際會跑的 glob。
+* **行號第三次搬移**：F-item 寫 `Makefile:409-429` ⇒ 未修版實際是 `491-513`（`ci:` 497）⇒ 修好後
+  `ci:` 在 497、recipe 到 552（再加預算覆寫後到 566）。本條目內文不再逐處改行號（改也很快過期），
+  一律以 **target 名 `ci:`** 定位。
+* **F-item 未提的兩點**：① `ci-gate` **不跑** `check_*.sh` 的 glob（它逐支明列）⇒ 只動文件的
+  docs-only push 只過 `ci-gate`，**glob 獨有的 12 支**（實測：`check_atlas_mcp_docs_consistency`／
+  `check_channel_index`／`check_design_tokens`／`check_doc_ports`／`check_docsgen_filter_sync`／
+  `check_jev_eval`／`check_maturity`／`check_no_duplicate_preflight`／`check_sa12_negative_evidence`／
+  `check_secrets`／`check_shellcheck`／`check_versions`）在該情境**完全不會跑**；
+  ② F-item 的三個修法建議（①124 計入 failed／②skipped>0 也非 0／③明列慢檢查）已被本 PR 的
+  「宣告式 skip ＋ 個別預算覆寫」取代 —— 取捨（「合法慢檢查誤紅」）**不是靠放寬判定解決**，見第 3、4 節。
+
+**3. 修法（三態明確化；`make ci` recipe 重寫）**
+
+* **pass** = `rc 0`；**skip** = **只**能來自 target 內的 `SKIP (declared)` 清單（每一項附「誰來覆蓋它」）；
+  **fail** = 其他任何結束碼（124 timeout、130/143 訊號、126/127 執行失敗）。
+* `timeout` 的 rc 改為**獨立計數** `timedout`，且收尾新增 `if [ $$timedout -gt 0 ]; then … exit 1; fi`
+  ⇒ **掛住一律紅**，訊息逐字附「哪一支」與 `elapsed=<秒>`。
+* 原本 `case … continue` 的 7 個樣式改成**宣告式 skip**並印出理由（逐項覆蓋來源見 recipe 上方註解）：
+  `data_naming`/`layer3_*`/`markdown_links` ⇒ `make ci-slow`；`critical_tasks` ⇒ `ci-gate` 逐支；
+  `finmind_quota` ⇒ `make ci-quota`；`task_liveness` ⇒ `daily-maintenance.yml` 帶參數；`frontend_dist` ⇒ 本 target 開頭已 `--diff` 跑過。
+  ⇒ **正常跳過仍是綠**（沒有「一律紅」），而「掛住」不再能冒充跳過。
+* 移除脆弱的 `elif [ $$? -eq 124 ]` 形式，改為 `rc=0; timeout … || rc=$$?;` 後才判定（repo 既有樣板
+  `scripts/ci/negative-proof-lib.sh:negproof_expect` 同形）。
+* 新增 `CI_SCRIPT_TIMEOUT ?= 30`：只調「多久算掛住」，**不改變**「掛住 ⇒ 紅燈」的判準。
+* **個別檢查的預算覆寫 `CI_SCRIPT_TIMEOUT_SLOW ?= 120`**（F-item 建議③，且**先量再改**）：
+  只套在**空機量測 ≥ 5s** 的四支 —— `check_secrets` 13.6s／`check_maturity` 8.3s／
+  `check_ledger_seam` 7.7s（冷啟動 19.2s）／`check_shellcheck` 7.6s；其餘一律 30s。
+  **放寬的是預算、不是判定**：超時仍 rc=124、仍紅、仍印 `elapsed=`。這不是預防性放水 ——
+  它是第 4 節 E 列（pre-push 真實失敗）逼出來的。
+
+**4. 驗收（rc 一律從 log 讀，非管線後讀 `$?`）**
+
+新增臨時 fixture `scripts/ci/check_zz-hang-probe.sh`（`sleep 31`，**未 commit、驗完已刪**）跑真的 `make ci`：
+
+| # | 情境 | log 末段 | rc |
+|---|---|---|---|
+| A | 未修（`origin/main` Makefile）、無 fixture | `CI: 35 passed, ❌ 0 failed, ⏱️ 0 timed out` | **0** |
+| B | 未修、有 `sleep 31` | `CI: 35 passed, ❌ 0 failed, ⏱️ 1 timed out` | **0 ← false-green（複現）** |
+| C | 已修、有 `sleep 31` | `⏱️ TIMEOUT (>30s, elapsed=30s): scripts/ci/check_zz-hang-probe.sh` ＋ `❌ 1 支檢查在 30s 內未結束（rc=124）` | **2 ← 紅** |
+| D | 已修、無 fixture | `CI: 35 passed, ⏭️ 8 skipped (declared), ❌ 0 failed, ⏱️ 0 timed out` | **0（正常情況不誤紅）** |
+| E | **真實 pre-push**（`git push` 的 hook → `make ci-full` → 子 make `make ci`） | `⏱️ TIMEOUT (>30s, elapsed=30s): scripts/ci/check_ledger_seam.sh` ⇒ `CI: 34 passed, ⏭️ 8 skipped (declared), ❌ 0 failed, ⏱️ 1 timed out` ⇒ `make[1]: *** [ci] Error 1` ⇒ `❌ pre-push: make ci-full FAILED.` | **push 被擋下（rc=1）** |
+| F | 加預算覆寫後重跑同一條 pre-push | （見 PR 的回報；`ci-gate` ＋ `ci-full` 皆須通過） | 待填 |
+
+**E 列是本次修法最重要的一筆證據**，兩種讀法都成立：
+①**修法在真實路徑上生效** —— 舊碼會讓同一條 pre-push 直接放行，新碼把它擋下來了；
+②**也暴露了新的假紅風險** —— `check_ledger_seam.sh` 空機 7.7s（冷 19.2s），在 `ci-full` 的
+`go test -race` 尾端負載下吃滿 30s（`elapsed=30s` 是它自己的訊息，不是猜的）。
+⇒ 這是 F-item 早就警告的取捨（「①/② 都可能讓合法慢檢查在高負載機器上誤紅 ⇒ 要先有 timeout 預算的量測」），
+處置就是第 3 節的 `CI_SCRIPT_TIMEOUT_SLOW`（量測後放寬那四支），**不是**回頭放寬判定。
+
+**5. 契約測試與負向證明（突變 ⇒ 必紅）**
+
+新增 `tests/scripts/test-ci-timeout-tri-state.sh`（**逐字抽取真檔 recipe** 進 hermetic fixture 執行；
+抽取器本身有「空集合／錨點漂移／缺 timeout 獨立計數／缺預算覆寫 ⇒ 紅」的自我斷言），納入 `make ci-gate`。
+覆蓋 9 案：掛住=紅（含同一行指名腳本＋`elapsed=`）／訊號=紅且不誤標 TIMEOUT／宣告式 skip=綠
+**且被跳過的腳本真的沒被執行**（marker 檔不存在）／正常=綠且計數行逐字相符／非 0=紅且帶 rc／
+glob 空集合=紅／**預算覆寫=清單內放寬後綠、放寬後仍超時則紅**（覆寫沒有開新的假綠路徑）／mutation 自證。
+
+負向證明（真的動檔 ⇒ 守衛必紅 ⇒ `cp` 還原並以 sha256 驗回）：
+
+* 突變 1（**忠實的舊行為**）：`timedout=$$((timedout+1))` → `skipped=$$((skipped+1))`
+  ＋ `if [ $$timedout -gt 0 ]` → `if [ 0 -gt 0 ]`（diff 4 行）⇒ 守衛紅：
+  `FAIL: ci recipe 沒有「timeout 獨立計數」（FU-20260926-12 回歸？）`、`GUARD_RC=1`。
+* 突變 2（**保留文字錨點、只改判定**：`if [ $$timedout -gt 0 ]` → `timedout=0; if [ $$timedout -gt 0 ]`）
+  ⇒ 走的是行為層斷言，守衛紅：`FAIL: ① 掛住的檢查讓 make ci 回 0（FU-20260926-12 未修：false-green）`、`GUARD_RC=1`。
+* 還原：`cp` 回備份 ⇒ `sha256sum Makefile` = `d7191eae140081d0cc8e2ec6e0df9a59fa1fe76f9f84e63aa052eb8b6c0d17e5`
+  （與修好版逐字相同）⇒ 守衛回綠 `GUARD_RC=0`。
+
+**6. 同型盤點（業主要求；本 PR **只修第 1 列**，其餘僅列出並附 file:line，建議由 root 另配 F-item）**
+
+判準：不需要「檔案被改名／刪除」這種前提，只要環境或輸入異常（工具不存在、flag 不支援、指令失敗、
+掛住）就回 0，且輸出看不出「其實沒檢查」。逐字原文與完整 25 列（P0=3／P1=14／P2=8）見本 lane 的稽核交付
+（`fix-20261016-ci-timeout-tri-state` 的 `.audit/`，**未 commit**）。下表只列要點，且**每一列本線都自己
+複驗過**（不是轉述）：
+
+| 嚴重度 | 位置 | 為什麼是「閘門說謊」（本線複驗方式） |
+|---|---|---|
+| **P0** | 本條目（`Makefile` `ci:`） | 基準缺陷，本 PR 已修（A–F 列） |
+| **P0** | `scripts/ci/check_doc_links.sh:20,25` | 用 BSD grep 不支援的 `-rnP`，又 `2>/dev/null` 吞掉錯誤 ⇒ 行程替換 **0 行** ⇒ 永遠印 `✅ All links OK` 並 exit 0。**本線複驗**：`grep -rnP '\[.*?\]\([^http#].*?\.md[#\)]' docs/ --include='*.md'` ⇒ stdout 0 行、`rc=2`；同一 pattern 換 `-E` ⇒ **328 行**。**對照組**：真正在掃的 `check_markdown_links.sh` 在同一棵樹印 `Checked 274 link + 359 bare path = 633 reference(s)`、`rc=0`（本線實測） |
+| **P0** | `scripts/ci/check_frontend_dist.sh:170,178-181` | **本線複驗逐字**：`:170` `changed=$(git diff --name-only "$RANGE" 2>/dev/null \|\| true)`、`:178-180` 印「diff 未含 … — 跳過 dist 檢查」、`:181 exit 0` ⇒ `git diff` 失敗（RANGE 打錯／不在 git work tree）與「真的沒改前端」**輸出完全相同**，而這正是 pre-push 用來擋「改了前端卻沒重建 dist」的閘門 |
+| P1 | `Makefile` `ci-slow` | 清單逐字明列（檔案被改名就整支不跑），且**無計數、無「0 支被執行 ⇒ 紅」守衛** |
+| P1 | `Makefile:46-51` ＋ `.githooks/pre-push:180` | `git diff origin/main...HEAD 2>/dev/null \| grep -qE …` 失敗 ⇒ 判為 docs-only ⇒ `ci-full` 靜默跳過 |
+| P1 | `scripts/ci/check_case_conflicts.sh:49-85` | **本線複驗逐字**：`if $STRICT; then` 區塊內**只印 WARNING、沒有 `exit 1`**（全檔唯一的 `exit 1` 在 `:42`，判的是另一件事：case-conflict pairs）⇒ `quality.yml:190` 的 `--strict` 不會因非 snake_case 而紅 |
+| P1 | `scripts/ci/check_field_contract.sh:160-167` | 非 `--strict`（本機兩個入口都不帶）⇒ `UNKNOWN_COUNT>0` 只 WARNING ⇒ 永遠 0 |
+| P1 | `scripts/ci/check_shellcheck.sh:33-37,55-57` | 沒裝 shellcheck ⇒ `exit 0`（`make ci` 把它 `>/dev/null 2>&1` ⇒ 連 warning 都看不到） |
+| P1 | `scripts/ci/check_versions.sh:38,54` | **本線複驗逐字**：`[[ -f "$f" ]] \|\| continue` ⇒ TARGETS 清單中的檔案不存在就**靜默縮小掃描面**；`:54` 在 `DRIFT=0` 時無條件印 `✅ All … in sync` ⇒ 掃描面可以縮到 0 仍回綠 |
+| P1 | `scripts/ci/check_maturity.sh:80-83` | **本線複驗逐字**：`if [ "$found_any" -eq 0 ]; then … log_pass "所有 ${count} 個 Go package 都有 doc.go"` ⇒ 掃到 0 個 package 也印「通過」 |
+| P1 | `scripts/ci/check_strategy_path.sh:131,136` | **本線複驗逐字**：`SR_DEFENSIVE_COUNT=$(grep -cE … \|\| true)`：`sector_rotator.go` 不存在 ⇒ 變數為**空字串** ⇒ `[ "" -gt 0 ]` 失敗 ⇒ 走 else 的 `log_pass`（「單一來源」的假安心） |
+| P1 | `scripts/ci/check_atlas_mcp_docs_consistency.sh:71-75`、`check_commit_messages.sh:40`、`check_jev_eval.sh:35-39`、`check_layer3_benchmarks.sh:105-107`、`check_frontend_imports.sh:87-89`、`verify_factor_integrity.sh:86-91` | 同一族（掃描面靜默縮小／訊號被計成通過）；逐字原文見稽核交付 |
+| 假紅（反方向） | `scripts/ci/local-ci.sh:41,44` | **本線複驗**：`set -e` 下 `((PASS++))` 在 `PASS=0` 時回傳 1 ⇒ **腳本在第一支檢查後就中止**（最小重現：`set -euo pipefail; P=0; f(){ true; ((P++)); }; f; echo reached` ⇒ 只印 `ok`、`rc=1`，「reached」永遠不印）。同族殘留見 `docs/operations/remediation-manifest.md` E22 |
+
+**7. 已知限制**
+
+* **30s 預算是量測後才放寬的，不是先驗保證**：量測是**空機逐支計時**（方法與數值寫在 `Makefile`
+  `CI_SCRIPT_TIMEOUT_SLOW` 上方註解）；負載係數取 4× 當餘裕（E 列實證 `check_ledger_seam` 在
+  `ci-full` 負載下是 0.39×餘裕都撐不住），**不是**實測上限。若未來有新檢查在負載下超過預算，
+  症狀是**可診斷的紅燈**（附 `elapsed=`），處置是補量測後加鍵或改列 declared-skip。
+* **`ci` 開頭那條明列的 `check_frontend_dist.sh --diff …` 沒有 timeout**：掛住時 `make ci` 會**原地停住**
+  （可見的 hang，不是假綠）⇒ 未納入本次修法。
+* **第 6 節的 P0/P1 未修**：`check_doc_links.sh` 與 `check_frontend_dist.sh` 兩條要各自一個主題
+  （一個是 grep 可攜性、一個是「失敗的跳過」要與「合法的跳過」分離），混進本 PR 會讓審查失焦；
+  建議另開 F-item（ID 交由 root 配發，避免與他線撞號）。
+* `docs/operations/remediation-manifest.md` 的 E3 列與「已對帳」表仍寫「他線已登記 ⇒ 本表不重複派遣」，
+  現在已過期；本 PR **未動該檔**（避開 E1 在飛的 `Makefile`／`quality.yml` 佔用），請 root 併入時一併更新。
+
+---
 
 ---
 
@@ -1535,7 +1702,7 @@
 
 ### FU-20260927-04 — **12 處** `runbook_url` 指向 `wiki.internal`（DNS **NXDOMAIN**）：其中 **5 處**在 repo 內沒有對應 runbook
 
-- **狀態**：`open`
+- **狀態**：`done`（2026-10-16 收斂；**盤點敘述有更正**，處置見條文末）
 - **記錄日期**：2026-09-27
 - **事實（我實查,全部可重現）**：
   - `grep -rn 'wiki.internal' monitoring/` ⇒ **12 處**。
@@ -1558,9 +1725,48 @@
 
 ---
 
+## 處置（2026-10-16，PR 本車道）
+
+### A. 盤點更正（權威清單以機械式盤點為準，F-item 敘述有 3 處不精確）
+
+1. **`repo 內共 13 處`，不是 12 處**。F-item 的「12 處」是 `grep -rn 'wiki.internal' monitoring/`
+   的數；repo 全掃（tracked 檔）另有 **1 處**在 `docs/operations/loki-deployment.md:205`
+   （Loki LogQL 規則的**設計預覽**，`monitoring/rules/loki/` 不存在 ⇒ 不是執行期規則）。
+2. **標題的「其中 5 處在 repo 內」與內文分類不符**：12 處**全部**在 repo 內；
+   「**7／5**」是**依告警家族**的切法（channel-health 7 處／llm-annotator 5 處），不是「repo 內／外」。
+3. **行號已過期**：`channel_health_latent_staleness.yml` 現為
+   `:36`（`ChannelDataStale`）／`:54`（`ChannelFetchLatencyHigh`）／`:74`／`:90`／`:106`／`:122`
+   （`ChannelHealthStatusError` ×4），F-item 記的 `:22／:40／:60／:76／:92／:108` 是舊版。
+4. **「repo 外的 7 處」不存在**。repo 外唯一命中是 Mac Mini 的
+   `~/workspace/atlas-monitoring/rules/`（**9 處**），那是 **iMac 時代殘留樹、不是掛載源**
+   （`check_monitoring_single_source.sh` 的 R1/R3 正是為它而寫；生產容器掛的是 repo 的 `monitoring/`）
+   ⇒ 刻意**不動**，只回報。生產 checkout（`~/workspace/atlas`，Mac Mini）是同一 repo 的舊 HEAD
+   （12 處），部署後自然收斂。
+
+### B. 修法（不換成另一個猜的網址；每個目標都先確認存在，且**內容涵蓋該告警的處置**）
+
+| 原本（死鏈） | 新目標 | 依據 |
+|---|---|---|
+| `channel_health_latent_staleness.yml` 6 處 ＋ `wave9_channel_individual_health.yml` 1 處（7 處） | **新建** `docs/operations/channel-health-runbook.md` | 4 條告警逐條 triage（症狀／影響／診斷／緩解／升級）＋ 契約感知 `overage` 語意；原 `wave9-runbook.md` §3.3 只涵蓋 `atlas_channel_health_errors_total`，直接指它會重演「看起來修好」 |
+| `llm_annotator_alerts.yml` 5 處 | **新建** `docs/operations/llm-annotator-runbook.md` | repo 內原本沒有 llm-annotator 的處置文件；新檔 §1 記載「該家族在生產**沒有生產者**」的實證（另開 FU-20261016-10） |
+| `docs/operations/loki-deployment.md:205` | `docs/operations/local-deploy.md`（既有） | 該 4 條 LogQL 規則**尚未在 repo 落地**（沒有 `monitoring/rules/loki/`）⇒ 不為預覽造 runbook；指向既有的服務重啟／回滾手冊，並在該行註明「實作時應改指專屬 panic runbook」 |
+
+### C. 驗收（附原文；指令與 rc 一律從 log 讀）
+
+- `grep -rn 'wiki.internal' monitoring/` ⇒ **rc=1（0 命中）**。
+- `python3 scripts/ci/check_monitoring_single_source.py` ⇒ `R4 runbook_url 目標：OK`、`✅ PASS`、**rc=0**
+  （唯一警告是既有的 `atlas_container_liveness_alerts.yml:167` 指向 `monitoring/prometheus.yml`，非本票範圍）。
+- **生產實證（2026-10-16 唯讀查詢）**：Prometheus `/api/v1/alerts` 當下 firing 的
+  `ChannelDataStale{channel="tej"}` 的 `runbook_url` annotation **就是** `https://wiki.internal/runbooks/channel-data-stale`
+  ⇒ 本票講的「事件當下 runbook 是死的」是**當日可重現**的事實，不是推論。
+- 12 個新目標逐條人工複核：8 條 channel-health 規則 → 新 runbook 的 §3／§4／§5／§6 逐條對應到規則名；
+  5 條 llm-annotator → §3／§4／§5 逐條對應（並附「這 5 條目前休眠」）。
+
+---
+
 ### FU-20260927-05 — `scripts/ci/check_monitoring_single_source.py` 可再加 **R4：`runbook_url` 必須指到存在且對應的文件**（只建議,未實作）
 
-- **狀態**：`open`
+- **狀態**：`done`（2026-10-16 實作 R4；處置見條文末）
 - **記錄日期**：2026-09-27
 - **來源**：本日的 replay 告警工作（#2063／#2066／`FU-20260927-03`／`FU-20260927-04`）暴露的同一道縫：
   `runbook_url` 是**唯一沒有人守的欄位**（#2066 是一次人工修;12 處死鏈仍在）。
@@ -1577,6 +1783,49 @@
     （實作需 owner 確認佔用;且在 `FU-20260927-04` 收斂前就把外部 URL 設成 fail,會讓 gate 立刻紅）。
 - **驗收條件**：故意把一條 `runbook_url` 改成 `.../blob/main/docs/operations/`（目錄）⇒ 檢查 **exit 1**;
   12 處 `wiki.internal` 的既定狀態下 ⇒ **只 warn、不 FAIL**（且有自我測試,不可退化成永遠 PASS）。
+
+## 處置（2026-10-16，PR 本車道）
+
+### A. R4 的取捨（照 F-item 的界線：外部不可離線證明 ⇒ 預設 warn，可設定）
+
+- **FAIL（離線可證）**：指向**本 repo** 的 `runbook_url` 必須是 `/blob/<ref>/<path>` 的**檔案** URL，
+  且 `<path>` 在 repo 內**存在**、**不是目錄**；`/tree/…`、`/issues/N`、`/blob/main/`（只指目錄）
+  一律 FAIL——驗收條件要求的「改成 `.../blob/main/docs/operations/` ⇒ exit 1」正是這一條。
+  另外：值不是 http(s) 絕對 URL、host 不合法、host 不是完整網域名稱且不在白名單內 ⇒ FAIL。
+- **WARN（不影響 rc，但**一定印出**；`--quiet` 也印）**：外部 host 不在白名單內、
+  in-repo 目標不是 `.md`（runbook 應是散文）、in-repo blob 的 ref 不是 `main`。
+- **可設定、不需改程式**：白名單檔 `scripts/ci/monitoring-runbook-allowlist.json`
+  （`external_hosts` ＋ `external_policy: warn|fail`），或 CLI `--strict-external`。
+  **為什麼預設 warn**：外部 URL 不做 DNS／HTTP 檢查（CI 連外會製造新的 flake，
+  同 repo 已有 `check_jev_contract.sh` 的實證 `FU-20260926-21`）⇒「外部目標是否真的活著」
+  不是離線可證的命題，設成 FAIL 只會製造誤紅。**為什麼 warning 不能是隱形的**：
+  警告若被 `--quiet` 吃掉，這條政策就退化成「永遠 PASS」，故實作把警告印在 verdict 之外。
+- **本 repo 的識別**：用 `git remote get-url origin` 推導 `owner/repo`（CI checkout 目錄名是 `atlas-go`、
+  本機 worktree 名是 `fix-…` ⇒ **不能**用目錄 basename），推導不到才用常數 `kaecer68/atlas-go`。
+  推導失敗的失效方向是「自家 URL 被當成外部」⇒ 只 warn，不會誤紅。
+
+### B. 自測與負向證明（都在既有 CI job 內，**未新增 CI job**；也未動 `.github/workflows/ci-cd.yml`（該檔為另一車道佔用））
+
+- `tests/scripts/test-monitoring-single-source.sh`：**26 項**（原 10 項 ＋ R4 的 16 項：
+  存在／缺檔／目錄／tree／issue 連結／非 http scheme／無 scheme／非完整 host ⇒ FAIL；
+  未知外部 host ＋ 非 .md 目標 ⇒ PASS ＋ `[R4-W]`；`--strict-external` 與白名單 `policy=fail` ⇒ FAIL；
+  白名單命中 ⇒ 無警告；**mutation 自證**：停用 R4 判定 ⇒ 目錄 fixture 由紅轉綠，還原後必須回紅）。
+- `scripts/ci/monitoring-single-source-negative-proof.sh`：新增第二個 fixture
+  `monitoring/rules/__negtest__.yml`（`runbook_url` 指向不存在的檔）＋ `[R4]` 規則 id 斷言
+  ⇒ 證明「擋下它的是 R4」。`tests/scripts/test-negative-proofs.sh` 的規則層 mutation
+  同步擴到 R4（否則只停 R2/R3 時 R4 仍會擋下 fixture，掩蓋 E7 要證明的形狀）⇒ **38 項 PASS**。
+- CI：`monitoring-single-source` job 既有三步（check ＋ self-test ＋ negative proof）**不必改**即涵蓋 R4；
+  `make ci-gate` 的 `ci-quick` 也會跑 check 本體。
+
+### C. 驗收（rc 皆從 log 讀）
+
+- 全 repo 掃描：`✅ monitoring-single-source PASS`、**rc=0**。
+- 突變（把一條 `runbook_url` 改成不存在的路徑）：**rc=1**，紅燈原文
+  `❌ [R4] monitoring/rules/__negtest__.yml:6 — 目標檔案在 repo 內不存在：docs/operations/__negtest_missing__.md（…）`；
+  以 `cp` 備份 ＋ sha256 還原（負向證明的 fixture 由腳本 `rm` 還原，非 `git checkout`）。
+- `docs/operations/FOLLOWUPS.md` 本條與 `FU-20260927-04` 一併改 `done`；`check_followups_unique_ids.sh` rc=0。
+
+---
 
 ### FU-20260927-06 — `AtlasReplayJsonlBehindCsv` 的門檻以**日曆天**計，但修後的真實落後是**1 個交易日** ⇒ 常態下每週約 96% 相位會 firing
 
@@ -3088,6 +3337,161 @@ PY
   `grep -n 'ExperimentsJSONL' internal/experiment/evolution_health.go`；
   `grep -rn 'TryPromoteFromPath\|PromoteResult(' --include='*.go' cmd internal | grep -v _test`。
 
+### FU-20261016-10 — llm-annotator 的 9 條告警建在**沒有生產者**的指標家族上 ⇒ 綠燈是「假的安心」（5 條帶 `runbook_url`）
+
+- **狀態**：`open`（**只登記，未改規則**：改規則＝改對外契約與 Grafana 引用，需 owner 定案）
+- **記錄日期**：2026-10-16
+- **來源**：`FU-20260927-04` 的 runbook 收斂（本車道）。為 llm-annotator 寫 runbook 時必須回答
+  「值班照著查會看到什麼」，一查才發現**查不到任何東西**。
+- **事實（三項互相印證：程式碼唯一呼叫點 ＋ router 設定 ＋ 生產唯讀查詢）**：
+  1. **唯一生產者**：`llm_annotator_requests_total` 只在 `internal/llm_annotator/annotator.go`
+     的 `KimiClient.recordOutcome` 發射，而它只被 `KimiClient.Annotate` 呼叫。
+  2. **`Annotate` 已不在線上 annotate 路徑**（issue #1897）：`POST /api/strategies/{id}/annotate`
+     走 `llm.Router` 的 `RouterAnnotator`（`cmd/atlas/annotator_wiring.go`）；legacy `KimiClient`
+     只保留一個用途 —— `GET /api/llm_annotator/cost` 的**唯讀用量來源**。
+     `configs/llm_router.yaml` 檔頭逐字寫明 `kimi — … NOT in any chain since ADR-012 addendum 4`；
+     `failure_attribution` 鏈是 `minimax → deepseek → mock`（legacy client 註冊成 `ProviderKimi`，
+     不在任何鏈內）。router 自己發的是另一族：`llm_client_requests_total`、
+     `llm_router_fallback_triggered_total`（#1926 才接上）。
+  3. **生產實證（2026-10-16 唯讀 Prometheus 查詢）**：`count(llm_annotator_requests_total)` ⇒ **空集合**；
+     同日 `count(llm_router_fallback_triggered_total)` ⇒ `2`（router 那族是活的）。
+- **風險（兩種都不吵，所以沒人會發現）**：
+  - 空集合下 `sum(rate(...)) == 0` **不成立**（不是 0，是沒有樣本）⇒ `LLMAnnotatorNoTraffic` 不會 fire；
+    burn-rate 的 recording 規則無輸入 ⇒ 也不會有任何 ratio。**9 條告警（含 4 條 `error_category` 的）
+    既不會響、也不提供保護**，但在 Grafana／規則清單上與其他告警長得一樣。
+  - 真正的失敗歸因健康訊號（fallback 觸發、鏈被走完）**沒有專屬告警** ⇒ 現在是「有指標、沒規則」
+    與「有規則、沒指標」各佔一半。
+- **最小處置（選項，需 owner 定案）**：①**退役**這 9 條（判準寫在規則檔內，說明生產者不存在）；
+  ②把 burn rate 改指 router 的 `llm_client_requests_total`／`llm_router_fallback_triggered_total`
+  （別名／對照表要進 Grafana）；③若確定要保留 legacy 路徑，必須顯式接回 `/annotate`（＝撤 #1897，另案）。
+  三者都**不得**只調門檻或加 silence —— 那會讓「沒有保護力」變成「看起來有保護力」。
+- **查法**：`docker exec atlas-go curl -s localhost:18080/metrics | grep -c '^llm_annotator_requests_total'`；
+  Prometheus `count(llm_annotator_requests_total)`；`grep -rn 'llm_annotator_requests_total' --include='*.go' internal cmd`；
+  `grep -n 'kimi' configs/llm_router.yaml`。
+- **相關**：`docs/operations/llm-annotator-runbook.md` §1（同一組事實的 runbook 版）；
+  `monitoring/rules/llm_annotator_alerts.yml` 檔頭註解。
+
+---
+
+### FU-20261016-11 — TEJ：`api_key` 放在 **query string**，且 transport error 會把**整條 URL**寫進 error（channel health 直接顯示）
+
+- **狀態**：`open`
+- **記錄日期**：2026-10-16
+- **來源**：`FU-20260926-02` 的同型掃描（PR [#2243](https://github.com/kaecer68/atlas-go/pull/2243) 實作時以 `grep` 掃全 repo 的 body/error 組合後登記；**刻意不在該 PR 修**，見該 PR 說明）。
+- **事實（程式碼；`internal/marketdata/tej_provider.go`）**：
+  - `:188`／`:260` `params.Set("api_key", c.apiKey)` ⇒ `:194`／`:267` 把憑證編進 **request URL**。
+  - `:203`／`:276` `fmt.Errorf("tej http request: %w", err)` —— `err` 來自 `http.Client.Do`，是 `*url.Error`，
+    Go 的格式化結果**含完整 URL** ⇒ error 字串裡就有 `api_key=<真憑證>`。
+  - `:209`／`:282` status != 200 時再把回應 body **原文**併進 error。
+  - 這兩種 error 都經 `internal/apigateway/adapter_tej.go:57` 的 `LastError: err.Error()` 進
+    `channel_health` 記錄（持久化 ＋ API 可讀）。
+- **已驗證的最小實驗（本 PR 執行，非推測）**：以 stdlib 對關閉的埠發一個帶 `?api_key=FAKE-key-1234` 的 GET，
+  `http.Client.Do` 的錯誤字串為 `Get "http://127.0.0.1:1/api?api_key=FAKE-key-1234&coid=2330": dial tcp …`
+  ⇒ 「URL 進 error」為 Go 保證，不是本 repo 的推測。**未實測**：TEJ 真實回應 body 是否真的回帶憑證
+  （無 TEJ 憑證／端點，且不需要：URL 這條已經成立）。
+- **建議（未實作）**：① 憑證改走 header（`X-API-KEY` 或 `Authorization`），或至少在 error 前把 query 的
+  機密參數遮蔽（見 `FU-20261016-15` 的共用 URL 遮蔽器）；② `:209`／`:282` 的 body 走共用遮蔽器；
+  ③ 補一個 hermetic 測試：以含假 `api_key` 的 URL 觸發 transport error，斷言錯誤字串不含該值。
+- **驗收條件**：TEJ 的 transport／非 2xx error 字串**不含** `api_key` 原值，且仍含 `status`／上游 `Error.Code`／
+  `Error.Message`；負對照（拿掉遮蔽）⇒ 新測試紅燈。
+
+---
+
+### FU-20261016-12 — `internal/live`：券商回應 body 原文進下單／風控錯誤訊息
+
+- **狀態**：`open`
+- **記錄日期**：2026-10-16
+- **來源**：同 `FU-20260926-02` 的同型掃描（PR [#2243](https://github.com/kaecer68/atlas-go/pull/2243) 實作時的掃描結果）。
+- **事實（程式碼）**：
+  - `internal/live/twse_adapter.go:207`／`:271`／`:322` —— 委託、狀態、取消三條路徑都把
+    `strings.TrimSpace(string(respBody))` **原文**放進 `fmt.Errorf("… API error status=%d body=%s")`。
+  - `internal/live/http_adapter.go:306` —— `brokerHTTPError.message` 直接放 `body=%s`（原文）；
+    `:294` 的 transport error 也以 `%v` 原文放進 message（同 `FU-20261016-11` 的 URL 類風險：
+    券商 URL 雖未帶 key，但 `*url.Error` 會帶完整 path／參數）。
+  - `internal/live/fubon_dma.go:285` —— unmarshal 失敗時把**整行回應**（`line`）放進 error。
+- **為何是機密問題**：這些訊息的消費者是下單／風控紀錄與告警；券商 API 的錯誤 body 常回帶帳號、
+  委託書號，甚至（在認證失敗時）憑證前綴。**未實測** single case（無券商憑證，且不應在生產探測）。
+- **建議（未實作）**：套用共用的上游文字遮蔽器（`internal/marketdata/redact.go` 的那一套，
+  建議提升為跨套件套件，見 `FU-20261016-15`），保留 `status`／`code`。
+- **驗收條件**：以假 body（含假憑證／帳號）驅動三條錯誤路徑 ⇒ message 不含原值、仍含 status 與 code。
+
+---
+
+### FU-20261016-13 — LLM client 家族：provider 錯誤 body 原文進 error（401 常回帶 key 前綴）
+
+- **狀態**：`open`
+- **記錄日期**：2026-10-16
+- **來源**：同 `FU-20260926-02` 的同型掃描（PR [#2243](https://github.com/kaecer68/atlas-go/pull/2243) 實作時的掃描結果）。
+- **事實（程式碼）**：
+  - `internal/llm/clients/base.go:191` `fmt.Errorf("http status %d: %s", resp.StatusCode, truncateForError(respBody))`
+    —— 只做**長度**限制（200 bytes），沒有任何欄位遮蔽。
+  - `internal/llm_annotator/annotator.go:438-439` `fmt.Errorf("%w: status %d: %s", ErrUnavailable, resp.StatusCode, string(respBody))`
+    —— 連長度限制都沒有（可放大到 1MiB 的 `io.LimitReader`）。
+- **為何是機密問題**：這正是「機密跟著診斷訊息跑」的教科書案例 —— LLM provider 的 401 body 典型形狀就是
+  `{"error":{"message":"Incorrect API key provided: sk-…"}}`，也就是**錯誤訊息本身就是憑證揭露**。
+  這些 error 會進 `atlas_llm_*` 紀錄／dashboard 與 log。
+- **建議（未實作）**：兩處都改成「長度受限 ＋ 遮蔽後」的摘要；provider 憑證本身可用字面規則消滅
+  （呼叫端持有 key，可傳入）。
+- **驗收條件**：以 `{"error":{"message":"Incorrect API key provided: <假 key>"}}` 驅動 ⇒ error 不含假 key，
+  仍含 `status=401` 與 provider 的 message 骨架。
+
+---
+
+### FU-20261016-14 — `internal/marketdata` 其餘 provider 的 raw-body error 站點（遮蔽器已就位，屬機械式套用）
+
+- **狀態**：`open`
+- **記錄日期**：2026-10-16
+- **來源**：同 `FU-20260926-02` 的同型掃描（PR [#2243](https://github.com/kaecer68/atlas-go/pull/2243) 只修 FinMind 家族 ＋ 共用的 `retry.go`，**刻意不動其他 provider**）。
+- **事實（程式碼；2026-10-16 掃描，非測試檔中「把 body 原文以 `%s` 併進 error」的站點）**：
+  `twse_openapi.go:310`／`:503`、`twse_mi_index.go:262`、`fugle_client.go:336`（`X-API-KEY` 走 header，
+  但 body 未遮蔽）、`taifex_provider.go:149`／`:284`、`taifex_institutional.go:74`、`tpex_daily_close.go:162`、
+  `bdi_provider.go:86`、`bls_cpi_provider.go:95`、`export_provider.go:149`、`yahoo_session.go:403`（4KB body）、
+  `fubon_client.go:231`／`:315`／`:374`（本機 fubon proxy，body 由 proxy 產生）、`taiex_twse_fallback.go:90`。
+  本 PR 已在同一套件提供 `redactUpstreamText(body, secrets...)`；這些站點多數**一行可套**。
+- **為何仍要登記**：這些 provider 的 body 是否真的回帶機密**尚未逐一實測**；但失效模式已經證實存在於
+  同族（FinMind 的 `token_tail`、以及 `retry.go` 的共用 sink）⇒ 以「有憑證的 provider 一律遮蔽」為預設，
+  比「逐一證明會漏」便宜。**這正是本條不與 `-02` 合併的原因**：範圍不同、且改動面是 26 個站點。
+- **建議（未實作）**：① 先做 `-15`（共用遮蔽器跨套件化）；② 逐 provider 套用並補「含假憑證 body」的
+  負向測試；③ 有憑證的 provider（fugle／fubon／tej／yahoo session）優先。
+- **驗收條件**：上列站點全部經遮蔽；每個 provider 至少一個「餵假憑證 body ⇒ 不得出現在 error／log」的測試。
+
+---
+
+### FU-20261016-15 — 遮蔽器**不可跨套件重用**（且沒有 URL／query 類機密遮蔽器）
+
+- **狀態**：`open`
+- **記錄日期**：2026-10-16
+- **來源**：`FU-20260926-02`（PR [#2243](https://github.com/kaecer68/atlas-go/pull/2243)）修復時的架構觀察。
+- **事實**：本 PR 的 `redactUpstreamText` 定義在 `internal/marketdata/redact.go`，是**未匯出**的套件內函式
+  ⇒ `internal/llm`、`internal/live`、`cmd/*` 都拿不到，只能各自複製一份清單（`FU-20260926-01/-09` 的
+  「三份 14400」正是同一種病：同一個知識有多份副本，就會漂移）。另外**沒有任何 URL／query 遮蔽器**：
+  憑證放進 query string 的 provider（目前確認只有 TEJ，見 `FU-20261016-11`）在 `*url.Error` 這條路徑上
+  完全沒有防線。
+- **建議（未實作）**：① 提升為 `internal/redact`（或 `internal/logging` 的子套件）並匯出
+  `RedactUpstreamText`／`RedactURL`；② 在 `internal/logging` 這一層加保險（例如對 key 名像
+  `token/api_key/authorization/cookie` 的 log 欄位值自動遮蔽），讓「忘記呼叫遮蔽器」不再是單點失效；
+  ③ 把 `FU-20261016-14` 的站點改成呼叫共用版。
+- **驗收條件**：`internal/marketdata` 以外的套件可 import 同一個遮蔽器；且刪掉任一 provider 的呼叫
+  ⇒ 該 provider 的負向測試紅燈（而不是「安靜地少一層防護」）。
+
+---
+
+### FU-20261016-16 — `cmd/*` CLI 與 `atlas-mcp` 的 raw body／fullURL 進 error（輸出到終端與 log 檔）
+
+- **狀態**：`open`
+- **記錄日期**：2026-10-16
+- **來源**：同 `FU-20260926-02` 的同型掃描（PR [#2243](https://github.com/kaecer68/atlas-go/pull/2243) 實作時的掃描結果）。
+- **事實（程式碼）**：`cmd/macrobackfill/main.go:266`／`:270`／`:273`、
+  `cmd/backfill-macro-history/main.go:351`、`cmd/fetch-historical/main.go`、
+  `cmd/fetch-historical-capital-flow/main.go`、`cmd/backfill-taifex-oi-v2/main.go:464`（`%.160s` 只截長度）、
+  `cmd/experimental/c07-obs-collector/main.go:240`、`cmd/experimental/c07-spot-check-recorder/main.go:336`、
+  `cmd/atlas-mcp/server/http_client.go:111`（`fullURL` ＋ 原文 body；URL 由呼叫端參數組出）。
+- **為何要登記**：這些是**手動／cron CLI**，錯誤直接印到終端機與 `logs/`，貼進 issue 的機率不比服務 log 低。
+  與 `-14` 差別在於：這裡沒有 `internal/marketdata` 的共用遮蔽器可用（見 `-15`），且 `fullURL` 屬
+  「URL 類」（同 `-11`）。
+- **建議（未實作）**：待 `-15` 落地後套用；`atlas-mcp` 的 `fullURL` 需要 URL 遮蔽器。
+- **驗收條件**：同 `-14`（假憑證不得出現在 CLI 的錯誤輸出）。
+
 ---
 
 ## 相關文件
@@ -3096,3 +3500,5 @@ PY
   — SmartUniverseBuilder `symbols_ranked=0` 根因報告（含 §6.2 缺口與 §8 防再犯檢查建議）
 - [README.md](README.md) — 本目錄索引
 - [local-deploy.md](local-deploy.md) — 部署與 `.env` 分工（prod DSN 為何不放 `.env`）
+
+---

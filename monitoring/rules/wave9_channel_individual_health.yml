@@ -14,7 +14,7 @@ groups:
           description: |
             Channel {{ $labels.channel }} 5m error rate: {{ $value | humanizePercentage }}.
             建議檢查該 channel 對應的 data provider 狀態。
-          runbook_url: "https://wiki.internal/runbooks/wave9-channel-individual-health"
+          runbook_url: "https://github.com/kaecer68/atlas-go/blob/main/docs/operations/channel-health-runbook.md"
 
 # PD-W9-1：YELLOW 事件預設 severity: info，alert rule 預設 enabled: false
 # Wave 9.1 實作 EventChannelIndividualHealth emit 邏輯後，operator 可手動啟用此 alert rule

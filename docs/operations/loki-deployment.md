@@ -202,7 +202,11 @@ groups:
           description: |
             {{ $labels.service }} 在最近 1 分鐘內有 panic 或 fatal error log。
             立即檢查 service health。
-          runbook_url: "https://wiki.internal/runbooks/loki-panic"
+          # 2026-10-16（FU-20260927-04）：原本指向一個 DNS 已不存在的內部 wiki 主機
+          # （NXDOMAIN）⇒ 事件當下是死鏈。這 4 條 LogQL 規則**尚未**在本 repo 落地
+          # （沒有 `monitoring/rules/loki/`），先指到既有的服務重啟／回滾手冊；
+          # 規則真的實作時應改指專屬的 panic runbook。
+          runbook_url: "https://github.com/kaecer68/atlas-go/blob/main/docs/operations/local-deploy.md"
 ```
 
 #### Rule 2: `AtlasGoHighErrorLogRate`(WARNING)
