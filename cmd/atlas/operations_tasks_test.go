@@ -627,6 +627,16 @@ func TestCompareReplayCSVToJSONL_ConversionNeeded(t *testing.T) {
 		t.Fatalf("seed JSONL: %v", err)
 	}
 
+	// JSONL 領先 CSV 的 fixture（外部寫入者／人工修復；FU-20260927-08）：
+	// 先生成到 2026-03-20，再把來源 CSV 退回只有 2026-03-19。
+	aheadCSV := filepath.Join(dir, "ahead.csv")
+	aheadJSONL := filepath.Join(dir, "ahead.jsonl")
+	writeReplayCSVFixture(t, aheadCSV, "2026-03-19", "2026-03-20")
+	if err := importer.ImportTWOpenDataCSVToJSONL(aheadCSV, aheadJSONL); err != nil {
+		t.Fatalf("seed ahead JSONL: %v", err)
+	}
+	writeReplayCSVFixture(t, aheadCSV, "2026-03-19")
+
 	cases := []struct {
 		name  string
 		csv   string
@@ -636,6 +646,7 @@ func TestCompareReplayCSVToJSONL_ConversionNeeded(t *testing.T) {
 		{"CSV 與 JSONL 同步 ⇒ 不轉", csv, jsonl, false},
 		{"JSONL 缺席 ⇒ 轉（自我修復）", csv, missing, true},
 		{"CSV 讀不到 ⇒ 不轉（無來源）", filepath.Join(dir, "no-such.csv"), jsonl, false},
+		{"JSONL 領先 ⇒ 轉（衍生檔必須收斂回來源 CSV）", aheadCSV, aheadJSONL, true},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
