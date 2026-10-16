@@ -1259,6 +1259,9 @@ ci-gate: embed-dirs
 	@echo "  → make ci-slow 計數守衛契約測試（hermetic fixtures：0 支 ⇒ 紅／部分缺失不誤紅／mutation 自證；FU-20261016-24）"
 	@bash tests/scripts/test-ci-slow-zero-counter.sh
 	@echo "    ✅"
+	@echo "  → ci-full orphan artifact check 契約測試（hermetic fixtures：git 失敗必紅／真的沒有仍綠／mutation 自證；FU-20261016-25）"
+	@bash tests/scripts/test-ci-full-orphan-git-fail.sh
+	@echo "    ✅"
 	@echo "  → watchdog 重啟分類契約測試（hermetic：stub docker／假 HOME；8 case + mutation 自證；FU-20260930-10）"
 	@bash tests/scripts/test-watchdog-restart-classify.sh
 	@echo "    ✅"
@@ -1377,19 +1380,40 @@ ci-full: ci-gate ci-constitution
 		exit 1; \
 	fi
 	@echo "    ✅"
+	@# FU-20261016-25（2026-10-16）：舊版用「命令替換 git ls-files」當迴圈清單 —— git 失敗時該清單是
+	@# 空集合，與「真的沒有 orphan artifact」逐字相同 ⇒ 迴圈 body 一次都沒進去，收尾照印 ✅ 且 rc=0
+	@# （與 FU-20261016-21「git 失敗被當成空集合」同根因）。現在顯式接 git 的 rc：rc≠0 ⇒ fail loud
+	@# 並帶可診斷訊息；真的沒有 ⇒ 維持綠。另補 file(1) 存在的 fail-closed —— 舊版沒有 file(1) 時
+	@# 偵測結果是空字串 ⇒ 二進位偵測整段靜默失效、照樣印 ✅（同一形狀）。
+	@# 契約測試：tests/scripts/test-ci-full-orphan-git-fail.sh（已納入 make ci-gate）。
 	@echo "  → orphan artifact check"
 	@ORPHANS=""; \
-	for f in $$(git ls-files); do \
+	git_rc=0; \
+	TRACKED=$$(git ls-files) || git_rc=$$?; \
+	TRACKED_PID=$$(git ls-files '*.pid') || git_rc=$$?; \
+	TRACKED_OUT=$$(git ls-files '*.out') || git_rc=$$?; \
+	if [ $$git_rc -ne 0 ]; then \
+		echo "❌ orphan artifact check: git ls-files 失敗（rc=$${git_rc}）⇒ 拿不到已追蹤的檔案清單"; \
+		echo "   「清單取不到（空集合）」不等於「沒有 orphan artifact」⇒ 不以通過放行（fail loud；FU-20261016-25）。"; \
+		echo "   修復：確認在 git work tree 內執行 make、且 git 可用（git rev-parse --is-inside-work-tree）。"; \
+		exit 1; \
+	fi; \
+	command -v file >/dev/null 2>&1 || { \
+		echo "❌ orphan artifact check: 找不到 file(1) ⇒ 二進位 orphan 偵測無法執行"; \
+		echo "   「偵測工具缺失」不等於「沒有 orphan artifact」⇒ 不以通過放行（fail loud；FU-20261016-25）。"; \
+		exit 1; \
+	}; \
+	for f in $$TRACKED; do \
 		[ -f "$$f" ] || continue; \
 		ft=$$(file "$$f" 2>/dev/null); \
 		case "$$ft" in \
 			*"Mach-O"*|*"ELF"*) ORPHANS="$$ORPHANS  [BINARY] $$f";; \
 		esac; \
 	done; \
-	for f in $$(git ls-files '*.pid'); do \
+	for f in $$TRACKED_PID; do \
 		ORPHANS="$$ORPHANS  [PID] $$f"; \
 	done; \
-	for f in $$(git ls-files '*.out'); do \
+	for f in $$TRACKED_OUT; do \
 		ORPHANS="$$ORPHANS  [COVERAGE] $$f"; \
 	done; \
 	if [ -n "$$ORPHANS" ]; then \
