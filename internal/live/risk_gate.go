@@ -74,30 +74,16 @@ func (g *RiskGate) Check(ctx context.Context, order domain.Order) error {
 // SetHaltTrading enables or disables a trading halt. When true, all orders
 // are rejected until the halt is cleared.
 //
-// DECLARED ONLY / NOT ENFORCED (FU-20261016-32, verified 2026-10-16).
+// NOT A PRODUCTION WRITER (FU-20261016-32, re-verified 2026-10-16).
 //
-// The gate itself is live — OrderManager.checkRiskGate calls RiskGate.Check
-// (order_manager.go:128) on every attempt — but nothing in production writes the
-// halt flag, so the "trading halted" branch in Check is unreachable today. All
-// three writers are test-only: SetHaltTrading, SyncHaltFromCircuitState and
-// SyncRiskGateFromCircuitBreaker. The live CircuitBreaker can reach CircuitHalted
-// / CircuitPaused, and SyncRiskGateFromCircuitBreaker exists precisely to mirror
-// that state, but no orchestrator loop calls it.
-//
-// The halt therefore rejects no order in production today: it is a flag with no
-// writer, not a halt that sometimes fires. Wiring a writer is a production
-// risk-behavior change, so it is proposed (FU-20261016-32) and not applied
-// here. Re-certification conditions (all of them):
-//  1. An owner decision on which writer is authoritative (circuit breaker state
-//     vs. an operator action) and on what clears the halt.
-//  2. An end-to-end test: CircuitBreaker in CircuitHalted ⇒ a submitted order is
-//     rejected with the "trading halted" error, and clearing the breaker lets it
-//     through.
-//  3. Observability for the halt flag (RiskGate.Status already exposes
-//     halt_trading) plus an alert path, so a stuck halt is visible.
-//  4. Removal of this entry from
-//     internal/risk/exported_risk_levers_wiring_test.go and closing
-//     FU-20261016-32 in the same commit.
+// The halt flag is written on the production path by
+// SyncRiskGateFromCircuitBreaker, which Orchestrator.onIntradayCycle calls after
+// every circuit evaluation, so the "trading halted" branch of Check is live. This
+// setter is the operator-facing variant and still has no caller: there is no
+// manual-halt control surface yet, and no decision on what would clear a manual
+// halt. It is kept so that surface has a named entry point, and it stays wired
+// == false in internal/risk/exported_risk_levers_wiring_test.go so a first caller
+// has to think about that control path.
 func (g *RiskGate) SetHaltTrading(halt bool) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
@@ -107,7 +93,13 @@ func (g *RiskGate) SetHaltTrading(halt bool) {
 // SyncHaltFromCircuitState mirrors the circuit breaker state into the risk
 // gate's halt flag. Halted and Paused both block new orders; Normal clears
 // the halt. This is the canonical wire point between CircuitBreaker and
-// RiskGate.
+// RiskGate, and it is live: SyncRiskGateFromCircuitBreaker calls it, and
+// Orchestrator.onIntradayCycle calls that after every circuit evaluation.
+//
+// It is listed as wired == false in
+// internal/risk/exported_risk_levers_wiring_test.go only because its single
+// caller sits in this same file, which that guard excludes from its
+// external-reference scan; the row carries wiredVia to say so.
 func (g *RiskGate) SyncHaltFromCircuitState(state CircuitState) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
@@ -119,14 +111,16 @@ func (g *RiskGate) SyncHaltFromCircuitState(state CircuitState) {
 // risk gate's halt flag and, if a non-nil provider is given, refreshes the
 // VaR estimate.
 //
-// NOT WIRED (FU-20261016-32, verified 2026-10-16): this function has no caller
-// at all, production or test. The orchestrator does not call it on a schedule —
-// the only circuit-breaker integration in the live path is
-// Orchestrator.circuitBreaker, whose state is never mirrored into RiskGate. The
-// function is kept so the intended wire point is not lost, and it is listed in
-// internal/risk/exported_risk_levers_wiring_test.go so that a first caller fails
-// the guard until the re-certification conditions on SetHaltTrading are met.
-func SyncRiskGateFromCircuitBreaker(rg *RiskGate, cb *CircuitBreaker, varProvider func() float64) {
+// WIRED (FU-20261016-32, 2026-10-16): Orchestrator.onIntradayCycle calls this
+// with a nil provider right after every circuit evaluation, so the gate's halt
+// follows CircuitHalted / CircuitPaused and clears when the breaker returns to
+// CircuitNormal. The provider is nil on purpose: the live VaR estimate is not
+// calibrated yet, and mirroring it would put an unvalidated number on the
+// order-reject path. Callers that do pass a provider must accept that risk.
+//
+// cb is the interface the Orchestrator holds, not the concrete breaker, so the
+// wire point does not have to type-assert.
+func SyncRiskGateFromCircuitBreaker(rg *RiskGate, cb CircuitBreakerOps, varProvider func() float64) {
 	if rg == nil || cb == nil {
 		return
 	}
