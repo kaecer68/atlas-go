@@ -399,6 +399,12 @@ func (o *Orchestrator) onIntradayCycle() {
 	portfolio := o.stateStore.GetPortfolio()
 	o.circuitBreaker.Evaluate(portfolio, o.stateStore.GetPositions(), nil)
 	state := o.circuitBreaker.State()
+
+	// Mirror the fresh circuit state into the risk gate, which is what makes the
+	// hard-halt branch of RiskGate.Check reachable (FU-20261016-32). The VaR
+	// provider is deliberately nil: the live VaR estimate is not calibrated, so
+	// it must not reach a reject path (decision 5a, 2026-10-16).
+	SyncRiskGateFromCircuitBreaker(o.riskGate, o.circuitBreaker, nil)
 	if o.metrics != nil {
 		o.metrics.RecordCircuitBreakerState(string(state))
 		o.metrics.RecordPortfolio(portfolio.Cash, portfolio.Cash+portfolio.UnrealizedPnL)
