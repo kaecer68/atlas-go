@@ -157,8 +157,9 @@ func TestImportTWOpenDataCSVToJSONL_ReplaceIsAtomic(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read converted target: %v", err)
 	}
-	// 內容比對用「排序後的列集合」：Loader 對同一天的股票是 map 走訪
-	// （internal/replay/twse_csv.go 的 ByDate[symbol]），列序在合法範圍內不保證穩定。
+	// 內容比對刻意用「排序後的列集合」而非逐位元組：本測試要守的是**原子性**，
+	// 列序由 twmarket_order_test.go 的契約測試負責（FU-20261016-31 之後列序已
+	// 確定為 date→symbol 全序；集合比對讓這條測試不隨該契約的細節漂移）。
 	if diff := jsonlLineSetDiff(t, got, expected); diff != "" {
 		t.Fatalf("converted target content differs from the expected JSONL: %s", diff)
 	}

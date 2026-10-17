@@ -5,8 +5,10 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"maps"
 	"os"
 	"path/filepath"
+	"slices"
 	"sync/atomic"
 
 	"github.com/kaecer68/atlas-go/internal/replay"
@@ -31,6 +33,25 @@ var tempFileSeq atomic.Uint64
 // The replacement is "sibling temp file → fsync → rename". rename(2) inside one
 // file system is atomic, so a reader only ever sees the complete old file or the
 // complete new file. No failure path leaves a temp or partial file behind.
+//
+// # Row-order contract (FU-20261016-31)
+//
+// Rows are written in a total order: **date ascending, then symbol ascending**
+// (byte order). The order is part of the file format, not an implementation
+// artifact:
+//
+//   - `internal/replay.GetLatestDate` reads only the **last** non-empty line of a
+//     `.jsonl` file and reports its `date`, so "the last line carries the newest
+//     date" must hold;
+//   - byte-level comparison of two conversions of the same CSV — replay diffs,
+//     integrity checksums such as `internal/replay.ComputeChecksum` — must not
+//     see noise that no data change can explain.
+//
+// Reading the dataset's inner `map[string]domain.DailyBar` directly (as the
+// pre-fix code did) walks it in Go's randomized map order, so the same CSV
+// produced a different file on every conversion: 10 consecutive conversions of
+// `samples/replay/twse_stock_day_all_sample.csv` (53 rows) produced 10 distinct
+// sha256 digests, with the first line already differing between two runs.
 func ImportTWOpenDataCSVToJSONL(sourcePath, targetPath string) error {
 	ds, err := replay.LoadTWSEOpenDataCSV(sourcePath)
 	if err != nil {
@@ -58,8 +79,12 @@ func ImportTWOpenDataCSVToJSONL(sourcePath, targetPath string) error {
 
 	enc := json.NewEncoder(tmp)
 	for _, date := range ds.Dates {
-		for _, bar := range ds.ByDate[date.Format("2006-01-02")] {
-			if err := enc.Encode(bar); err != nil {
+		// The outer loop is the loader's already-ascending date series; the inner
+		// map is walked in sorted key order so that one CSV always yields the same
+		// bytes (see the row-order contract above).
+		day := ds.ByDate[date.Format("2006-01-02")]
+		for _, symbol := range slices.Sorted(maps.Keys(day)) {
+			if err := enc.Encode(day[symbol]); err != nil {
 				return err
 			}
 		}
