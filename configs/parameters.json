@@ -311,15 +311,15 @@
       }
     },
     "risk_volatility_threshold": {
-      "value": 0.08,
-      "rationale": "8% daily volatility is extreme; extra penalty warranted",
+      "value": 0.012324,
+      "rationale": "1.2% daily volatility: the 75th percentile of the calibration sample (n=13 agents, rank 9), verified by recomputation on 2026-10-17 (docs/specs/risk-vol-threshold-recompute-20261017.md); 8%/day is not reachable with a clean sample",
       "source": "empirical",
       "last_calibrated": "2026-06-13T00:30:48.122543+08:00",
       "calibration_timestamp": "2026-06-13T00:30:48.122543+08:00",
       "calibration_method": "percentile_based",
       "citation": {
         "source_type": "empirical",
-        "source_reference": "Agent weight system calibration; value realigned to the documented daily-scale default 0.08 on 2026-09-30 (issue #2169: the previous 1.3551911193487005 was an annualized-scale write)",
+        "source_reference": "Agent weight system calibration; the deployed auto-calibration (percentile_based, n=13, rank int(0.75*13)=9) wrote 0.012323875595980305 to the calibrated overlay on 2026-10-17T06:22:58Z; recomputation shows it is the daily sample sigma of the agent at that rank (relative difference 1.4e-15), not a rescaled series; SSOT aligned to that product as 0.012324 so the reviewed baseline and the effective value agree (previous SSOT 0.08, itself the 2026-09-30 daily-scale realignment of issue #2169)",
         "evidence_quality": "high",
         "update_policy": "auto",
         "validation_method": "TWSE historical data validation",
