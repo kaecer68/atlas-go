@@ -10,6 +10,8 @@ import (
 	"net/url"
 	"strings"
 	"time"
+
+	"github.com/kaecer68/atlas-go/internal/redact"
 )
 
 // HttpClient calls atlas-go's HTTP API. It forwards ATLAS_API_KEY when set and
@@ -89,7 +91,10 @@ func (c *HttpClient) do(ctx context.Context, method, fullURL string, body io.Rea
 func (c *HttpClient) doRaw(ctx context.Context, method, fullURL string, body io.Reader) ([]byte, error) {
 	req, err := http.NewRequestWithContext(ctx, method, fullURL, body)
 	if err != nil {
-		return nil, fmt.Errorf("HttpClient: new request: %w", err)
+		// *url.Error and *url.ParseError quote the URL, and the URL can carry a
+		// credential in its query string; redact.Error keeps errors.Is working
+		// on the wrapped error (FU-20261016-16).
+		return nil, fmt.Errorf("HttpClient: new request: %w", redact.Error(err))
 	}
 	req.Header.Set("Accept", "application/json")
 	if body != nil {
@@ -100,7 +105,8 @@ func (c *HttpClient) doRaw(ctx context.Context, method, fullURL string, body io.
 	}
 	resp, err := c.httpc.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("HttpClient: do: %w", err)
+		// The transport error is an *url.Error, so its text carries fullURL.
+		return nil, fmt.Errorf("HttpClient: do: %w", redact.Error(err))
 	}
 	defer func() { _ = resp.Body.Close() }()
 	raw, err := io.ReadAll(resp.Body)
@@ -108,7 +114,11 @@ func (c *HttpClient) doRaw(ctx context.Context, method, fullURL string, body io.
 		return nil, fmt.Errorf("HttpClient: read body: %w", err)
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, fmt.Errorf("HttpClient: %s %s -> %d: %s", method, fullURL, resp.StatusCode, strings.TrimSpace(string(raw)))
+		// The URL keeps its path and query-parameter NAMES so the failing call is
+		// identifiable; the values of credential parameters and the body's
+		// credential members are masked (FU-20261016-16).
+		return nil, fmt.Errorf("HttpClient: %s %s -> %d: %s",
+			method, redact.URL(fullURL), resp.StatusCode, redact.Text(strings.TrimSpace(string(raw))))
 	}
 	return raw, nil
 }

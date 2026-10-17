@@ -44,6 +44,8 @@ import (
 	"golang.org/x/text/encoding/htmlindex"
 	"golang.org/x/text/encoding/traditionalchinese"
 	"golang.org/x/text/transform"
+
+	"github.com/kaecer68/atlas-go/internal/redact"
 )
 
 const (
@@ -461,7 +463,10 @@ func (f *taifexFetcher) fetchOnce(ctx context.Context, form url.Values) (map[str
 		return nil, false, errRateLimited
 	}
 	if resp.StatusCode != http.StatusOK {
-		return nil, false, fmt.Errorf("HTTP %d: %.160s", resp.StatusCode, strings.TrimSpace(string(body)))
+		// %.160s bounds the length but keeps whatever credential rides in the
+		// body; redact first and let the precision cap the redacted text
+		// (FU-20261016-16).
+		return nil, false, fmt.Errorf("HTTP %d: %.160s", resp.StatusCode, redact.Text(strings.TrimSpace(string(body))))
 	}
 
 	text, err := decodeBody(body, resp.Header.Get("Content-Type"))
@@ -485,7 +490,9 @@ func parseForeignOINetCSVMulti(text string) (values map[string]float64, found bo
 		return nil, false, nil
 	}
 	if !strings.HasPrefix(trimmed, "日期") {
-		return nil, false, fmt.Errorf("unexpected TAIFEX response (not CSV): %.100s", trimmed)
+		// Same family as the non-200 branch above: the body reaches the
+		// operator through the error, so it is redacted before it is quoted.
+		return nil, false, fmt.Errorf("unexpected TAIFEX response (not CSV): %.100s", redact.Text(trimmed))
 	}
 
 	r := csv.NewReader(strings.NewReader(trimmed))

@@ -40,6 +40,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/kaecer68/atlas-go/internal/redact"
 )
 
 // operatorFlag is the -operator CLI flag for spot-check audit trail.
@@ -333,7 +335,7 @@ func fetchPredictionReport(baseURL string) (*predictionReport, error) {
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("status %d: %s", resp.StatusCode, string(body))
+		return nil, fmt.Errorf("status %d: %s", resp.StatusCode, redact.Text(string(body)))
 	}
 
 	var report predictionReport
