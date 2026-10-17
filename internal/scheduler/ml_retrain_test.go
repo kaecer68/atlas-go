@@ -239,3 +239,60 @@ func writeTestCSV(t *testing.T, path string, bars []domain.DailyBar) {
 		_, _ = f.WriteString(line)
 	}
 }
+
+// badCloseBars builds n bars for one symbol close 100+i, with bars[badIdx]
+// carrying the documented bad stored value (FU-20260930-03). badIdx < 0 leaves
+// the series clean.
+func badCloseBars(n, badIdx int) []domain.DailyBar {
+	bars := make([]domain.DailyBar, n)
+	start := time.Date(2026, 1, 5, 0, 0, 0, 0, time.UTC)
+	for i := range bars {
+		closePrice := 100.0 + float64(i)
+		if i == badIdx {
+			closePrice = 0
+		}
+		bars[i] = domain.DailyBar{
+			Date:   start.AddDate(0, 0, i),
+			Symbol: "2330.TW",
+			Open:   closePrice,
+			High:   closePrice,
+			Low:    closePrice,
+			Close:  closePrice,
+			Volume: 1000,
+		}
+	}
+	return bars
+}
+
+// TestExtractLabels_SkipsPairsWithBadClose locks FU-20260930-04 for the ML
+// retrain job (cmd/scheduler path): extractLabels had no guard at all, so a
+// stored Close=0 produced a +Inf or -100% label, and extractLabels could return
+// a different number of rows than extractFeatures.
+func TestExtractLabels_SkipsPairsWithBadClose(t *testing.T) {
+	bars := badCloseBars(10, 6) // bad bar inside the sampleable range [5, n-2]
+	X := extractFeatures(bars)
+	y := extractLabels(bars)
+
+	if len(y) != len(X) {
+		t.Fatalf("label/feature length mismatch: %d labels vs %d feature rows", len(y), len(X))
+	}
+	if len(y) != 2 {
+		t.Fatalf("got %d samples, want 2 (indexes 7 and 8; every pair touching bar 6 is skipped)", len(y))
+	}
+	for i, v := range y {
+		if v <= -0.5 || math.IsInf(v, 0) || math.IsNaN(v) {
+			t.Errorf("label[%d] = %v: a missing close became a fabricated label", i, v)
+		}
+	}
+
+	// Control: the same series without the bad bar uses every index and keeps
+	// its exact label values.
+	clean := badCloseBars(10, -1)
+	cx, cy := extractFeatures(clean), extractLabels(clean)
+	if len(cx) != 4 || len(cy) != 4 {
+		t.Fatalf("clean data produced %d features / %d labels, want 4/4 (normal data must not change)", len(cx), len(cy))
+	}
+	if want := 107.0/106.0 - 1; math.Abs(cy[1]-want) > 1e-12 {
+		t.Errorf("clean label[1] = %v, want %v", cy[1], want)
+	}
+}

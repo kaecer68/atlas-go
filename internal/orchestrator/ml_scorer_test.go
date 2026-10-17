@@ -376,3 +376,70 @@ func TestForwardReturnZeroClose(t *testing.T) {
 		t.Error("forward return with zero current close should be 0")
 	}
 }
+
+// capturingModel records the training set handed to Fit so a test can assert
+// which samples reached the model.
+type capturingModel struct {
+	X [][]float64
+	Y []float64
+}
+
+func (m *capturingModel) Fit(X [][]float64, y []float64) error {
+	m.X = X
+	m.Y = y
+	return nil
+}
+
+func (m *capturingModel) Predict(X [][]float64) ([]float64, error) {
+	return make([]float64, len(X)), nil
+}
+
+// TestMLScorer_TrainSkipsNonPositiveClose locks FU-20260930-04: a stored
+// Close=0 (FU-20260930-03) in either the feature bar or the forward bar used to
+// enter the training set, where it produced a fabricated -100% label and, for a
+// zero open, a division by zero in the feature vector.
+func TestMLScorer_TrainSkipsNonPositiveClose(t *testing.T) {
+	bars := []domain.DailyBar{
+		makeDailyBar("2330.TW", "2026-01-05", 100, 102, 99, 101, 1000),
+		makeDailyBar("2330.TW", "2026-01-06", 101, 103, 100, 102, 1000),
+		makeDailyBar("2330.TW", "2026-01-07", 0, 0, 0, 0, 1000), // stored bad row
+		makeDailyBar("2330.TW", "2026-01-08", 102, 104, 101, 103, 1000),
+	}
+
+	m := &capturingModel{}
+	s := NewMLScorer(m)
+	if err := s.Train(bars); err != nil {
+		t.Fatalf("Train: %v", err)
+	}
+
+	// The bad bar poisons the pairs (01-06 -> 01-07) and (01-07 -> 01-08); only
+	// 01-05 -> 01-06 remains usable.
+	if len(m.Y) != 1 {
+		t.Fatalf("trained on %d samples, want 1 (every pair touching the bad bar must be skipped)", len(m.Y))
+	}
+	if len(m.X) != len(m.Y) {
+		t.Fatalf("feature/label length mismatch: %d features vs %d labels", len(m.X), len(m.Y))
+	}
+	for i, y := range m.Y {
+		if y <= -0.5 {
+			t.Errorf("label[%d] = %v: a missing close became a near -100%% label", i, y)
+		}
+	}
+
+	// Control: without the bad bar every pair is used and the labels stay exact.
+	clean := []domain.DailyBar{
+		makeDailyBar("2330.TW", "2026-01-05", 100, 102, 99, 101, 1000),
+		makeDailyBar("2330.TW", "2026-01-06", 101, 103, 100, 102, 1000),
+		makeDailyBar("2330.TW", "2026-01-07", 102, 104, 101, 103, 1000),
+	}
+	m2 := &capturingModel{}
+	if err := NewMLScorer(m2).Train(clean); err != nil {
+		t.Fatalf("Train (clean): %v", err)
+	}
+	if len(m2.Y) != 2 {
+		t.Fatalf("clean data produced %d samples, want 2 (normal data must not change)", len(m2.Y))
+	}
+	if want := 102.0/101.0 - 1; m2.Y[0] != want {
+		t.Errorf("clean label[0] = %v, want %v", m2.Y[0], want)
+	}
+}

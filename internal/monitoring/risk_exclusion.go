@@ -10,6 +10,7 @@ import (
 
 	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/domain"
+	"github.com/kaecer68/atlas-go/internal/domain/shared"
 )
 
 const (
@@ -315,6 +316,10 @@ func (f *RiskExclusionFilter) checkLiquidity(symbol string, quoteBySymbol map[st
 }
 
 // realizedVolatility returns the standard deviation of daily simple returns over the last n days.
+//
+// Daily pairs with a non-positive or non-finite close at either end are skipped
+// (FU-20260930-04): a stored Close=0 is a missing observation, and using it
+// would inject a fabricated -100% return into the volatility estimate.
 func (f *RiskExclusionFilter) realizedVolatility(symbol string, days int) float64 {
 	series := f.priceHistoryProvider.GetCloseSeries(symbol)
 	if len(series) < days+1 {
@@ -323,7 +328,11 @@ func (f *RiskExclusionFilter) realizedVolatility(symbol string, days int) float6
 	returns := make([]float64, 0, days)
 	start := max(0, len(series)-days-1)
 	for i := start + 1; i < len(series); i++ {
-		if series[i-1] == 0 {
+		// Skip the pair when EITHER end is a missing/bad price
+		// (FU-20260930-04): guarding only series[i-1] let a stored Close=0
+		// contribute a fabricated -100% daily return to both the mean and the
+		// standard deviation.
+		if !shared.IsUsablePrice(series[i-1]) || !shared.IsUsablePrice(series[i]) {
 			continue
 		}
 		returns = append(returns, series[i]/series[i-1]-1)
@@ -354,16 +363,20 @@ func (f *RiskExclusionFilter) maxDrawdown(symbol string, days int) float64 {
 	if len(series) > days {
 		series = series[len(series)-days:]
 	}
-	peak := series[0]
+	// A close<=0 is a missing observation, not a -100% trough
+	// (FU-20260930-04): it is skipped so it can neither seed the peak nor be
+	// read as a full peak-to-trough collapse.
+	peak := 0.0
 	maxDD := 0.0
 	for _, price := range series {
+		if !shared.IsUsablePrice(price) {
+			continue
+		}
 		if price > peak {
 			peak = price
 		}
-		if peak > 0 {
-			if dd := (peak - price) / peak; dd > maxDD {
-				maxDD = dd
-			}
+		if dd := (peak - price) / peak; dd > maxDD {
+			maxDD = dd
 		}
 	}
 	return maxDD

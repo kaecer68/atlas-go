@@ -23,6 +23,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/kaecer68/atlas-go/internal/domain/shared"
 )
 
 // HistoricalBar is the minimal point-in-time daily bar a condition may read.
@@ -182,10 +184,16 @@ func RunBacktest(ctx context.Context, cfg BacktestConfig, panel PanelSource, con
 				continue // no forward truth available
 			}
 			closePrice := bars[i].Close
-			if closePrice <= 0 {
+			if !shared.IsUsablePrice(closePrice) {
 				continue
 			}
 			fwd := bars[i+cfg.ForwardDays].Close
+			// The forward bar needs the same guard (FU-20260930-04): a stored
+			// Close=0 on the horizon day used to be recorded as a real -100%
+			// outcome, which then enters the win-rate aggregates.
+			if !shared.IsUsablePrice(fwd) {
+				continue
+			}
 			forwardReturn := fwd/closePrice - 1
 
 			prefix := bars[:i+1] // condition inputs: data with date <= t only

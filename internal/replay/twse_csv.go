@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
+	"github.com/kaecer68/atlas-go/internal/domain/shared"
 )
 
 // ErrReplayDataMissing is returned when the replay CSV file cannot be found.
@@ -127,7 +128,10 @@ func (d *Dataset) QuotesForDate(date time.Time, symbols []string) []domain.Quote
 func (d *Dataset) ForwardReturn(symbol string, currentDate time.Time, window int) (float64, bool) {
 	currentKey := currentDate.Format("2006-01-02")
 	currentBar, ok := d.ByDate[currentKey][symbol]
-	if !ok || currentBar.Close == 0 {
+	// Non-positive/non-finite closes are missing observations, not prices
+	// (FU-20260930-04): the guard must reject close<0 and NaN/Inf too, not
+	// just exactly 0.
+	if !ok || !shared.IsUsablePrice(currentBar.Close) {
 		return 0, false
 	}
 
@@ -136,7 +140,7 @@ func (d *Dataset) ForwardReturn(symbol string, currentDate time.Time, window int
 		return 0, false
 	}
 	nextBar, ok := d.ByDate[nextDate.Format("2006-01-02")][symbol]
-	if !ok || nextBar.Close == 0 {
+	if !ok || !shared.IsUsablePrice(nextBar.Close) {
 		return 0, false
 	}
 
