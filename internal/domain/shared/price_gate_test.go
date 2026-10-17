@@ -8,7 +8,7 @@ import (
 // TestPlausibleReturn pins the gross-error bound of k3 decision 3-1: TWSE/TPEX
 // daily price limits are 10% (20% for a few classes), so a stored move beyond
 // 50% in one session is corrupted data, while ordinary limit moves, corporate
-// action artefacts below the bound, and multi-day compounding all pass.
+// action artifacts below the bound, and multi-day compounding all pass.
 func TestPlausibleReturn(t *testing.T) {
 	cases := []struct {
 		name    string

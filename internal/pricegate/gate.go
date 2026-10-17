@@ -1,21 +1,3 @@
-// Package pricegate classifies price-derived returns against the gross-error
-// bound of FU-20260930-03 / k3 decision 3-1.
-//
-// Why a gate at all: the FU-20260930-04 audit taught every price->return
-// consumer to skip a non-positive or non-finite close, because such a value is a
-// MISSING observation. That fixed close<=0, but not the second documented bad
-// value: a corrupted multiple, such as 5904.TW stored at 720 for a day whose
-// official close was 72 (FU-20260930-03). Both closes are perfectly usable
-// prices, so the price guard passes and the +900% return flows into momentum,
-// volatility, ML labels and win-rate aggregates as if it were real.
-//
-// The gate rejects such an observation, logs it for audit (k3 decision 3-1
-// requires the rejected row to be auditable), and exempts the IPO window where
-// TWSE/TPEX apply no daily price limit and a >50% move can be genuine.
-//
-// Check does NOT return the return value: each consumer keeps its own
-// arithmetic form ((curr-prev)/prev or curr/prev-1), so a normal observation
-// keeps the exact value it had before this gate existed.
 package pricegate
 
 import (

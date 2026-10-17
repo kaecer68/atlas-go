@@ -12,7 +12,7 @@ import "math"
 // 5904.TW with an ~10x close (720 against an official 72), which every return
 // consumer read as +900%. This bound is deliberately loose — it is a
 // gross-error gate, not a volatility filter — so a legitimate limit-up day or a
-// corporate-action artefact below 50% still passes.
+// corporate-action artifact below 50% still passes.
 const MaxPlausibleDailyReturn = 0.5
 
 // IPOPriceLimitExemptDays is the number of trading days after listing during
