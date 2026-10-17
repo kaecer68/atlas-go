@@ -118,6 +118,20 @@ func (e *DynamicThresholdEngine) DetectRegime(indicators MarketIndicators) Regim
 	return RegimeNeutral
 }
 
+// GetRegimeMultiplier returns the regime multiplier currently configured for
+// regime. It is a read-only accessor: the same value is applied inside
+// GetThreshold / calculateThresholdUnsafe (`regimeAdjustment :=
+// e.regimeMultipliers[regime]`), so a caller is not required for the regime
+// adjustment to take effect.
+//
+// Audit note (FU-20261016-32, verified 2026-10-16): this accessor has no
+// production caller, and that is not by itself a control gap — nothing here
+// claims to gate anything. The engine's *inputs* are the separate story: the
+// production calls into this type are SetRiskAppetite
+// (orchestrator/system_dispatcher.go:122 and :135), and no production path calls
+// GetThreshold or GetCurrentThreshold, so the dynamic threshold is written but
+// never read. That wiring question is recorded in FU-20261016-32 and is not
+// resolved here (it would change production risk thresholds).
 func (e *DynamicThresholdEngine) GetRegimeMultiplier(regime RegimeType) float64 {
 	e.mu.RLock()
 	defer e.mu.RUnlock()

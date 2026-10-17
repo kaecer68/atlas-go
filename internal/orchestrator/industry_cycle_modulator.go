@@ -69,6 +69,35 @@ func (m *IndustryCycleModulator) GetCycleCard() *industry.CycleStatusCard {
 // When cycle confidence is low (< 0.3), position is reduced by 20%.
 // When cycle confidence is high (> 0.7), full position is allowed.
 // When no card is available, the position is returned unchanged.
+//
+// DECLARED ONLY / NOT ENFORCED (FU-20261016-32, verified 2026-10-16).
+//
+// No production path consumes this method: the only callers are tests. The
+// production entry point for cycle modulation is CollectModulationSteps (called
+// from executor_collection.go:349 when plugins.cycleModulator is non-nil), which
+// emits conviction steps and never routes sizing through here — so this is a
+// second, unconsumed encoding of the same intent, not a live lever.
+//
+// Two independent gates are both off today:
+//  1. ModulatorWiringActive is false (plugin_registry.go): nothing injects a
+//     cycle modulator into the production registry, pinned by
+//     TestProductionRegistryLeavesConvictionModulatorsUnwired.
+//  2. SetCycleCard has no production caller either, so even an injected
+//     modulator would see a nil card on this method's argument path.
+//
+// Wiring it is a value-semantics change (it rescales position size), so it must
+// first satisfy ALL of:
+//  1. A design decision on whether sizing should be driven by the cycle card or
+//     by CollectModulationSteps' conviction steps — applying both would express
+//     the same cycle view twice.
+//  2. Proof, by test, that the two encodings do not double-count one phase.
+//  3. The CycleTracker must be seeded from observed industry positions rather
+//     than config defaults (the same input objection recorded for
+//     ModulatorWiringActive).
+//  4. An end-to-end test showing the size actually reaching the order path, plus
+//     removal of this entry from the guard table in
+//     internal/risk/exported_risk_levers_wiring_test.go and closing
+//     FU-20261016-32 in the same commit.
 func (m *IndustryCycleModulator) ModulatePosition(size float64, card *industry.CycleStatusCard) float64 {
 	if card == nil || size <= 0 {
 		return size
@@ -87,6 +116,13 @@ func (m *IndustryCycleModulator) ModulatePosition(size float64, card *industry.C
 // ModulateScore adjusts a conviction score by the composite cycle coefficient.
 // CompositeCoefficient ranges [0.8, 1.2]; scores are scaled proportionally.
 // When no card is available, the score is returned unchanged.
+//
+// DECLARED ONLY / NOT ENFORCED (FU-20261016-32, verified 2026-10-16): the only
+// callers are tests. Conviction is modulated in production through
+// CollectModulationSteps -> domain.ConvictionStep (executor_collection.go:349),
+// which does not call this method, and ModulatorWiringActive is false, so no
+// agent's score is rescaled by it. Re-certification conditions are the same four
+// listed on ModulatePosition.
 func (m *IndustryCycleModulator) ModulateScore(score int, card *industry.CycleStatusCard) int {
 	if card == nil || score <= 0 {
 		return score

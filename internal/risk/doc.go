@@ -10,14 +10,25 @@
 //	IndustryRiskProvider      — Industry cycle risk interface
 //	ApprovalWorkflow          — Human-in-the-loop approval workflow
 //
-// Decision flow:
+// Decision flow (only the first step is wired as of FU-20261016-32):
 //
-//	MacroAwareDrawdownEngine.Evaluate(riskSnapshot, regime, narrativeEvents)
-//	  → DrawdownDecision (action, rationale, positionScale)
-//	  → GetPositionSizeAdjustment(decision) → float64
-//	  → ShouldHaltTrading(decision) → bool
+//	MacroAwareDrawdownEngine.Evaluate(macroAssessment, structuralAssessment)
+//	  → MacroAwareDrawdownDecision (Action, Percentage, MaxExposure, Rationale)
+//	  → decision.Action is consumed by StrategyEvolver.determineState
+//	  → GetPositionSizeAdjustment(decision) → float64   [DECLARED ONLY]
+//	  → ShouldHaltTrading(decision) → bool              [duplicate of the inline check]
 //
-// positionScale is a multiplier: 0.5 means "halve all positions" — it does
+// What is enforced today: the Action. StrategyEvolver suspends the strategy layer
+// when Action >= DrawdownSevere (orchestrator/strategy_evolver.go:200), which is
+// the same predicate ShouldHaltTrading encodes.
+//
+// What is NOT enforced: the exposure cap. MaxExposure is read only by
+// GetPositionSizeAdjustment and by CalculatePortfolioAdjustment, and neither has
+// a caller; EvaluateWithPortfolio, which does fill FinalMaxExposure in its
+// breakdown, is only reachable from cmd/stress-test. So do not treat
+// DrawdownLevel.MaxExposure (1.0 / 0.85 / 0.65 / 0.40 / 0.10) as a live cap.
+//
+// MaxExposure is a multiplier: 0.5 means "halve all positions" — it does
 // NOT include cash. To cap total exposure, use
 // CapitalPhaseController.GetCapitalLimit() instead.
 //

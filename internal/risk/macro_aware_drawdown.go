@@ -239,12 +239,53 @@ func (e *MacroAwareDrawdownEngine) buildRationale(
 	return rationale
 }
 
-// GetPositionSizeAdjustment returns the position size multiplier based on drawdown decision
+// GetPositionSizeAdjustment returns the position size multiplier based on drawdown decision.
+//
+// DECLARED ONLY / NOT ENFORCED (FU-20261016-32, verified 2026-10-16).
+//
+// The decision itself is computed on the production path — System.evaluateDrawdown
+// (orchestrator/system_risk_session.go:380) calls Evaluate, and StrategyEvolver
+// consumes decision.Action — but the exposure cap never reaches position sizing:
+//   - this accessor has no caller (production or test),
+//   - CalculatePortfolioAdjustment, the other reader of decision.MaxExposure, has
+//     no caller either,
+//   - the breakdown fields FinalMaxExposure / FinalPercentage are only filled by
+//     EvaluateWithPortfolio, whose only caller is cmd/stress-test.
+//
+// In other words the DrawdownLevel.MaxExposure table (defaults: 1.0 / 0.85 / 0.65
+// / 0.40 / 0.10) describes an intention, not a live cap. Do not read in-review
+// numbers as "the platform caps exposure at 10% in an emergency".
+//
+// Wiring it is a production risk-behavior change, so it is proposed (see
+// FU-20261016-32) and not applied here. Re-certification conditions (all of them):
+//  1. An owner decision on where the cap binds (portfolio weight engine, order
+//     sizing, or the sim engine's per-trade gate) and on what it multiplies.
+//  2. Proof the chosen site does not double-apply with the existing
+//     PortfolioRiskAdjuster.AdjustWeights caps (15% / 10% / 5% / 0 weights), which
+//     are themselves only reachable from cmd/stress-test.
+//  3. An end-to-end test: DrawdownEmergency decision ⇒ realized exposure ≤
+//     MaxExposure on the production path.
+//  4. Removal of this entry from
+//     internal/risk/exported_risk_levers_wiring_test.go and closing
+//     FU-20261016-32 in the same commit.
 func (e *MacroAwareDrawdownEngine) GetPositionSizeAdjustment(decision *MacroAwareDrawdownDecision) float64 {
 	return decision.MaxExposure
 }
 
-// ShouldHaltTrading determines if trading should be halted based on the decision
+// ShouldHaltTrading determines if trading should be halted based on the decision.
+//
+// NOT A MISSING CONTROL (FU-20261016-32, verified 2026-10-16): this method has no
+// caller, but the predicate it encodes is already enforced inline on the
+// production path. StrategyEvolver.determineState returns StrategySuspended when
+// `drawdown.Action >= risk.DrawdownSevere`
+// (orchestrator/strategy_evolver.go:200), and isEmergencyEscalation uses the same
+// comparison (:183) to bypass the evolution cooldown — identical semantics
+// to this method's `decision.Action >= DrawdownSevere`. So an emergency decision
+// does suspend the strategy layer; only this convenience wrapper is unused.
+//
+// It is left in place rather than deleted because it documents the intended
+// reading of the decision, and deleting an exported method of a shared risk
+// engine needs the same owner sign-off as adding a caller.
 func (e *MacroAwareDrawdownEngine) ShouldHaltTrading(decision *MacroAwareDrawdownDecision) bool {
 	return decision.Action >= DrawdownSevere
 }

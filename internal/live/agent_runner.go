@@ -218,6 +218,28 @@ func (r *AgentRunner) RunStyleAndSectorAgents(ctx context.Context, watchlist []s
 	return nil
 }
 
+// ApplyRiskFilters runs the LayerControl (CRO/CIO) agents over the pending
+// recommendations and stores the survivors as the filtered set.
+//
+// NOT A LIVE RISK GATE (FU-20261016-32, verified 2026-10-16): nothing in
+// production calls this method, and calling it would apply the control layer a
+// second time. The controlled path is the analysis pipeline:
+// orchestrator/executor_pipeline.go:131 -> DefaultControlLayerStrategy.ApplyControl
+// -> PluginRegistry.ApplyControl (executor_control.go:104). The live runner then
+// receives that already-filtered result as ExecutionInput.FinalRecommendations
+// and stores it verbatim in ApplyExecutionInput (agent_runner.go:65).
+//
+// The state this method writes (StateStore.SetFilteredRecommendations) has no
+// production reader either, so leaving it uncalled loses no filtering:
+// GetFilteredRecommendations is only used by tests.
+//
+// Re-certification conditions: only if the live path stops consuming
+// pre-filtered recommendations. Then this method must (a) be the single place
+// that applies the control layer for the live path, (b) leave pending
+// recommendations untouched rather than re-deriving them, (c) come with an
+// end-to-end test that a blocked recommendation never reaches the order path,
+// and (d) drop its entry from internal/risk/exported_risk_levers_wiring_test.go
+// together with closing FU-20261016-32.
 func (r *AgentRunner) ApplyRiskFilters(ctx context.Context) error {
 	if r.system == nil {
 		return fmt.Errorf("system not initialized")

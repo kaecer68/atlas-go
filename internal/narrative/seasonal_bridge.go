@@ -33,6 +33,32 @@ func (sb *SeasonalBridge) SetCycleCard(card *industry.CycleStatusCard) {
 // cycle phase is expansion and at least one seasonal pattern is active, the base
 // multiplier is amplified by the composite coefficient. Returns the base multiplier
 // unchanged when no card is cached or when the cycle is not expansion.
+//
+// DECLARED ONLY / NOT ENFORCED (FU-20261016-32, verified 2026-10-16).
+//
+// The only callers are tests. The wired half of this bridge is SeasonalMultiplier,
+// which industry.SeasonalEngine consumes through the NarrativeSeasonalProvider
+// interface (internal/industry/seasonality.go:287 and :525). The cycle-aware
+// amplification is not part of that interface, so no production path applies it.
+//
+// Setting the card is unwired as well: SetCycleCard (seasonal_bridge.go) has no
+// production caller, so cycleCard is always nil in production and this function
+// would return the base multiplier unchanged even if something called it. Both
+// halves have to be dealt with together, which is why the amplification is
+// declared here instead of being quietly left as a no-op.
+//
+// Re-certification conditions (all of them):
+//  1. A design decision on whether cycle amplification should stack on top of the
+//     already-wired seasonal multiplier: the two would multiply, so one phase
+//     could be expressed twice.
+//  2. A test proving the composition does not double-count an expansion phase
+//     (the same concern recorded for FU-20260930-01 on the silicon phase
+//     multipliers).
+//  3. A production caller for SetCycleCard that feeds an observed card (not a
+//     config seed).
+//  4. An end-to-end test on the seasonal adjustment path, plus removal of this
+//     entry from internal/risk/exported_risk_levers_wiring_test.go and closing
+//     FU-20261016-32 in the same commit.
 func (sb *SeasonalBridge) CycleAmplifiedMultiplier(base float64, theme string, industryID string, direction float64) float64 {
 	baseMultiplier := sb.SeasonalMultiplier(theme, industryID, direction)
 	card := sb.cycleCard
