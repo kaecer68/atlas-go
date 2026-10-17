@@ -5774,6 +5774,30 @@ gen_routes_determinism_test.go: PASS（同輸入兩次呼叫逐位元組相同�
   ④ 附錄 A 其餘 84 條候選未判定。
 
 
+### FU-20261017-01 — `darwinian.risk_volatility_threshold` 掉到 0.0123（−83%）**是算出來的**：p75 指標指向單一 agent 的日波動（已重算驗證）
+
+- **狀態**：`done`
+- **記錄日期**：2026-10-17
+- **來源**：2026-10-17T06:22:58Z 的生產校準（overlay `data/state/parameters.calibrated.json`：
+  `0.07265911146663549` → **`0.012323875595980305`**）＋ SSOT `configs/parameters.json:313-314`
+  的 `0.08`。完整推導見 `docs/specs/risk-vol-threshold-recompute-20261017.md`。
+- **根因（已驗證，非推論）**：值 = `internal/calibration/calibrate.go:533-534`
+  的百分位指標 `agentVols[int(0.75×n)] / √252`，而該量就是**某一個 agent 的日報酬
+  樣本標準差（n−1）**。06:22 那輪 `n=13` ⇒ rank 9 ⇒ 指向 **`energy-desk-01`**
+  （1944 筆、最後一筆 2026-09-26）：重算 `0.012323875595980322` vs 寫入
+  `0.012323875595980305`，**相對差 1.4e-15**（浮點累加次序）。⇒ **是算出來的**。
+- **對稽核敘述的更正（三處）**：① 樣本來源是 **`recommendation_outcomes.metadata->>'forward_return'`**，
+  **不是** `stock_signal_outcomes.forward_return`；② `IsUsablePrice`（`close<=0`）過濾在
+  `internal/calibration/load.go:117` 的 **replay returns** 路徑（garch/var/factor），
+  **不影響** darwinian 樣本集；③ 「13 個樣本可精確重現」**不可行**（表上無 `created_at`，
+  06:22 之後內容已變：同一支程式今天的 p75 命中率 `0.714286` vs 06:22 的 `0.873016`），
+  已改用「集合一致重建 + 逐位元組 σ 比對」。
+- **處置**：**唯讀驗證，未改任何程式或參數**。產出
+  `docs/specs/risk-vol-threshold-recompute-20261017.md`（含樣本清單、公式與行號、
+  重算值、與 0.0123 的差、重現指令）。
+- **限制**：不主張 0.0123「合理」——p75-of-13 這種單點估計量的適當性是政策問題
+  （見 `FU-20260930-09`）；本條只證「是算出來的」。歷史列集合不可重建（無 `created_at`）。
+
 ## 相關文件
 
 - [universe-scoring-ranked-zero-20260925.md](universe-scoring-ranked-zero-20260925.md)
