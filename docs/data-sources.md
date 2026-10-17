@@ -89,8 +89,8 @@ Reads from `data/sector_data/sector_data.json`. Provides TSMC revenue, CoWoS uti
 
 | Attribute | Detail |
 |-----------|--------|
-| Source | **第一方：TWSE「融券借券賣出餘額」TWT93U（上市）+ TPEx `margin/sbl`（上櫃）**；FinMind `TaiwanDailyShortSaleBalances` 僅為 fallback（2026-09-24 起，fix/20260924-finmind-quota） |
-| Status | **LIVE (G02)** — provider 走官方端點，零 FinMind 配額；逐列與 FinMind 資料集比對完全相同（2026-09-23 上市 1301/1301 + 上櫃 931/931；2026-03-02 2157/2157） |
+| Source | **第一方：TWSE「融券借券賣出餘額」TWT93U（上市）+ TPEx `margin/sbl`（上櫃）**（借券賣出半部）＋ **TWSE「證交所借券系統與證商/證金營業處所借券餘額合計表」TWT72U**（借券餘額／供給面，上市 + 上櫃；2026-10-16 起）；FinMind `TaiwanDailyShortSaleBalances` 僅為 fallback（2026-09-24 起，fix/20260924-finmind-quota） |
+| Status | **LIVE (G02)** — provider 走官方端點，零 FinMind 配額；借券賣出半部逐列與 FinMind 資料集比對完全相同（2026-09-23 上市 1301/1301 + 上櫃 931/931；2026-03-02 2157/2157）。`sbl_borrow_balance`（借券餘額）在 2026-10-15 前是 placeholder（全部 34 萬筆皆 0，FU-20260929-02），現由 TWT72U 提供；上游未提供時為 JSON `null`（不是 0） |
 | Rate Limit | 1 req / 2s, burst 1（`limits.go:132`）；實際共用 `getTWSESharedLimiter()`（3 req/5s）與 TPEx 專用共用桶 |
 | Channel ID | `twse_sbl` |
 | Gateway Adapter | `internal/apigateway/adapter_twse_sbl.go` |

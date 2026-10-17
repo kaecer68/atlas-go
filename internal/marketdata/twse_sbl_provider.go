@@ -20,12 +20,19 @@ import (
 
 // SBLStats holds securities borrowing & lending statistics for a single stock.
 type SBLStats struct {
-	Date             string `json:"date"`
-	Symbol           string `json:"symbol"`
-	SBLShortBalance  int64  `json:"sbl_short_balance"`  // 借券賣出餘額（股）
-	SBLShortVolume   int64  `json:"sbl_short_volume"`   // 當日借券賣出股數
-	SBLReturnVolume  int64  `json:"sbl_return_volume"`  // 當日還券股數
-	SBLBorrowBalance int64  `json:"sbl_borrow_balance"` // 借券餘額（股）
+	Date            string `json:"date"`
+	Symbol          string `json:"symbol"`
+	SBLShortBalance int64  `json:"sbl_short_balance"` // 借券賣出餘額（股）＝需求面
+	SBLShortVolume  int64  `json:"sbl_short_volume"`  // 當日借券賣出股數
+	SBLReturnVolume int64  `json:"sbl_return_volume"` // 當日還券股數
+	// SBLBorrowBalance 是借券餘額（股）＝供給面（券源），來源為 TWSE TWT72U
+	// 「證交所借券系統與證商/證金營業處所借券餘額合計表」。
+	//
+	// nil = 上游未提供（不可用），與 0 = 上游明確回報餘額為 0 是**不同**的事實。
+	// 2026-10-15 前此欄是 int64 placeholder，沒有任何路徑填過它 ⇒ 全部 34 萬筆
+	// 日檔都是「0」，讓「借券供給面無法量測」被誤讀成「供給面為 0」
+	// （FU-20260929-02）。改用指標後 JSON 會出現明確的 null。
+	SBLBorrowBalance *int64 `json:"sbl_borrow_balance"`
 }
 
 // SBL data sources (provenance labels surfaced by LastSource()).
@@ -48,8 +55,11 @@ var ErrSBLNoSource = fmt.Errorf("twse_sbl: no data source available")
 // Sources (fix/20260924-finmind-quota):
 //
 //  1. First-party (default ON): TWSE 「融券借券賣出餘額」TWT93U (上市) +
-//     TPEx margin/sbl (上櫃). Zero FinMind quota. Verified row-for-row
-//     equivalent to the FinMind dataset — see twse_sbl_firstparty.go.
+//     TPEx margin/sbl (上櫃) for the 借券賣出 half, plus TWSE TWT72U
+//     「證交所借券系統與證商/證金營業處所借券餘額合計表」for the 借券餘額
+//     (supply-side) column. Zero FinMind quota. The 借券賣出 half is verified
+//     row-for-row equivalent to the FinMind dataset — see
+//     twse_sbl_firstparty.go.
 //  2. FinMind fallback (only when explicitly wired): dataset
 //     TaiwanDailyShortSaleBalances via the shared FinMindClient, which spends
 //     the shared daily quota. Used when the first-party source is disabled or
@@ -87,7 +97,8 @@ func (p *TWSESBLProvider) LastFetchState() (successAt time.Time, lastErr string)
 }
 
 // LastSource reports the provenance of the most recent successful fetch
-// (SBLSourceFirstParty / SBLSourceFinMind / "TWSE:TWT93U+TPEx:margin/sbl").
+// (SBLSourceFirstParty / SBLSourceFinMind /
+// "TWSE:TWT93U+TPEx:margin/sbl+TWSE:TWT72U").
 // Empty before the first success. Observability only — health decisions must
 // not depend on it.
 func (p *TWSESBLProvider) LastSource() string {
@@ -282,9 +293,10 @@ func (p *TWSESBLProvider) sblDayStats(ctx context.Context, day time.Time) ([]SBL
 
 // FetchSBLHistory backfills per-day report files for [start, end].
 //
-// Source: first-party TWSE TWT93U (上市) + TPEx margin/sbl (上櫃) — at most 2
-// official calls per weekday and ZERO FinMind quota
-// (fix/20260924-finmind-quota). The FinMind client is a fallback only.
+// Source: first-party TWSE TWT93U (上市) + TPEx margin/sbl (上櫃) + TWSE TWT72U
+// (借券餘額／供給面) — at most 3 official calls per weekday and ZERO FinMind
+// quota (fix/20260924-finmind-quota, FU-20260929-02). The FinMind client is a
+// fallback only.
 //
 // Non-trading days come back empty from both exchanges and are skipped
 // silently. Idempotent: existing files are skipped (~22 days per month).
@@ -348,13 +360,17 @@ func (p *TWSESBLProvider) RateLimiter() *rate.Limiter { return p.limiter }
 
 // FetchSBLSummary fetches the daily SBL summary data (full market).
 //
-// Data source: TWSE 「融券借券賣出餘額」TWT93U (上市) + TPEx margin/sbl (上櫃).
-// Both expose the same 14-column 信用額度總量管制餘額表; the 借券 half maps to:
+// Data source: TWSE 「融券借券賣出餘額」TWT93U (上市) + TPEx margin/sbl (上櫃) +
+// TWSE 「證交所借券系統與證商/證金營業處所借券餘額合計表」TWT72U (上市 + 上櫃).
+// The first two expose the same 15-column 信用額度總量管制餘額表; the 借券 half maps to:
 //
 //	SBLShortBalance  ← 當日餘額（借券賣出今日餘額）
 //	SBLShortVolume   ← 當日賣出（當日借券賣出）
 //	SBLReturnVolume  ← 當日還券
-//	SBLBorrowBalance ← 兩張表都沒有此欄位，保持 0
+//
+// SBLBorrowBalance（借券餘額＝供給面）只存在於 TWT72U，且該表沒有「借券賣出」
+// 半部 —— 兩張表是互補的，缺一不可（FU-20260929-02：這欄曾是永遠 0 的 placeholder）。
+// TWT72U 回報 0 會如實寫 0；表上沒有的證券留 nil（不可用）。
 //
 // date is the target trading day (YYYYMMDD). The report is published after
 // close, so the call probes `date` and walks back up to sblProbeDays-1 days

@@ -2464,12 +2464,32 @@ glob 空集合=紅／**預算覆寫=清單內放寬後綠、放寬後仍超時�
 
 ### FU-20260929-02 — `sbl_borrow_balance` 在全部 316,171 筆 SBL 觀測中皆為 0 ⇒ 借券供給面無法量測
 
-- **狀態**：`open`
+- **狀態**：`done`
 - **記錄日期**：2026-09-29
 - **來源**：同 FU-20260929-01（#2093；同一份報告 §8 的自動註記）
 - **現況**：`data/state/sbl/*_sbl.json`（生產 **144 檔 / 2026-03-02 → 2026-09-24**）的 `sbl_borrow_balance` **非零筆數 = 0 / 316,171**；`internal/marketdata/twse_sbl_provider.go` 的 FinMind 路徑只填 `sbl_short_balance` / `sbl_short_volume` / `sbl_return_volume` 三欄。
   復現：`jq -r '.[].sbl_borrow_balance' data/state/sbl/20260924_sbl.json | sort -u`（輸出只有 `0`），或看量測工具報告 §8 的自動註記。
 - **影響**：供給面（券源 / 借券餘額）的分類學與後續檢定今天做不到；**不影響**已完成的 forward-IC 結論 —— 該結論只用到已填充的 3 個欄位，且 `sbl_borrow_balance` 為 0 不會產生「假訊號」，只會讓「供給面」這一格留白。
+
+- **根因（2026-10-16 查證；唯讀實測）**：**既不是「上游真的回 0」，也不是新版 API 移除欄位 —— 這欄從落地起就沒有任何路徑填過它**（F-item 原敘述只到「FinMind 路徑只填 3 欄」，未指出這點）：
+  - ① **程式側**：`SBLStats.SBLBorrowBalance` 從 G02 第一顆 commit（`36e1239c4`）就是 placeholder；`git log -S SBLBorrowBalance` 只有那兩顆 G02 commit，全 repo 對它的引用只有「struct 宣告 + `cmd/experimental/sbl-ic-study` 讀取 + 前端 `valid_fields.json` 型別鏡射」，**零賦值**。第一方路徑（`parseSBLRows`）與 FinMind 路徑（`fetchSBLDayFinMind`）都只寫其他 3 欄。
+  - ② **上游側（三條來源都沒有這一欄）**：TWSE `exchangeReport/TWT93U` 與 TPEx `www/zh-tw/margin/sbl` 都是同一張 **15 欄**「信用額度總量管制餘額表」，只有借券**賣出**半部（前日餘額／當日賣出／當日還券／當日調整／當日餘額／次一營業日可限額）；FinMind `TaiwanDailyShortSaleBalances` 實測（2026-10-16 匿名呼叫 `data_id=2330`）亦只有 `SBLShortSalesPreviousDayBalance` / `ShortSales` / `Returns` / `Adjustments` / `CurrentDayBalance` / `Quota` / `ShortCovering` 六欄 ⇒ **沒有「借券餘額」可對映**。
+  - ③ **生產實際分佈（唯讀）**：kmacmini `~/workspace/atlas/data/state/sbl/*.json` = **156 檔 / 342,967 列**，`sbl_borrow_balance` 的 `min = max = count(*) filter (where <>0) = 0`；本機 clone 138 檔 / 301,845 列同（無 DB 表：該通道只落地日檔，PG/SQLite 均無此欄）。
+  - ④ **但供給面抓得到**：TWSE `exchangeReport/TWT72U`「證交所借券系統與證商/證金營業處所借券餘額合計表」（免 key、與 TWT93U 同主機、一日一 call、同時涵蓋集中市場與櫃檯買賣中心），第 5 欄「本日借券餘額股(4)=(1)+(2)-(3)」就是該指標。實測 2330 於 2026-09-16 為 **59,693,000 股 ≥ 借券賣出餘額 14,684,514 股**（供給 ≥ 需求，方向正確）。
+- **處置（2026-10-16 完成；本 PR）**：
+  - **修法（走「改抓其他可得欄位」分支，不是硬改資料）**：第一方路徑補上 TWT72U ⇒ `applyBorrowBalance` 逐代號填入 `SBLBorrowBalance`；`FetchSBLHistory`/`FetchSBLSummary` 每日最多 3 個官方 call（原 2 個）、FinMind 配額仍為 0。新增來源字串 `TWSE:TWT72U`（`LastSource` = `TWSE:TWT93U+TPEx:margin/sbl+TWSE:TWT72U`），adapter Metadata/來源宣告與 `docs/data-sources.md`、`docs/architecture.md` 同步。
+  - **不可用 ≠ 0（型別改指標）**：`SBLBorrowBalance` 改為 `*int64`，上游未提供時序列化為 **`null`**。理由：TWT72U 會列出餘額為 0 的證券（2026-09-16：8183 精星 0 股），但每日仍有 165-166 檔只出現在 TWT93U/TPEx 而不在 TWT72U ⇒「表上缺席」無法區分「0」與「不可得」，把缺席寫成 0 正是本條的病徵。FinMind fallback（無此欄）亦然。
+  - **fail loud 的兩道界線**：① TWT72U 表頭不符或 HTTP 失敗 ⇒ **回傳錯誤**（不再讓供給面靜默留 0）；② TWT93U 有資料但 TWT72U 當日無資料 ⇒ 視為「日報未齊備」整日回報無資料（回探／下輪重試），避免落地一個供給面全 null 且日後不會被覆寫的日檔。實測 2026-08-03..10-16 共 **52/52 個交易日**兩表有無資料一致，故正常情況不會觸發；上市主機失敗時維持既有「部分覆蓋」語意（回傳上櫃資料 + warn），因為同主機的 TWT72U 必然也不可得。
+  - **負向證明（同一支探針、同一輸入 `20260916`，前後各跑一次真實端點）**：
+    - 修前（`origin/main` f9d49ba6d）：`rows=2233 borrowNonZero=0 min=0 max=0 sample=[2330=0(shortBalance=14684514) 2301=0 5206=0]`
+    - 修後（本 PR）：`rows=2233 borrowNonNil=2068 borrowNonZero=2067 min=1000 max=883297000 sample=[2330=59693000(shortBalance=14684514) 2301=79068000 5206=483000]`
+    - 突變（打在行為行）：`applyBorrowBalance` 改 no-op ⇒ `TestSBLBorrowBalance_*` 3 條 **FAIL**（原文：`2330 borrow = nil(不可用), want 59000000`）；移除「TWT72U 未發布⇒整日無資料」守衛 ⇒ `want the 2026-09-23 report, got [{Date:2026-09-24 ... SBLBorrowBalance:<nil>}]` FAIL；欄名前綴改 `前日借券餘額` ⇒ `borrow[2330] = 122610000, want 59693000` FAIL。三次都以 `cp` 備份還原，`sha256` 與備份逐位元組相同。
+  - **測試**：`internal/marketdata` 新增 8 條契約測試（真實 TWT72U 回應節錄 fixture、缺席⇒nil、未發布⇒回探、表頭突變⇒錯誤、HTTP 失敗⇒錯誤、上市主機失敗⇒部分覆蓋且不呼叫 TWT72U、FinMind fallback⇒nil）。`go test ./internal/marketdata/...` 與 `./internal/apigateway/...` 全綠。
+  - **尚待業主決定（只提案，未執行）**：**歷史日檔回填**。`persistDay`/`dayFileExists` 的語意是「已存在的日檔不改寫」⇒ 2026-10-15（含）以前的 156 個日檔仍不會有供給面資料。要讓 SBL 供給面研究涵蓋 2026-03-02..2026-10-15，需要明確授權下列**其中一種**（兩者都會動到生產資料，故未執行）：
+    - (A) 把這些 `data/state/sbl/*_sbl.json` 先移出／刪除，再讓 `FetchSBLHistory` 重抓（3 個官方 call/交易日，約 156 天 ⇒ 約 470 calls；TWT93U 的歷史值是否與當時逐列相同尚未驗證，**回填前應先對 1-2 天做逐列比對**）。
+    - (B) 只補供給面：對每個既有日檔以 TWT72U 重新取一次該日的「本日借券餘額」，就地補 `sbl_borrow_balance`（不動其他 3 欄，風險較小，但需要一支一次性工具）。
+    - 附帶提醒：`cmd/experimental/sbl-ic-study` 的 §8 自動註記已改寫，會明確指出「2026-10-16 前的 0 是 not ingested，不是 no borrowing」，避免後續讀者把回填前的視窗當成供給面實測。
+- **注意**：`FU-20260929-01` 的「仍未解」清單仍列著本條（歷史敘述，未改動）；本條已於 2026-10-16 收斂。
 
 ---
 
