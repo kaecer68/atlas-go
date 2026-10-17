@@ -5823,6 +5823,30 @@ gen_routes_determinism_test.go: PASS（同輸入兩次呼叫逐位元組相同�
   (2) 它本身**不會**通知任何人，通知仍取決於 watcher 是否已接線；
   (3) `key` 標籤基數 = overlay entry 數（實測 14）。
 
+### FU-20261017-03 — `store_backend_empty_default_jsonl` 每 12h 一則 WARN：`session_summary_reconcile` 以「省略欄位」表達「我要 JSONL」（**只提案**）
+
+- **狀態**：`open`
+- **記錄日期**：2026-10-17
+- **來源**：生產日誌
+  `time=2026-10-17T06:27:20.326Z level=WARN msg=store_backend_empty_default_jsonl resolved_backend=jsonl component=ledger_store_factory`，
+  緊接 `task_started name=session_summary_reconcile`（24h 內 1 筆）。
+- **現況**：`cmd/atlas/reconcile_task.go:54` 的
+  `ledger.NewSessionStore(config.Config{LedgerDir: d.Cfg.LedgerDir})` **沒有** `StoreBackend`
+  ⇒ `ResolveStoreBackend("")`（`internal/ledger/store_factory.go:79`）走 legacy 預設（JSONL）並記 WARN。
+  store = `ledger.SessionStore`（JSONL 實作）、路徑 = `<LedgerDir>/sessions/<id>/summary.json`
+  （生產 `/app/data/state`，實測 231 個 session 目錄）。
+- **判定**：**功能上是預期的**（這個 job 的職責就是把 PG SSoT 與 flat ledger 對帳，PG 側由
+  `repository.NewPostgresRepository` 直接建立）⇒ 這則 WARN 是**雜訊**，而且「意圖」寄託在
+  空字串的預設值上。全 repo 只有 **2 處**這樣寫（另一次是 CLI
+  `cmd/reconcile-sessions/main.go:81`），其餘 55 處都明示 `"jsonl"` 或傳入 `cfg.StoreBackend`。
+- **處置**：**只提案、未改程式**（依「只提案」護欄）。提案 = 該處明示
+  `StoreBackend: "jsonl"`（行為差異為零：`ResolveStoreBackend("jsonl") == ResolveStoreBackend("")`），
+  並補一個 log-capture 測試斷言不再出現該 WARN。完整推導與 diff 見
+  `docs/specs/store-backend-empty-jsonl-fallback-20261017.md`。
+- **驗收條件**：`session_summary_reconcile` 執行後日誌不再有 `store_backend_empty_default_jsonl`，
+  且仍寫入同一條 `<LedgerDir>/sessions/…`。
+
+
 ## 相關文件
 
 - [universe-scoring-ranked-zero-20260925.md](universe-scoring-ranked-zero-20260925.md)
