@@ -5138,6 +5138,82 @@ log 目錄：`/tmp/fu29-logs/`；shim 目錄：`/tmp/fu29-emptyset-shim/`（假 
   「同檔宣告為 `map[` 的識別字」，不涵蓋「經由 helper 間接走訪 map」的情形。
 
 
+### FU-20261016-32 — 風控語意「匯出但零生產引用」8 條：3 條**明示未啟用**、3 條**其實不是缺陷**（同語意由別的入口生效），2 條（停止交易閘門寫入端、回撤曝險上限）**真的沒生效**（只提案）
+
+- **狀態**：`done`
+- **記錄日期**：2026-10-16 ／ **完成於**：2026-10-16（PR #2269；branch `fix/20261016-exported-risk-symbols`）
+- **嚴重度**：**P2（文件／宣告說謊；其中 2 條是人看得懂但機器不會做的風控承諾）** —— 沒有任何一條造成錯誤計算或壞資料：
+  8 條全是「名稱在講槓桿、生產路徑沒有它」。最嚴重的是 `SetHaltTrading`（停止交易閘門的寫入端無人呼叫 ⇒
+  `RiskGate.Check` 的硬停分支在生產上**不可達**）與 `GetPositionSizeAdjustment`（回撤決策的**曝險上限從未到達 sizing**）。
+- **來源**：`FU-20260930-01` 第 4 節「同型掃描（只列清單、未逐條處置）」（522／53 那份清單）；2026-10-16 root 指派本車道收斂。
+- **權威清單**：[`docs/specs/exported-risk-symbols-audit-20261016.md`](../specs/exported-risk-symbols-audit-20261016.md)
+  （判準、掃描指令、8 條逐條判定、負向證明、附錄 A 其餘 84 條候選）。
+
+- **★ 第一步就是機械式複現（不照抄敘述）**：AST 掃描 `origin/main` `012f9845e`
+  ⇒ `decls=20627 zero_prod=1009 zero_prod_zero_test=272`；再以 `git grep` 逐字複驗。
+  原始的 **522／53 無法逐字複現**（該車道只留文字判準、未留腳本；lexical 與 AST 的誤差方向相反）：
+  我以宣告為單位得 **652**、名稱去重得 **581**、窄版風控語意得 **92**。
+  ⇒ 本條**不沿用** 522／53，處置上限就是指定的 **8 條**，其餘 84 條只列清單。
+
+- **8 條逐條結論（每條：位置 → 判定）**：
+  1. `ModulatePosition`（`internal/orchestrator/industry_cycle_modulator.go:72`）→ **明示未啟用**。
+     生產入口是 `CollectModulationSteps`（`executor_collection.go:349`），本方法不在那條路上；
+     且 `ModulatorWiringActive=false`（`plugin_registry.go:314`）＋ `SetCycleCard` 零生產呼叫者（雙重關閉）。
+  2. `ModulateScore`（同檔 `:90`）→ **明示未啟用**（同 1 的兩道閘門）。
+  3. `CycleAmplifiedMultiplier`（`internal/narrative/seasonal_bridge.go:36`）→ **明示未啟用**。
+     活著的是 `SeasonalMultiplier`（`industry.NarrativeSeasonalProvider`，`seasonality.go:287,525`）；
+     週期放大不在介面裡，且 `SeasonalBridge.SetCycleCard`（`:28`）零生產呼叫者 ⇒ `cycleCard` 恆 nil ⇒ 就算被呼叫也回傳 base。
+  4. `GetRegimeMultiplier`（`internal/sim/dynamic_threshold.go:121`）→ **其實不是缺陷**：純讀取子，
+     同值已在 `GetThreshold`/`calculateThresholdUnsafe` 內套用。（**另一件事**：該引擎的讀取端全空 ——
+     `GetThreshold`/`GetCurrentThreshold`/`GetStats` 皆 0 生產呼叫者，生產只有 `SetRiskAppetite`；只記錄、未改。）
+  5. `ApplyRiskFilters`（`internal/live/agent_runner.go:221`）→ **其實不是缺陷**：控制層已在分析管線套用
+     （`executor_pipeline.go:131` → `executor_control.go:104`），實盤 runner 收到的是 `input.FinalRecommendations`
+     （`agent_runner.go:65`）；再呼叫反而是**重複過濾**（第二次輸入已被裁過，`blocked_count` 也失真）。
+  6. `SetHaltTrading`（`internal/live/risk_gate.go:76`）→ **該接線，只提案**。`RiskGate.Check` 有生產呼叫者
+     （`order_manager.go:128`），但 `haltTrading` 的三個寫入端（`SetHaltTrading`／`SyncHaltFromCircuitState`／
+     `SyncRiskGateFromCircuitBreaker`）**全部 0 生產呼叫者** ⇒ 硬停分支不可達。
+     提案三個選項見稽核文件 §2.6；**未動任何生產風控行為**。
+  7. `ShouldHaltTrading`（`internal/risk/macro_aware_drawdown.go:248`）→ **其實不是缺陷**：述詞已在生產內聯
+     （`strategy_evolver.go:200` 的 `drawdown.Action >= risk.DrawdownSevere` ⇒ `StrategySuspended`；`:183` 同式繞冷卻）。
+  8. `GetPositionSizeAdjustment`（同檔 `:243`）→ **該接線，只提案**。`Evaluate` 有生產呼叫者
+     （`system_risk_session.go:380`），但 `decision.MaxExposure` 的兩個讀取者（本方法、`CalculatePortfolioAdjustment`）
+     **都 0 呼叫者**，`EvaluateWithPortfolio` 與 `PortfolioRiskAdjuster.AdjustWeights` 的唯一呼叫者是 `cmd/stress-test`
+     ⇒ `DrawdownLevel.MaxExposure`（1.0/0.85/0.65/0.40/0.10）只是一張意圖表，緊急回撤不會把曝險壓到 10%。
+
+- **★ 動手前對 F-item 敘述的更正三處**（讀碼結果）：
+  ① 「`ModulatePosition` 的輸入 `CycleStatusCard` 已在生產消費」→ 卡片有生產消費者，但**這條輸入鏈沒有**：
+     `IndustryCycleModulator.SetCycleCard` 零生產呼叫者。
+  ② 「`SyncRiskGateFromCircuitBreaker` 的 doc 說 orchestrator 會排程呼叫」→ **沒有**任何排程呼叫，
+     該句是與現況不符的文件（已改寫為 `NOT WIRED`）。
+  ③ 522／53 不可逐字複現（見上），故不沿用其數字。
+
+- **修法（只做兩件事，且都不改計算路徑）**：
+  1. **明示未啟用／不得呼叫**：在 6 個符號（§2.1／2.2／2.3／2.5／2.6／2.8）的 doc comment 加
+     `DECLARED ONLY / NOT ENFORCED (FU-20261016-32)`（`ApplyRiskFilters` 用 `NOT A LIVE RISK GATE`、
+     §2.4 用稽核註記、§2.7 用 `NOT A MISSING CONTROL`），各自附**重新認證條件**（含端到端測試要求）。
+  2. **雙向守門**：新增 `internal/risk/exported_risk_levers_wiring_test.go`（表驅動 8 列）：
+     `wired=false` 而有生產引用 ⇒ 紅；`wired=true` 而無生產引用 ⇒ 紅；另有「表不能腐爛」檢查
+     （定義檔必須仍宣告該符號）。
+  另更正 `internal/risk/doc.go` 的「Decision flow」——原文把 `GetPositionSizeAdjustment`／`ShouldHaltTrading`
+  寫成流程的一部分，未說哪一步沒生效。
+  **未動**：所有計算、`DrawdownLevel` 數值、`RiskGate.Check`、任何 gate 行為；**未加** `Deprecated:`；
+  **未移除**任何符號（API surface golden `internal/{risk,sim}/testdata/*_api.golden.json` 因此不需更新）。
+- **負向證明（修前／修後可區分）**：修前**沒有**這支守門測試 ⇒ 接線不會變紅。
+  修後四個突變全部咬住（逐一實測後還原；`cp` ＋ `sha256` 逐位元組相等，`21ea43aa…f49524`）：
+  | 突變 | 結果 |
+  |---|---|
+  | M1 新增生產檔呼叫 `SetHaltTrading`（`go build ./internal/live/` rc=0） | **rc=1** `SetHaltTrading now has production consumer(s): [internal/live/zz_fu32_probe.go] …`；移除後 rc=0 |
+  | M2 `GetPositionSizeAdjustment` 列改 `wired: true` | **rc=1** `… is declared wired but no non-test production file references it …`；還原後 rc=0 |
+  | M3 列上符號名改一字（模擬改名） | **rc=1** `… no longer declares it — update or drop this guard row`；還原後 rc=0 |
+  | M4 同套件新增只「提及」符號的生產檔 | **rc=1** `… now has production consumer(s): [internal/risk/zz_fu32_probe2.go]`（證明 `extraSkip` 不是整包跳過）；移除後 rc=0 |
+
+- **已知限制**：① 掃描器的選擇子近似（`x.Name` 一律算引用）⇒ 零引用清單**傾向低估**（保守方向）。
+  ② `DynamicThresholdEngine` 讀取端全空 —— 比 `GetRegimeMultiplier` 大得多的缺口，需改生產門檻計算 ⇒ 未動。
+  ③ 兩條「該接線」的**行為變更未執行**（依「模糊決策只提案」）：
+  停止交易寫入端（3 選項）與回撤曝險上限（3 條件）都需業主決定。
+  ④ 附錄 A 其餘 84 條候選未判定。
+
+
 ## 相關文件
 
 - [universe-scoring-ranked-zero-20260925.md](universe-scoring-ranked-zero-20260925.md)
