@@ -4171,7 +4171,7 @@ yahoo session 的 body（把 session 自己的 `crumb`／`cookie` 當字面 secr
   整包忽略，測試檔屬連帶受害；本 PR 以 `-f` 明確加入版控，未改 `.gitignore`。
 ### FU-20261016-17 — `internal/marketdata` 的 integration 測試在 CI **確定性 SKIP** ⇒ 該目錄目前是「白名單豁免」、零 CI 覆蓋
 
-- **狀態**：`open`
+- **狀態**：`done`（2026-10-16 收斂；處置與證據見條文末）
 - **記錄日期**：2026-10-16
 - **來源**：`FU-20261015-01` 的收斂（PR [#2244](https://github.com/kaecer68/atlas-go/pull/2244)）＋ 新守門 `scripts/ci/check_integration_filter_sync.py` 的豁免機制
 - **事實**：
@@ -4196,6 +4196,71 @@ yahoo session 的 body（把 session 自己的 `crumb`／`cookie` 當字面 secr
   守門會直接轉綠；**只刪豁免、不補條目**會被守門抓成 `uncovered` 紅燈（刻意設計，避免兩件事只做一半）。
 - **查法**：`bash scripts/ci/check_integration_filter_sync.sh`（應顯示 `⏭️ internal/marketdata ← exempt：…`）；
   `go test -tags=integration -run TestSectorIndexReader_ReadRange_RealFixture -v ./internal/marketdata/`（本機有真資料時才會真的跑）。
+
+**處置（2026-10-16；分支 `fix/20261016-test-credibility`）**
+
+**1. 最小複現：這個測試在兩種環境下**都**不是證據（F-item 敘述的兩處更正）**
+
+| 環境 | 指令（rc 從 log 讀） | 結果（逐字） |
+|---|---|---|
+| lane worktree（＝乾淨 checkout，無 `data/state`） | `go test -tags=integration -run TestSectorIndexReader_ReadRange_RealFixture -v ./internal/marketdata/` | `sector_index_reader_real_test.go:31: Real sector_index data directory not available` ＋ `--- SKIP: TestSectorIndexReader_ReadRange_RealFixture (0.00s)`（rc=0） |
+| `git archive HEAD` 純樹（CI 等價：gitignored 資料不存在） | 同上 | 同一行 SKIP（rc=0） |
+| **主 clone（有 334 個真 fixture 檔）** | 同上 | **`--- FAIL`**：`sector_index_reader_real_test.go:71: 2026-06-24 should be present in the real dataset after the sector_index backfill`（rc=1） |
+
+- **更正 ①：「本機有真資料時才驗得到」不成立——有真資料時它會紅。** 第三個斷言釘死一個歷史日期
+  （2026-06-24 的 backfill），而 repo 根的 runtime 資料是可變的：實測以 JSON 逐檔掃描
+  `data/state/sector_index` 的 334 個檔，**沒有任何一列** `2026-06-24`。⇒ 該測試在 CI/lane 是 SKIP、
+  在主 clone 是 FAIL，**兩種結果都不構成證據**（前者不比對、後者比對的是一個已不存在的資料承諾）。
+- **更正 ②：CI 走哪一個 SKIP 分支取決於殘留狀態。** 乾淨 checkout 走 `:31`
+  （`Real sector_index data directory not available`）；被引用的 run `38831941034` 走 `:46`
+  （`sector_index dir present but no parseable data for window`，該 run 的 integration 段 log 在
+  第 73851-73852 行，非本條原寫的 24353 行 —— 那組行號屬於另一次匯出）。**兩條分支都只是無條件不比對**。
+
+**2. 修法：合成 fixture（選項 ①）。為什麼不選「版控一個最小 fixture」**
+
+| 判準 | 合成 fixture（採用） | 版控最小 fixture（未採用） |
+|---|---|---|
+| 與既有資料治理衝突 | 無（`t.TempDir()`，不碰 `data/state/**`） | 要把資料檔放回 gitignored 樹 ⇒ 需新增 `.gitignore` 例外，長期在「runtime 資料」與「測試資料」之間製造歧義 |
+| 抗資料輪替 | 免疫（fixture 由測試自己造） | 仍釘死歷史日期 ⇒ 資料一輪替就再壞一次（本票第一個死因） |
+| 能覆蓋壞環境輸入 | 能（壞 JSON／異 schema／檔名不符契約都可造） | 只能覆蓋「正常資料」 |
+
+- `internal/marketdata/sector_index_reader_real_test.go` 重寫為
+  `TestSectorIndexReader_ReadRange_RuntimeShapedDataset`（保留 `//go:build integration`；**全檔已無 `t.Skip`**）。
+  fixture 形狀照真目錄：18 產業 batch 檔（含視窗外的 2026-05-29／2026-07-13）、同一天的 8 產業 legacy
+  單日檔（值與 native 不同 ⇒ 來源優先可鑑別）、只有 legacy 檔覆蓋的 2026-07-02（含
+  `ai_supply_chain`／`electronics` 折疊成同一 L1 的平均）、壞 JSON、異 schema、檔名不符契約的
+  `sector_data.json`（payload 合法且在視窗內 ⇒ 用來釘「不得漏入」）。
+- **6 類精確值斷言**（不是「有檔案」）：① 四個 native 日期 × 18 產業逐值等於 fixture spec；
+  ② 來源優先（legacy 值不同且必須輸）；③ legacy-only 日期逐值 + 同 L1 折疊為算術平均；
+  ④ 視窗濾除（含端點入、窗外除）；⑤ backfill 日有值且每個產業都有、無檔案覆蓋的日子仍缺席
+  （missing ≠ 0）；⑥ 壞檔／異名檔被忽略且不 leak，另外全域 finite 檢查與「兩次呼叫結果相同」。
+- 刪掉 `findSectorIndexDataDir`（唯一用途是探 repo 根的 runtime 目錄；留著只會誘人再加 SKIP）。
+
+**3. CI 過濾器：豁免 → 白名單（守門 rc=0）**
+
+`.github/workflows/ci-cd.yml` 的 `integration:` 段：`# integration-filter-exempt: internal/marketdata — …`
+與其理由整段移除，改為 `- 'internal/marketdata/**'`（附新的理由註解，寫明改成合成 fixture 後不再 SKIP）。
+`bash scripts/ci/check_integration_filter_sync.sh` ⇒ **rc=0**，輸出 `✅ internal/marketdata ← internal/marketdata/** (sector_index_reader_real_test.go)`；
+摘要 `25 目錄：24 涵蓋 + 1 豁免`（豁免只剩 `cmd/atlas-mcp-setup`）。
+
+**4. 負向證明（`cp` 備份還原；reader 以 sha256 逐位元組驗回）**
+
+| # | 情境 | 結果（逐字） |
+|---|---|---|
+| A | 修前（`git archive HEAD` 純樹，舊檔） | `--- SKIP: TestSectorIndexReader_ReadRange_RealFixture (0.00s)`（rc=0） |
+| B | 修後（**同一棵純樹**，只換測試檔） | `--- PASS: TestSectorIndexReader_ReadRange_RuntimeShapedDataset (0.00s)`（rc=0） |
+| C | 突變 1：`sector_index_reader.go` 的 legacy 覆寫保護短路（`alreadyCovered` ⇒ `false && alreadyCovered`，來源優先失效） | 紅燈 `2026-06-03 electronics = 2.625: the legacy file overrode the 18-industry file (native value is -6.75, legacy value is 3)` ＋ 6 個逐值不符（rc=1） |
+| D | 突變 2：native 階段移除視窗過濾 | 紅燈 `ReadRange returned 2026-05-29, which is outside the requested window`（rc=1） |
+| — | 還原 | `shasum -a 256 internal/marketdata/sector_index_reader.go` = `da04308be3259da04999d14722d08f6258e98f01f752151a6c635e66529a5a3d`（與突變前一致） |
+
+**5. 已知限制**
+
+- 白名單的代價：每個改到 `internal/marketdata` 的 PR 多跑一趟 integration suite（實測 806s／820s／864s），
+  這次買到的是 sector_index 讀取路徑的真覆蓋。若日後要省 CI 分鐘，等價做法是**拿掉該測試的
+  `//go:build integration`**（fixture 已合成 ⇒ 預設 unit job 也會真的跑）**並同時移除白名單條目** ——
+  兩件事必須同一個 commit，否則守門會紅（只刪測試檔不刪白名單 ⇒ 反向條目；只刪白名單不刪豁免 ⇒ uncovered）。
+- 合成 fixture 驗的是**讀取端契約**（多檔折疊、來源優先、視窗、壞檔耐受），不是 upstream payload 的真實形狀；
+  後者屬 `twse_sector_index_provider_test.go`／`finmind_sector_index_provider_test.go` 的範圍。
 
 ### FU-20261016-18 — `check_doc_links.sh` **永遠不紅**（BSD grep 無 `-rnP` ＋ 吞錯）⇒ 死閘門
 
@@ -4315,13 +4380,91 @@ yahoo session 的 body（把 session 自己的 `crumb`／`cookie` 當字面 secr
 
 ### FU-20261016-20 — 測試以固定相對層數（`"../.."`）解析 module root ⇒ **lane 本機假綠、CI 紅**
 
-- **狀態**：`open`
+- **狀態**：`done`（2026-10-16 收斂；處置與證據見條文末）
 - **記錄日期**：2026-10-16
 - **嚴重度**：P1（假綠類，已實際造成一次 CI 紅與一輪重跑）。
 - **來源**：`FU-20260930-12` 實作時（PR #2246）由 **CI 抓到、本機抓不到**；root 已記錄。
 - **事實**：`internal/stockpicker/daily_update_pool_integration_test.go` 用 `"../.."` 解析 repo 根以讀 `configs/parameters.json`，但呼叫點在 `t.Chdir(root)` **之後** ⇒ CI checkout 於 `/home/runner/work/atlas-go/atlas-go`（比 lane worktree 多一層）即失敗：`read parameters.json: open /home/runner/work/configs/parameters.json: no such file or directory`。**本機之所以綠，是因為 lane worktree 的 `../..` 剛好是主 clone（那裡有 `configs/parameters.json`）** ⇒ 典型本機假綠。已修（`48d3fa034`）：改為從 cwd 往上找 `go.mod`，並把解析出的路徑印進錯誤訊息。
 - **判準（建議）**：測試**不得**用固定相對層數定位 repo 根；一律「從 cwd 往上找 `go.mod`」，且失敗訊息必須**指名解析出來的路徑**。
 - **建議處置**：① 機械掃描 `*_test.go` 內 `"../.."`／`filepath.Join("..","..")` 之類的 repo-root 假設，逐筆判定 ② 若數量可觀，加一道守門（新測試**禁止**此形狀）③ 相關記憶：global `atlas_lane_test_cwd_traps_2026_10_16`（PR #2246 車道寫入）。
+
+**處置（2026-10-16；分支 `fix/20261016-test-credibility`）**
+
+**1. 最小複現：同一段程式碼，lane 綠、CI 深度紅（探針**不進版控**，跑完即刪）**
+
+探針把失敗機制原樣重演：先 `t.Chdir(模組根)`，再解析舊寫法的 `filepath.Abs("../..")`，檢查該目錄有沒有
+`configs/parameters.json`；然後用新寫法 `reporoot.FromCwd()` 再解析一次。兩個深度各跑「舊／新」：
+
+| 深度 | 舊寫法 `filepath.Abs("../..")`（從模組根） | 新寫法 `reporoot.FromCwd()` |
+|---|---|---|
+| lane worktree（`<主 clone>/.worktrees/fu-test-credibility-20261016`） | ⇒ `/Users/kaecer/workspace/atlas`（**有** configs）⇒ PASS | ⇒ lane 根（有 configs）⇒ PASS |
+| CI 深度（`/tmp/fu-testcred-ci/atlas-go/atlas-go`，與 `/home/runner/work/atlas-go/atlas-go` 同構） | ⇒ `/tmp/fu-testcred-ci`（**沒有** configs）⇒ **FAIL**：`old-style resolution: /tmp/fu-testcred-ci has no configs/parameters.json` | ⇒ 該樹根（有 configs）⇒ PASS |
+
+⇒ **一個綠一個紅**，且換成新寫法後兩個深度都綠。逐字 log：
+`probe_fu20_test.go:43: old  filepath.Abs("../..") = …`／`:44: new  reporoot.FromCwd() = …`。
+
+**2. 根因（比原敘述更精確的一句）**
+
+不是「`../..` 的層數剛好錯」，而是**解析時機與 cwd 假設**：呼叫點在 `t.Chdir(root)` 之後才解析 `../..`，
+於是答案變成「模組根的父目錄的父目錄」；lane 之所以綠，是因為
+`<主 clone>/.worktrees/<lane>` 往上兩層**剛好是主 clone**（那裡有 `configs/parameters.json`），
+也就是「錯的答案在本機看起來是對的」。CI checkout 在位元組上同深度但父目錄不同 ⇒ 紅。
+
+**3. 修法：共用 helper（`internal/testutil/reporoot`）＋ 逐筆判定**
+
+- 新增 `internal/testutil/reporoot`：`Find(startDir)`／`FromCwd()`／`RequireEntries()`。
+  **錯誤訊息指名解析出的路徑**（`no go.mod above <abs> (search stopped at <dir>)`、
+  `module root resolved to <root>, which has no <entry>`），並有 6 個 hermetic 測試（巢狀 module 取最近者、
+  找不到時必須指名搜尋路徑、`RequireEntries` 必須指名解析出的 root）。
+- 機械掃描 `git ls-files '*_test.go'`（1281 個檔）得 **166 行**；逐筆判定後分兩類：
+  - **Tier A（把某個值當 repo 根算出來）＝ 29 處，全部改掉**：
+    `internal/experiment`（executor ×3、judge ×4、auto、orchestrator_integration）、
+    `internal/monitoring/dashboard_api_test.go` ×3（`os.Chdir`）、`internal/industry/linkage_test.go`、
+    `internal/apigateway/register_adapters_retired_test.go`、`internal/orchestrator/inert_declarations_test.go` ×3、
+    `internal/eventdriven/sector_prediction_status_test.go`、`internal/stockpicker/daily_update_pool_lifecycle_test.go`、
+    `internal/config/parameters_load_dir_test.go`、`internal/marketdata/sector_data_provider_state_test.go`、
+    `internal/llm/config_test.go`、`cmd/atlas/prism_wiring_test.go`（`Abs(Join(..))` ×2 ＋ 3 個固定層數 config 路徑）、
+    `cmd/check-channel-consistency/main_test.go` ×2、`cmd/backfill-period-history`、
+    `cmd/backfill-quotes-range`／`cmd/backfill-futures-bars`（`const repoRootFromCmd = "../.."` ⇒ `repoRootFromCmd(t)`）、
+    `cmd/experimental/sector-allocation-closure-preflight`（`Abs(Join("..","..",".."))`，三層）。
+    `os.Chdir("../..")` 的 4 處原本在失敗時 `t.Skipf`（＝安靜放過）⇒ 改成 `t.Fatalf` 並指名解析出的路徑。
+  - **Tier B（`"../../configs/parameters.json"`、`testdb.Pool(t, "../../sql/migrations")` 這類直接吃固定層數字面值）
+    ＝ 60 行 / 33 檔，本票**不改**，改以**額度**凍結**（理由：每一處都綁一個具體套件，其中多支要真 PG 才驗得到，
+    在一個 PR 裡全改是無謂風險；但不設上限就會持續增長）。清單見 `scripts/ci/test-repo-root-baseline.json`。
+- **逐筆判定的兩個反例（不改，屬「輸入」而非「假設」）**：`cmd/mapgen/astutil/parser_test.go:15` 與
+  `internal/config/parameters_compliance_test.go:63` 的 `[]string{".", "..", "../..", …}` 是**餵給「往上找」邏輯的候選清單**
+  （本身就在處理任意深度），不是 repo-root 定位 ⇒ 留在 Tier B 額度內。
+
+**4. ★ 守門：`scripts/ci/check_test_repo_root.py`（`make ci-gate` 內）**
+
+| 層級 | 規則 | 紅燈條件 |
+|---|---|---|
+| Tier A（硬禁止，無額度） | A1 `os.Chdir("../..")`／A2 `filepath.Abs/Clean("../..")`／A3 `Abs/Clean(Join("..", ".."))`／A4 `Abs/Clean(Join(<dir>, "../.."))`／A5 `root* = "../.."`／A6 `root* = filepath.Join("..", "..")` | 命中即 rc=1，輸出 `path:line` ＋ 規則名 |
+| Tier B（額度 ratchet） | 其餘 `"../.."` 開頭字面值／`Join("..", "..")` | 超過該檔額度（新檔額度 0）即 rc=1；用量下降只印 stale（不紅燈，避免多 lane 互踩） |
+
+- 註解行（行首 `//`）不判違規（註解要能**說明反例**）；掃不到任何 `*_test.go` ⇒ **rc=2**（空集合不得當通過）。
+- 契約測試 `tests/scripts/test-test-repo-root-guard.sh`（13 case，hermetic，已納入 `make ci-gate`）：
+  Tier A 命中／同位置改 helper 則綠（鑑別力）／純註解不算／額度內綠／超額紅／新檔紅／用量下降印 stale／
+  Tier A 不被額度吞掉／空集合 rc=2／`--json` 可解析／**兩個 mutation 自證**（把 `CLIMB_LITERAL`、`TIER_B`
+  改成永不匹配 ⇒ 對應紅燈消失）／不動呼叫者 repo（HEAD、index 檔數、baseline sha256 不變）。
+
+**5. 負向證明（突變打在行為行；`cp` 還原並以 sha256 驗回）**
+
+| # | 動作 | 結果 |
+|---|---|---|
+| A | 把 `internal/config/parameters_load_dir_test.go` 的 `reporoot.FromCwd()` 突變回修前寫法 `filepath.Abs(filepath.Join("..", ".."))`（sha256 `f123a13f…` ⇒ `11b99f03…`） | `bash scripts/ci/check_test_repo_root.sh` ⇒ **rc=1**，紅燈原文：`internal/config/parameters_load_dir_test.go:11: [A3 filepath.Abs/Clean(Join("..", ".."))] root, err := filepath.Abs(filepath.Join("..", ".."))` ＋ `❌ 測試用固定相對層數定位 repo 根：lane 本機可能假綠、CI 紅（見 FU-20261016-20）` |
+| B | `cp` 還原同一檔 | sha256 回到 `f123a13f89fac4ec9fabe61a1ef6f9bcde6c7ffd2f54826a1fbf6ac6e500e1d8`；守門 rc=0 |
+| C | 契約測試內的兩個 mutation（`CLIMB_LITERAL`／`TIER_B` 改成永不匹配） | 對應的紅燈消失 ⇒ 證明那些紅燈**來自偵測器**，不是來自其他斷言 |
+
+**6. 已知限制**
+
+- Tier B 的 60 行 / 33 檔仍是固定層數假設（額度凍結）。它們的失敗模式與 Tier A 相同（套件搬家或
+  在解析前 `Chdir` 就會錯），只是每一處都需要該套件自己的驗證（多支要真 PG）。收斂路徑：逐套件改用
+  `reporoot`，然後 `bash scripts/ci/check_test_repo_root.sh --update-baseline` 下調額度。
+- Tier B 的額度是**每檔行數**（不是行內容指紋）：把一整段搬去別的行不會被發現；但**新增**一定會被發現，
+  這是本守門要防的東西（新測試不得再引入）。
+- 守門只掃 `*_test.go`。非測試的 `cmd/**` CLI 也有類似寫法（`cmd/check-maturity` 等已有自己的 walk-up
+  `findRepoRoot`）——不在本票範圍。
 
 ### FU-20261016-21 — `ci-full` 的觸發判定把「git 失敗」與「真的只改文件」混為一談 ⇒ 最強閘門可被靜默跳過（`Makefile` 的副本還已與 hook 分歧）
 
