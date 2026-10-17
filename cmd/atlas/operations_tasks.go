@@ -6,7 +6,7 @@ package main
 // snapshot work that runs independently of the realtime / live trading
 // paths.
 //
-// Tasks (10 total):
+// Tasks (11 total):
 //   1. system_health_monitor    — healthMonitor.RunDaily (24h)
 //   2. auto_backfill            — daily-replay-sync binary (24h)
 //   3. fundamentals_staleness_check — monitor.Alert on >90d (24h)
@@ -17,6 +17,7 @@ package main
 //   8. silicon_cycle_update     — industrySvc.UpdateSiliconIndicators (10m)
 //   9. metrics_snapshot         — repo.SaveSnapshot (60s)
 //  10. government_flow_aggregate — GovernmentBrokerAggregator daily (24h, BK-13)
+//  11. ledger_archive          — internal/ledger.Archiver retention + size rotation (6h, FU-20261012-05)
 
 import (
 	"context"
@@ -160,6 +161,12 @@ func registerOperationsTasks(d operationsDeps) {
 		},
 	})
 	log.Printf("[Gateway] registered storage_cleanup background task (24h interval)")
+
+	// Register ledger_archive: the JSONL ledger archiver (FU-20261012-05). The
+	// storage_cleanup task above only *deletes* aged files under fixed
+	// subdirectories; the append-only ledger JSONL files were handled by
+	// internal/ledger.Archiver, which had zero call sites before this wiring.
+	registerLedgerArchiveTask(d.taskMgr, d.cfg)
 
 	var dashboardEC *industry.EventCalendar
 	if d.dashboard != nil {
@@ -539,20 +546,11 @@ func runAutoBackfill(ctx context.Context, cfg config.Config, now time.Time) erro
 	if err != nil {
 		return fmt.Errorf("backfill replay read: %w", err)
 	}
-	if tz, tzErr := time.LoadLocation("Asia/Taipei"); tzErr == nil {
-		now = now.In(tz)
-	}
-	end := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
-	if now.Hour() < 15 || (now.Hour() == 15 && now.Minute() < 30) {
-		end = end.AddDate(0, 0, -1)
-	}
-	start := latestDate.AddDate(0, 0, 1)
-	for start.Weekday() == time.Saturday || start.Weekday() == time.Sunday {
-		start = start.AddDate(0, 0, 1)
-	}
-	for end.Weekday() == time.Saturday || end.Weekday() == time.Sunday {
-		end = end.AddDate(0, 0, -1)
-	}
+	// Both boundaries are Asia/Taipei midnights (FU-20260927-09): the CSV date
+	// arrives as UTC midnight from the date-only parser, so it must be
+	// normalized before it is compared with a trading-day boundary. See
+	// replay_backfill_window.go for the convention.
+	start, end := replayBackfillWindow(latestDate, now)
 	// backfillErr is kept instead of returned immediately: the fetch outcome
 	// must not decide whether the JSONL gets refreshed (R1, adversarial
 	// review 2026-09-27 — the previous `return err` here reproduced the very
@@ -563,8 +561,9 @@ func runAutoBackfill(ctx context.Context, cfg config.Config, now time.Time) erro
 		// Nothing to fetch. This branch used to `return nil` outright, which
 		// also skipped the conversion. It now logs and falls through, so the
 		// JSONL gate below is always evaluated.
-		log.Printf("[Gateway] backfill gap: none (csv_latest=%s target=%s) — fetch skipped, JSONL freshness gate still evaluated",
-			latestDate.Format(dateLayout), end.Format(dateLayout))
+		log.Printf("[Gateway] backfill gap: none (csv_latest=%s target=%s timezone=%s now=%s) — fetch skipped, JSONL freshness gate still evaluated",
+			recordTaipeiDate(latestDate).Format(dateLayout), end.Format(dateLayout),
+			replayDateZoneName, now.In(taipeiLocation()).Format(time.RFC3339))
 	} else if err := runReplayGapBackfill(ctx, absWorkDir, cfg.ReplayDataPath,
 		start.Format(dateLayout), end.Format(dateLayout)); err != nil {
 		backfillErr = err
@@ -754,10 +753,10 @@ func syncReplayJSONLFromCSV(csvPath, jsonlPath string) error {
 // that weekend rollbacks don't double-subtract when the original day
 // is already a non-trading day.
 func currentTaipeiTradingDate(now time.Time) time.Time {
-	taipei, err := time.LoadLocation("Asia/Taipei")
-	if err != nil {
-		taipei = time.UTC
-	}
+	// One shared *time.Location instance for the whole package (taipeiLocation
+	// caches it), so values produced here and in replay_backfill_window.go are
+	// comparable by location as well as by instant.
+	taipei := taipeiLocation()
 	local := now.In(taipei)
 	d := time.Date(local.Year(), local.Month(), local.Day(), 0, 0, 0, 0, taipei)
 	// Pre-close cutoff: 15:30 Taipei (TWSE close 13:30 + 2h settlement).

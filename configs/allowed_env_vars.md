@@ -29,6 +29,12 @@
 | `ATLAS_STATE_DIR` | 狀態目錄路徑 | `data/state` |
 | `ATLAS_DATA_DIR` | 資料根目錄路徑（provider cache files 等寫入此目錄下的 `state/`） | `/app/data` |
 | `ATLAS_LEDGER_DIR` | Ledger 持久化目錄 | `data/state` |
+| `ATLAS_LEDGER_ARCHIVE_ENABLED` | `ledger_archive` 背景任務開關：把 append-only JSONL ledger 檔歸檔到 `<ATLAS_LEDGER_DIR>/archive`（FU-20261012-05；`false`＝完全不歸檔） | `true` |
+| `ATLAS_LEDGER_ARCHIVE_RETENTION_DAYS` | 保留政策（天數）：ledger 檔 mtime 超過此天數即**搬移**進 `archive/`（不刪資料） | `365` |
+| `ATLAS_LEDGER_ARCHIVE_MAX_FILE_SIZE_MB` | 保留政策（大小）：仍在寫入的 ledger 檔達到此大小時 gzip 複製進 `archive/` 再就地截斷 | `100` |
+| `ATLAS_LEDGER_ARCHIVE_FILES_PER_RUN` | 單次執行最多處理幾個檔（避免一次長時間 IO；未處理的下一輪接手） | `50` |
+| `ATLAS_LEDGER_ARCHIVE_PRUNE_DAYS` | 刪除 `archive/` 內舊檔的天數；`0`＝永不刪除（歸檔只搬不刪） | `0` |
+| `ATLAS_LEDGER_ARCHIVE_GLOBS` | 掃描樣式（相對 `ATLAS_LEDGER_DIR`，逗號分隔） | `*.jsonl,alerts/*.jsonl` |
 | `ATLAS_EXCHANGE_RATE_CACHE` | ExchangeRate provider 跨日 daily cache 檔案路徑（覆寫預設 `ATLAS_DATA_DIR/state/exchange_rate_daily.json`） | 空（未設定時用 `ATLAS_DATA_DIR/state/exchange_rate_daily.json`） |
 | `ATLAS_STOCKPICKER_DUAL_WRITE` | stockpicker 每日更新的 PG 主寫入開關（SSOT→PG batch B）：`false`＝kill switch，整條 run 退回 SQLite 主寫入且零 PG 寫入 | `true` |
 | `ATLAS_STOCKPICKER_SQLITE_MIRROR` | stockpicker 每日更新是否另外把 PG 主寫入的 rows 鏡射進 job-local SQLite artifact（`data/state/atlas.db`） | `false`（關閉時該檔既不開啟也不建立；C7 2026-10-13） |
