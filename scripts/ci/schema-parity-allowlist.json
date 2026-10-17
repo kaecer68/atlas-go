@@ -1,0 +1,156 @@
+{
+  "_doc": [
+    "PG（sql/migrations/*.up.sql）與 SQLite（internal/ledger/sqlite_core.go 的 CREATE TABLE ＋ additiveMigrations ＋ 各 store 的延遲 ALTER）逐表 schema 比對的豁免清單。",
+    "守門：internal/ledger/schema_parity_test.go 的 TestSchemaParity_PGMigrationsVsSQLite（由 scripts/ci/check_schema_parity.sh 在 make ci-gate 執行）。",
+    "classes：pg_only_tables（PG 有、SQLite 從未實作的表）／sqlite_only_tables／column_differences（某側獨有的欄）／type_differences／nullability_differences（可空性不一致）。",
+    "每筆都必須有 reason；backend 只填 pg 或 sqlite（該欄由哪一側獨有）。",
+    "★ allowlist 不許腐爛：某筆差異若不再出現（已修好或敘述過期）⇒ 守門紅燈（stale）。修好就把該筆刪掉，不要讓它變成永久的靜音。",
+    "規格與量測表：docs/specs/schema-parity-spec.md"
+  ],
+  "version": 1,
+  "pg_only_tables": [
+    {
+      "table": "alerts",
+      "reason": "其他子系統的 store 專用表（認證／監控指標／任務活性／推薦鏈）；SQLite ledger schema 從未實作同名表，因此沒有雙寫路徑可漂移"
+    },
+    {
+      "table": "atlas_mcp_tokens",
+      "reason": "其他子系統的 store 專用表（認證／監控指標／任務活性／推薦鏈）；SQLite ledger schema 從未實作同名表，因此沒有雙寫路徑可漂移"
+    },
+    {
+      "table": "baseline_history",
+      "reason": "其他子系統的 store 專用表（認證／監控指標／任務活性／推薦鏈）；SQLite ledger schema 從未實作同名表，因此沒有雙寫路徑可漂移"
+    },
+    {
+      "table": "capital_flow",
+      "reason": "其他子系統的 store 專用表（認證／監控指標／任務活性／推薦鏈）；SQLite ledger schema 從未實作同名表，因此沒有雙寫路徑可漂移"
+    },
+    {
+      "table": "channel_health",
+      "reason": "其他子系統的 store 專用表（認證／監控指標／任務活性／推薦鏈）；SQLite ledger schema 從未實作同名表，因此沒有雙寫路徑可漂移"
+    },
+    {
+      "table": "channel_secrets",
+      "reason": "其他子系統的 store 專用表（認證／監控指標／任務活性／推薦鏈）；SQLite ledger schema 從未實作同名表，因此沒有雙寫路徑可漂移"
+    },
+    {
+      "table": "experiment_lineage",
+      "reason": "其他子系統的 store 專用表（認證／監控指標／任務活性／推薦鏈）；SQLite ledger schema 從未實作同名表，因此沒有雙寫路徑可漂移"
+    },
+    {
+      "table": "export_statistics",
+      "reason": "其他子系統的 store 專用表（認證／監控指標／任務活性／推薦鏈）；SQLite ledger schema 從未實作同名表，因此沒有雙寫路徑可漂移"
+    },
+    {
+      "table": "metric_trends",
+      "reason": "其他子系統的 store 專用表（認證／監控指標／任務活性／推薦鏈）；SQLite ledger schema 從未實作同名表，因此沒有雙寫路徑可漂移"
+    },
+    {
+      "table": "metrics",
+      "reason": "其他子系統的 store 專用表（認證／監控指標／任務活性／推薦鏈）；SQLite ledger schema 從未實作同名表，因此沒有雙寫路徑可漂移"
+    },
+    {
+      "table": "otel_traces",
+      "reason": "其他子系統的 store 專用表（認證／監控指標／任務活性／推薦鏈）；SQLite ledger schema 從未實作同名表，因此沒有雙寫路徑可漂移"
+    },
+    {
+      "table": "recommendation_outcomes",
+      "reason": "其他子系統的 store 專用表（認證／監控指標／任務活性／推薦鏈）；SQLite ledger schema 從未實作同名表，因此沒有雙寫路徑可漂移"
+    },
+    {
+      "table": "symbol_industry",
+      "reason": "其他子系統的 store 專用表（認證／監控指標／任務活性／推薦鏈）；SQLite ledger schema 從未實作同名表，因此沒有雙寫路徑可漂移"
+    },
+    {
+      "table": "task_execution_events",
+      "reason": "其他子系統的 store 專用表（認證／監控指標／任務活性／推薦鏈）；SQLite ledger schema 從未實作同名表，因此沒有雙寫路徑可漂移"
+    },
+    {
+      "table": "task_executions",
+      "reason": "其他子系統的 store 專用表（認證／監控指標／任務活性／推薦鏈）；SQLite ledger schema 從未實作同名表，因此沒有雙寫路徑可漂移"
+    },
+    {
+      "table": "task_liveness",
+      "reason": "其他子系統的 store 專用表（認證／監控指標／任務活性／推薦鏈）；SQLite ledger schema 從未實作同名表，因此沒有雙寫路徑可漂移"
+    },
+    {
+      "table": "users",
+      "reason": "其他子系統的 store 專用表（認證／監控指標／任務活性／推薦鏈）；SQLite ledger schema 從未實作同名表，因此沒有雙寫路徑可漂移"
+    },
+    {
+      "table": "workspaces",
+      "reason": "其他子系統的 store 專用表（認證／監控指標／任務活性／推薦鏈）；SQLite ledger schema 從未實作同名表，因此沒有雙寫路徑可漂移"
+    }
+  ],
+  "sqlite_only_tables": [
+    {
+      "table": "outcomes",
+      "reason": "SQLite ledger 的舊 outcome 表；PG 側的對應表是 stock_signal_outcomes／recommendation_outcomes（不同 schema、不同寫入端），PG 從未建同名表，故不補"
+    }
+  ],
+  "column_differences": [
+    {
+      "table": "session_summaries",
+      "column": "summary_json",
+      "backend": "sqlite",
+      "reason": "SQLite 各 store 首次使用時延遲 ALTER 加的整包 summary JSON（session_store_sqlite.go／outcome_store_sqlite.go）；PG 用 broker_runtime／guard_outcomes／tax_snapshots 等型別化欄位存同一份內容，故不在 PG 補一個沒人寫的欄"
+    }
+  ],
+  "type_differences": [],
+  "nullability_differences": [
+    {
+      "table": "human_interventions",
+      "column": "intervention_id",
+      "backend": "pg",
+      "reason": "加列時刻意可為 NULL：SQLite 的 ALTER TABLE 無法在沒有 DEFAULT 的情況下加 NOT NULL 欄，且此變更前的既有資料列沒有該值；PG 端的 NOT NULL 只對 PG 寫入路徑有意義"
+    },
+    {
+      "table": "human_interventions",
+      "column": "time",
+      "backend": "pg",
+      "reason": "加列時刻意可為 NULL：SQLite 的 ALTER TABLE 無法在沒有 DEFAULT 的情況下加 NOT NULL 欄，且此變更前的既有資料列沒有該值；PG 端的 NOT NULL 只對 PG 寫入路徑有意義"
+    },
+    {
+      "table": "human_interventions",
+      "column": "type",
+      "backend": "pg",
+      "reason": "加列時刻意可為 NULL：SQLite 的 ALTER TABLE 無法在沒有 DEFAULT 的情況下加 NOT NULL 欄，且此變更前的既有資料列沒有該值；PG 端的 NOT NULL 只對 PG 寫入路徑有意義"
+    },
+    {
+      "table": "screening_rejects",
+      "column": "agent_id",
+      "backend": "pg",
+      "reason": "加列時刻意可為 NULL：SQLite 的 ALTER TABLE 無法在沒有 DEFAULT 的情況下加 NOT NULL 欄，且此變更前的既有資料列沒有該值；PG 端的 NOT NULL 只對 PG 寫入路徑有意義"
+    },
+    {
+      "table": "screening_rejects",
+      "column": "criterion",
+      "backend": "pg",
+      "reason": "加列時刻意可為 NULL：SQLite 的 ALTER TABLE 無法在沒有 DEFAULT 的情況下加 NOT NULL 欄，且此變更前的既有資料列沒有該值；PG 端的 NOT NULL 只對 PG 寫入路徑有意義"
+    },
+    {
+      "table": "screening_rejects",
+      "column": "time",
+      "backend": "pg",
+      "reason": "加列時刻意可為 NULL：SQLite 的 ALTER TABLE 無法在沒有 DEFAULT 的情況下加 NOT NULL 欄，且此變更前的既有資料列沒有該值；PG 端的 NOT NULL 只對 PG 寫入路徑有意義"
+    },
+    {
+      "table": "session_summaries",
+      "column": "time",
+      "backend": "pg",
+      "reason": "加列時刻意可為 NULL：SQLite 的 ALTER TABLE 無法在沒有 DEFAULT 的情況下加 NOT NULL 欄，且此變更前的既有資料列沒有該值；PG 端的 NOT NULL 只對 PG 寫入路徑有意義"
+    },
+    {
+      "table": "human_interventions",
+      "column": "session_id",
+      "backend": "sqlite",
+      "reason": "既有 SQLite 舊 DDL 自 2020 起就是 NOT NULL（SQLite 比 PG 嚴格）：兩個後端各寫各的、沒有互相鏡射，故 PG 接受 NULL 不會導致 SQLite 失敗；收斂要重建表，屬 FU-20261012-09 以外的獨立工作"
+    },
+    {
+      "table": "human_interventions",
+      "column": "symbol",
+      "backend": "sqlite",
+      "reason": "既有 SQLite 舊 DDL 自 2020 起就是 NOT NULL（SQLite 比 PG 嚴格）：兩個後端各寫各的、沒有互相鏡射，故 PG 接受 NULL 不會導致 SQLite 失敗；收斂要重建表，屬 FU-20261012-09 以外的獨立工作"
+    }
+  ]
+}

@@ -647,6 +647,15 @@ jobs:
         bash tests/scripts/test-integration-filter-sync.sh
         bash scripts/ci/check_integration_filter_sync.sh
 
+    # PG migrations 與 SQLite schema 的逐欄比對守門（FU-20261012-07 / FU-20261012-09）。
+    # 放進這個**無 paths filter** 的 job 是刻意的：它必須在「只改 migrations」或「只改
+    # sqlite_core.go」的 PR 上都跑到，否則漂移正好在被引進的那個 PR 上靜默。
+    # 契約測試以自帶 fixture 證明守門會紅（含 multi-ADD-COLUMN 的 regression probe）。
+    - name: Verify PostgreSQL/SQLite schema parity (guard + hermetic contract test)
+      run: |
+        bash tests/scripts/test-check-schema-parity.sh
+        bash scripts/ci/check_schema_parity.sh
+
   # Operations gate (migrated from ci.yml per 2026-07-03 pipeline audit Phase 2)
   operations:
     runs-on: ubuntu-latest

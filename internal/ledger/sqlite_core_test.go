@@ -90,3 +90,111 @@ func TestAddStockWinRateBreakEvenColumn_HealsLegacyTable(t *testing.T) {
 		t.Fatalf("stock_win_rate_by_regime must expose break_even_cost_rate: %v", err)
 	}
 }
+
+// legacyParityTableSchema is the EXACT pre-000030 (2026-10-16) SQLite shape of
+// the three tables that had drifted from their PostgreSQL counterparts, as
+// produced by the SQLite CREATE TABLE IF NOT EXISTS blocks of that revision.
+// The production 2026-10-12 file matches this shape: SQLite never had the PG
+// columns (operator/criterion/time/…), and PG never had the legacy columns
+// (action/reason/timestamp/…).
+const legacyParityTableSchema = `
+CREATE TABLE human_interventions (
+	id INTEGER PRIMARY KEY AUTOINCREMENT,
+	session_id TEXT NOT NULL,
+	symbol TEXT NOT NULL,
+	agent_id TEXT,
+	action TEXT,
+	timestamp TEXT
+);
+CREATE TABLE screening_rejects (
+	id INTEGER PRIMARY KEY AUTOINCREMENT,
+	session_id TEXT NOT NULL,
+	symbol TEXT NOT NULL,
+	reason TEXT,
+	timestamp TEXT,
+	factor_scores_json TEXT
+);
+CREATE TABLE session_summaries (
+	id INTEGER PRIMARY KEY AUTOINCREMENT,
+	session_id TEXT UNIQUE NOT NULL,
+	total_recs INTEGER,
+	passed_guards INTEGER,
+	rejected INTEGER,
+	timestamp TEXT
+);`
+
+// TestAddSchemaParityColumns_HealsLegacyTables is the regression test for
+// FU-20261012-07/-09: the SQLite half of the schema reconciliation must reach
+// databases that already exist. CREATE TABLE IF NOT EXISTS never alters an
+// existing table, so without addSchemaParityColumns every column that 000030
+// adds on the PostgreSQL side would be missing from the deployed atlas.db —
+// exactly the 2026-10-12 break_even_cost_rate failure mode.
+func TestAddSchemaParityColumns_HealsLegacyTables(t *testing.T) {
+	db, err := OpenSQLiteDB(":memory:")
+	if err != nil {
+		t.Fatalf("OpenSQLiteDB: %v", err)
+	}
+	defer func() { _ = db.Close() }()
+
+	// 1. Legacy file: the pre-000030 tables plus one row per table.
+	if _, err := db.Exec(legacyParityTableSchema); err != nil {
+		t.Fatalf("create legacy tables: %v", err)
+	}
+	if _, err := db.Exec(`INSERT INTO human_interventions (session_id, symbol, agent_id, action, timestamp)
+		VALUES ('2026-10-11', '2330', 'agent-x', 'veto', '2026-10-11T09:05:00Z')`); err != nil {
+		t.Fatalf("insert legacy human_interventions row: %v", err)
+	}
+	if _, err := db.Exec(`INSERT INTO screening_rejects (session_id, symbol, reason, timestamp, factor_scores_json)
+		VALUES ('2026-10-11', '2330', 'low volume', '2026-10-11T09:05:00Z', '{}')`); err != nil {
+		t.Fatalf("insert legacy screening_rejects row: %v", err)
+	}
+	if _, err := db.Exec(`INSERT INTO session_summaries (session_id, total_recs, passed_guards, rejected, timestamp)
+		VALUES ('2026-10-11', 12, 9, 3, '2026-10-11T13:30:00Z')`); err != nil {
+		t.Fatalf("insert legacy session_summaries row: %v", err)
+	}
+
+	// 2. Reproduce the drift: the PostgreSQL column names are still missing.
+	for _, q := range []string{
+		`SELECT operator FROM human_interventions`,
+		`SELECT criterion FROM screening_rejects`,
+		`SELECT risk_commentary FROM session_summaries`,
+	} {
+		if _, err := db.Exec(q); err == nil {
+			t.Fatalf("precondition broken: legacy table already answers %q", q)
+		} else if !strings.Contains(err.Error(), "no such column") {
+			t.Fatalf("want a no-such-column error for %q, got %v", q, err)
+		}
+	}
+
+	// 3. InitSchema heals it, and is idempotent.
+	if err := InitSchema(db); err != nil {
+		t.Fatalf("InitSchema: %v", err)
+	}
+	if err := InitSchema(db); err != nil {
+		t.Fatalf("InitSchema must be idempotent: %v", err)
+	}
+
+	// 4. Every PostgreSQL-side column now answers on the legacy tables, and the
+	//    legacy rows survive with their original values (nothing is rewritten).
+	for _, q := range []string{
+		`SELECT operator, intervention_id, type, target_symbol, value, reason FROM human_interventions`,
+		`SELECT criterion, agent_id, skill, threshold, actual_value, factor_scores FROM screening_rejects`,
+		`SELECT regime, order_count, broker_runtime, approval_id, tax_snapshots, after_tax_pnl, risk_commentary FROM session_summaries`,
+	} {
+		if _, err := db.Exec(q); err != nil {
+			t.Fatalf("after InitSchema %q must answer: %v", q, err)
+		}
+	}
+	var action string
+	if err := db.QueryRow(`SELECT action FROM human_interventions`).Scan(&action); err != nil || action != "veto" {
+		t.Fatalf("legacy human_interventions row must survive: action=%q err=%v", action, err)
+	}
+	var reason string
+	if err := db.QueryRow(`SELECT reason FROM screening_rejects`).Scan(&reason); err != nil || reason != "low volume" {
+		t.Fatalf("legacy screening_rejects row must survive: reason=%q err=%v", reason, err)
+	}
+	var totalRecs int
+	if err := db.QueryRow(`SELECT total_recs FROM session_summaries`).Scan(&totalRecs); err != nil || totalRecs != 12 {
+		t.Fatalf("legacy session_summaries row must survive: total_recs=%d err=%v", totalRecs, err)
+	}
+}

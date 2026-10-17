@@ -3366,13 +3366,19 @@ rc=1                            # ⇒ 修前無宣告常數、無守門測試：
 
 ### FU-20261012-07 — 同一張表有**兩份 schema**（PG migrations／SQLite `CREATE IF NOT EXISTS` ＋ 手寫清單）⇒ 每次新增欄位都可能只改一邊
 
-- **狀態**：`open`
+- **狀態**：`done`（**2026-10-16 PR #2273**；原敘述與標題全數保留，處置、證據與實測更正見文末）
 - **記錄日期**：2026-10-12
 - **來源**：2026-10-12 生產 P0（`/api/stock/win_rate` 503）根因
 - **事實**：`#2213` 在 `sql/migrations/000028` 補了 PG 的 `break_even_cost_rate`，但 SQLite 側的 `internal/ledger/sqlite_core.go`（`CREATE TABLE IF NOT EXISTS` ＋ `additiveMigrations` 清單 `:377-383`）未登記 ⇒ 生產 503（已由 #2218 修）。另全 24 張同名表**有 4 張欄位不一致**，其中 `outcomes` 在 PG 甚至不存在。
 - **風險**：只要第二個 DB 活著，這類事故會**重複發生**（維護成本 × 2，且失敗模式是「上線後才炸」）。
 - **最小處置**：①先加**schema 分歧守門**（比對 PG migrations 與 SQLite DDL／additive 清單，共同表不一致即紅，附合法差異 allowlist）②依 Q2 報告的 C1→C7 收斂到單一 PG。
 - **查法**：`grep -n "CREATE TABLE IF NOT EXISTS stock_win_rate" -A14 internal/ledger/sqlite_core.go` 與 `cat sql/migrations/0000*stock_win_rate*.up.sql`。
+
+- **處置（2026-10-16，PR #2273；root 實測）**：
+  - **根因成立，但數字與嚴重度要更正**：同一張表確實有兩份定義，而 `CREATE TABLE IF NOT EXISTS` **不會**替既有資料庫補欄 ⇒ 新增一列實際要動**三處**（PG migration／SQLite `CREATE TABLE`／SQLite `additiveMigrations`），漏任一處都不會在測試或啟動期報錯，只在**讀該欄的第一個請求**炸（#2213→#2218 即此）。原敘述「全 24 張同名表有 4 張欄位不一致」以現在量測是「**23 張共同表中 3 張**欄位不一致 ＋ **1 張（`outcomes`）SQLite 獨有**（PG 從未建同名表，對應表是 `stock_signal_outcomes`／`recommendation_outcomes`）」——數量巧合，但不是「4 張共同表」。
+  - **原守門本身是假綠（原敘述未提及，比數字更嚴重）**：① `ALTER TABLE` 解析器每個敘述只抓**第一個** `ADD COLUMN`，`000007_add_session_summary_tax_params.up.sql` 一個 `ALTER` 宣告 4 欄 ⇒ `after_tax_pnl`／`total_tax_paid`／`parameters_version` 從未進入比對（實測舊守門把這 3 欄錯歸為「SQLite-only」）；② allowlist 以**整張表**登錄（`human_interventions`／`screening_rejects`／`session_summaries`）⇒ 這 3 張表上任何新增的單邊欄位都被靜默接受，守門反而不保證自己的目的；③ 只從 PG 往 SQLite 比對，SQLite-only 表永不出現在報告（`outcomes` 因此從未被看見）；④ 完全沒有型別比對。
+  - **處置**：①守門重寫（欄位集合**雙向**／型別家族／可空性；allowlist 改**逐欄**登錄且 **stale 即紅**；SQLite 側仍為實測 `InitSchema`＋`PRAGMA table_info`，另加掃描 store 的延遲 `ALTER`，否則模型會少掉真實資料庫有的 `summary_json`）；②守門接進 `make ci-gate` 與 GitHub Actions `governance` job（無 paths filter，只改 migrations 或只改 `sqlite_core.go` 的 PR 都會跑到），契約測試 `tests/scripts/test-check-schema-parity.sh` 以自帶 fixture 自證會紅（含 multi-`ADD COLUMN` regression probe）；③規格 `docs/specs/schema-parity-spec.md`（權威量測表 ＋ 新增欄位必動的三處清單 ＋ 誠實邊界）。④「依 Q2 的 C1→C7 收斂到單一 PG」不在本項範圍，仍未做：本項只保證**兩側同形**，不保證**語意同源**（兩邊仍各寫自己的欄名世代，另一側留 NULL）。
+  - **證據**：同一棵突變樹（SQLite 移除 `screening_rejects.reason`）舊守門 `rc=0 / PASS`（且把它印成 `allowlisted divergence`），新守門 `rc=1` ＋ `column screening_rejects.reason: exists only in PostgreSQL`；`cp` 還原後 `sha256` 與突變前逐位元相同（`5c71b32f…`／`023e3953…`）。
 
 ### FU-20261012-08 — `data/state/atlas.db` **不在每日備份內**，且唯一還原點 schema 已舊
 
@@ -3387,7 +3393,7 @@ rc=1                            # ⇒ 修前無宣告常數、無守門測試：
 
 ### FU-20261012-09 — 3 張共同表在 PG 與 SQLite 是**不同 schema**（合計 44 個欄位不一致）
 
-- **狀態**：`open`
+- **狀態**：`done`（**2026-10-16 PR #2273**；原敘述與標題全數保留，實測更正、處置與證據見文末）
 - **記錄日期**：2026-10-12
 - **來源**：新增的 schema parity 守門（`internal/ledger/schema_parity_test.go`）首次把全表比對跑出來
 - **事實**（實測；守門的 allowlist 內含逐表數字）：
@@ -3398,6 +3404,17 @@ rc=1                            # ⇒ 修前無宣告常數、無守門測試：
 - **風險**：以「PG 形狀」寫的查詢一旦某天改走 SQLite（或反之）就會 503 或讀到舊欄位 —— 與 2026-10-12 的 `break_even_cost_rate` P0 同族。
 - **最小處置**：隨 Q2 的「單一 PG」收斂（C1→C7）一併對齊；在那之前守門以 allowlist **明文列出並在每次測試輸出**，避免這些分歧被默默當成「已同意」。
 - **查法**：`go test ./internal/ledger/ -run SchemaParity -v`（輸出會逐條列出 allowlisted divergence）。
+
+- **處置（2026-10-16，PR #2273；root 實測）**：
+  - **量測更正：合計 44 → 47**。原敘述低估 3 欄，原因是舊守門的 `ALTER` 解析器漏掉多欄 `ALTER` 的第 2～4 個 `ADD COLUMN`，`session_summaries` 因此少算 `after_tax_pnl`／`total_tax_paid`／`parameters_version`。修復前逐表實測：
+    - `human_interventions`：PG-only 10（`intervention_id`／`operator`／`reason`／`target_agent_id`／`target_model_id`／`target_sector`／`target_symbol`／`time`／`type`／`value`）／SQLite-only 4（`action`／`agent_id`／`symbol`／`timestamp`）＝ **14**
+    - `screening_rejects`：PG-only 8（`actual_value`／`agent_id`／`criterion`／`criterion_label`／`factor_scores`／`skill`／`threshold`／`time`）／SQLite-only 3（`factor_scores_json`／`reason`／`timestamp`）＝ **11**
+    - `session_summaries`：PG-only **18**（原敘述寫 15，漏 `after_tax_pnl`／`total_tax_paid`／`parameters_version`）／SQLite-only 4（`passed_guards`／`rejected`／`timestamp`／`total_recs`）＝ **22**
+    - **合計 47**（不是 44）；另有 `outcomes` 是 SQLite 獨有、PG 從未建同名表（PG 的對應表是 `stock_signal_outcomes`／`recommendation_outcomes`，不同 schema、不同寫入端）⇒ **不**補 PG 表，登錄 allowlist 並附理由。
+  - **修法（保守、additive）**：①PG 端 `sql/migrations/000030_schema_parity_ledger_columns.up.sql` 補 SQLite-only 的 11 欄（全 `ADD COLUMN IF NOT EXISTS`）；②SQLite 端 `internal/ledger/sqlite_core.go` 的 `CREATE TABLE` 定義 ＋ 新的 `addSchemaParityColumns`（逐欄 `addColumnIfMissing`，既有 `atlas.db` 只有 ALTER 補得到）補 PG-only 的 36 欄；③**沒有刪欄、沒有改型別**；唯一不對稱是 SQLite 端新欄全 nullable——`ALTER TABLE` 無法在沒有 DEFAULT 時加 `NOT NULL`，且既有資料列沒有值 ⇒ 9 筆可空性差異**逐條登錄並附理由**（7 筆屬此類、2 筆是 SQLite 舊 DDL 比 PG 嚴格）。
+  - **修復後（權威數字，2026-10-16，基準 `844f590f2`）**：`human_interventions` **16／16**、`screening_rejects` **14／14**、`session_summaries` **24／25**（差 `summary_json`：SQLite store 首次使用時延遲 ALTER 的整包 JSON，PG 用 `broker_runtime`／`guard_outcomes`／`tax_snapshots` 存同一內容）⇒ **3 張共同表欄位集合差異 0、型別差異 0**。全 23 張共同表亦為 0 差異；剩餘刻意差異逐條登錄於 `scripts/ci/schema-parity-allowlist.json`（18 張 PG-only 表／`outcomes`／`summary_json`／9 筆可空性）。
+  - **不需要生產資料回填**（新增欄全 nullable）；PG migration 由既有 runner 於下次部署套用，本次不觸碰任何生產 DB。
+  - **證據**：`bash scripts/ci/check_schema_parity.sh` → `schema-parity: 23 shared tables, 18 PostgreSQL-only tables (allowlisted 18), 1 SQLite-only tables (allowlisted 1)`；`go test ./internal/ledger/ -count=1` rc=0；`make ci-full` 全綠（`0 issues.`／coverage 71.1%）。
 
 ### FU-20261015-01 — CI 的 integration 路徑過濾器**漏掉多個目錄** ⇒ 那些 `-tags=integration` 測試從未在 CI 執行
 
