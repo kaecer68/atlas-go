@@ -63,10 +63,11 @@ func TestText_SinkCorpus(t *testing.T) {
 		{
 			// The caller may not hold the value it must redact: an upstream
 			// can quote a key the caller never saw. The shape rule covers it.
-			name:      "provider-shaped key the caller cannot pass in",
-			text:      `{"error":{"message":"Incorrect API key provided: sk-live9f3c1f0b7a2e4d5c6b7a"}}`,
+			name: "provider-shaped key the caller cannot pass in",
+			// secret-scan-allow: 下一行的 sk- 字串是假 fixture（形狀規則測試用），非真憑證
+			text:      `{"error":{"message":"Incorrect API key provided: sk-live9f3c1f0b7a2e4d5c6b7a"}}`, // secret-scan-allow: 假 fixture，非真憑證
 			wantKept:  []string{"Incorrect API key provided"},
-			wantNotIn: []string{"sk-live9f3c1f0b7a2e4d5c6b7a"},
+			wantNotIn: []string{"sk-live9f3c1f0b7a2e4d5c6b7a"}, // secret-scan-allow: 假 fixture，非真憑證
 		},
 		{
 			name:     "short prose is not a credential shape",

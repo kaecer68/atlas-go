@@ -11,7 +11,7 @@ import (
 // llmRedactionFixtureKey is a fake credential shaped like the real thing. A
 // provider's 401 body echoes the key it was given, so before FU-20261016-13 the
 // key travelled into atlas_llm_* records and the dashboard with the error.
-const llmRedactionFixtureKey = "sk-FAKE9f3c1f0b7a2e4d5c6b7a"
+const llmRedactionFixtureKey = "sk-FAKE9f3c1f0b7a2e4d5c6b7a" // secret-scan-allow: 假 fixture（sk- 形狀測試用），非真憑證
 
 // TestDeepSeek_Errors_HideAPIKey is the negative proof for FU-20261016-13 on
 // the BaseClient path: the provider body must reach the caller without the

@@ -15,7 +15,7 @@
 
 ---
 
-## S · Stable（穩定生產）— 24 packages
+## S · Stable（穩定生產）— 25 packages
 
 所有直接由 `cmd/atlas/main.go` 匯入的模組，處於生產執行路徑中。
 
@@ -34,6 +34,7 @@
 | `ledger` | JSONL append-only 持久化 — outcomes/scorecard | `LoadOutcomes()`, `RecordSessionSummary()` |
 | `live` | 即時交易 — broker execution、context 統一、原子寫入（需 flag 啟用） | `Orchestrator` |
 | `logging` | 統一日誌介面 — Info/Error 系列 | `Logger` |
+| `redact` | 憑證遮蔽單一實作 — `Text`／`URL`／`Error`；上游 body、URL query、錯誤字串跨套件共用（2026-10-16，FU-20261016-15） | `Text()`, `URL()`, `Error()` |
 | `marketdata` | 資料提供者抽象 — TWSE OpenAPI、Fugle、Hybrid | `Provider`, `HybridProvider` |
 | `monitoring` | 監控 API 與 Dashboard — 115 handlers、200 symbols | `Server` |
 | `narrative` | 宏觀敘事事件偵測 — 因果鏈、台灣壓力指數 | `NarrativeEvent`, `Ingestor` |
