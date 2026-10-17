@@ -475,14 +475,8 @@
       "internal/live/risk_gate.go:SetHaltTrading": {
         "tier": "test-only",
         "class": "dead",
-        "reason": "唯一呼叫端為測試（order_manager_test.go:332）；production halt 由 CB.CanPlaceOrder（execution.go:59）決定，haltTrading 無 writer",
-        "evidence": "internal/live/risk_gate.go:76  test-files=2"
-      },
-      "internal/live/risk_gate.go:SyncRiskGateFromCircuitBreaker": {
-        "tier": "dead",
-        "class": "legacy-inert",
-        "reason": "doc 說 orchestrator 應定期呼叫（risk_gate.go:95），但全 repo 無呼叫端 → cb→gate halt/VaR 同步（:101-103）從未發生",
-        "evidence": "internal/live/risk_gate.go:97  test-files=0"
+        "reason": "唯一呼叫端為測試（order_manager_test.go:332）；操作端人工停損尚無介面，production 的 halt writer 是 SyncRiskGateFromCircuitBreaker（orchestrator.go:407）",
+        "evidence": "internal/live/risk_gate.go:87  test-files=2"
       },
       "internal/live/scheduler.go:SetSystem": {
         "tier": "test-only",
