@@ -166,6 +166,19 @@ const (
 	SiliconSOXIndicatorIsYoY = false
 )
 
+// SiliconPhaseWeightMultiplierWired reports whether any production path consumes
+// GetPhaseWeightMultiplier. It does not (FU-20260930-01, verified 2026-10-17):
+// every caller is a test, so the per-phase multipliers are a declaration, not
+// a risk control. The live overheat penalty is the cycle status card's
+// silicon layer, which derives it from GetPhaseScore — see the doc comment on
+// GetPhaseWeightMultiplier for the enforced path and for the conditions any
+// future wiring must satisfy first.
+//
+// The two directions are coupled by TestSiliconPhaseWeightMultiplierHasNoConsumer:
+// flipping this constant to true without a real consumer fails, and a consumer
+// appearing while it is false fails.
+const SiliconPhaseWeightMultiplierWired = false
+
 // capexProxyScale maps TSMC revenue YoY onto an implied capex-guidance change
 // when the sector_data channel has no capex figure. 1:1 is conservative (capex
 // is normally more volatile than revenue) and is the minimum scale that keeps
@@ -428,6 +441,43 @@ func GetTypicalDuration(phase SiliconCyclePhase) int {
 // Phase 1 (expansion): 1.10 — strongest allocation
 // Phase 2 (overheat):  0.90 — reduce exposure
 // Phase 3 (contraction): 0.85 — defensive underweight
+//
+// DECLARED ONLY / NOT ENFORCED (FU-20260930-01, restated 2026-10-17).
+//
+// No production path consumes this function: the only callers are
+// TestPhaseWeightMultiplier (silicon_cycle_test.go) and
+// TestSiliconIndexMA_ConsumptionPathObservable (silicon_index_ma_test.go), and
+// SiliconPhaseWeightMultiplierWired is false. The numbers above therefore
+// describe an intention, not a live lever — do not read them as "the platform
+// cuts semiconductor exposure by 10% while the phase is overheat".
+//
+// The live exposure path is the cycle status card's silicon layer: the silicon
+// layer contribution is (score-0.5)*layerWeight, built from
+// GetPhaseScore(phase) in CycleStatusCardBuilder.resolveSiliconLayer ->
+// buildAdj (cycle_status_card.go). That curve already penalizes overheat
+// (score 0.40 ⇒ -0.10*layerWeight, -0.025 at the shipped weight 0.25) and
+// rewards expansion (score 1.00 ⇒ +0.10*layerWeight). The overheat intent is
+// enforced; only this second encoding of it is not.
+//
+// Wiring this function — or any silicon-phase weight multiplier — is a
+// value-semantics change, so it must first satisfy ALL of:
+//  1. A design decision on what a market-wide silicon phase scales. The phase is
+//     market-wide (SiliconCycleTracker holds one phase, with no industry
+//     argument), whereas the only per-industry weight chain that consumes a
+//     phase multiplier is IndustryService.GetIndustryOverview
+//     (baseWeight * cycleMultiplier * seasonalMultiplier * linkageMultiplier,
+//     where cycleMultiplier comes from CycleTracker.GetWeightModulator for the
+//     *business* cycle). Applied there, one silicon factor would move every
+//     industry, including non-semiconductor ones.
+//  2. Evidence that the new factor does not double-count the penalty the card
+//     already applies through GetPhaseScore -> buildAdj (see above).
+//  3. Scheduling per the #1971 observation window: an exposure multiplier moves
+//     portfolio weights, so it belongs after the window, unlike the
+//     honesty-only change made here (docs/reference/inert-registry.md, Batch C).
+//
+// Until then these values must not change, and
+// TestSiliconPhaseWeightMultiplierHasNoConsumer keeps the declaration honest in
+// both directions (consumer appearing / constant flipped without a consumer).
 func GetPhaseWeightMultiplier(phase SiliconCyclePhase) float64 {
 	switch phase {
 	case PhaseBottomRecovery:

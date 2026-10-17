@@ -1,8 +1,10 @@
 package industry
 
 import (
+	"io/fs"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -220,4 +222,100 @@ func TestPhaseHistoryWindowZeroDoesNotWipe(t *testing.T) {
 	if got := e.GetTransitionCount(); got == 0 {
 		t.Fatal("zero HistoryWindowSize wiped the phase history")
 	}
+}
+
+// moduleRootForScan walks up from the test working directory until it finds
+// go.mod. Production-consumer scans must run against the module root, not
+// against a directory that merely looks close to it (issue #1944 Batch A4).
+func moduleRootForScan(t *testing.T) string {
+	t.Helper()
+	dir, err := filepath.Abs(".")
+	if err != nil {
+		t.Fatalf("abs working dir: %v", err)
+	}
+	for range 10 {
+		if _, statErr := os.Stat(filepath.Join(dir, "go.mod")); statErr == nil {
+			return dir
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			break
+		}
+		dir = parent
+	}
+	t.Fatalf("module root not found above %s", dir)
+	return ""
+}
+
+// TestSiliconPhaseWeightMultiplierHasNoConsumer is the machine-checkable
+// contract for the FU-20260930-01 declaration (DECLARED ONLY / NOT ENFORCED on
+// GetPhaseWeightMultiplier): the per-phase multipliers must not be presented as
+// a live risk control while nothing consumes them.
+//
+// It couples the declaration flag with the code scan in BOTH directions, so the
+// two cannot drift apart:
+//
+//   - consumer(s) found while SiliconPhaseWeightMultiplierWired is false ⇒ red.
+//     Wiring the multiplier is a value change: update the doc comment, the flag,
+//     the end-to-end test and FU-20260930-01 in the same commit.
+//   - flag true with no consumer ⇒ red. Claiming enforcement that does not exist
+//     is the defect this guard exists for.
+//
+// The scan is deliberately textual and deliberately over-triggering (the N-C1
+// precedent in internal/config/parameters_inert_declarations_test.go): any
+// non-test production reference counts as a consumer, including one that only
+// mentions the name. False-red is the safe direction here.
+func TestSiliconPhaseWeightMultiplierHasNoConsumer(t *testing.T) {
+	const (
+		symbol       = "GetPhaseWeightMultiplier"
+		definingFile = "internal/industry/silicon_cycle.go"
+	)
+
+	root := moduleRootForScan(t)
+
+	var consumers []string
+	for _, sub := range []string{"internal", "cmd"} {
+		walkErr := filepath.WalkDir(filepath.Join(root, sub), func(path string, d fs.DirEntry, err error) error {
+			if err != nil {
+				return err
+			}
+			if d.IsDir() || !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
+				return nil
+			}
+			rel, relErr := filepath.Rel(root, path)
+			if relErr != nil {
+				rel = path
+			}
+			rel = filepath.ToSlash(rel)
+			if rel == definingFile {
+				return nil // the declaration itself
+			}
+			data, readErr := os.ReadFile(path)
+			if readErr != nil {
+				return readErr
+			}
+			if strings.Contains(string(data), symbol) {
+				consumers = append(consumers, rel)
+			}
+			return nil
+		})
+		if walkErr != nil {
+			t.Fatalf("walk %s: %v", sub, walkErr)
+		}
+	}
+
+	if SiliconPhaseWeightMultiplierWired {
+		if len(consumers) == 0 {
+			t.Fatalf("%s is declared wired but no non-test production file references %s — wire it, or set the constant back to false together with the DECLARED ONLY comment (FU-20260930-01)",
+				"SiliconPhaseWeightMultiplierWired", symbol)
+		}
+		t.Logf("%s: declared wired, consumers=%v", symbol, consumers)
+		return
+	}
+
+	if len(consumers) > 0 {
+		t.Fatalf("%s now has production consumer(s): %v — it is declared DECLARED ONLY / NOT ENFORCED, so a wiring change must update the doc comment and SiliconPhaseWeightMultiplierWired (silicon_cycle.go), add the end-to-end test it needs, satisfy the re-certification conditions listed there, and close FU-20260930-01 in the same commit",
+			symbol, consumers)
+	}
+	t.Logf("%s: 0 production consumers (test-only), constant=false — declaration holds", symbol)
 }

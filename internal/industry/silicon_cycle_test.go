@@ -261,6 +261,11 @@ func TestPhaseTransitions(t *testing.T) {
 	}
 }
 
+// TestPhaseWeightMultiplier pins the declared per-phase multipliers. They are
+// DECLARED ONLY / NOT ENFORCED (FU-20260930-01): no production path consumes
+// them — the live overheat penalty comes from GetPhaseScore via buildAdj, and
+// TestSiliconPhaseWeightMultiplierHasNoConsumer is the guard that keeps that
+// true and lists the conditions any wiring must satisfy first.
 func TestPhaseWeightMultiplier(t *testing.T) {
 	tests := []struct {
 		phase          SiliconCyclePhase
