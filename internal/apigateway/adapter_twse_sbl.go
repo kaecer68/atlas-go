@@ -25,9 +25,11 @@ func NewTWSESBLChannelAdapter() *TWSESBLChannelAdapter {
 
 // SetFinMindClient injects the shared FinMind client (G02 live wiring).
 // Since fix/20260924-finmind-quota the client is only the FALLBACK source:
-// the channel's primary source is the official TWSE TWT93U (上市) + TPEx
-// margin/sbl (上櫃) tables, which consume no FinMind quota. FinMind answers
-// only when the first-party source is disabled or errors for a day.
+// the channel's primary sources are the official TWSE TWT93U (上市) + TPEx
+// margin/sbl (上櫃) tables (借券賣出 half) plus TWSE TWT72U (借券餘額 =
+// 供給面, FU-20260929-02), which consume no FinMind quota. FinMind answers
+// only when the first-party source is disabled or errors for a day — and it
+// carries no 借券餘額 column, so SBLBorrowBalance stays nil on that path.
 func (a *TWSESBLChannelAdapter) SetFinMindClient(f *marketdata.FinMindClient) {
 	a.provider.SetFinMindClient(f)
 }
@@ -105,7 +107,7 @@ func (a *TWSESBLChannelAdapter) Metadata() ChannelMetadata {
 		Country:    "TW",
 		Platform:   "TWSE",
 		APIFormat:  "JSON",
-		Path:       "TWSE:TWT93U+TPEx:margin/sbl (FinMind:TaiwanDailyShortSaleBalances fallback)",
+		Path:       "TWSE:TWT93U+TPEx:margin/sbl+TWSE:TWT72U (FinMind:TaiwanDailyShortSaleBalances fallback)",
 		HasLimiter: true,
 	}
 }

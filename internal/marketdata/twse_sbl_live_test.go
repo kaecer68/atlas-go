@@ -49,8 +49,8 @@ func TestTWSESBL_LiveFirstParty_EquivalentToFinMindArtifact(t *testing.T) {
 	if len(stats) < 2000 {
 		t.Fatalf("live rows = %d, want >= 2000 (both exchanges must answer; a single-host result = missing 上櫃 half)", len(stats))
 	}
-	if got := p.LastSource(); got != "TWSE:TWT93U+TPEx:margin/sbl" {
-		t.Errorf("LastSource = %q, want both official hosts", got)
+	if got := p.LastSource(); got != "TWSE:TWT93U+TPEx:margin/sbl+TWSE:TWT72U" {
+		t.Errorf("LastSource = %q, want all three official tables", got)
 	}
 	for _, s := range stats {
 		if s.Date == "" || s.Symbol == "" {
