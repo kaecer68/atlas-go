@@ -1340,7 +1340,7 @@ func main() {
 		fmt.Sprintf("%d of %d rows (%.1f%%) could not use a TDCC share count and fell back to a turnover-derived share estimate for sbl_balance_pct.",
 			missing, len(rows), float64(missing)/float64(len(rows))*100),
 		"TDCC share counts sum the holder tiers and deliberately drop the published `total` and `差異數調整` rows; keeping either roughly doubles the implied share count (2330: 25.93bn vs 51.86bn shares).",
-		fmt.Sprintf("sbl_borrow_balance is non-zero in %d of %d SBL observations, so the supply-side (借券餘額) hypotheses stay unmeasurable with the current ingestion — consistent with the known ingestion gap.", borrowRows, borrowTotal))
+		fmt.Sprintf("sbl_borrow_balance is non-zero in %d of %d SBL observations, so the supply-side (借券餘額) hypotheses stay unmeasurable on this window. Since 2026-10-16 (FU-20260929-02) the column is sourced from TWSE TWT72U「證交所借券系統與證商/證金營業處所借券餘額合計表」; the day files fetched before that date were never queried against it, so their 0 means \"not ingested\" rather than \"no borrowing\" — re-fetch those days before reading a supply-side result out of them.", borrowRows, borrowTotal))
 	for _, l := range labelDefs {
 		if bd := broadDates(rows, l.fn, opt.broadMin); len(bd) > 0 && bd[0] > dates[0] {
 			rep.Notes = append(rep.Notes, fmt.Sprintf("%s: the first reference date whose labeled cross-section reaches %d symbols is %s; earlier dates are a large-cap-only sample (~114 fugle-quoted names).",
