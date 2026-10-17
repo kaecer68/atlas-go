@@ -2,10 +2,12 @@ package live
 
 import (
 	"context"
+	"strings"
 	"sync"
 	"testing"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
+	livestore "github.com/kaecer68/atlas-go/internal/live/store"
 )
 
 func TestRiskGate_Check_AllowsOrder(t *testing.T) {
@@ -237,6 +239,72 @@ func TestRiskGate_SyncHaltFromCircuitState(t *testing.T) {
 	gate.SyncHaltFromCircuitState(CircuitPaused)
 	if !gate.Status()["halt_trading"].(bool) {
 		t.Fatal("expected halt_trading true after Paused sync (close-only)")
+	}
+}
+
+func TestSyncRiskGateFromCircuitBreaker_MirrorsHaltButNotVaR(t *testing.T) {
+	tmp := t.TempDir()
+	cb := NewCircuitBreaker(tmp+"/cb_log.jsonl", tmp+"/cb_state.json")
+	cb.ResetDayState(1_000_000)
+
+	gate := NewRiskGate(RiskGateConfig{MaxDailyLossPct: 0, VaRCriticalThreshold: 0.10})
+	gate.UpdateVaR(0.01) // a stale estimate that the nil provider must not disturb
+
+	// Breaker -> halted: the halt must reach the gate; VaR must stay untouched.
+	cb.Evaluate(livestore.PortfolioState{Cash: 1_000_000, DayPnL: -30_000}, nil, nil)
+	if cb.State() != CircuitHalted {
+		t.Fatalf("expected breaker halted, got %s", cb.State())
+	}
+	SyncRiskGateFromCircuitBreaker(gate, cb, nil)
+
+	status := gate.Status()
+	if halted, _ := status["halt_trading"].(bool); !halted {
+		t.Fatal("expected halt_trading true after mirroring a halted breaker")
+	}
+	if got, _ := status["var_value"].(float64); got != 0.01 {
+		t.Fatalf("VaR must not be mirrored when the provider is nil: got %v, want 0.01", status["var_value"])
+	}
+	order := domain.Order{Symbol: "2330", Side: domain.SideBuy, Quantity: 1, Price: 100}
+	err := gate.Check(context.Background(), order)
+	if err == nil {
+		t.Fatal("expected a halted breaker to make RiskGate.Check reject the order")
+	}
+	if !strings.Contains(err.Error(), "trading halted") {
+		t.Fatalf("expected the trading-halted rejection, got: %v", err)
+	}
+
+	// Breaker -> normal: the halt must clear.
+	cb.ResetDayState(1_000_000)
+	SyncRiskGateFromCircuitBreaker(gate, cb, nil)
+	if halted, _ := gate.Status()["halt_trading"].(bool); halted {
+		t.Fatal("expected halt_trading false after mirroring a normal breaker")
+	}
+	if err := gate.Check(context.Background(), order); err != nil {
+		t.Fatalf("expected order to pass after the halt cleared, got: %v", err)
+	}
+
+	// Positive control for the VaR half: a provider does update the estimate, so
+	// the assertion above is about the nil provider and not about a dead branch.
+	SyncRiskGateFromCircuitBreaker(gate, cb, func() float64 { return 0.42 })
+	if got, _ := gate.Status()["var_value"].(float64); got != 0.42 {
+		t.Fatalf("expected a non-nil provider to refresh VaR: got %v", gate.Status()["var_value"])
+	}
+}
+
+func TestSyncRiskGateFromCircuitBreaker_NilArgumentsAreNoOps(t *testing.T) {
+	tmp := t.TempDir()
+	gate := NewRiskGate(RiskGateConfig{})
+	gate.UpdateVaR(0.02)
+
+	SyncRiskGateFromCircuitBreaker(nil, NewCircuitBreaker(tmp+"/cb_log.jsonl", tmp+"/cb_state.json"), func() float64 { return 1 })
+	SyncRiskGateFromCircuitBreaker(gate, nil, func() float64 { return 1 })
+
+	status := gate.Status()
+	if got, _ := status["var_value"].(float64); got != 0.02 {
+		t.Fatalf("nil breaker must not touch the gate: var_value = %v", status["var_value"])
+	}
+	if halted, _ := status["halt_trading"].(bool); halted {
+		t.Fatal("nil breaker must not halt the gate")
 	}
 }
 
