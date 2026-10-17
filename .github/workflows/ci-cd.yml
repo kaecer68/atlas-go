@@ -648,6 +648,15 @@ jobs:
         bash tests/scripts/test-integration-filter-sync.sh
         bash scripts/ci/check_integration_filter_sync.sh
 
+    # 測試不得用固定相對層數定位 repo 根（FU-20261016-20）。與上面同一個**無 paths filter**
+    # 的 job：這個缺陷是「lane 本機假綠、CI 紅」，只在 pre-push（`make ci-gate`）不夠，
+    # 因為不跑 hook 的人照樣能推。兩者皆 hermetic（只讀 git ls-files 與自帶 fixture、
+    # 不跑 Go、不連網、不寫 repo）。
+    - name: Verify test repo-root guard (Tier A ban + Tier B ratchet + hermetic contract test)
+      run: |
+        bash tests/scripts/test-test-repo-root-guard.sh
+        bash scripts/ci/check_test_repo_root.sh
+
   # Operations gate (migrated from ci.yml per 2026-07-03 pipeline audit Phase 2)
   operations:
     runs-on: ubuntu-latest
