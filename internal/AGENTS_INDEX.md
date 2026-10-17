@@ -2,7 +2,7 @@
 
 > 進入 `internal/<mod>/` 工作前，先讀該目錄下的 `AGENTS.md`（或 `CONSTITUTION.md`）。模組特有陷阱寫在裡面，跳過會踩坑。
 >
-> **總計**：83 個模組（29 S / 33 E / 9 X / 1 A / 10 U）；2026-09-24 新增 `sectormap`（#1943）、`stockflows`（#1945）；2026-09-25 新增 `symbolindustry`（#1943），並按實際列數校正 S/U/X 計數。保留 AGENTS.md 的 hot-path 覆蓋模組共 **15** 個（2026-07-11 從 27 合併精簡，清單見下方）。
+> **總計**：84 個模組（30 S / 33 E / 9 X / 1 A / 10 U）；2026-09-24 新增 `sectormap`（#1943）、`stockflows`（#1945）；2026-09-25 新增 `symbolindustry`（#1943），並按實際列數校正 S/U/X 計數。保留 AGENTS.md 的 hot-path 覆蓋模組共 **15** 個（2026-07-11 從 27 合併精簡，清單見下方）。
 
 > **v0.0.2.0 變更（2026-07-24）**：成熟度重分組——swarm X→A、replay/capitalflow/forecast/retail/strategy_ranker/stress/reporting/subscription 升至 E；sectorallocation 補加入 X；calibration 補加入 U。
 > **2026-08-07 補齊**：16 個實際存在但未索引模組補入（S: constants/experiment/janus/live；E: acceptance/eventquality/marketexplain/methodology/observability/userstate；X: alerting/llm/llm_annotator/stocktools；U: backfill/buildinfo）。
@@ -11,7 +11,7 @@
 
 ## 索引（按成熟度分組）
 
-### S · Stable（穩定生產，29 個）
+### S · Stable（穩定生產，30 個）
 
 | 模組 | 關鍵主題 |
 |------|---------|
@@ -26,6 +26,7 @@
 | `ledger` | JSONL append-only、OutcomeCount 計算 |
 | `channelsecrets` | 資料通道 API key 加密持久化 + 熱重載（issue #1776；Postgres/SQLite 雙 backend、AES-256-GCM） |
 | `logging` | 統一日誌介面 |
+| `redact` | 憑證遮蔽單一實作（`Text`／`URL`／`Error`）：上游 body、URL query、錯誤字串；跨套件共用（FU-20261016-15） |
 | `marketdata` | Provider 抽象、TWSE / FinMind / Fugle |
 | `monitoring` | Dashboard API、監控、人工干預入口 |
 | `narrative` | 宏觀敘事、因果鏈、台灣壓力指數 |
