@@ -92,7 +92,7 @@ func (p *BLSCPIProvider) FetchSnapshot(ctx context.Context) (MacroDataSnapshot, 
 		return MacroDataSnapshot{}, fmt.Errorf("us_cpi read body: %w", err)
 	}
 	if resp.StatusCode != http.StatusOK {
-		return MacroDataSnapshot{}, fmt.Errorf("us_cpi http status %d: %s", resp.StatusCode, strings.TrimSpace(string(raw)))
+		return MacroDataSnapshot{}, fmt.Errorf("us_cpi http status %d: %s", resp.StatusCode, redactUpstreamText(strings.TrimSpace(string(raw))))
 	}
 
 	// Decoded with an inline anonymous struct on purpose: gentags emits any

@@ -159,7 +159,7 @@ func (c *TPExDailyCloseClient) fetch(ctx context.Context) ([]domain.Quote, error
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
 		c.breakerRecordFailure()
-		return nil, fmt.Errorf("tpex daily close: status %d, body: %s", resp.StatusCode, strings.TrimSpace(string(body)))
+		return nil, fmt.Errorf("tpex daily close: status %d, body: %s", resp.StatusCode, redactUpstreamText(strings.TrimSpace(string(body))))
 	}
 
 	var rows []tpexDailyCloseRow

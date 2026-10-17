@@ -307,7 +307,7 @@ func (c *TWSEClient) GetQuotes(ctx context.Context) ([]domain.Quote, error) {
 			bodyStr = "(empty body)"
 		}
 		c.breakerRecordFailure()
-		return nil, fmt.Errorf("api error: status %d, body: %s", resp.StatusCode, bodyStr)
+		return nil, fmt.Errorf("api error: status %d, body: %s", resp.StatusCode, redactUpstreamText(bodyStr))
 	}
 
 	// Buffer body to bytes (bytes-read pattern) so the CSV fallback below can
@@ -500,7 +500,7 @@ func (c *TWSEClient) GetDailyQuote(ctx context.Context, date string, symbol stri
 			bodyStr = "(empty body)"
 		}
 		c.breakerRecordFailure()
-		return domain.Quote{}, fmt.Errorf("api error: status %d, body: %s", resp.StatusCode, bodyStr)
+		return domain.Quote{}, fmt.Errorf("api error: status %d, body: %s", resp.StatusCode, redactUpstreamText(bodyStr))
 	}
 
 	// Buffer body to bytes (bytes-read pattern) so charset transcoding via
