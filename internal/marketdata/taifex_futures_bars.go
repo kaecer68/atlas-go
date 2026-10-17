@@ -496,7 +496,7 @@ func verifyFuturesCSVHeader(text string) error {
 		if len(preview) > 120 {
 			preview = preview[:120]
 		}
-		return fmt.Errorf("%w: taifex futures csv header sentinel missing (first line %q) — upstream returned a non-CSV body (HTML/JS error page) despite HTTP 200", ErrTAIFEXFuturesBarsSchema, preview)
+		return fmt.Errorf("%w: taifex futures csv header sentinel missing (first line %q) — upstream returned a non-CSV body (HTML/JS error page) despite HTTP 200", ErrTAIFEXFuturesBarsSchema, redactUpstreamText(preview))
 	}
 	return nil
 }

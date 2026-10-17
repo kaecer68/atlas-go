@@ -22,6 +22,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/kaecer68/atlas-go/internal/redact"
 )
 
 const (
@@ -184,7 +186,7 @@ func checkLLMHealth(baseURL string) checkResult {
 		return checkResult{
 			Name:    "/api/llm/health 200 OK",
 			OK:      false,
-			Message: fmt.Sprintf("status=%d, body=%s", resp.StatusCode, truncate(resp.Body, 200)),
+			Message: fmt.Sprintf("status=%d, body=%s", resp.StatusCode, redact.Text(truncate(resp.Body, 200))),
 		}
 	}
 	var health struct {

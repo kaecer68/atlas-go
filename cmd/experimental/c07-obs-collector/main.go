@@ -37,6 +37,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/kaecer68/atlas-go/internal/redact"
 )
 
 const (
@@ -237,7 +239,9 @@ func fetchPredictionReport(baseURL string) (*predictionReport, error) {
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("status %d: %s", resp.StatusCode, truncate(string(body), 200))
+		// status stays (it is the diagnosis); the body has to lose any
+		// credential before this error is printed or logged (FU-20261016-16).
+		return nil, fmt.Errorf("status %d: %s", resp.StatusCode, redact.Text(truncate(string(body), 200)))
 	}
 
 	var report predictionReport

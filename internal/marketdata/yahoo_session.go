@@ -400,7 +400,15 @@ func (s *yahooSession) fetchFromHost(ctx context.Context, host, symbol string, p
 			// host so fetchWithFallback tries the next one.
 			return nil, fmt.Errorf("http %d: HTML response from %s", resp.StatusCode, host)
 		}
-		return nil, fmt.Errorf("http %d from %s: %s", resp.StatusCode, host, string(body))
+		// The session's own crumb and cookie are credential material: Yahoo
+		// echoes auth material back in its error envelopes, and this message
+		// travels to channel-health rows and on-call logs. Passing them as
+		// literals masks an echo even when the body around it is free-form
+		// text (a header dump), not JSON.
+		s.mu.RLock()
+		sessionSecrets := []string{s.crumb, s.cookie}
+		s.mu.RUnlock()
+		return nil, fmt.Errorf("http %d from %s: %s", resp.StatusCode, host, redactUpstreamText(string(body), sessionSecrets...))
 	}
 
 	body, err := io.ReadAll(resp.Body)

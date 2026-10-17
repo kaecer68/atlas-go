@@ -17,7 +17,8 @@ import (
 func fakeChart(t *testing.T, rows []struct {
 	day   string
 	close float64
-}) *httptest.Server {
+},
+) *httptest.Server {
 	t.Helper()
 	ts := make([]int64, 0, len(rows))
 	closes := make([]*float64, 0, len(rows))
@@ -288,5 +289,64 @@ func TestDefaultChannelsCoverYahooBackedFields(t *testing.T) {
 		if !strings.Contains(got, want) {
 			t.Errorf("default channels %q missing %q", got, want)
 		}
+	}
+}
+
+// The credential fixtures below are fake.
+const (
+	fakeYahooBodyKey = "FAKE-yahoo-body-7c8d9e0f1a2b3c4d"
+	fakeYahooCrumb   = "FAKEyahooCrumb9x8y7z"
+)
+
+// TestFetchHistoryHTTPErrorRedactsUpstreamCredential drives the non-200 branch
+// ("yahoo %s: HTTP %d: %s"). The error keeps the ticker, the status and the
+// upstream message skeleton; it must not carry the session credential, neither
+// as a JSON member nor as a literal the caller handed in (FU-20261016-16).
+func TestFetchHistoryHTTPErrorRedactsUpstreamCredential(t *testing.T) {
+	orig := chartURLTemplate
+	t.Cleanup(func() { chartURLTemplate = orig })
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusUnauthorized)
+		// Two leak shapes in one body: a secret-named JSON member, and the
+		// session crumb echoed inside an otherwise harmless message.
+		_, _ = w.Write([]byte(`{"chart":{"error":{"code":"Unauthorized","description":"Upstream rejected the crumb ` +
+			fakeYahooCrumb + `","token_tail":"` + fakeYahooBodyKey + `"}}}`))
+	}))
+	t.Cleanup(srv.Close)
+	chartURLTemplate = srv.URL + "/v8/finance/chart/%s?period1=%d&period2=%d&interval=1d"
+
+	start, _ := time.ParseInLocation("2006-01-02", "2026-09-01", time.Local)
+	end, _ := time.ParseInLocation("2006-01-02", "2026-09-03", time.Local)
+	auth := &yahooAuth{cookie: "A3=FAKEyahooCookie1a2b3c4d", crumb: fakeYahooCrumb}
+
+	_, err := fetchHistory(context.Background(), srv.Client(), auth, channel{ticker: "TEST"}, start, end)
+	if err == nil {
+		t.Fatal("want an error for HTTP 401, got nil")
+	}
+	msg := err.Error()
+	for _, leak := range []string{fakeYahooBodyKey, fakeYahooCrumb, "A3=FAKEyahooCookie1a2b3c4d"} {
+		if strings.Contains(msg, leak) {
+			t.Errorf("error leaks %q: %s", leak, msg)
+		}
+	}
+	if !strings.Contains(msg, "HTTP 401") || !strings.Contains(msg, "Unauthorized") {
+		t.Errorf("error dropped the diagnosis: %s", msg)
+	}
+}
+
+// TestYahooAuthSecretsExposesCredentials pins the helper the sink above relies
+// on: nil auth yields nothing (bare requests), and a populated session yields
+// the cookie and the crumb.
+func TestYahooAuthSecretsExposesCredentials(t *testing.T) {
+	var nilAuth *yahooAuth
+	if got := nilAuth.secrets(); len(got) != 0 {
+		t.Errorf("nil yahooAuth.secrets() = %v, want none", got)
+	}
+	auth := &yahooAuth{cookie: "A3=abc", crumb: "xyz"}
+	got := auth.secrets()
+	if len(got) != 2 || got[0] != "A3=abc" || got[1] != "xyz" {
+		t.Errorf("yahooAuth.secrets() = %v, want [A3=abc xyz]", got)
 	}
 }

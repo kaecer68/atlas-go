@@ -146,7 +146,7 @@ func (t *TAIFEXProvider) FetchPCR(ctx context.Context) (*PCRStats, error) {
 
 	if resp.StatusCode != http.StatusOK {
 		t.breakerRecordFailure()
-		return nil, fmt.Errorf("taifex pcr api error: status %d, body=%s", resp.StatusCode, string(body))
+		return nil, fmt.Errorf("taifex pcr api error: status %d, body=%s", resp.StatusCode, redactUpstreamText(string(body)))
 	}
 
 	// P2-15: response schema fingerprint — warn with the exact missing key
@@ -281,7 +281,7 @@ func (t *TAIFEXProvider) FetchRetailFuturesOI(ctx context.Context) (*RetailFutur
 
 	if resp.StatusCode != http.StatusOK {
 		t.breakerRecordFailure()
-		return nil, fmt.Errorf("taifex large trader api error: status %d, body=%s", resp.StatusCode, string(body))
+		return nil, fmt.Errorf("taifex large trader api error: status %d, body=%s", resp.StatusCode, redactUpstreamText(string(body)))
 	}
 
 	var rawList []taifexLargeTraderRaw

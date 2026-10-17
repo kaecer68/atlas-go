@@ -25,6 +25,8 @@ import (
 	"os"
 	"strings"
 	"time"
+
+	"github.com/kaecer68/atlas-go/internal/redact"
 )
 
 const (
@@ -182,7 +184,7 @@ func checkHealthEndpoint(baseURL string) checkResult {
 		return checkResult{
 			Name:    "/health 200 OK",
 			OK:      false,
-			Message: fmt.Sprintf("status=%d, body=%s", resp.StatusCode, truncate(resp.Body, 200)),
+			Message: fmt.Sprintf("status=%d, body=%s", resp.StatusCode, redact.Text(truncate(resp.Body, 200))),
 		}
 	}
 	var health struct {
@@ -228,7 +230,7 @@ func checkMacroSnapshot(baseURL string) checkResult {
 		return checkResult{
 			Name:    "/api/macro/snapshot/latest 200 OK",
 			OK:      false,
-			Message: fmt.Sprintf("status=%d, body=%s", resp.StatusCode, truncate(resp.Body, 200)),
+			Message: fmt.Sprintf("status=%d, body=%s", resp.StatusCode, redact.Text(truncate(resp.Body, 200))),
 		}
 	}
 	// Decode response: API returns MacroDataSnapshot fields at top level
@@ -288,7 +290,7 @@ func checkEventsPredictionShape(baseURL string) checkResult {
 		return checkResult{
 			Name:    "/api/events/prediction 200 OK",
 			OK:      false,
-			Message: fmt.Sprintf("status=%d, body=%s", resp.StatusCode, truncate(resp.Body, 200)),
+			Message: fmt.Sprintf("status=%d, body=%s", resp.StatusCode, redact.Text(truncate(resp.Body, 200))),
 		}
 	}
 	// Decode outer data envelope; tolerate either {data: {...}} or top-level {...}

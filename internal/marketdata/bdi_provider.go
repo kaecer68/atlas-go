@@ -83,7 +83,7 @@ func (p *BDIProvider) FetchSnapshot(ctx context.Context) (MacroDataSnapshot, err
 		if bodyStr == "" {
 			bodyStr = "(empty body)"
 		}
-		return MacroDataSnapshot{}, fmt.Errorf("bdi http status %d, body: %s", resp.StatusCode, bodyStr)
+		return MacroDataSnapshot{}, fmt.Errorf("bdi http status %d, body: %s", resp.StatusCode, redactUpstreamText(bodyStr))
 	}
 
 	body, err := io.ReadAll(resp.Body)
