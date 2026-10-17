@@ -5774,6 +5774,79 @@ gen_routes_determinism_test.go: PASS（同輸入兩次呼叫逐位元組相同�
   ④ 附錄 A 其餘 84 條候選未判定。
 
 
+### FU-20261017-01 — `darwinian.risk_volatility_threshold` 掉到 0.0123（−83%）**是算出來的**：p75 指標指向單一 agent 的日波動（已重算驗證）
+
+- **狀態**：`done`
+- **記錄日期**：2026-10-17
+- **來源**：2026-10-17T06:22:58Z 的生產校準（overlay `data/state/parameters.calibrated.json`：
+  `0.07265911146663549` → **`0.012323875595980305`**）＋ SSOT `configs/parameters.json:313-314`
+  的 `0.08`。完整推導見 `docs/specs/risk-vol-threshold-recompute-20261017.md`。
+- **根因（已驗證，非推論）**：值 = `internal/calibration/calibrate.go:533-534`
+  的百分位指標 `agentVols[int(0.75×n)] / √252`，而該量就是**某一個 agent 的日報酬
+  樣本標準差（n−1）**。06:22 那輪 `n=13` ⇒ rank 9 ⇒ 指向 **`energy-desk-01`**
+  （1944 筆、最後一筆 2026-09-26）：重算 `0.012323875595980322` vs 寫入
+  `0.012323875595980305`，**相對差 1.4e-15**（浮點累加次序）。⇒ **是算出來的**。
+- **對稽核敘述的更正（三處）**：① 樣本來源是 **`recommendation_outcomes.metadata->>'forward_return'`**，
+  **不是** `stock_signal_outcomes.forward_return`；② `IsUsablePrice`（`close<=0`）過濾在
+  `internal/calibration/load.go:117` 的 **replay returns** 路徑（garch/var/factor），
+  **不影響** darwinian 樣本集；③ 「13 個樣本可精確重現」**不可行**（表上無 `created_at`，
+  06:22 之後內容已變：同一支程式今天的 p75 命中率 `0.714286` vs 06:22 的 `0.873016`），
+  已改用「集合一致重建 + 逐位元組 σ 比對」。
+- **處置**：**唯讀驗證，未改任何程式或參數**。產出
+  `docs/specs/risk-vol-threshold-recompute-20261017.md`（含樣本清單、公式與行號、
+  重算值、與 0.0123 的差、重現指令）。
+- **限制**：不主張 0.0123「合理」——p75-of-13 這種單點估計量的適當性是政策問題
+  （見 `FU-20260930-09`）；本條只證「是算出來的」。歷史列集合不可重建（無 `created_at`）。
+
+### FU-20261017-02 — `drift_unexplained` 的**逐 key** 資訊原本只在日誌：改以 counter 曝露（`atlas_calibration_drift_unexplained_total`）
+
+- **狀態**：`done`
+- **記錄日期**：2026-10-17
+- **來源**：生產日誌 `drift_unexplained … out_of_window_keys=darwinian.risk_volatility_threshold.value`
+  （`2026-10-17T06:27:05Z` 起每 5 分鐘一則）。
+- **根因（更正稽核敘述）**：敘述「`drift_unexplained` 只是 WARN ⇒ **沒有 rule／alert**」**不成立** ✗ ——
+  `monitoring/rules/calibration_freshness_alerts.yml` 第 4 條 `CalibrationEffectiveDriftUnexplained`
+  自 #2076 起就存在，且生產 Prometheus 此刻 **firing**（`activeAt 2026-10-17T07:27:20Z`，
+  Alertmanager `/api/v2/alerts` 同一筆 active）。真正的缺口是**粒度**：既有 gauge 只回答
+  「**幾個** key」，而「**哪一個** key」只寫在日誌裡 ⇒ Prometheus 看不到。
+- **處置**：新增 counter `atlas_calibration_drift_unexplained_total{artifact,key,reason}`
+  （`reason ∈ out_of_window｜not_applicable`），與 WARN **同一份判定**逐輪 +1（= 每輪一則 WARN 的
+  一一對應）；`ssot_moved`（設計行為）與 `drift_run_ok=0`（未知）**不計數**。
+  實作 `internal/monitoring/calibration_effective.go`；測試
+  `internal/monitoring/calibration_drift_unexplained_test.go`（7 條契約）＋
+  `cmd/atlas/calibration_effective_metrics_task_test.go`（2 個端到端 `/metrics` 案例）。
+  文件：`docs/specs/calibration-drift-unexplained-per-key-20261017.md`。
+- **送達通道（不在本 repo，由 a2a-dev 接線）**：Mac Mini 的 `~/bin/notify.sh` watcher，
+  event **`atlas.drift_unexplained`**、source **`atlas-calibration`**、severity **`warning`**，
+  watcher 內建 **6h 去重**。本 repo **沒有**（也刻意不加）讀這個 counter 的 Prometheus rule。
+- **限制**：(1) counter 每 5 分鐘 +1 ⇒ 只看 `increase()/rate()`，絕對值無意義；
+  (2) 它本身**不會**通知任何人，通知仍取決於 watcher 是否已接線；
+  (3) `key` 標籤基數 = overlay entry 數（實測 14）。
+
+### FU-20261017-03 — `store_backend_empty_default_jsonl` 每 12h 一則 WARN：`session_summary_reconcile` 以「省略欄位」表達「我要 JSONL」（**只提案**）
+
+- **狀態**：`open`
+- **記錄日期**：2026-10-17
+- **來源**：生產日誌
+  `time=2026-10-17T06:27:20.326Z level=WARN msg=store_backend_empty_default_jsonl resolved_backend=jsonl component=ledger_store_factory`，
+  緊接 `task_started name=session_summary_reconcile`（24h 內 1 筆）。
+- **現況**：`cmd/atlas/reconcile_task.go:54` 的
+  `ledger.NewSessionStore(config.Config{LedgerDir: d.Cfg.LedgerDir})` **沒有** `StoreBackend`
+  ⇒ `ResolveStoreBackend("")`（`internal/ledger/store_factory.go:79`）走 legacy 預設（JSONL）並記 WARN。
+  store = `ledger.SessionStore`（JSONL 實作）、路徑 = `<LedgerDir>/sessions/<id>/summary.json`
+  （生產 `/app/data/state`，實測 231 個 session 目錄）。
+- **判定**：**功能上是預期的**（這個 job 的職責就是把 PG SSoT 與 flat ledger 對帳，PG 側由
+  `repository.NewPostgresRepository` 直接建立）⇒ 這則 WARN 是**雜訊**，而且「意圖」寄託在
+  空字串的預設值上。全 repo 只有 **2 處**這樣寫（另一次是 CLI
+  `cmd/reconcile-sessions/main.go:81`），其餘 55 處都明示 `"jsonl"` 或傳入 `cfg.StoreBackend`。
+- **處置**：**只提案、未改程式**（依「只提案」護欄）。提案 = 該處明示
+  `StoreBackend: "jsonl"`（行為差異為零：`ResolveStoreBackend("jsonl") == ResolveStoreBackend("")`），
+  並補一個 log-capture 測試斷言不再出現該 WARN。完整推導與 diff 見
+  `docs/specs/store-backend-empty-jsonl-fallback-20261017.md`。
+- **驗收條件**：`session_summary_reconcile` 執行後日誌不再有 `store_backend_empty_default_jsonl`，
+  且仍寫入同一條 `<LedgerDir>/sessions/…`。
+
+
 ## 相關文件
 
 - [universe-scoring-ranked-zero-20260925.md](universe-scoring-ranked-zero-20260925.md)
