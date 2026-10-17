@@ -5749,7 +5749,7 @@ gen_routes_determinism_test.go: PASS（同輸入兩次呼叫逐位元組相同�
      （`order_manager.go:128`），但 `haltTrading` 的三個寫入端（`SetHaltTrading`／`SyncHaltFromCircuitState`／
      `SyncRiskGateFromCircuitBreaker`）**全部 0 生產呼叫者** ⇒ 硬停分支不可達。
      提案三個選項見稽核文件 §2.6；**未動任何生產風控行為**。
-     **處置（2026-10-16，PR #2280）：已依 §2.6 選項 2 接線（只鏡射 halt、不鏡射 VaR）。**
+     **處置（2026-10-16，PR #2279）：已依 §2.6 選項 2 接線（只鏡射 halt、不鏡射 VaR）。**
      `Orchestrator.onIntradayCycle` 在每次電路評估（`circuitBreaker.Evaluate` + `State()`）後呼叫
      `SyncRiskGateFromCircuitBreaker(o.riskGate, o.circuitBreaker, nil)`；參數型別由 `*CircuitBreaker` 改為
      orchestrator 持有的 `CircuitBreakerOps`（免型別斷言），`nil` 的 VaR provider 是刻意的（live VaR 未校準）。
