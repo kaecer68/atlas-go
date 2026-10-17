@@ -2,6 +2,8 @@ package portfolio
 
 import (
 	"gonum.org/v1/gonum/mat"
+
+	"github.com/kaecer68/atlas-go/internal/domain/shared"
 )
 
 //
@@ -10,6 +12,10 @@ import (
 // | Data               | Source                         | Computation          |
 // |--------------------|--------------------------------|----------------------|
 // | Daily price series | HistoricalPrices.GetCloseSeries | (Pₜ-Pₜ₋₁)/Pₜ₋₁     |
+//
+// A close that is not usable (<=0 or non-finite, see shared.IsUsablePrice) is
+// treated as missing: that day's return stays 0 and is not added to the mean
+// (FU-20260930-04).
 // | Factor scores      | FactorEngine                   | Momentum/Value/Quality|
 // | Constraints        | configs/parameters.json         | w_max, cash_reserve  |
 //
@@ -86,7 +92,10 @@ func (o *Optimizer) extractReturnMatrix(symbols []string) *returnMatrix {
 		for t := range Tret {
 			prev := s[offset+t]
 			curr := s[offset+t+1]
-			if prev == 0 {
+			// A stored close<=0 is a missing observation (FU-20260930-04):
+			// guarding only the previous close let curr=0 enter the matrix as
+			// a fabricated -100% return.
+			if !shared.IsUsablePrice(prev) || !shared.IsUsablePrice(curr) {
 				continue
 			}
 			r := curr/prev - 1

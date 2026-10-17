@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/kaecer68/atlas-go/internal/domain/shared"
 	"github.com/kaecer68/atlas-go/internal/replay"
 )
 
@@ -110,7 +111,10 @@ func LoadReturnsFromCSV(path string) ([]float64, int, error) {
 	var prevClose float64
 	for _, date := range ds.Dates {
 		bar, ok := ds.ByDate[date.Format("2006-01-02")][bestSym]
-		if !ok || bar.Close == 0 {
+		// Non-positive/non-finite closes are missing observations, not prices
+		// (FU-20260930-04): `== 0` alone let a negative close through and
+		// produced a nonsensical label.
+		if !ok || !shared.IsUsablePrice(bar.Close) {
 			continue
 		}
 		if prevClose > 0 {

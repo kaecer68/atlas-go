@@ -139,6 +139,10 @@ func (hp *HistoricalPrices) SMA(symbol string, days int) float64 {
 //
 // CAUTION: computed from UNADJUSTED prices — see package doc for bias.
 // This UNDERSTATES true total return across ex-dividend dates.
+//
+// A non-positive or non-finite close at either end is treated as a MISSING
+// observation (FU-20260930-04) and yields 0 — the same value returned when the
+// series is too short — instead of a fabricated -100% move.
 func (hp *HistoricalPrices) MomentumReturn(symbol string, days int) float64 {
 	series := hp.GetCloseSeries(symbol)
 	if len(series) < days+1 {
@@ -146,7 +150,9 @@ func (hp *HistoricalPrices) MomentumReturn(symbol string, days int) float64 {
 	}
 	latest := series[len(series)-1]
 	past := series[len(series)-1-days]
-	if past == 0 {
+	// A stored close<=0 is a missing observation, not a -100% move
+	// (FU-20260930-03). Return the same "no data" value as the length guard.
+	if !shared.IsUsablePrice(latest) || !shared.IsUsablePrice(past) {
 		return 0
 	}
 	return latest/past - 1
@@ -299,6 +305,11 @@ func (hp *HistoricalPrices) ActionEffects(symbol string) []shared.ActionEffect {
 //
 // CAUTION: inherits the same unadjusted-price bias as MomentumReturn; do not
 // interpret as ex-corporate-action volatility.
+//
+// A daily pair with a non-positive or non-finite close at either end is skipped
+// (FU-20260930-04): such a row is a missing observation, and keeping it would
+// inject a fabricated -100% return into both the mean and the standard
+// deviation. When no pair survives, the result is 0.
 func (hp *HistoricalPrices) Volatility(symbol string, days int) float64 {
 	series := hp.GetCloseSeries(symbol)
 	if len(series) < days+1 {
@@ -307,7 +318,10 @@ func (hp *HistoricalPrices) Volatility(symbol string, days int) float64 {
 	returns := make([]float64, 0, days)
 	start := max(len(series)-days-1, 0)
 	for i := start + 1; i < len(series); i++ {
-		if series[i-1] == 0 {
+		// Skip the pair when EITHER end is a missing/ bad price
+		// (FU-20260930-04). Guarding only the previous close let a stored
+		// Close=0 contribute a fabricated -100% daily return.
+		if !shared.IsUsablePrice(series[i-1]) || !shared.IsUsablePrice(series[i]) {
 			continue
 		}
 		returns = append(returns, series[i]/series[i-1]-1)

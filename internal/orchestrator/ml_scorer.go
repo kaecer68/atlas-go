@@ -6,6 +6,7 @@ import (
 	"sort"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
+	"github.com/kaecer68/atlas-go/internal/domain/shared"
 	"github.com/kaecer68/atlas-go/internal/ml"
 	"github.com/kaecer68/atlas-go/internal/portfolio"
 )
@@ -70,6 +71,14 @@ func (s *MLScorer) Train(bars []domain.DailyBar) error {
 		for i := 0; i < len(b)-1; i++ {
 			bar := b[i]
 			next := b[i+1]
+
+			// A stored close<=0 is a missing observation, not a -100% forward
+			// return (FU-20260930-04). Training on it would both poison the
+			// label distribution and divide by a zero open/close in the
+			// feature vector, so the sample is skipped entirely.
+			if !shared.IsUsablePrice(bar.Close) || !shared.IsUsablePrice(next.Close) {
+				continue
+			}
 
 			features := extractFeatures(bar)
 			label := forwardReturn(bar, next)
@@ -214,8 +223,13 @@ func extractFeatures(bar domain.DailyBar) []float64 {
 }
 
 // forwardReturn computes the return from current bar's close to next bar's close.
+//
+// Both closes must be usable prices (FU-20260930-04): a missing next close is
+// not a -100% return. Callers that build a training set skip such pairs
+// outright (see Train); this guard is the last line of defense for a direct
+// call.
 func forwardReturn(current, next domain.DailyBar) float64 {
-	if current.Close == 0 {
+	if !shared.IsUsablePrice(current.Close) || !shared.IsUsablePrice(next.Close) {
 		return 0
 	}
 	return (next.Close - current.Close) / current.Close

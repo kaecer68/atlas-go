@@ -2846,13 +2846,17 @@ rc=1                            # ⇒ 修前無宣告常數、無守門測試：
   `IsTradable`（`internal/apigateway/adapter_twse.go:131`：`Close > 0 && Volume > 0`）只守住部分路徑。
 - **最小處置建議**：①寫入端把 `close<=0` 視為**缺值**（拒絕或標記，而非 0）②`5904`／`2380` 修值或標缺
   ③與 `FU-20260930-04` 併做（先盤點再決定修法）。
+- **與 `FU-20260930-04` 的分工（2026-10-16）**：消費端半邊**已於 `FU-20260930-04` 收斂**
+  （壞值不再被讀成 −100%；見 `docs/specs/close-positive-consumer-audit-20261016.md`）。
+  本條**仍 `open`**：`close<=0` 的 109 列與 `5904.TW` 10 倍價還在資料裡，且**跳空倍數在消費端仍會穿透**
+  （擋它屬值語意變更 ⇒ 僅提案）。**資料修復是 operator 動作**，不在程式 PR 內。
 
 ---
 
 ### FU-20260930-04 — 稽核「未守 `Close>0`」的 return／volatility 消費者
 
-- **狀態**：`open`
-- **記錄日期**：2026-09-30
+- **狀態**：`done`（2026-10-16 收斂；盤點敘述已更正，處置見條文末）
+- **記錄日期**：2026-09-30 ／ **完成於**：2026-10-16
 - **來源**：`#2151`／`FU-20260930-03` 衍生（壞值 × 未守門 = −100% 假訊號）
 - **現況**：尚未逐一盤點。已知主要消費面為 `portfolio.HistoricalPrices` 的
   `GetCloseSeries`／`MomentumReturn`／`Volatility`（`internal/portfolio/historical_prices.go`）；
@@ -2860,6 +2864,26 @@ rc=1                            # ⇒ 修前無宣告常數、無守門測試：
 - **指紋**：待產出「消費者 × 是否守 `Close>0`」清單（本條即為該清單的產出任務）
 - **最小處置建議**：產出**表格化盤點**（消費者 `file:line`／是否守門／未守門時對壞列的行為），
   再決定是否補守門 —— 補守門屬**值語意變更 ⇒ 窗後或需業主授權**。
+
+- **處置（2026-10-16，PR 本車道）**：**敘述部分成立、部分需更正**，已修。
+  - **權威盤點**：`docs/specs/close-positive-consumer-audit-20261016.md`（16 筆修復＋14 筆已守＋5 筆提案）。
+  - **更正原敘述 ①**：主要消費面**不只** `historical_prices.go`。機械式掃描（`internal/**`＋`cmd/**`）得到
+    **16 處未守／半守** 的價格→報酬／波動／回撤／標籤消費者，跨 `portfolio`／`monitoring`／`feature`／
+    `replay`／`orchestrator`／`scheduler`／`stockpicker`／`calibration`。其中最嚴重的是
+    `internal/feature/feature.go` 的 `return_1d`／`return_5d`／`return_autocorr`（**ML 特徵**）與
+    `internal/scheduler/ml_retrain.go:237` `extractLabels`（**完全未守**：0 分母 ⇒ ±Inf、前向 0 ⇒ −1）、
+    `internal/stockpicker/backtest.go` 前向 bar（壞值被寫成 **−100% outcome** 進 win-rate）。
+  - **更正原敘述 ②**：補守門**不是**值語意變更。守門只改變「本來就是壞值」的列（非正／非有限），
+    正常資料逐位元組同一結果 ⇒ 可直接落地；真正的值語意變更只有**跳空倍數**（10 倍價）防護 ⇒ 僅提案。
+  - **更正原敘述 ③（守門強度的坑）**：既有守門有兩種弱型：只守 `== 0`（**負值可穿透**）與只守**單端**
+    （prev 守、curr 不守 ⇒ 壞列被讀成 −100%）。後者是本次 −100% 假訊號的**主因**。
+  - **選定語意**：非正／非有限收盤價＝**缺值 ⇒ 跳過該觀測**；跳過後無可用觀測時沿用該函式既有的
+    「無資料」值（`0`／`ok=false`）。**沒有**任何路徑被改成「靜默回 0 當成有效報酬」。
+  - **未修（提案）**：跳空倍數防護、`SMA`／`ma_ratio` 等價格水準消費者、總經即時報價
+    `(Last-Open)/Open`（Open=0 ⇒ ±Inf/NaN；可達性未證實）、`optimizer_math.go:96` 均值分母、
+    `cmd/experimental/**` 研究工具 ⇒ 見盤點 §3。
+  - **資料面**：`FU-20260930-03` 的 `close<=0`／10 倍價**仍需 operator 修資料**（本 PR 不動任何資料；
+    10 倍價在消費端仍會穿透）⇒ 03 維持 `open`。
 
 ---
 

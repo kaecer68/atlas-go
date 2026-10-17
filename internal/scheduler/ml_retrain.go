@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
+	"github.com/kaecer68/atlas-go/internal/domain/shared"
 	"github.com/kaecer68/atlas-go/internal/ml"
 	"github.com/kaecer68/atlas-go/internal/replay"
 )
@@ -180,6 +181,25 @@ func (s *MLRetrainScheduler) outputDir() string {
 	return "data/state/ml_models"
 }
 
+// sampleIndexes returns the bar indexes usable as training samples: both the
+// feature bar and its forward bar must carry a usable close (see
+// shared.IsUsablePrice). Index i means "features from bars[i], label from
+// bars[i] -> bars[i+1]".
+//
+// FU-20260930-04: without this filter a stored Close<=0 bars[i+1] produced a
+// fabricated -100% label (and bars[i].Close=0 divided by zero inside the
+// feature row), so the model was trained on garbage. Features and labels are
+// built from this single index list to keep them aligned.
+func sampleIndexes(bars []domain.DailyBar) []int {
+	idx := make([]int, 0, len(bars))
+	for i := 5; i < len(bars)-1; i++ {
+		if shared.IsUsablePrice(bars[i].Close) && shared.IsUsablePrice(bars[i+1].Close) {
+			idx = append(idx, i)
+		}
+	}
+	return idx
+}
+
 func extractFeatures(bars []domain.DailyBar) [][]float64 {
 	n := len(bars)
 	if n < 6 {
@@ -210,8 +230,9 @@ func extractFeatures(bars []domain.DailyBar) [][]float64 {
 	stdC := math.Sqrt(sc / float64(n))
 	stdV := math.Sqrt(sv / float64(n))
 
-	X := make([][]float64, 0, n-6)
-	for i := 5; i < n-1; i++ {
+	idxs := sampleIndexes(bars)
+	X := make([][]float64, 0, len(idxs))
+	for _, i := range idxs {
 		b := bars[i]
 		row := make([]float64, 8)
 
@@ -234,20 +255,21 @@ func extractFeatures(bars []domain.DailyBar) [][]float64 {
 	return X
 }
 
+// extractLabels returns the forward-return label for every sample index
+// reported by sampleIndexes, so the slice stays aligned with extractFeatures.
+//
+// FU-20260930-04: a pair whose ends are not usable prices is skipped instead of
+// being labeled with a fabricated -100% move.
 func extractLabels(bars []domain.DailyBar) []float64 {
-	n := len(bars)
-	if n < 2 {
+	idxs := sampleIndexes(bars)
+	if len(idxs) == 0 {
 		return nil
 	}
-	y := make([]float64, n-1)
-	for i := 0; i < n-1; i++ {
-		y[i] = bars[i+1].Close/bars[i].Close - 1
+	y := make([]float64, 0, len(idxs))
+	for _, i := range idxs {
+		y = append(y, bars[i+1].Close/bars[i].Close-1)
 	}
-	skip := 5
-	if len(y) <= skip {
-		return nil
-	}
-	return y[skip:]
+	return y
 }
 
 func datasetToBars(ds *replay.Dataset) []domain.DailyBar {
