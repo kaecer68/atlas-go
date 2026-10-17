@@ -99,7 +99,8 @@
 | 被拒列可審計 | `logging.Warn(component, "gap_multiple_rejected", symbol/pos/horizon/prev/curr/return/bound)`；豁免記 `Info(gap_multiple_ipo_exempt)`；**每 component 上限 100 行**＋1 行 `gap_multiple_rejected_suppressed` |
 | 正常資料不變 | `pricegate.Check` 只回「可否使用」，**不負責除法**——各消費端保留原本算式（`(curr-prev)/prev` 或 `curr/prev-1`），故正常觀測逐位元組同值 |
 
-接下來的消費端（皆為 §1 已修過的同一批）：`portfolio`（`MomentumReturn`／`Volatility`／
+接上的消費端是 §1 的 16 筆中的 **13 筆報酬消費者**（`maxDrawdown`／`price_position`／`quality_intra`
+三筆是價格水準，跳空倍數門檻不適用）：`portfolio`（`MomentumReturn`／`Volatility`／
 `extractReturnMatrix`）、`feature`（`return_1d`／`return_5d`／`return_autocorr`／`ForwardReturnLabel`）、
 `monitoring.realizedVolatility`、`replay.Dataset.ForwardReturn`、`calibration.LoadReturnsFromCSV`、
 `scheduler.extractLabels`（經 `sampleIndexes`）、`orchestrator.ml_scorer.Train`、`stockpicker` 前向報酬。

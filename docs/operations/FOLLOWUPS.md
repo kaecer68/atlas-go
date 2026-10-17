@@ -2937,7 +2937,8 @@ rc=1                            # ⇒ 修前無宣告常數、無守門測試：
     ① **3-1 跳空倍數門檻已做** ⇒ `|r|` 超出 `shared.MaxPlausibleReturn(horizon)`（單日 50%，長天期按
     `1.5^h-1` 複利）即視為壞值，由新套件 `internal/pricegate` 統一守門並記 WARN（可審計、每 component
     上限 100 行）；**新股上市首 5 個交易日豁免**（`shared.InIPOExemptWindow`，無漲跌幅限制 ⇒ >50% 可為真，
-    豁免本身記 INFO）。已接到本條修過的 16 處同族：`portfolio`（momentum／volatility／optimizer）、
+    豁免本身記 INFO）。已接到本條 16 筆中的 **13 筆報酬消費端**（其餘 3 筆是價格水準消費者
+    `maxDrawdown`／`price_position`／`quality_intra`，不適用跳空倍數門檻）：`portfolio`（momentum／volatility／optimizer）、
     `feature`（`return_1d`／`return_5d`／`return_autocorr`／`ForwardReturnLabel`）、`monitoring`
     `realizedVolatility`、`replay.ForwardReturn`、`calibration` 校準標籤、`scheduler.extractLabels`、
     `orchestrator` `ml_scorer.Train`、`stockpicker` 前向報酬。
