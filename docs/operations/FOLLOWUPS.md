@@ -5798,6 +5798,31 @@ gen_routes_determinism_test.go: PASS（同輸入兩次呼叫逐位元組相同�
 - **限制**：不主張 0.0123「合理」——p75-of-13 這種單點估計量的適當性是政策問題
   （見 `FU-20260930-09`）；本條只證「是算出來的」。歷史列集合不可重建（無 `created_at`）。
 
+### FU-20261017-02 — `drift_unexplained` 的**逐 key** 資訊原本只在日誌：改以 counter 曝露（`atlas_calibration_drift_unexplained_total`）
+
+- **狀態**：`done`
+- **記錄日期**：2026-10-17
+- **來源**：生產日誌 `drift_unexplained … out_of_window_keys=darwinian.risk_volatility_threshold.value`
+  （`2026-10-17T06:27:05Z` 起每 5 分鐘一則）。
+- **根因（更正稽核敘述）**：敘述「`drift_unexplained` 只是 WARN ⇒ **沒有 rule／alert**」**不成立** ✗ ——
+  `monitoring/rules/calibration_freshness_alerts.yml` 第 4 條 `CalibrationEffectiveDriftUnexplained`
+  自 #2076 起就存在，且生產 Prometheus 此刻 **firing**（`activeAt 2026-10-17T07:27:20Z`，
+  Alertmanager `/api/v2/alerts` 同一筆 active）。真正的缺口是**粒度**：既有 gauge 只回答
+  「**幾個** key」，而「**哪一個** key」只寫在日誌裡 ⇒ Prometheus 看不到。
+- **處置**：新增 counter `atlas_calibration_drift_unexplained_total{artifact,key,reason}`
+  （`reason ∈ out_of_window｜not_applicable`），與 WARN **同一份判定**逐輪 +1（= 每輪一則 WARN 的
+  一一對應）；`ssot_moved`（設計行為）與 `drift_run_ok=0`（未知）**不計數**。
+  實作 `internal/monitoring/calibration_effective.go`；測試
+  `internal/monitoring/calibration_drift_unexplained_test.go`（7 條契約）＋
+  `cmd/atlas/calibration_effective_metrics_task_test.go`（2 個端到端 `/metrics` 案例）。
+  文件：`docs/specs/calibration-drift-unexplained-per-key-20261017.md`。
+- **送達通道（不在本 repo，由 a2a-dev 接線）**：Mac Mini 的 `~/bin/notify.sh` watcher，
+  event **`atlas.drift_unexplained`**、source **`atlas-calibration`**、severity **`warning`**，
+  watcher 內建 **6h 去重**。本 repo **沒有**（也刻意不加）讀這個 counter 的 Prometheus rule。
+- **限制**：(1) counter 每 5 分鐘 +1 ⇒ 只看 `increase()/rate()`，絕對值無意義；
+  (2) 它本身**不會**通知任何人，通知仍取決於 watcher 是否已接線；
+  (3) `key` 標籤基數 = overlay entry 數（實測 14）。
+
 ## 相關文件
 
 - [universe-scoring-ranked-zero-20260925.md](universe-scoring-ranked-zero-20260925.md)
