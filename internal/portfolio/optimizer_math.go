@@ -3,7 +3,7 @@ package portfolio
 import (
 	"gonum.org/v1/gonum/mat"
 
-	"github.com/kaecer68/atlas-go/internal/domain/shared"
+	"github.com/kaecer68/atlas-go/internal/pricegate"
 )
 
 //
@@ -96,8 +96,10 @@ func (o *Optimizer) extractReturnMatrix(symbols []string) *returnMatrix {
 			curr := s[offset+t+1]
 			// A stored close<=0 is a missing observation (FU-20260930-04):
 			// guarding only the previous close let curr=0 enter the matrix as
-			// a fabricated -100% return.
-			if !shared.IsUsablePrice(prev) || !shared.IsUsablePrice(curr) {
+			// a fabricated -100% return. The gate also drops a corrupted
+			// multiple, which both closes being usable cannot reveal (k3
+			// decision 3-1).
+			if !pricegate.Check("portfolio.optimizer_return_matrix", valid[i], prev, curr, offset+t+1, 1) {
 				continue
 			}
 			r := curr/prev - 1

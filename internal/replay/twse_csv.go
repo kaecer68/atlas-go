@@ -15,6 +15,7 @@ import (
 
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/domain/shared"
+	"github.com/kaecer68/atlas-go/internal/pricegate"
 )
 
 // ErrReplayDataMissing is returned when the replay CSV file cannot be found.
@@ -144,6 +145,14 @@ func (d *Dataset) ForwardReturn(symbol string, currentDate time.Time, window int
 		return 0, false
 	}
 
+	// A corrupted stored multiple (a 10x close) is a gross error, not a real
+	// jump: both closes are usable prices, so the guard above cannot see it
+	// (k3 decision 3-1). pos is the position of the forward bar on the dataset
+	// date axis so the IPO no-limit window stays exempt.
+	if !pricegate.Check("replay.forward_return", symbol, currentBar.Close, nextBar.Close, d.dateIndex(nextDate), window) {
+		return 0, false
+	}
+
 	// Reject stale/duplicated OHLCV: if both bars share the same Open/High/Low/Close/Volume,
 	// the data source is likely backfilled with the same row across consecutive dates.
 	// Return ok=false so downstream code (orchestrator, judge) falls back to the
@@ -157,6 +166,18 @@ func (d *Dataset) ForwardReturn(symbol string, currentDate time.Time, window int
 	}
 
 	return (nextBar.Close - currentBar.Close) / currentBar.Close, true
+}
+
+// dateIndex returns the position of date on the dataset's date axis, or -1 when
+// the date is not part of the dataset.
+func (d *Dataset) dateIndex(date time.Time) int {
+	key := date.Format("2006-01-02")
+	for i, dt := range d.Dates {
+		if dt.Format("2006-01-02") == key {
+			return i
+		}
+	}
+	return -1
 }
 
 func (d *Dataset) NextDate(currentDate time.Time, offset int) (time.Time, bool) {

@@ -7,6 +7,7 @@ import (
 
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/domain/shared"
+	"github.com/kaecer68/atlas-go/internal/pricegate"
 )
 
 // Func computes one feature value from a bar at position idx in a sorted bar slice.
@@ -27,18 +28,26 @@ var Registry = map[string]Func{
 	"return_1d": func(b domain.DailyBar, idx int, bars []domain.DailyBar) float64 {
 		// Both ends must be usable prices: a stored Close<=0 is a missing
 		// observation, not a -100% return (FU-20260930-04).
-		if idx > 0 && shared.IsUsablePrice(bars[idx-1].Close) && shared.IsUsablePrice(b.Close) {
-			return (b.Close - bars[idx-1].Close) / bars[idx-1].Close
+		if idx == 0 {
+			return 0
 		}
-		return 0
+		// The gate also drops a corrupted multiple, which the price guard
+		// alone cannot see (k3 decision 3-1).
+		if !pricegate.Check("feature.return_1d", "", bars[idx-1].Close, b.Close, idx, 1) {
+			return 0
+		}
+		return (b.Close - bars[idx-1].Close) / bars[idx-1].Close
 	},
 	"return_5d": func(b domain.DailyBar, idx int, bars []domain.DailyBar) float64 {
 		// Same guard as return_1d: both ends must be usable prices
 		// (FU-20260930-04).
-		if idx >= 5 && shared.IsUsablePrice(bars[idx-5].Close) && shared.IsUsablePrice(b.Close) {
-			return (b.Close - bars[idx-5].Close) / bars[idx-5].Close
+		if idx < 5 {
+			return 0
 		}
-		return 0
+		if !pricegate.Check("feature.return_5d", "", bars[idx-5].Close, b.Close, idx, 5) {
+			return 0
+		}
+		return (b.Close - bars[idx-5].Close) / bars[idx-5].Close
 	},
 	"hl_ratio": func(b domain.DailyBar, _ int, _ []domain.DailyBar) float64 {
 		if b.Close > 0 {
@@ -349,7 +358,7 @@ var Registry = map[string]Func{
 			// Both ends must be usable prices (FU-20260930-04): guarding only
 			// the previous close fed a fabricated -100% return into the
 			// autocorrelation.
-			if shared.IsUsablePrice(bars[pos-1].Close) && shared.IsUsablePrice(bars[pos].Close) {
+			if pricegate.Check("feature.return_autocorr", "", bars[pos-1].Close, bars[pos].Close, pos, 1) {
 				rets[j] = (bars[pos].Close - bars[pos-1].Close) / bars[pos-1].Close
 			}
 		}
@@ -601,7 +610,7 @@ func ForwardReturnLabel() func(bars []domain.DailyBar) []float64 {
 		for i := 0; i < len(bars)-1; i++ {
 			// Both ends must be usable prices (FU-20260930-04): guarding only
 			// bars[i] turned a missing forward close into a -100% label.
-			if shared.IsUsablePrice(bars[i].Close) && shared.IsUsablePrice(bars[i+1].Close) {
+			if pricegate.Check("feature.forward_return_label", "", bars[i].Close, bars[i+1].Close, i+1, 1) {
 				l[i] = (bars[i+1].Close - bars[i].Close) / bars[i].Close
 			}
 		}
