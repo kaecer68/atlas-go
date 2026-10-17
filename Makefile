@@ -1242,6 +1242,10 @@ ci-gate: embed-dirs
 	@bash tests/scripts/test-integration-filter-sync.sh
 	@bash scripts/ci/check_integration_filter_sync.sh
 	@echo "    ✅"
+	@echo "  → PG/SQLite schema 逐欄比對守門（FU-20261012-07/-09：同表兩份 schema，一邊漏補欄 ⇒ 2026-10-12 的 503）"
+	@bash tests/scripts/test-check-schema-parity.sh
+	@bash scripts/ci/check_schema_parity.sh
+	@echo "    ✅"
 	@echo "  → monitoring 單一設定樹自我測試（hermetic fixtures；PR 階段攔『改錯棵』）"
 	@bash tests/scripts/test-monitoring-single-source.sh
 	@echo "    ✅"

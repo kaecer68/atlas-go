@@ -50,12 +50,27 @@ func InitSchema(db *sql.DB) error {
 		conviction_breakdown_json TEXT
 	);
 
+	-- screening_rejects mirrors sql/migrations/000003_add_audit_tables.up.sql as
+	-- amended by 000030 (FU-20261012-07/-09): the PG shape (time/agent_id/skill/
+	-- criterion/criterion_label/threshold/actual_value/factor_scores) and the
+	-- legacy SQLite shape (reason/timestamp/factor_scores_json) are both kept so
+	-- the two backends expose ONE column set. Adding a column on one side only is
+	-- what produced the 2026-10-12 production 503; TestSchemaParity fails on any
+	-- future one-sided change.
 	CREATE TABLE IF NOT EXISTS screening_rejects (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		time TEXT,
 		session_id TEXT NOT NULL,
 		symbol TEXT NOT NULL,
+		agent_id TEXT,
+		skill TEXT,
+		criterion TEXT,
+		criterion_label TEXT,
+		threshold TEXT,
+		actual_value TEXT,
 		reason TEXT,
 		timestamp TEXT,
+		factor_scores TEXT,
 		factor_scores_json TEXT
 	);
 
@@ -69,9 +84,32 @@ func InitSchema(db *sql.DB) error {
 		timestamp TEXT
 	);
 
+	-- session_summaries mirrors sql/migrations/000003_add_audit_tables.up.sql as
+	-- amended by 000007/000009/000030. Same rule as screening_rejects: one column
+	-- set for both backends, and every column added here must also be added to
+	-- addSchemaParityColumns for databases created before the column existed
+	-- (CREATE TABLE IF NOT EXISTS never alters an existing table).
 	CREATE TABLE IF NOT EXISTS session_summaries (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		time TEXT,
 		session_id TEXT UNIQUE NOT NULL,
+		regime TEXT,
+		order_count INTEGER,
+		position_count INTEGER,
+		ending_cash REAL,
+		portfolio_value REAL,
+		outcome_count INTEGER,
+		broker_runtime TEXT,
+		next_experiment_agent_id TEXT,
+		proposal_id TEXT,
+		commit_id TEXT,
+		approval_id TEXT,
+		guard_outcomes TEXT,
+		tax_snapshots TEXT,
+		after_tax_pnl REAL,
+		total_tax_paid REAL,
+		parameters_version TEXT,
+		risk_commentary TEXT,
 		total_recs INTEGER,
 		passed_guards INTEGER,
 		rejected INTEGER,
@@ -80,11 +118,21 @@ func InitSchema(db *sql.DB) error {
 
 	CREATE TABLE IF NOT EXISTS human_interventions (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		time TEXT,
 		session_id TEXT NOT NULL,
 		symbol TEXT NOT NULL,
 		agent_id TEXT,
 		action TEXT,
-		timestamp TEXT
+		timestamp TEXT,
+		intervention_id TEXT,
+		type TEXT,
+		target_agent_id TEXT,
+		target_model_id TEXT,
+		target_sector TEXT,
+		target_symbol TEXT,
+		value REAL,
+		reason TEXT,
+		operator TEXT
 	);
 
 	CREATE TABLE IF NOT EXISTS quotes (
@@ -391,6 +439,7 @@ func InitSchema(db *sql.DB) error {
 		addOutcomePeriodColumns,        // capital-flow Phase 2 PR-2a (market_period join)
 		addPeriodDetectorVersionColumn, // capital-flow Phase 3 PR-3b (detector semantics stamp)
 		addStockWinRateBreakEvenColumn, // Phase 4 PR #2213 (break-even cost, 2026-10-12 P0)
+		addSchemaParityColumns,         // FU-20261012-07/-09 (PG/SQLite single column set)
 	}
 	for _, m := range additiveMigrations {
 		if err := m(db); err != nil {
@@ -460,6 +509,79 @@ func addColumnIfMissing(db *sql.DB, table, column, ddl string) error {
 	}
 	if _, err := db.Exec(`ALTER TABLE ` + table + ` ADD COLUMN ` + column + ` ` + ddl); err != nil {
 		return fmt.Errorf("alter %s add %s: %w", table, column, err)
+	}
+	return nil
+}
+
+// addSchemaParityColumns brings the three shared ledger tables whose PostgreSQL
+// and SQLite shapes had drifted apart (human_interventions, screening_rejects,
+// session_summaries) to a single column set: the union of both historic shapes.
+// FU-20261012-07 tracks the dual-definition class, FU-20261012-09 the divergence
+// itself; the authoritative measurement lives in
+// scripts/ci/schema-parity-allowlist.json + docs/specs/schema-parity-spec.md and
+// is enforced by TestSchemaParity_PGMigrationsVsSQLite.
+//
+// Two rules make this migration mandatory rather than cosmetic:
+//
+//   - CREATE TABLE IF NOT EXISTS never adds a column to an existing database, so
+//     every column added to the CREATE TABLE blocks above must also be applied
+//     here (this is exactly how the 2026-10-12 break_even_cost_rate P0 shipped).
+//   - Nothing is dropped and no type is changed: the legacy names (timestamp /
+//     agent_id / action / reason / factor_scores_json / total_recs …) stay
+//     alongside the newer PG names (time / target_agent_id / operator /
+//     criterion / factor_scores / order_count …). Each backend keeps writing the
+//     names it already writes; the other side's columns stay NULL.
+//
+// The mirrored PG columns are added by sql/migrations/000030_schema_parity_ledger_columns.up.sql.
+// All columns are nullable in SQLite even where PG declares NOT NULL: rows that
+// predate this change have no value for them, and ALTER TABLE cannot add a NOT
+// NULL column without a default.
+func addSchemaParityColumns(db *sql.DB) error {
+	columns := []struct{ table, column, ddl string }{
+		// human_interventions — PG shape (000003) missing from SQLite.
+		{"human_interventions", "time", "TEXT"},
+		{"human_interventions", "intervention_id", "TEXT"},
+		{"human_interventions", "type", "TEXT"},
+		{"human_interventions", "target_agent_id", "TEXT"},
+		{"human_interventions", "target_model_id", "TEXT"},
+		{"human_interventions", "target_sector", "TEXT"},
+		{"human_interventions", "target_symbol", "TEXT"},
+		{"human_interventions", "value", "REAL"},
+		{"human_interventions", "reason", "TEXT"},
+		{"human_interventions", "operator", "TEXT"},
+		// screening_rejects — PG shape (000003) missing from SQLite.
+		{"screening_rejects", "time", "TEXT"},
+		{"screening_rejects", "agent_id", "TEXT"},
+		{"screening_rejects", "skill", "TEXT"},
+		{"screening_rejects", "criterion", "TEXT"},
+		{"screening_rejects", "criterion_label", "TEXT"},
+		{"screening_rejects", "threshold", "TEXT"},
+		{"screening_rejects", "actual_value", "TEXT"},
+		{"screening_rejects", "factor_scores", "TEXT"},
+		// session_summaries — PG shape (000003/000007/000009) missing from SQLite.
+		{"session_summaries", "time", "TEXT"},
+		{"session_summaries", "regime", "TEXT"},
+		{"session_summaries", "order_count", "INTEGER"},
+		{"session_summaries", "position_count", "INTEGER"},
+		{"session_summaries", "ending_cash", "REAL"},
+		{"session_summaries", "portfolio_value", "REAL"},
+		{"session_summaries", "outcome_count", "INTEGER"},
+		{"session_summaries", "broker_runtime", "TEXT"},
+		{"session_summaries", "next_experiment_agent_id", "TEXT"},
+		{"session_summaries", "proposal_id", "TEXT"},
+		{"session_summaries", "commit_id", "TEXT"},
+		{"session_summaries", "approval_id", "TEXT"},
+		{"session_summaries", "guard_outcomes", "TEXT"},
+		{"session_summaries", "tax_snapshots", "TEXT"},
+		{"session_summaries", "after_tax_pnl", "REAL"},
+		{"session_summaries", "total_tax_paid", "REAL"},
+		{"session_summaries", "parameters_version", "TEXT"},
+		{"session_summaries", "risk_commentary", "TEXT"},
+	}
+	for _, c := range columns {
+		if err := addColumnIfMissing(db, c.table, c.column, c.ddl); err != nil {
+			return fmt.Errorf("migrate %s.%s: %w", c.table, c.column, err)
+		}
 	}
 	return nil
 }
