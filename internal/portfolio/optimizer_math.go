@@ -14,8 +14,9 @@ import (
 // | Daily price series | HistoricalPrices.GetCloseSeries | (Pₜ-Pₜ₋₁)/Pₜ₋₁     |
 //
 // A close that is not usable (<=0 or non-finite, see shared.IsUsablePrice) is
-// treated as missing: that day's return stays 0 and is not added to the mean
-// (FU-20260930-04).
+// treated as missing: that day's return stays 0 and is neither added to the
+// mean numerator nor counted in its denominator (FU-20260930-04; k3 decision
+// 3-4 fixed the denominator, which used to stay at the fixed T-1).
 // | Factor scores      | FactorEngine                   | Momentum/Value/Quality|
 // | Constraints        | configs/parameters.json         | w_max, cash_reserve  |
 //
@@ -89,6 +90,7 @@ func (o *Optimizer) extractReturnMatrix(symbols []string) *returnMatrix {
 		s := series[i]
 		offset := len(s) - T
 		sum := 0.0
+		n := 0
 		for t := range Tret {
 			prev := s[offset+t]
 			curr := s[offset+t+1]
@@ -101,8 +103,15 @@ func (o *Optimizer) extractReturnMatrix(symbols []string) *returnMatrix {
 			r := curr/prev - 1
 			ret[t][i] = r
 			sum += r
+			n++
 		}
-		means[i] = sum / float64(Tret)
+		// Divide by the returns actually accumulated, not by the fixed T-1
+		// denominator: a skipped missing observation must not shrink the mean
+		// of the observations that do exist (k3 decision 3-4). With no usable
+		// return the mean stays 0, never NaN.
+		if n > 0 {
+			means[i] = sum / float64(n)
+		}
 	}
 
 	return &returnMatrix{assets: valid, returns: ret, means: means}
