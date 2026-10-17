@@ -2,7 +2,7 @@
 
 > 進入 `internal/<mod>/` 工作前，先讀該目錄下的 `AGENTS.md`（或 `CONSTITUTION.md`）。模組特有陷阱寫在裡面，跳過會踩坑。
 >
-> **總計**：84 個模組（30 S / 33 E / 9 X / 1 A / 10 U）；2026-09-24 新增 `sectormap`（#1943）、`stockflows`（#1945）；2026-09-25 新增 `symbolindustry`（#1943），並按實際列數校正 S/U/X 計數。保留 AGENTS.md 的 hot-path 覆蓋模組共 **15** 個（2026-07-11 從 27 合併精簡，清單見下方）。
+> **總計**：85 個模組（31 S / 33 E / 9 X / 1 A / 10 U）；2026-09-24 新增 `sectormap`（#1943）、`stockflows`（#1945）；2026-09-25 新增 `symbolindustry`（#1943），並按實際列數校正 S/U/X 計數；2026-10-17 新增 `pricegate`（k3 決策 3-1）。保留 AGENTS.md 的 hot-path 覆蓋模組共 **15** 個（2026-07-11 從 27 合併精簡，清單見下方）。
 
 > **v0.0.2.0 變更（2026-07-24）**：成熟度重分組——swarm X→A、replay/capitalflow/forecast/retail/strategy_ranker/stress/reporting/subscription 升至 E；sectorallocation 補加入 X；calibration 補加入 U。
 > **2026-08-07 補齊**：16 個實際存在但未索引模組補入（S: constants/experiment/janus/live；E: acceptance/eventquality/marketexplain/methodology/observability/userstate；X: alerting/llm/llm_annotator/stocktools；U: backfill/buildinfo）。
@@ -31,6 +31,7 @@
 | `monitoring` | Dashboard API、監控、人工干預入口 |
 | `narrative` | 宏觀敘事、因果鏈、台灣壓力指數 |
 | `orchestrator` | 三層 executor 路由、GuardOutcomes 對齊、PluginHost |
+| `pricegate` | 價格→報酬守門（`Check`）：跳空倍數門檻、新股首 5 日豁免、被拒列 WARN — Maturity: stable |
 | `portprobe` | Stateless TCP port 探測 helper（`Probe`/`LookupOccupant`/`IsFubonZombie`/`KillOccupant`）— Maturity: stable |
 | `repository` | PostgreSQL 持久化、DualWriteRepository |
 | `risk` | RiskManager、VaR、宏觀回撤 |

@@ -6,9 +6,9 @@ import (
 	"sort"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
-	"github.com/kaecer68/atlas-go/internal/domain/shared"
 	"github.com/kaecer68/atlas-go/internal/ml"
 	"github.com/kaecer68/atlas-go/internal/portfolio"
+	"github.com/kaecer68/atlas-go/internal/pricegate"
 )
 
 // ScoredQuote pairs a Quote with its ML-predicted score.
@@ -59,7 +59,7 @@ func (s *MLScorer) Train(bars []domain.DailyBar) error {
 	var X [][]float64
 	var y []float64
 
-	for _, b := range symbolBars {
+	for sym, b := range symbolBars {
 		if len(b) < 2 {
 			continue
 		}
@@ -73,15 +73,17 @@ func (s *MLScorer) Train(bars []domain.DailyBar) error {
 			next := b[i+1]
 
 			// A stored close<=0 is a missing observation, not a -100% forward
-			// return (FU-20260930-04). Training on it would both poison the
-			// label distribution and divide by a zero open/close in the
-			// feature vector, so the sample is skipped entirely.
-			if !shared.IsUsablePrice(bar.Close) || !shared.IsUsablePrice(next.Close) {
+			// return (FU-20260930-04), and a corrupted multiple is a gross
+			// error rather than a real jump (k3 decision 3-1). Training on
+			// either would both poison the label distribution and divide by a
+			// zero open/close in the feature vector, so the sample (label AND
+			// features) is skipped entirely.
+			label, ok := forwardReturn(sym, i+1, bar, next)
+			if !ok {
 				continue
 			}
 
 			features := extractFeatures(bar)
-			label := forwardReturn(bar, next)
 
 			X = append(X, features)
 			y = append(y, label)
@@ -222,17 +224,18 @@ func extractFeatures(bar domain.DailyBar) []float64 {
 	return []float64{momentum, value, quality, liquidity}
 }
 
-// forwardReturn computes the return from current bar's close to next bar's close.
+// forwardReturn computes the return from current bar's close to next bar's close
+// and reports whether the pair may be used as a training sample.
 //
 // Both closes must be usable prices (FU-20260930-04): a missing next close is
-// not a -100% return. Callers that build a training set skip such pairs
-// outright (see Train); this guard is the last line of defense for a direct
-// call.
-func forwardReturn(current, next domain.DailyBar) float64 {
-	if !shared.IsUsablePrice(current.Close) || !shared.IsUsablePrice(next.Close) {
-		return 0
+// not a -100% return. A return beyond the gross-error bound is a corrupted
+// stored multiple, not a real jump (k3 decision 3-1). pos is the index of the
+// forward bar in the symbol's series, which keeps the IPO window exempt.
+func forwardReturn(symbol string, pos int, current, next domain.DailyBar) (float64, bool) {
+	if !pricegate.Check("orchestrator.ml_scorer.label", symbol, current.Close, next.Close, pos, 1) {
+		return 0, false
 	}
-	return (next.Close - current.Close) / current.Close
+	return (next.Close - current.Close) / current.Close, true
 }
 
 // compile-time interface check: MLScorer implements nothing external yet.

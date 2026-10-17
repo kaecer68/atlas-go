@@ -1411,22 +1411,37 @@ func QuotesToMacroDataSnapshot(quotes []domain.Quote) narrative.MacroDataSnapsho
 	// treats RecordedAt=0 (1970) as stale and returns nil adjustments, which
 	// would silently disable the CharterMode macro-flow path (Phase C2).
 	data.RecordedAt = time.Now().Unix()
+	const component = "orchestrator.macro_snapshot"
 	for _, q := range quotes {
 		switch q.Symbol {
 		case "US10Y", "^TNX":
-			data.US10Y = narrative.MacroDataPoint{Value: q.Last, ChangePct: (q.Last - q.Open) / q.Open * 100}
+			if pct, ok := quoteChangePct(component, q); ok {
+				data.US10Y = narrative.MacroDataPoint{Value: q.Last, ChangePct: pct}
+			}
 		case "DXY", "^DXY":
-			data.DXY = narrative.MacroDataPoint{Value: q.Last, ChangePct: (q.Last - q.Open) / q.Open * 100}
+			if pct, ok := quoteChangePct(component, q); ok {
+				data.DXY = narrative.MacroDataPoint{Value: q.Last, ChangePct: pct}
+			}
 		case "VIX", "^VIX":
-			data.VIX = narrative.MacroDataPoint{Value: q.Last, ChangePct: (q.Last - q.Open) / q.Open * 100}
+			if pct, ok := quoteChangePct(component, q); ok {
+				data.VIX = narrative.MacroDataPoint{Value: q.Last, ChangePct: pct}
+			}
 		case "USD/TWD", "USDTWD=X":
-			data.USD_TWD = narrative.MacroDataPoint{Value: q.Last, ChangePct: (q.Last - q.Open) / q.Open * 100}
+			if pct, ok := quoteChangePct(component, q); ok {
+				data.USD_TWD = narrative.MacroDataPoint{Value: q.Last, ChangePct: pct}
+			}
 		case "OIL", "CL=F":
-			data.Oil = narrative.MacroDataPoint{Value: q.Last, ChangePct: (q.Last - q.Open) / q.Open * 100}
+			if pct, ok := quoteChangePct(component, q); ok {
+				data.Oil = narrative.MacroDataPoint{Value: q.Last, ChangePct: pct}
+			}
 		case "GOLD", "GC=F":
-			data.Gold = narrative.MacroDataPoint{Value: q.Last, ChangePct: (q.Last - q.Open) / q.Open * 100}
+			if pct, ok := quoteChangePct(component, q); ok {
+				data.Gold = narrative.MacroDataPoint{Value: q.Last, ChangePct: pct}
+			}
 		case "JPY=X", "USDJPY=X":
-			data.JPY = narrative.MacroDataPoint{Value: q.Last, ChangePct: (q.Last - q.Open) / q.Open * 100}
+			if pct, ok := quoteChangePct(component, q); ok {
+				data.JPY = narrative.MacroDataPoint{Value: q.Last, ChangePct: pct}
+			}
 		}
 	}
 	return data

@@ -372,8 +372,8 @@ func TestExtractFeaturesZeroClose(t *testing.T) {
 func TestForwardReturnZeroClose(t *testing.T) {
 	current := makeDailyBar("2330", "2026-01-02", 0, 0, 0, 0, 0)
 	next := makeDailyBar("2330", "2026-01-03", 0, 0, 0, 100, 0)
-	if forwardReturn(current, next) != 0 {
-		t.Error("forward return with zero current close should be 0")
+	if r, ok := forwardReturn("2330", 1, current, next); ok || r != 0 {
+		t.Errorf("forwardReturn with zero current close = (%v, %v), want (0, false)", r, ok)
 	}
 }
 

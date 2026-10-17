@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/kaecer68/atlas-go/internal/domain/shared"
+	"github.com/kaecer68/atlas-go/internal/pricegate"
 	"github.com/kaecer68/atlas-go/internal/replay"
 )
 
@@ -109,6 +110,10 @@ func LoadReturnsFromCSV(path string) ([]float64, int, error) {
 
 	var returns []float64
 	var prevClose float64
+	// obs counts the symbol's usable closes seen so far, which is the position
+	// used for the IPO exemption: date gaps must not turn a new listing's first
+	// sessions into "not exempt" (k3 decision 3-1).
+	obs := 0
 	for _, date := range ds.Dates {
 		bar, ok := ds.ByDate[date.Format("2006-01-02")][bestSym]
 		// Non-positive/non-finite closes are missing observations, not prices
@@ -117,10 +122,12 @@ func LoadReturnsFromCSV(path string) ([]float64, int, error) {
 		if !ok || !shared.IsUsablePrice(bar.Close) {
 			continue
 		}
+		obs++
 		if prevClose > 0 {
-			ret := (bar.Close - prevClose) / prevClose
-			if !math.IsNaN(ret) && !math.IsInf(ret, 0) {
-				returns = append(returns, ret)
+			// The gate also drops a corrupted multiple (a 10x close), which
+			// both closes being usable prices cannot reveal (k3 decision 3-1).
+			if pricegate.Check("calibration.label_return", bestSym, prevClose, bar.Close, obs-1, 1) {
+				returns = append(returns, (bar.Close-prevClose)/prevClose)
 			}
 		}
 		prevClose = bar.Close

@@ -11,6 +11,7 @@ import (
 	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/domain/shared"
+	"github.com/kaecer68/atlas-go/internal/pricegate"
 )
 
 const (
@@ -331,8 +332,9 @@ func (f *RiskExclusionFilter) realizedVolatility(symbol string, days int) float6
 		// Skip the pair when EITHER end is a missing/bad price
 		// (FU-20260930-04): guarding only series[i-1] let a stored Close=0
 		// contribute a fabricated -100% daily return to both the mean and the
-		// standard deviation.
-		if !shared.IsUsablePrice(series[i-1]) || !shared.IsUsablePrice(series[i]) {
+		// standard deviation. The gate also drops a corrupted multiple, which
+		// both ends being usable prices cannot reveal (k3 decision 3-1).
+		if !pricegate.Check("monitoring.realized_volatility", symbol, series[i-1], series[i], i, 1) {
 			continue
 		}
 		returns = append(returns, series[i]/series[i-1]-1)
