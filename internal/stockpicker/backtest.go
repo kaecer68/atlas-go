@@ -24,7 +24,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/kaecer68/atlas-go/internal/domain/shared"
+	"github.com/kaecer68/atlas-go/internal/pricegate"
 )
 
 // HistoricalBar is the minimal point-in-time daily bar a condition may read.
@@ -184,14 +184,14 @@ func RunBacktest(ctx context.Context, cfg BacktestConfig, panel PanelSource, con
 				continue // no forward truth available
 			}
 			closePrice := bars[i].Close
-			if !shared.IsUsablePrice(closePrice) {
-				continue
-			}
 			fwd := bars[i+cfg.ForwardDays].Close
 			// The forward bar needs the same guard (FU-20260930-04): a stored
 			// Close=0 on the horizon day used to be recorded as a real -100%
-			// outcome, which then enters the win-rate aggregates.
-			if !shared.IsUsablePrice(fwd) {
+			// outcome, which then enters the win-rate aggregates. The gate also
+			// drops a corrupted multiple (a 10x close), which both closes being
+			// usable prices cannot reveal (k3 decision 3-1): a -90% or +900%
+			// "outcome" would otherwise be aggregated into the win rate.
+			if !pricegate.Check("stockpicker.forward_return", symbol, closePrice, fwd, i+cfg.ForwardDays, cfg.ForwardDays) {
 				continue
 			}
 			forwardReturn := fwd/closePrice - 1

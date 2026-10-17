@@ -13,6 +13,7 @@ import (
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/domain/shared"
 	"github.com/kaecer68/atlas-go/internal/ml"
+	"github.com/kaecer68/atlas-go/internal/pricegate"
 	"github.com/kaecer68/atlas-go/internal/replay"
 )
 
@@ -193,9 +194,19 @@ func (s *MLRetrainScheduler) outputDir() string {
 func sampleIndexes(bars []domain.DailyBar) []int {
 	idx := make([]int, 0, len(bars))
 	for i := 5; i < len(bars)-1; i++ {
-		if shared.IsUsablePrice(bars[i].Close) && shared.IsUsablePrice(bars[i+1].Close) {
-			idx = append(idx, i)
+		if !shared.IsUsablePrice(bars[i].Close) || !shared.IsUsablePrice(bars[i+1].Close) {
+			continue
 		}
+		// The gate also drops a corrupted multiple (a 10x close), which both
+		// closes being usable prices cannot reveal (k3 decision 3-1). A
+		// rejected pair is logged; the features and labels share this one
+		// index list, so both stay aligned. extractFeatures and extractLabels
+		// each call this, so one rejected pair can appear twice in the log —
+		// pricegate bounds that per component.
+		if !pricegate.Check("scheduler.ml_retrain.label", "", bars[i].Close, bars[i+1].Close, i+1, 1) {
+			continue
+		}
+		idx = append(idx, i)
 	}
 	return idx
 }

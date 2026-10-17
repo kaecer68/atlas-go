@@ -4,6 +4,8 @@ import (
 	"fmt"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
+	"github.com/kaecer68/atlas-go/internal/domain/shared"
+	"github.com/kaecer68/atlas-go/internal/logging"
 	"github.com/kaecer68/atlas-go/internal/narrative"
 )
 
@@ -55,36 +57,77 @@ func (s *System) applyNarrativeContextWithEvents(recs []domain.Recommendation, e
 	return enriched
 }
 
+// quoteChangePct returns the intraday change of q in percent and reports
+// whether the observation may be used (k3 decision 3-3).
+//
+// The divisor is the only guarded input: a non-positive or non-finite Open
+// cannot divide, and the raw expression (Last-Open)/Open yields +-Inf or NaN,
+// which then reaches the narrative detectors and the macro-flow engine as if it
+// were a real session move. Such a quote is a MISSING observation, so the field
+// keeps its zero value and the skip is logged for audit. Normal quotes take the
+// same arithmetic as before, bit for bit.
+func quoteChangePct(component string, q domain.Quote) (float64, bool) {
+	if !shared.IsUsablePrice(q.Open) {
+		logging.Warn(component, "quote_change_skipped",
+			"reason", "unusable_open", "symbol", q.Symbol, "open", q.Open, "last", q.Last)
+		return 0, false
+	}
+	return (q.Last - q.Open) / q.Open * 100, true
+}
+
 func QuotesToNarrativeData(quotes []domain.Quote) narrative.MarketNarrativeData {
 	data := narrative.MarketNarrativeData{}
+	const component = "orchestrator.quotes_to_narrative"
 	for _, q := range quotes {
 		switch q.Symbol {
 		case "DXY", "^DXY":
-			data.DXYChangePct = (q.Last - q.Open) / q.Open * 100
+			if pct, ok := quoteChangePct(component, q); ok {
+				data.DXYChangePct = pct
+			}
 		case "US10Y", "^TNX":
 			data.US10YChangeBps = q.Last
 		case "VIX", "^VIX":
 			data.VIXLevel = q.Last
 		case "OIL", "CL=F":
-			data.OilChangePct = (q.Last - q.Open) / q.Open * 100
+			if pct, ok := quoteChangePct(component, q); ok {
+				data.OilChangePct = pct
+			}
 		case "GOLD", "GC=F":
-			data.GoldChangePct = (q.Last - q.Open) / q.Open * 100
+			if pct, ok := quoteChangePct(component, q); ok {
+				data.GoldChangePct = pct
+			}
 		case "JPY=X", "USDJPY=X":
-			data.JPY_ChangePct = (q.Last - q.Open) / q.Open * 100
+			if pct, ok := quoteChangePct(component, q); ok {
+				data.JPY_ChangePct = pct
+			}
 		case "SPX", "^GSPC":
-			data.SPXIndexChangePct = (q.Last - q.Open) / q.Open * 100
+			if pct, ok := quoteChangePct(component, q); ok {
+				data.SPXIndexChangePct = pct
+			}
 		case "NDX", "^IXIC":
-			data.NDXIndexChangePct = (q.Last - q.Open) / q.Open * 100
+			if pct, ok := quoteChangePct(component, q); ok {
+				data.NDXIndexChangePct = pct
+			}
 		case "DJI", "^DJI":
-			data.DJIIndexChangePct = (q.Last - q.Open) / q.Open * 100
+			if pct, ok := quoteChangePct(component, q); ok {
+				data.DJIIndexChangePct = pct
+			}
 		case "SOX", "^SOX":
-			data.SOXIndexChangePct = (q.Last - q.Open) / q.Open * 100
+			if pct, ok := quoteChangePct(component, q); ok {
+				data.SOXIndexChangePct = pct
+			}
 		case "BDI":
-			data.BDIChangePct = (q.Last - q.Open) / q.Open * 100
+			if pct, ok := quoteChangePct(component, q); ok {
+				data.BDIChangePct = pct
+			}
 		case "COPPER", "HG=F":
-			data.CopperChangePct = (q.Last - q.Open) / q.Open * 100
+			if pct, ok := quoteChangePct(component, q); ok {
+				data.CopperChangePct = pct
+			}
 		case "TSM", "TSMADR":
-			data.TSMADRChangePct = (q.Last - q.Open) / q.Open * 100
+			if pct, ok := quoteChangePct(component, q); ok {
+				data.TSMADRChangePct = pct
+			}
 		}
 	}
 	return data

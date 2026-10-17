@@ -40,6 +40,7 @@
 | `narrative` | 宏觀敘事事件偵測 — 因果鏈、台灣壓力指數 | `NarrativeEvent`, `Ingestor` |
 | `orchestrator` | 核心協調層 — `SystemCore`、`PluginHost`、三層 executor 路由 | `SystemCore`, `PluginHost` | Wave 11 L2.1：新增 `llmSectorAgentsPlugin`（Issue #719 wired）— opt-in（env `LLM_SECTOR_AGENTS_ENABLED`），driver 為 nil 時回 no-op pass-through；`SectorAgentLLM` 已用 #711 Phase 3 的 `PlanDriver`+`ReflectDriver` 拆分設計;**Wave 11 L2.3**（v0.0.2.0）：新增 `SemiconductorLLMAgent`(Issue #711 PR5b),LLM-driven sector agent behind `UseLLMSectorAgents` flag(default off)。`llm_driver_adapter.go` + `prompts/` 屬 L2.3 PoC 基礎設施。`sector_agent_llm` 維持 experimental(等 L2.4 觀察窗口驗證) |
 | `portprobe` | Stateless TCP port 探測 helper — Probe / LookupOccupant / IsFubonZombie / KillOccupant（wildcard `net.Listen` 無 side effect） | `State`, `Occupant`, `Probe()` |
+| `pricegate` | 價格→報酬守門單一實作 — 跳空倍數門檻（單日 50%、長天期複利）、新股首 5 日豁免、被拒列 WARN（k3 決策 3-1，2026-10-17） | `Check()` |
 | `portfolio` | Darwinian 權重管理（`[0.3, 2.5]`）+ FactorEngine（動能/價值/品質） | `Manager`, `FactorEngine` |
 | `repository` | PostgreSQL 持久化 — `DualWriteRepository` | `DualWriteRepository` |
 | `risk` | 風險管理 — `RiskManager`、VaR、宏觀回撤 | `RiskManager` |

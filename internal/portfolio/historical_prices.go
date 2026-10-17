@@ -33,6 +33,7 @@ import (
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/domain/shared"
 	"github.com/kaecer68/atlas-go/internal/marketdata"
+	"github.com/kaecer68/atlas-go/internal/pricegate"
 )
 
 // HistoricalPrices stores closing prices by symbol and date.
@@ -151,8 +152,10 @@ func (hp *HistoricalPrices) MomentumReturn(symbol string, days int) float64 {
 	latest := series[len(series)-1]
 	past := series[len(series)-1-days]
 	// A stored close<=0 is a missing observation, not a -100% move
-	// (FU-20260930-03). Return the same "no data" value as the length guard.
-	if !shared.IsUsablePrice(latest) || !shared.IsUsablePrice(past) {
+	// (FU-20260930-03), and a corrupted multiple (a 10x close) is a gross
+	// error, not a real jump (k3 decision 3-1). Both return the same "no data"
+	// value as the length guard; the gap-multiple rejection is logged.
+	if !pricegate.Check("portfolio.momentum_return", symbol, past, latest, len(series)-1, days) {
 		return 0
 	}
 	return latest/past - 1
@@ -318,10 +321,12 @@ func (hp *HistoricalPrices) Volatility(symbol string, days int) float64 {
 	returns := make([]float64, 0, days)
 	start := max(len(series)-days-1, 0)
 	for i := start + 1; i < len(series); i++ {
-		// Skip the pair when EITHER end is a missing/ bad price
+		// Skip the pair when EITHER end is a missing/bad price
 		// (FU-20260930-04). Guarding only the previous close let a stored
-		// Close=0 contribute a fabricated -100% daily return.
-		if !shared.IsUsablePrice(series[i-1]) || !shared.IsUsablePrice(series[i]) {
+		// Close=0 contribute a fabricated -100% daily return. The gate also
+		// drops a corrupted multiple, which the price guard cannot see (k3
+		// decision 3-1).
+		if !pricegate.Check("portfolio.volatility", symbol, series[i-1], series[i], i, 1) {
 			continue
 		}
 		returns = append(returns, series[i]/series[i-1]-1)
