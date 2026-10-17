@@ -2724,7 +2724,7 @@ PY
 
 ### FU-20260930-01 — `GetPhaseWeightMultiplier`（過熱 0.90）**未被任何生產路徑消費**（test-only ⇒ 誤導性風控外觀）
 
-- **狀態**：`open`
+- **狀態**：`done`（2026-10-17 明示未啟用落地；**盤點敘述有更正**：真正的根因不是「該接的線沒接」，而是同一意圖的第二種未被消費編碼 —— 過熱減碼已在生產走 `GetPhaseScore`→`buildAdj`，接線只會重複計罰；處置見條文末）
 - **記錄日期**：2026-09-30
 - **來源**：`#2160`（I22-overheat 修復）設計審查時發現
 - **現況**：`internal/industry/silicon_cycle.go:414-419` 定義 `GetPhaseWeightMultiplier`（過熱回 0.90），
@@ -2738,6 +2738,79 @@ PY
 - **最小處置建議（不改變行為 ⇒ 可即辦）**：在其 doc comment 明寫
   `DECLARED ONLY / NOT ENFORCED`＋理由，並把測試改為**斷言「無生產消費者」的守門測試**
   （若日後有人接線，測試即紅 ⇒ 迫使同步更新本條目）。要真正接線則是**值語意變更 ⇒ 需設計決定**。
+
+**處置（2026-10-17，分支 `fix/20261016-fu20260930-01-getphaseweightmultiplier`）**
+
+**1. 根因查證：核心事實成立（生產 0 消費者），但「誤導性風控」的因果被寫弱了**
+
+| F-item 敘述（2026-09-30） | 實測（2026-10-17，`origin/main` `bfac872d8`） |
+|---|---|
+| 定義在 `silicon_cycle.go:414-419` | 同檔 **`:439-479`（doc）＋`:481`（func）** ⇒ 行號已漂移 |
+| 「全 repo 唯一呼叫點是測試 `silicon_cycle_test.go:276`」 | **兩個**測試檔：`silicon_cycle_test.go:281`（`TestPhaseWeightMultiplier`）＋ `silicon_index_ma_test.go:331-332`（`#2160` **自己**加的 `overheat == 0.90` 斷言）⇒ 原指紋**漏列**後者 |
+| 「生產呼叫者 0」 | **仍為 0** ✓（第 2 節逐字輸出） |
+| 「實際接線的曝險路徑是狀態卡矽層分數（`buildAdj`：擴張 `+0.5w`、過熱 `−0.1w`），與這個函式無關」 | **成立，且是本案的關鍵**：矽層貢獻 ＝ `(GetPhaseScore(phase)−0.5)×layerWeight`（`cycle_status_card.go` 的 `resolveSiliconLayer`→`buildAdj`）⇒ 過熱（分數 0.40）已扣 `−0.10×w`、擴張（1.00）已加 `+0.10×w` ⇒ **「過熱減碼」的意圖本來就在生產生效**，只是走分數曲線而非這個乘數 |
+
+⇒ 真根因不是「少接一條線」，而是**同一意圖存在第二種未被消費的編碼，且沒有任何機制標示它**（與 `#1944` inert 家族同型）。
+補強：矽相位是**全市場單一相位**（`SiliconCycleTracker` 只持有一個相位、無 industry 參數），
+要接只能接到 `IndustryService.GetIndustryOverview` 的權重鏈
+（`baseWeight × cycleMultiplier × seasonalMultiplier × linkageMultiplier`，其中 `cycleMultiplier` 來自
+`CycleTracker.GetWeightModulator`，走的是**商業**週期）⇒ 對所有產業（含非半導體）乘同一個因子。
+
+**2. 最小複現／負向證明（修前：無消費者，且「有人接線」不會有任何紅燈）**
+
+```
+$ git grep -n 'GetPhaseWeightMultiplier' origin/main -- '*.go' | grep -v _test.go
+origin/main:internal/industry/silicon_cycle.go:426:// GetPhaseWeightMultiplier returns a portfolio weight multiplier for each phase.
+origin/main:internal/industry/silicon_cycle.go:431:func GetPhaseWeightMultiplier(phase SiliconCyclePhase) float64 {
+rc=0                            # ⇒ 除定義／doc comment 外 0 個生產呼叫者
+$ git show origin/main:internal/industry/silicon_cycle.go | grep -c 'DECLARED ONLY / NOT ENFORCED'
+0
+rc=1                            # ⇒ 修前沒有任何「未啟用」宣告（探針在修前後必須不同）
+$ git grep -l 'SiliconPhaseWeightMultiplierWired' origin/main -- internal/industry
+rc=1                            # ⇒ 修前無宣告常數、無守門測試：有人接線不會變紅
+```
+
+**修後**：新增常數 `SiliconPhaseWeightMultiplierWired=false`（`silicon_cycle.go:180`）＋ 守門測試
+`TestSiliconPhaseWeightMultiplierHasNoConsumer`（`silicon_cycle_wiring_test.go`）；**三個突變全部咬住**
+（逐一實測後還原；`cp` ＋ `sha256` 逐位元組相等）：
+
+| 突變 | 打在哪一行 | 輸出（rc 讀自 log） |
+|---|---|---|
+| **M1** 新增非測試生產檔引用符號（`internal/industry/zz_consumer_probe.go`；`go build ./internal/industry/` rc=0） | 掃描面 | `now has production consumer(s): [internal/industry/zz_consumer_probe.go] …` ⇒ **FAIL**（log `rc=1`）；移除探針後 PASS |
+| **M2** `SiliconPhaseWeightMultiplierWired` false→true | 常數行 | `is declared wired but no non-test production file references GetPhaseWeightMultiplier …` ⇒ **FAIL**（log `rc=1`）；`cp` 還原後 sha256 `ed8be521…dfb1` 相等 ⇒ PASS |
+| **M3** 把「只跳過定義檔」改成「跳過整個 `internal/industry/`」 | 掃描跳過條件（**行為行**） | **PASS（假綠）** ⇒ 證明「只跳過定義檔」是承重的：同套件內的接線也必須被咬住 |
+
+**3. 修法與理由（二選一：明示降級 ✓／接線 ✗）**
+
+- **採用「明示未啟用」**（**不改變行為** ⇒ 依 `#1944` Batch C 分流政策可即辦）：
+  - `GetPhaseWeightMultiplier` doc comment 改寫為 `DECLARED ONLY / NOT ENFORCED`，明寫生效路徑（`GetPhaseScore`→`resolveSiliconLayer`→`buildAdj`）
+    與**重新認證條件三條**（① 設計決定「矽相位乘什麼」② 證明不與卡片矽層重複計罰 ③ 依 `#1971` 觀察窗排程）。
+  - 新增常數 ＋ 雙向守門測試（有消費者而常數 false ⇒ 紅；常數 true 而無消費者 ⇒ 紅）。
+  - `TestPhaseWeightMultiplier` **只加註解，未放寬任何斷言**。
+- **不採「接線」**：會 (a) 與既有卡片矽層重複計罰、(b) 對所有產業套同一因子（語意未定）、(c) **改變生產權重**
+  ⇒ 依「模糊決策只提案」與 Batch C 分流政策**只提案、不執行**。**接線提案待業主決定**。
+- **未動**：`silicon_index_ma_test.go:331-332` 的 `0.90` 斷言保留（測試消費者合法，`#2160` 痕跡不動）；
+  **未加** `Deprecated:`；`docs/reference/inert-registry.md` **未新增列**（該表 ID 由 root 配發；本條是否登記請 root 決定）；
+  **未自配新 ID**。
+
+**4. 同型掃描（只列清單，未逐條處置）**
+
+掃描法（近似、lexical）：`git ls-files '*.go'` 的非測試檔中取 exported func/method 名，扣掉「定義行／doc comment／interface 宣告」後，
+在 `internal/`＋`cmd/` 內**零生產引用**、但 `_test.go` 有引用者 ⇒ **522 個**；再以風控／訊號語意過濾 ⇒ **53 個**。
+人工逐字複驗（`git grep`）確認**至少**下列確為 test-only：
+
+| 符號 | 定義 | 語意 |
+|---|---|---|
+| `GetPhaseWeightMultiplier` | `internal/industry/silicon_cycle.go` | 相位→權重乘數（本條） |
+| `ModulatePosition`／`ModulateScore` | `internal/orchestrator/industry_cycle_modulator.go` | 以 `CycleStatusCard`（**已在生產消費**）調整部位大小／信心分數 |
+| `CycleAmplifiedMultiplier` | `internal/narrative/seasonal_bridge.go` | 週期感知的季節性乘數 |
+| `GetRegimeMultiplier`／`GetRiskAppetite` | `internal/sim/dynamic_threshold.go` | regime→門檻乘數／風險偏好 |
+| `ApplyRiskFilters` | `internal/live/agent_runner.go` | 實盤 agent 的風控過濾入口 |
+| `SetHaltTrading`／`SyncHaltFromCircuitState` | `internal/live/risk_gate.go` | 停止交易閘門的設定端 |
+| `CalculateMaxPositionSize` | `internal/risk/capital_controller.go` | 資金相位→最大部位 |
+| `GetMaxExposure`／`IsRiskOn`／`GetCurrentAllocation` | `internal/portfolio/regime.go` | regime 配置器的曝險存取子 |
+
+（`ModulatePosition`／`ModulateScore` 與本條最同型：輸入是已在生產消費的 `CycleStatusCard`，卻無生產呼叫者。）
 
 ---
 
