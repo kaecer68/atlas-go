@@ -235,3 +235,40 @@ func TestLoadReturns(t *testing.T) {
 		}
 	})
 }
+
+// TestLoadReturnsFromCSV_NonPositiveCloseSkipped locks FU-20260930-04 in the
+// calibration label loader: the guard was `bar.Close == 0`, so a stored
+// negative close (the documented bad value class is close<=0) produced a
+// nonsensical return (-1.59 for the fixture below) and also poisoned the
+// previous-close chain for the following bar.
+func TestLoadReturnsFromCSV_NonPositiveCloseSkipped(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "bad_close.csv")
+	content := `Date,Code,Name,TradeVolume,Open,High,Low,Close
+2024-01-01,2330,TSMC,1000,500,510,495,500
+2024-01-02,2330,TSMC,1100,505,515,500,510
+2024-01-03,2330,TSMC,1200,-300,-300,-300,-300
+2024-01-04,2330,TSMC,1300,515,525,510,520
+`
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		t.Fatalf("write csv: %v", err)
+	}
+
+	returns, _, err := LoadReturnsFromCSV(path)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(returns) != 2 {
+		t.Fatalf("got %d returns %v, want 2 (the bad bar contributes nothing)", len(returns), returns)
+	}
+	for i, r := range returns {
+		if r <= -0.5 {
+			t.Errorf("return[%d] = %v: a non-positive close became a return", i, r)
+		}
+	}
+	// The bar AFTER the bad one must still be measured against the last usable
+	// close (510), not against the dropped bad value.
+	if want := (520.0 - 510.0) / 510.0; returns[1] != want {
+		t.Errorf("return[1] = %v, want %v", returns[1], want)
+	}
+}

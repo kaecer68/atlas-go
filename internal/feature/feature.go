@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
+	"github.com/kaecer68/atlas-go/internal/domain/shared"
 )
 
 // Func computes one feature value from a bar at position idx in a sorted bar slice.
@@ -24,13 +25,17 @@ var Registry = map[string]Func{
 		return math.Log(float64(b.Volume))
 	},
 	"return_1d": func(b domain.DailyBar, idx int, bars []domain.DailyBar) float64 {
-		if idx > 0 && bars[idx-1].Close > 0 {
+		// Both ends must be usable prices: a stored Close<=0 is a missing
+		// observation, not a -100% return (FU-20260930-04).
+		if idx > 0 && shared.IsUsablePrice(bars[idx-1].Close) && shared.IsUsablePrice(b.Close) {
 			return (b.Close - bars[idx-1].Close) / bars[idx-1].Close
 		}
 		return 0
 	},
 	"return_5d": func(b domain.DailyBar, idx int, bars []domain.DailyBar) float64 {
-		if idx >= 5 && bars[idx-5].Close > 0 {
+		// Same guard as return_1d: both ends must be usable prices
+		// (FU-20260930-04).
+		if idx >= 5 && shared.IsUsablePrice(bars[idx-5].Close) && shared.IsUsablePrice(b.Close) {
 			return (b.Close - bars[idx-5].Close) / bars[idx-5].Close
 		}
 		return 0
@@ -311,7 +316,9 @@ var Registry = map[string]Func{
 		if idx < 19 {
 			return 0.0
 		}
-		if b.Close == 0 {
+		// The old `== 0` test let a negative close through, flipping the sign
+		// of the deviation from the mean (FU-20260930-04).
+		if !shared.IsUsablePrice(b.Close) {
 			return 0.0
 		}
 		sum := 0.0
@@ -324,7 +331,8 @@ var Registry = map[string]Func{
 
 	// quality_intra: 1 - (High-Low)/Close from ml_scorer.
 	"quality_intra": func(b domain.DailyBar, _ int, _ []domain.DailyBar) float64 {
-		if b.Close == 0 {
+		// `== 0` (not `<= 0`) let a negative close through (FU-20260930-04).
+		if !shared.IsUsablePrice(b.Close) {
 			return 0.0
 		}
 		return 1.0 - (b.High-b.Low)/b.Close
@@ -338,7 +346,10 @@ var Registry = map[string]Func{
 		rets := make([]float64, 20)
 		for j := range 20 {
 			pos := idx - 19 + j
-			if bars[pos-1].Close > 0 {
+			// Both ends must be usable prices (FU-20260930-04): guarding only
+			// the previous close fed a fabricated -100% return into the
+			// autocorrelation.
+			if shared.IsUsablePrice(bars[pos-1].Close) && shared.IsUsablePrice(bars[pos].Close) {
 				rets[j] = (bars[pos].Close - bars[pos-1].Close) / bars[pos-1].Close
 			}
 		}
@@ -588,7 +599,9 @@ func ForwardReturnLabel() func(bars []domain.DailyBar) []float64 {
 	return func(bars []domain.DailyBar) []float64 {
 		l := make([]float64, len(bars))
 		for i := 0; i < len(bars)-1; i++ {
-			if bars[i].Close > 0 {
+			// Both ends must be usable prices (FU-20260930-04): guarding only
+			// bars[i] turned a missing forward close into a -100% label.
+			if shared.IsUsablePrice(bars[i].Close) && shared.IsUsablePrice(bars[i+1].Close) {
 				l[i] = (bars[i+1].Close - bars[i].Close) / bars[i].Close
 			}
 		}

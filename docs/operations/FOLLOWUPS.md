@@ -928,7 +928,7 @@
 
 ### FU-20260926-13 — `empty_universe`（Step 1 就 0 檔）在 Prometheus 面**完全沒有訊號**：整條 pipeline 不動任何 counter
 
-- **狀態**：`open`
+- **狀態**：`done`（2026-10-16 收斂；**盤點敘述有更正**：訊號面已於 2026-09-27 落地，本 PR 修的是殘留的排查指引，處置見條文末）
 - **記錄日期**：2026-09-26
 - **來源**：本輪缺陷收斂批次（代號 **A2**）；SSOT＝**PR #2026 的缺陷收斂 manifest（docs/operations/remediation-manifest.md）**（該檔隨 #2026 併入 main，故刻意不加反引號以免 markdown-links 誤判）。
   本票在該 manifest §2/§3 **未列**（最接近的 §3 E11 是「`symbols_excluded` 無排除原因細分」，主題不同）
@@ -953,6 +953,132 @@
 - **驗收條件**：生產上「Step 1 就 0 檔」當日必須有一條**真陽性**告警（或至少一個會前進的 series）；
   **負對照**：`SymbolsBuilt > 0` 的正常執行不得觸發；且「整條 pipeline 沒跑」（同族缺口 (b)）
   不得被本票的規則誤報成 `empty_universe`（兩者需要相反的 triage）。
+
+**處置（2026-10-16，分支 `fix/20261016-empty-universe-signal`）**
+
+**1. 根因查證：F-item 的核心敘述已過期 —— metrics 面的靜默在 2026-09-27 就關閉了；本票真正剩下、值得修的缺陷是「第 7 條告警叫值班的人去 grep 一條不可能存在的日誌」**
+
+F-item 寫於 2026-09-26（worktree `81e4fe62`），**隔天**（PR **#2065**，`91cd0564d`，2026-09-27）整個
+`atlas_universe_*` 告警面就從「counter 增量」改成「pipeline 自己的 verdict 輸出族」。逐條核對：
+
+| F-item 的事實（2026-09-26） | 實測（2026-10-16，`origin/main` `f9d49ba6d`） |
+|---|---|
+| early-return 在 `universe_scheduler.go:751-754`，寫在 `gatheredCounter.Add` **之前** | 同一個 early-return，行號搬到 **`:849-851`**；「這條路徑不動任何 counter」**仍成立**（見第 2 節） |
+| snapshot 的 `quotes_status="not_attempted"` 是唯一機器可讀標記、**未曝露成指標** | **已曝露**：`atlas_universe_last_run_outcome{outcome="universe_empty"}`、`last_run_symbols_gathered` 等 verdict 族（`internal/monitoring/metrics/universe_run.go`），由 `BuildUniverse` 的**單一 `defer`** 發佈 ⇒ 每個退出路徑都經過 |
+| 規則檔 `:207-210` 與 `:233` 自述「全部規則（新舊）都不覆蓋 `empty_universe`：需要 Go 端新增心跳指標」 | **兩段文字都已不存在**；第 7 條 `AtlasUniverseEmptyUniverse`（`:497`）就是它，而檔尾「已知限制」清單已不含它 |
+| 缺口被 `atlas_universe_scoring_gaps_test.yml:436`（負向對照 3：六條都不 firing）刻意釘住 | 該檔已擴充成 **504 個 case**；第 7 條另有**真陽性** case F（`atlas_universe_scoring_test.yml`：「F 母體為空(gathered=0):只有第 7 條 firing」） |
+
+⇒ F-item 的「為何先開票、不實作」那三處動工清單（① 指標面 ② alert rule ③ promtool 測試）**全部已完成**。
+**本票不得**再照它新增指標或心跳（業主本 session 亦明令不得自行新增 heartbeat）。
+
+**2. 最小複現（fixture：Step 1 回 0 檔；證明「counter 面等同什麼都沒發生」、而輸出面有真陽性）**
+
+用既有 fixture 跑**真的** `BuildUniverse`（`deps.Tree`/`Mapper`/`Substrate` 全設 nil ⇒ `gatherAllSymbols` 回 0 檔），
+接線與生產相同（`SetOnInc(CollectorOnInc(c))` → `SetRunVerdictSink(GaugeSink(c))` → `WarmUp()`）：
+
+* **counter 面**：跑完後 `/metrics` 的每一條 `atlas_universe_*_total` **都仍是 `0.000000`**
+  （61 條 `atlas_universe_*` series 全部與 WarmUp 之後、任何一輪跑之前的畫面逐字相同）
+  ⇒ 「跑了但 Step 1 是空的」在 counter 面**與「什麼都沒發生」不可區分**。F-item 的這個觀察**正確**，
+  而且它**不可能**用 counter 修好：對 counter `Add(0)` 在 Prometheus 語意下不可觀測，該 family 又已被 `WarmUp()`
+  建立 ⇒ 唯一可行的訊號面就是 verdict gauge（2026-09-27 選對了）。
+* **輸出（verdict）面**：同一輪之後多出三條會動的 series ——
+  `atlas_universe_last_run_valid{stage="daily"} 1`、
+  `atlas_universe_last_run_symbols_gathered{stage="daily"} 0`、
+  `atlas_universe_last_run_outcome{outcome="universe_empty",stage="daily"} 1`
+  ⇒ 第 7 條的判定式（`valid == 1` AND `gathered == 0`）成立 ⇒ **真陽性**。
+* **日誌面**：這條路徑**只印一行** ——
+  `level=WARN msg=ranked_not_trustworthy reason=empty_universe symbols_built=0 symbols_filtered=0 quotes_status=not_attempted component=universe_scheduler`
+  （`markRankedUntrustworthy`，`universe_scheduler.go:230`）。
+
+⇒ F-item 的「Prometheus 面完全沒有訊號」**已不成立**。剩下的真缺陷在**排查指引**：
+第 7 條叫值班的人 `grep -E 'symbols_gathered|universe.*population'`，並說「Step 1 的
+`symbols_gathered count=0` 是本條的直接日誌證據」（`monitoring/rules/atlas_universe_scoring_alerts.yml:533-536`），
+但 `logging.Info("universe_scheduler", "symbols_gathered", …)` 寫在
+`if result.SymbolsBuilt == 0 { return }` **之後** ⇒ 那行**永遠不會**是 `count=0`。
+實測（同一支 fixture，只切空／不空）：**空的執行 `symbols_gathered` 命中 0 次；健康的執行命中 1 次（`count=2`）**。
+⇒ 照指引 grep 的人只會撈到**前一輪健康的** `count=1599`（或什麼都沒有），而告警說 `gathered=0`
+—— 這正是本票「真陽性 + 正確 triage」驗收條件裡缺的那一半。
+
+**3. 修法（最小；只換掉指引，不動 metrics、不動判定式）**
+
+* `monitoring/rules/atlas_universe_scoring_alerts.yml`：第 7 條 `description` 的「先查什麼」第 2 步
+  `grep -E 'symbols_gathered|universe.*population'` → `grep 'ranked_not_trustworthy.*reason=empty_universe'`，
+  並明寫**為什麼不要 grep `symbols_gathered`**（它寫在 early-return 之後）＋本次實測數字。
+* `monitoring/tests/atlas_universe_scoring_test.yml`：case F 的 `exp_annotations.description` **同步**
+  （promtool 逐字比對 annotation ⇒ 只改一邊必紅）。
+* 新增 `internal/monitoring/universe_empty_universe_log_test.go`：把上面那兩個事實**釘成測試**
+  （空的路徑**必須**有 `reason=empty_universe` 的 WARN、**不得**有 `symbols_gathered`；非空的執行相反）。
+  這條負向斷言就是「有人日後把那行 Info 移到 early-return 之前」時會紅的那一條。
+* **沒有動**：任何 `expr`／labels／`for:`、任何 Go 生產程式、任何 metrics 命名（護欄：不新增 heartbeat）。
+* 兩檔文字檔合計 `10 insertions(+), 6 deletions(-)`；沒有搬動任何其他條目的內文（見第 5 節的區段比對）。
+
+**4. 驗收（rc 一律從 log 檔讀，不在管線後讀 `$?`）**
+
+| # | 指令 | 結果 | rc |
+|---|---|---|---|
+| A | `promtool check rules monitoring/rules/*.yml`（`prom/prometheus:v3.14.0`） | `SUCCESS: 11 rules found`（`atlas_universe_scoring_alerts.yml`） | **0** |
+| B | `promtool test rules monitoring/tests/*.yml`（修後） | 全部 `SUCCESS` | **0** |
+| C | `go test ./internal/monitoring/... -count=1` | `ok` × 29 套件 | **0** |
+| D | 突變版 `promtool test rules`（見第 5 節 M-A） | `FAILED: name: F 母體為空…` | **1** |
+| E | 突變版 `go test -run TestBuildUniverseEmptyUniverseLogEvidence`（見第 5 節 M-B） | `FAIL` | **1** |
+| F | `make ci-gate`（**先 commit 再跑**，其 drift check 用 `git diff --exit-code -- '*.go'`） | 尾端逐字 `✅ ci-gate passed — 可以 push`；`CI-quick: 15 passed, ❌ 0 failed` | **0** |
+
+**5. 負向證明（突變打在行為行 ⇒ 必紅；`cp` 還原並以 sha256 證明逐位元組相等）**
+
+* **M-A（規則層：把「偵測空母體」這件事拿掉）**
+  `monitoring/rules/atlas_universe_scoring_alerts.yml` 第 504 行（第 7 條 expr 的**行為行**）
+  `…last_run_symbols_gathered{stage=~"daily|weekly"}) == 0` → `== 2`
+  （`grep -c` 確認該字串在檔案內**恰命中 1 次**，`git diff` 確認改到的是 expr 行）。
+  `promtool test rules monitoring/tests/*.yml` ⇒ **rc=1**，逐字：
+  `FAILED:` / `    name: F 母體為空(gathered=0):只有第 7 條 firing,` /
+  `    alertname: AtlasUniverseEmptyUniverse, time: 1h,` ⇒ `got:[]`。
+  **這證明第 7 條的 fixture 有鑑別力**（修前／修後同一個輸入得到不同的結論）。
+  還原：`cp` 回備份 ⇒ `sha256` = `31abf0931f678b90bcca0c8861078d7a1c27b54d3f7bf388d9b97f520a3bee96`，與突變前**逐位元組相同**。
+* **M-B（程式層：把 `symbols_gathered` 移到 early-return 之前）**
+  `internal/monitoring/universe_scheduler.go` 把 `logging.Info(… "symbols_gathered" …)` 整段搬到
+  `if result.SymbolsBuilt == 0 { … }` 之前。`go test -run TestBuildUniverseEmptyUniverseLogEvidence` ⇒ **rc=1**，逐字：
+  `` `symbols_gathered` is written after the SymbolsBuilt == 0 early return, so it must not appear on this path ``
+  ＋捕獲到的兩行日誌（`msg=symbols_gathered count=0` 與 `msg=ranked_not_trustworthy reason=empty_universe`）。
+  還原：`sha256` = `ec485ffe8fb3479f1b84ab79b4b22e226e1956c0c905cda8255a0a3f447dd191`，與突變前**逐位元組相同**。
+* **正常情況（非空 universe）不得觸發**：第 2 節的「健康執行」對照組（`symbols_built=2`、
+  `reason=""`、`symbols_gathered count=2`）；promtool 端同時有 case A/B/C/D/E/G/H/I 等**18 個**
+  `AtlasUniverseEmptyUniverse: exp_alerts: []` 的負向對照（含「剛重啟、這個 process 還沒跑過」的 valid=0 形狀）。
+
+**6. 合併前的區段比對（FOLLOWUPS.md 是共享檔；`ci-gate`／唯一號檢查抓不到「搬走別條內文」）**
+
+`git diff docs/operations/FOLLOWUPS.md` 逐段核對：本 PR 對該檔只有 **(a) 本條 `狀態` 行改寫** 與
+**(b) 本條條文末新增本節**，其餘條目**逐位元組未動**（diff 內刪除行只有 1 行 `- **狀態**：`open``）。
+
+**7. 同型盤點（業主要求；**只列清單**，本 PR 不動）**
+
+`BuildUniverse` 七個階段的「輸入為空 ⇒ 該階段什麼都不動」逐階段核對，**現在只剩一處在 metrics 面沒有專屬訊號**：
+
+| 階段 | 空的形狀 | 現在的訊號 | 判定 |
+|---|---|---|---|
+| Step 1 gather | 0 檔 | 第 7 條 ＋ verdict 族 ＋ WARN | 覆蓋（本票） |
+| Step 2 industry filter | 全滅 | 第 5 條 `AtlasUniverseEmptyFiltered` ＋ WARN `reason=empty_filtered` | 覆蓋 |
+| Step 3 quotes | provider 沒接／錯誤／空／partial／mock | 第 3 條（`ranked_trustworthy=0` 且 gathered/filtered>0）＋ `quotes_errors_total{error_type}` | 覆蓋 |
+| Step 4 screening | 全部被拒 | 第 2 條 `AtlasUniverseScreeningAllRejected`（`screened_passed==0`） | 覆蓋 |
+| Step 5 risk exclusion | 全部 excluded | 第 1 條 `AtlasUniverseRankedZero`（`ranked==0` 且 `trustworthy==1`） | 覆蓋，但**沒有專屬 outcome 值**（`last_run_outcome=ok` 而 ranked=0）⇒ triage 只能靠組合條件 |
+| Step 6 narrative scrape | 0 事件（無錯誤） | 只有 Info `narrative_scrape_ok events=0`；`narrative_events_scraped_total` **不動**；**無規則** | **同型殘留（metrics 面無訊號）**；要修需先有可區分「市場沒新聞」與「解析器對不上」的 reason，屬新設計 |
+| Step 7 寫入 | 寫入失敗 | 第 10／11 條（`snapshot_persisted`／`registry_persisted`） | 覆蓋 |
+
+另兩處**查證後不列為缺口**：`universe_coverage_check` 任務的 `coverage_*` counter 面雖然沒有規則，
+但同一個任務會用 `monitor.Alert(... "universe_coverage")` 發內部告警（`cmd/atlas/main.go:2322-2331`，
+含 `coverage_below_threshold`／`artifact_stale`／`population_smaller_than_built`）；
+每日／每週排程 closure 的「非觸發分鐘 ⇒ 靜默 return」是設計（由第 8 條心跳覆蓋）。
+
+**8. 已知限制**
+
+* 本 PR **未**在生產驗收（護欄：不動 production）。第 7 條在生產是否真的載入、以及「Step 1 就 0 檔」的
+  實際發生頻率，需部署後以 `curl -s localhost:18080/metrics | grep '^atlas_universe_last_run_'`
+  與 `curl -s localhost:9090/api/v1/rules | grep -o 'AtlasUniverseEmptyUniverse'` 確認。
+* 第 7 條的 `for: 30m` 語意不變：一個空的 verdict 會在下一次成功執行前**持續** firing（「verdict 不會自己過期」，
+  與第 8 條分工），本 PR 不動它。
+* `docs/operations/universe-scoring-ranked-zero-20260925.md:351` 與同檔 FU-20260925-02 的
+  「`empty_universe` 仍不覆蓋」**也**是同一批過期敘述（該檔 §6.2 開頭的 2026-09-25 更新橫幅與 `:61` 已載明
+  2026-09-27 落地）；本票**不動別條條目**，僅在此記錄，建議由 root 另配一次敘述收斂。
+* 第 6 節 Step 6 的殘留（narrative 0 事件）本 PR 只列出，未修（需要新的 reason 語意，屬跨檔功能新增）。
 
 ---
 
@@ -1862,8 +1988,8 @@ glob 空集合=紅／**預算覆寫=清單內放寬後綠、放寬後仍超時�
 
 ### FU-20260927-07 — CSV→JSONL 轉檔**非原子**：`os.Create` 先 truncate 再逐行寫 ⇒ 讀端可能讀到 0-byte 檔
 
-- **狀態**：`open`
-- **記錄日期**：2026-09-27
+- **狀態**：`done`
+- **記錄日期**：2026-09-27 ／ **完成於**：2026-10-16（PR #2263）
 - **來源**：PR #2079 的未驗項 ②（該 PR 讓轉檔在**沒有缺口的日子也會評估／執行** ⇒ 這條既有缺陷的**曝露面變大**）。
 - **事實（位置由我複核）**：`internal/importer/twmarket.go:11-34` 的 `ImportTWOpenDataCSVToJSONL`：
   - `:21` `f, err := os.Create(targetPath)` —— **當場 truncate 目標檔**（舊內容先消失）；
@@ -1879,12 +2005,36 @@ glob 空集合=紅／**預算覆寫=清單內放寬後綠、放寬後仍超時�
 - **驗收條件**：寫入進行中（或注入延遲）時由讀端開檔 ⇒ 只會拿到合法 JSONL 或舊檔，**不得**出現 0-byte／截斷；
   轉檔失敗（例如目標路徑是目錄）⇒ **不得**留下半成品檔（有負向對照）。
 
+- **處置（2026-10-16，PR #2263）**：**敘述成立**（修前最小複現見下），已修。
+  - **根因（讀碼確認，比原敘述更精確）**：`ImportTWOpenDataCSVToJSONL` 的 `os.Create(targetPath)`
+    在**開檔當下**就把目標 truncate 成 0 bytes，之後才逐列 `enc.Encode(bar)`；
+    整個寫入期間檔案都是不完整的，且**沒有** temp+rename、**沒有** 檔案鎖。
+    讀端確實是 `internal/orchestrator/composition.go:113` → `portfolio.HistoricalPrices.LoadFromExtendedJSONL`
+    的 `bufio.Scanner`（位置與原敘述一致）。
+  - **最小複現（修前 `f9d49ba6d`）**：fixture 40 日 × 400 檔（16,000 列、目標檔 2,560,000 bytes），
+    於轉檔進行中以無 sleep 的緊密輪詢統計目標檔 size（＝讀端開檔會看到的大小）
+    ⇒ **21,220 次取樣中 7 次為 0 bytes、17,300 次為截斷檔**（min=0、old=50、new=2560000）。
+    紅燈原文：`a concurrent reader observed 7/21220 samples of a 0-byte file and 17300/21220 samples of a truncated file`。
+  - **修法**：改為「同目錄暫存檔 → `tmp.Sync()`（fsync）→ `os.Rename`」；rename 同檔案系統內為原子
+    ⇒ 讀端只會看到完整的舊檔或完整的新檔。任何失敗路徑（含 rename 失敗）都移除暫存檔。
+    **沒有**用「只加鎖、仍原地 truncate」的替代寫法。
+  - **權限語意（原敘述已預告，實測後照此處理）**：目標檔**已存在** ⇒ 暫存檔 `Chmod` 回其既有權限
+    （0640 ⇒ 轉檔後仍 0640）；目標檔**不存在** ⇒ 以 `0666` 為請求模式建立，由 kernel 套 umask
+    （與 `os.Create` 的 `0666 & ~umask` 語意相同）⇒ 不出現 `os.CreateTemp` 的 0600 默默收緊。
+    測試以「同目錄 `os.Create` 對照組」比對，不依賴 umask 的實際值。
+  - **修後負向證明**：同一 fixture ⇒ **25,277 次取樣，0-byte=0、truncated=0、min=50（＝舊檔大小）**。
+    突變（把 temp+rename 打回 `os.Create`）⇒ 紅燈重現（`4/25940 samples of a 0-byte file and 21723/25940 samples of a truncated file`）；
+    `cp` 備份還原後 sha256 逐位元組相等（`d58eb31a7cd5c2a0da5b54e90c3be5b803c53761cc8c135f5b94a2e227def625`）。
+  - **失敗路徑**：`TestImportTWOpenDataCSVToJSONL_FailureLeavesNoPartialFile`（目標路徑是目錄）
+    ⇒ rename 失敗、錯誤往上回、目錄內容逐項不變（無 `.tmp-*` 殘留）。
+  - **同型清單（僅列出，未修；新 ID 由 root 配）**：見 PR #2263 body「同型掃描」段。
+
 ---
 
 ### FU-20260927-08 — 轉檔閘門**單向**：只比「CSV 較新」⇒ JSONL 領先時永不修，而日誌會把它說成「已同步」
 
-- **狀態**：`open`
-- **記錄日期**：2026-09-27
+- **狀態**：`done`
+- **記錄日期**：2026-09-27 ／ **完成於**：2026-10-16（PR #2263）
 - **來源**：PR #2079 的未驗項 ③。
 - **事實（位置由我複核，來自該 PR 的新增碼）**：PR #2079 的 `cmd/atlas/operations_tasks.go` 新增 `replayFreshness.conversionNeeded()`：
   - `csvErr != nil` ⇒ `false`（沒有來源可轉）；
@@ -1897,6 +2047,30 @@ glob 空集合=紅／**預算覆寫=清單內放寬後綠、放寬後仍超時�
   並讓「不一致但刻意不動」成為**具名**的第三態日誌。
   ⚠️ 要先決定**語意**：JSONL 領先時轉檔會**覆蓋外部寫入者的資料** ⇒ 這不是實作細節，是 owner 決策（不宜由實作者順手改）。
 - **驗收條件**：JSONL 尾行日期 > CSV 的 fixture ⇒ 下一輪轉檔後兩檔一致；且日誌**不再**把該狀態寫成 `already up to date`。
+
+- **處置（2026-10-16，PR #2263）**：**敘述成立**（修前最小複現見下），已修；原敘述的 owner 語意決策已定案。
+  - **最小複現（修前 `f9d49ba6d`）**：fixture CSV 最新日 `2026-03-19`、JSONL `2026-03-20`（外部寫入者領先）
+    ⇒ 舊碼 `conversionNeeded() == false`、`syncReplayJSONLFromCSV` rc=nil，日誌原文
+    `[Gateway] backfill CSV→JSONL conversion: skipped (already up to date) — csv_latest=2026-03-19 jsonl_latest=2026-03-20`，
+    且 JSONL **逐位元組未變** ⇒ 檔案永遠修不好、日誌把「不一致」講成「已同步」（假綠）。
+  - **語意決策（原敘述要求先定案）**：以「**衍生檔必須收斂回來源**」定案。JSONL 是衍生檔，
+    CSV（TWSE open data）是來源；衍生檔不得成為權威 ⇒ 任何不一致都轉，包含「JSONL 領先」
+    （外部寫入者／人工修復／`cmd/import-replay`／`composition.loadHistoricalPrices` 的補轉路徑）。
+    已知代價：外部寫入者刻意寫在 CSV 之後的資料會被覆蓋 —— 這是刻意的（該檔不應由本 task 以外的
+    元件寫入；`cmd/import-replay` 的輸入本來就必須是同一份 CSV）。
+  - **修法**：`conversionNeeded()` 由 `f.csvLatest.After(f.jsonlLatest)` 改為 `!f.csvLatest.Equal(f.jsonlLatest)`；
+    日誌新增具名第三態 `conversion: needed (JSONL is ahead) — csv_latest=… jsonl_latest=…`（方向逐字寫出）。
+    **既有斷言未放寬**：兩邊日期相等仍為 zero-work skip（不重寫）、CSV 讀不到仍不轉；
+    另**新增**「JSONL 領先 ⇒ 必須轉」的案例與「日誌 token 必須與事實相符」的斷言。
+  - **修後負向證明**：同一 fixture ⇒ 日誌 `needed (JSONL is ahead)` 後接 `converted`；
+    JSONL 由 `2026-03-20` 收斂回 `2026-03-19`、內容確實被重寫（前後 bytes 不同）。
+    突變（把閘門打回單向 `csvLatest.After(...)`）⇒ 紅燈重現
+    （`日誌說『already up to date』但兩邊日期不同：csv_latest=2026-03-19 jsonl_latest=2026-03-20 ⇒ 判定失真`
+    ＋ `JSONL 領先 CSV 時閘門必須要求轉檔…`）；`cp` 備份還原後 sha256 逐位元組相等
+    （`8ec1a39b3f2108648db78c9e2d482aaf90127ec6bca8ebea3b9915bca50abb7b`）。
+  - **日誌與事實一致性**：`TestSyncReplayJSONLFromCSV_LogMatchesReality` 對四種前置狀態
+    （落後／領先／一致／缺席）斷言「每個 token 都必須與觀測相符」：`already up to date`
+    只允許在兩邊日期相等、且檔案未被改寫時出現；`needed (...)` 的方向字串也必須與實際狀態相符。
 
 ---
 
@@ -2570,7 +2744,7 @@ PY
 
 ### FU-20260930-01 — `GetPhaseWeightMultiplier`（過熱 0.90）**未被任何生產路徑消費**（test-only ⇒ 誤導性風控外觀）
 
-- **狀態**：`open`
+- **狀態**：`done`（2026-10-17 明示未啟用落地；**盤點敘述有更正**：真正的根因不是「該接的線沒接」，而是同一意圖的第二種未被消費編碼 —— 過熱減碼已在生產走 `GetPhaseScore`→`buildAdj`，接線只會重複計罰；處置見條文末）
 - **記錄日期**：2026-09-30
 - **來源**：`#2160`（I22-overheat 修復）設計審查時發現
 - **現況**：`internal/industry/silicon_cycle.go:414-419` 定義 `GetPhaseWeightMultiplier`（過熱回 0.90），
@@ -2584,6 +2758,79 @@ PY
 - **最小處置建議（不改變行為 ⇒ 可即辦）**：在其 doc comment 明寫
   `DECLARED ONLY / NOT ENFORCED`＋理由，並把測試改為**斷言「無生產消費者」的守門測試**
   （若日後有人接線，測試即紅 ⇒ 迫使同步更新本條目）。要真正接線則是**值語意變更 ⇒ 需設計決定**。
+
+**處置（2026-10-17，分支 `fix/20261016-fu20260930-01-getphaseweightmultiplier`）**
+
+**1. 根因查證：核心事實成立（生產 0 消費者），但「誤導性風控」的因果被寫弱了**
+
+| F-item 敘述（2026-09-30） | 實測（2026-10-17，`origin/main` `bfac872d8`） |
+|---|---|
+| 定義在 `silicon_cycle.go:414-419` | 同檔 **`:439-479`（doc）＋`:481`（func）** ⇒ 行號已漂移 |
+| 「全 repo 唯一呼叫點是測試 `silicon_cycle_test.go:276`」 | **兩個**測試檔：`silicon_cycle_test.go:281`（`TestPhaseWeightMultiplier`）＋ `silicon_index_ma_test.go:331-332`（`#2160` **自己**加的 `overheat == 0.90` 斷言）⇒ 原指紋**漏列**後者 |
+| 「生產呼叫者 0」 | **仍為 0** ✓（第 2 節逐字輸出） |
+| 「實際接線的曝險路徑是狀態卡矽層分數（`buildAdj`：擴張 `+0.5w`、過熱 `−0.1w`），與這個函式無關」 | **成立，且是本案的關鍵**：矽層貢獻 ＝ `(GetPhaseScore(phase)−0.5)×layerWeight`（`cycle_status_card.go` 的 `resolveSiliconLayer`→`buildAdj`）⇒ 過熱（分數 0.40）已扣 `−0.10×w`、擴張（1.00）已加 `+0.10×w` ⇒ **「過熱減碼」的意圖本來就在生產生效**，只是走分數曲線而非這個乘數 |
+
+⇒ 真根因不是「少接一條線」，而是**同一意圖存在第二種未被消費的編碼，且沒有任何機制標示它**（與 `#1944` inert 家族同型）。
+補強：矽相位是**全市場單一相位**（`SiliconCycleTracker` 只持有一個相位、無 industry 參數），
+要接只能接到 `IndustryService.GetIndustryOverview` 的權重鏈
+（`baseWeight × cycleMultiplier × seasonalMultiplier × linkageMultiplier`，其中 `cycleMultiplier` 來自
+`CycleTracker.GetWeightModulator`，走的是**商業**週期）⇒ 對所有產業（含非半導體）乘同一個因子。
+
+**2. 最小複現／負向證明（修前：無消費者，且「有人接線」不會有任何紅燈）**
+
+```
+$ git grep -n 'GetPhaseWeightMultiplier' origin/main -- '*.go' | grep -v _test.go
+origin/main:internal/industry/silicon_cycle.go:426:// GetPhaseWeightMultiplier returns a portfolio weight multiplier for each phase.
+origin/main:internal/industry/silicon_cycle.go:431:func GetPhaseWeightMultiplier(phase SiliconCyclePhase) float64 {
+rc=0                            # ⇒ 除定義／doc comment 外 0 個生產呼叫者
+$ git show origin/main:internal/industry/silicon_cycle.go | grep -c 'DECLARED ONLY / NOT ENFORCED'
+0
+rc=1                            # ⇒ 修前沒有任何「未啟用」宣告（探針在修前後必須不同）
+$ git grep -l 'SiliconPhaseWeightMultiplierWired' origin/main -- internal/industry
+rc=1                            # ⇒ 修前無宣告常數、無守門測試：有人接線不會變紅
+```
+
+**修後**：新增常數 `SiliconPhaseWeightMultiplierWired=false`（`silicon_cycle.go:180`）＋ 守門測試
+`TestSiliconPhaseWeightMultiplierHasNoConsumer`（`silicon_cycle_wiring_test.go`）；**三個突變全部咬住**
+（逐一實測後還原；`cp` ＋ `sha256` 逐位元組相等）：
+
+| 突變 | 打在哪一行 | 輸出（rc 讀自 log） |
+|---|---|---|
+| **M1** 新增非測試生產檔引用符號（`internal/industry/zz_consumer_probe.go`；`go build ./internal/industry/` rc=0） | 掃描面 | `now has production consumer(s): [internal/industry/zz_consumer_probe.go] …` ⇒ **FAIL**（log `rc=1`）；移除探針後 PASS |
+| **M2** `SiliconPhaseWeightMultiplierWired` false→true | 常數行 | `is declared wired but no non-test production file references GetPhaseWeightMultiplier …` ⇒ **FAIL**（log `rc=1`）；`cp` 還原後 sha256 `ed8be521…dfb1` 相等 ⇒ PASS |
+| **M3** 把「只跳過定義檔」改成「跳過整個 `internal/industry/`」 | 掃描跳過條件（**行為行**） | **PASS（假綠）** ⇒ 證明「只跳過定義檔」是承重的：同套件內的接線也必須被咬住 |
+
+**3. 修法與理由（二選一：明示降級 ✓／接線 ✗）**
+
+- **採用「明示未啟用」**（**不改變行為** ⇒ 依 `#1944` Batch C 分流政策可即辦）：
+  - `GetPhaseWeightMultiplier` doc comment 改寫為 `DECLARED ONLY / NOT ENFORCED`，明寫生效路徑（`GetPhaseScore`→`resolveSiliconLayer`→`buildAdj`）
+    與**重新認證條件三條**（① 設計決定「矽相位乘什麼」② 證明不與卡片矽層重複計罰 ③ 依 `#1971` 觀察窗排程）。
+  - 新增常數 ＋ 雙向守門測試（有消費者而常數 false ⇒ 紅；常數 true 而無消費者 ⇒ 紅）。
+  - `TestPhaseWeightMultiplier` **只加註解，未放寬任何斷言**。
+- **不採「接線」**：會 (a) 與既有卡片矽層重複計罰、(b) 對所有產業套同一因子（語意未定）、(c) **改變生產權重**
+  ⇒ 依「模糊決策只提案」與 Batch C 分流政策**只提案、不執行**。**接線提案待業主決定**。
+- **未動**：`silicon_index_ma_test.go:331-332` 的 `0.90` 斷言保留（測試消費者合法，`#2160` 痕跡不動）；
+  **未加** `Deprecated:`；`docs/reference/inert-registry.md` **未新增列**（該表 ID 由 root 配發；本條是否登記請 root 決定）；
+  **未自配新 ID**。
+
+**4. 同型掃描（只列清單，未逐條處置）**
+
+掃描法（近似、lexical）：`git ls-files '*.go'` 的非測試檔中取 exported func/method 名，扣掉「定義行／doc comment／interface 宣告」後，
+在 `internal/`＋`cmd/` 內**零生產引用**、但 `_test.go` 有引用者 ⇒ **522 個**；再以風控／訊號語意過濾 ⇒ **53 個**。
+人工逐字複驗（`git grep`）確認**至少**下列確為 test-only：
+
+| 符號 | 定義 | 語意 |
+|---|---|---|
+| `GetPhaseWeightMultiplier` | `internal/industry/silicon_cycle.go` | 相位→權重乘數（本條） |
+| `ModulatePosition`／`ModulateScore` | `internal/orchestrator/industry_cycle_modulator.go` | 以 `CycleStatusCard`（**已在生產消費**）調整部位大小／信心分數 |
+| `CycleAmplifiedMultiplier` | `internal/narrative/seasonal_bridge.go` | 週期感知的季節性乘數 |
+| `GetRegimeMultiplier`／`GetRiskAppetite` | `internal/sim/dynamic_threshold.go` | regime→門檻乘數／風險偏好 |
+| `ApplyRiskFilters` | `internal/live/agent_runner.go` | 實盤 agent 的風控過濾入口 |
+| `SetHaltTrading`／`SyncHaltFromCircuitState` | `internal/live/risk_gate.go` | 停止交易閘門的設定端 |
+| `CalculateMaxPositionSize` | `internal/risk/capital_controller.go` | 資金相位→最大部位 |
+| `GetMaxExposure`／`IsRiskOn`／`GetCurrentAllocation` | `internal/portfolio/regime.go` | regime 配置器的曝險存取子 |
+
+（`ModulatePosition`／`ModulateScore` 與本條最同型：輸入是已在生產消費的 `CycleStatusCard`，卻無生產呼叫者。）
 
 ---
 
@@ -2619,13 +2866,17 @@ PY
   `IsTradable`（`internal/apigateway/adapter_twse.go:131`：`Close > 0 && Volume > 0`）只守住部分路徑。
 - **最小處置建議**：①寫入端把 `close<=0` 視為**缺值**（拒絕或標記，而非 0）②`5904`／`2380` 修值或標缺
   ③與 `FU-20260930-04` 併做（先盤點再決定修法）。
+- **與 `FU-20260930-04` 的分工（2026-10-16）**：消費端半邊**已於 `FU-20260930-04` 收斂**
+  （壞值不再被讀成 −100%；見 `docs/specs/close-positive-consumer-audit-20261016.md`）。
+  本條**仍 `open`**：`close<=0` 的 109 列與 `5904.TW` 10 倍價還在資料裡，且**跳空倍數在消費端仍會穿透**
+  （擋它屬值語意變更 ⇒ 僅提案）。**資料修復是 operator 動作**，不在程式 PR 內。
 
 ---
 
 ### FU-20260930-04 — 稽核「未守 `Close>0`」的 return／volatility 消費者
 
-- **狀態**：`open`
-- **記錄日期**：2026-09-30
+- **狀態**：`done`（2026-10-16 收斂；盤點敘述已更正，處置見條文末）
+- **記錄日期**：2026-09-30 ／ **完成於**：2026-10-16
 - **來源**：`#2151`／`FU-20260930-03` 衍生（壞值 × 未守門 = −100% 假訊號）
 - **現況**：尚未逐一盤點。已知主要消費面為 `portfolio.HistoricalPrices` 的
   `GetCloseSeries`／`MomentumReturn`／`Volatility`（`internal/portfolio/historical_prices.go`）；
@@ -2633,6 +2884,26 @@ PY
 - **指紋**：待產出「消費者 × 是否守 `Close>0`」清單（本條即為該清單的產出任務）
 - **最小處置建議**：產出**表格化盤點**（消費者 `file:line`／是否守門／未守門時對壞列的行為），
   再決定是否補守門 —— 補守門屬**值語意變更 ⇒ 窗後或需業主授權**。
+
+- **處置（2026-10-16，PR 本車道）**：**敘述部分成立、部分需更正**，已修。
+  - **權威盤點**：`docs/specs/close-positive-consumer-audit-20261016.md`（16 筆修復＋14 筆已守＋5 筆提案）。
+  - **更正原敘述 ①**：主要消費面**不只** `historical_prices.go`。機械式掃描（`internal/**`＋`cmd/**`）得到
+    **16 處未守／半守** 的價格→報酬／波動／回撤／標籤消費者，跨 `portfolio`／`monitoring`／`feature`／
+    `replay`／`orchestrator`／`scheduler`／`stockpicker`／`calibration`。其中最嚴重的是
+    `internal/feature/feature.go` 的 `return_1d`／`return_5d`／`return_autocorr`（**ML 特徵**）與
+    `internal/scheduler/ml_retrain.go:237` `extractLabels`（**完全未守**：0 分母 ⇒ ±Inf、前向 0 ⇒ −1）、
+    `internal/stockpicker/backtest.go` 前向 bar（壞值被寫成 **−100% outcome** 進 win-rate）。
+  - **更正原敘述 ②**：補守門**不是**值語意變更。守門只改變「本來就是壞值」的列（非正／非有限），
+    正常資料逐位元組同一結果 ⇒ 可直接落地；真正的值語意變更只有**跳空倍數**（10 倍價）防護 ⇒ 僅提案。
+  - **更正原敘述 ③（守門強度的坑）**：既有守門有兩種弱型：只守 `== 0`（**負值可穿透**）與只守**單端**
+    （prev 守、curr 不守 ⇒ 壞列被讀成 −100%）。後者是本次 −100% 假訊號的**主因**。
+  - **選定語意**：非正／非有限收盤價＝**缺值 ⇒ 跳過該觀測**；跳過後無可用觀測時沿用該函式既有的
+    「無資料」值（`0`／`ok=false`）。**沒有**任何路徑被改成「靜默回 0 當成有效報酬」。
+  - **未修（提案）**：跳空倍數防護、`SMA`／`ma_ratio` 等價格水準消費者、總經即時報價
+    `(Last-Open)/Open`（Open=0 ⇒ ±Inf/NaN；可達性未證實）、`optimizer_math.go:96` 均值分母、
+    `cmd/experimental/**` 研究工具 ⇒ 見盤點 §3。
+  - **資料面**：`FU-20260930-03` 的 `close<=0`／10 倍價**仍需 operator 修資料**（本 PR 不動任何資料；
+    10 倍價在消費端仍會穿透）⇒ 03 維持 `open`。
 
 ---
 
@@ -4775,6 +5046,97 @@ log 目錄：`/tmp/fu29-logs/`；shim 目錄：`/tmp/fu29-emptyset-shim/`（假 
   ④ 同型掃描的邊界只到「`set -e` ＋ 算術命令（裸自增／statement-form／`let`）」這三種形狀；未做全語意掃描
   （例如「外部命令失敗被 `set -e` 條件語境吸收」屬 `-28`／`-27` 家族的假綠面，不在本條範圍）。
   ⑤ 本條**未動** `-28` 的內文（含其「已知限制 ④」仍寫「本 PR 未修」）—— 依 root 指示「不得動 18–29」；`-30` 即該 ④ 所指的收斂條目。
+
+### FU-20261016-31 — CSV→JSONL 轉檔的**列序非決定性**：同一天的股票以 Go map 走訪序寫出 ⇒ 同一份 CSV 兩次轉檔得到不同檔案（下游 diff／雜湊／尾行讀取全受影響）
+
+- **狀態**：`done`
+- **記錄日期**：2026-10-16 ／ **完成於**：2026-10-16（PR #2266；branch `fix/20261016-jsonl-row-order`）
+- **嚴重度**：**P2** —— 沒有資料錯誤（列集合完全相同），但「同樣的輸入」不再等於「同樣的位元組」：replay diff、檔案的完整性雜湊、以及 `GetLatestDate` 尾行讀取所依賴的「最後一行＝最新資料日」都失去可驗證性。
+- **來源**：PR #2263 的「已知限制 ⑥」（該車道實測發現、僅列出、未修、未配 ID）。本車道**獨立複現**後才動手。
+
+- **★ F-item 敘述更正一處（動手前讀碼＋最小複現的結果）**：候選敘述寫缺陷在 `internal/importer/twse_csv.go` 的 `ByDate`。
+  **路徑需更正**：`internal/importer/` 底下**沒有** `twse_csv.go`；`ByDate` 在 `internal/replay/twse_csv.go:23`（`Dataset.ByDate map[string]map[string]domain.DailyBar`）。
+  其餘敘述（「同一天內列序非決定性」「同一份輸入轉檔兩次會互換」「PR #2263 已記錄未修」）**逐字成立**。
+  另外要指出真正的**寫出點**不在 `internal/replay`：`internal/replay` 只提供資料，走訪 map 的是 writer 本身。
+
+- **§0 最小複現（修前 `bfac872d8`；探針有鑑別力：修前／修後結果必須不同）**
+  **fixture**：`samples/replay/twse_stock_day_all_sample.csv`（7 個資料日 × 共 53 列；首日 5 檔）。
+  **手法**：同一個 process 內連續呼叫 `importer.ImportTWOpenDataCSVToJSONL(src, out_N)` 10 次，逐檔算 sha256。
+  **修前實測**：**10 次 ⇒ 10 個不同的 sha256**（`e37db4e8…`、`2b06c120…`、`b247924a…`、`7e929799…`、`f84d8bdb…`、`3ef283ec…`、`9e96cec9…`、`47704fa4…`、`55b7e0dc…`、`e18c83b1…`）。
+  **列序差異（`diff -u run00.jsonl run01.jsonl`，第 1 行起就不同）**：
+  `- {"date":"2026-03-20T00:00:00Z","symbol":"2317.TW",…}` 對 `+ {"date":"2026-03-20T00:00:00Z","symbol":"2603.TW",…}`
+  ⇒ 同一天的 5 檔在兩次轉檔間互換位置。
+  **只有順序不同（不是內容不同）**：`sort run00.jsonl | shasum -a 256` 與 `sort run01.jsonl | shasum -a 256` **同值**
+  （`f60bfa2219cf93c72ffc760a23402d0e4c58dc23186fa93e2e2e4e25516ae779`），兩檔都是 53 行。
+
+- **根因（指名到行；修前 `origin/main`）**：`internal/importer/twmarket.go:60-66`
+  內層迴圈寫成 `for _, bar := range ds.ByDate[date.Format("2006-01-02")]` —— 直接走訪 `map[string]domain.DailyBar`
+  （欄位在 `internal/replay/twse_csv.go:23`；逐日的內層 map 於 `:74` 建立、`:90` 填入）。Go 的 map 走訪序**每次執行都隨機**
+  ⇒ 同一天的列在每次轉檔得到不同排列。（外層 `ds.Dates` 由 `internal/replay/twse_csv.go:96` 的 `sort.Slice` 排過，
+  所以**日期軸本來就穩定**；不穩定的是日內順序。）`internal/importer/twmarket.go` 的原子寫入（temp→fsync→rename，FU-20260927-07）
+  與本缺陷正交：修好原子性之後，讀端拿到的仍是「每次排列都不同的完整檔」。
+
+- **下游依賴列序的清單（本 PR 只列出，未改動這些元件的行為）**：
+
+  | 下游 | 與列序的關係 |
+  |---|---|
+  | `internal/replay.GetLatestDate`（`:213`；`.jsonl` 分支＝`latestDateJSONL`，`internal/replay/twse_csv.go:227-278`） | **有依賴（日期軸）**：只讀**最後一行**非空行的 `date` ⇒ 「最後一行＝最新資料日」必須成立。呼叫者：`cmd/atlas/replay_freshness_metrics_task.go:192`（新鮮度指標與轉檔閘門）。日內順序對它無影響。 |
+  | `internal/portfolio.HistoricalPrices.LoadFromExtendedJSONL`（`internal/portfolio/historical_prices.go:58-92`） | **無依賴**：逐列 append 後按 symbol 的日期排序；順序不影響結果。 |
+  | `internal/replay.ComputeChecksum`（`internal/replay/version.go:40`） | **有依賴（位元組）**：byte 級 sha256 ⇒ 修前對 JSONL 使用會得到「內容沒變、雜湊卻變」。**現況：只在 `version_test.go` 被呼叫，沒有 production caller**（故列為潛在依賴，非現行故障）。 |
+  | `cmd/merge-replay`（`cmd/merge-replay/main.go:96-101`） | **幾乎無依賴**：自己按 (date, code) 排序；只有「同鍵重複列」時採 first-wins，才與列序有關（本 writer 以 map 建檔 ⇒ 不可能產生重複鍵）。 |
+  | `internal/importer/twmarket_atomic_test.go`、`cmd/atlas/replay_conversion_convergence_test.go` | **無依賴**：以「排序後列集合」比對。 |
+
+- **修法（唯一改動的 production 檔＝`internal/importer/twmarket.go`）**：寫入前對列排序，定出**全序**：
+  **date 遞增 → symbol 遞增（byte order）**。外層沿用 loader 已遞增的 `ds.Dates`，內層改為
+  `for _, symbol := range slices.Sorted(maps.Keys(day))`（修後 `:85-88`）。
+  排序契約寫進函式 doc 的 `# Row-order contract (FU-20261016-31)` 段（修後 `:37-55`），並在契約裡指名
+  「為什麼順序是格式的一部分」（`GetLatestDate` 的尾行讀取、位元組可比較性）。
+  **未改**：CSV 解析語意、原子寫入流程（temp→fsync→rename）、權限語意、任何下游行為。
+
+- **負向證明（三段；`cp` 備份還原並以 sha256 證明）**
+  ① **修前**：10 次同輸入轉檔 ⇒ **10 個不同 sha256**（見 §0）。
+  ② **修後**：同 10 次 ⇒ **只有 1 個 sha256**，且**等於修前 `sort | shasum` 的值**（`f60bfa22…`）
+     ⇒ 同時證明「逐位元組穩定」與「內容集合不變（只換順序）」。新增的契約測試也留下同型證據：
+     `[evidence] 8 conversions, 1 distinct sha256 = 5d1dfba4c095cdb2716abce6b59e1499a4dba8715e9917312545d00583ebcacc`。
+  ③ **突變 ⇒ 契約測試必紅**：把**行為行** `internal/importer/twmarket.go:86` 的 `slices.Sorted(maps.Keys(day))`
+     改成 `slices.Collect(maps.Keys(day))`（同一行、只拿掉排序；`maps` 與 `slices` 都仍被使用 ⇒ 紅燈來自斷言，不是編譯錯誤）。
+     紅燈原文（三條契約測試全紅）：
+     - `twmarket_order_test.go:113: converting the same CSV 8 times produced 8 distinct sha256 digests ([94d3639c… 40a86db1… 9e8ba09d… d9c3bc47… c8318634… 71db72fb… 45581fc1… bcb2d7fe…]); the file must be byte-identical across conversions`
+     - `twmarket_order_test.go:148: rows 3/4 on 2026-01-05T00:00:00Z are out of symbol order (2603.TW before 2317.TW)`
+     - `twmarket_order_test.go:205: the same rows in a different input order produced different files`（附兩份 sha：`07973860…` vs `ac85502a…`）
+     `cp` 還原後 `shasum -a 256`：`7915fe2fa139822939b63703ab2e27c301296c17a5cd2a3953dec64f5d797cbc`（備份與還原後逐位元組相等）。
+
+- **新增契約測試（同 commit）**：`internal/importer/twmarket_order_test.go`
+  ① `RowOrderIsDeterministic`：同輸入轉 8 次 ⇒ 逐位元組相同；
+  ② `RowsAreTotallyOrdered`：直接對輸出檔斷言 date→symbol 全序，並與 loader 看到的 (date, symbol) 集合逐鍵比對（內容集合不變）；
+  ③ `OutputIgnoresInputRowOrder`：兩份「內容集合相同、排列不同（日期區塊反轉＋區塊內列序反轉）」的 fixture ⇒ 輸出**逐位元組相同**
+  （同時守住日期軸：若 loader 不再回傳遞增日期，尾行讀取契約與本測試一起失效）。
+  並更新 `internal/importer/twmarket_atomic_test.go` 的**過時註解**（原註解寫「列序在合法範圍內不保證穩定」—— 修後已不成立）。
+
+- **同型掃描（機械式；指令＝自寫的 Go AST-lite 掃描器：`range` 到「同檔宣告為 `map[` 的識別字」＋ 同一函式內有寫檔／雜湊呼叫；**只列清單，新 ID 由 root 配**）**
+  命中 23 處、逐處讀碼分類後的真同形候選（同一組輸入 ⇒ 輸出位元組可能不同）：
+
+  | 位置 | 形狀 |
+  |---|---|
+  | `internal/marketdata/government_broker_aggregator.go:606`（`writeBrokerDetails`） | `for _, acc := range details`（map）⇒ 依序 append 成 `brokers[]`，**未排序**就 `json.Marshal` 寫檔（`brokers/<date>_brokers.json`）⇒ 檔案順序＝map 走訪序。 |
+  | `internal/monitoring/universe_scheduler.go:1565`（`CheckD6Expiry`） | `for sym := range previouslyRankedSet` 產生 `newEntries` ⇒ 併入 `wl.Symbols` 後**持久化**（`watchlist.json`，tmp+rename）⇒ 陣列順序＝map 走訪序。 |
+  | `cmd/mapgen/gen_routes.go:109,129`（`buildRoutesMarkdown`） | 「不在 canonical order 的 group」以 `for groupName, gr := range groups` 逐列輸出 ⇒ 生成文件的該段順序不穩。 |
+  | `internal/monitoring/prometheus.go:26`（`PrometheusHandler`） | `for name, group := range byName` ⇒ `/metrics` 本文順序不穩（**語意無害**：Prometheus 不以順序解讀；但任何位元組比對／golden 測試會不穩）。 |
+  | `internal/repository/postgres_metrics.go:88`（`QueryLatest`） | `for key, value := range labels` 決定 `$N` 佔位與 `args` 的順序 ⇒ 同一組條件的 **SQL 文字不同**（結果相同；影響 pgx prepared-statement 快取命中率）。 |
+
+  **已排除（讀碼確認「看起來同形、其實不是」）**：`internal/monitoring/metrics.go:303` 與 `internal/llm_annotator/observability.go:118`
+  （`metricKey`：先 `sort` 再組字串）、`internal/ledger/futures_bar_store_jsonl.go:70,221`、`internal/ledger/futures_shadow_store_jsonl.go:65`
+  （改寫前先 `sort.Strings(keys)`；掃描器命中的是**收集鍵**那個迴圈，不是寫入迴圈）、`cmd/gentags/main.go:607`、`cmd/atlas-mcp/docsgen/main.go:54`
+  （codegen 先排序）、`cmd/backfill-fundamentals-ps-sector/main.go:32`（`json.MarshalIndent` 會排序 map 鍵）、
+  `cmd/mapgen/gen_fe_be.go:69`、`cmd/experimental/jev-eval-sympanel/main.go:205`、`cmd/calibrate-seasonal/main.go:313`、
+  `cmd/backfill-industry-tree/main.go:108,137`、`internal/marketdata/yahoo_session.go:186`（`url.Values.Encode` 會排序）、
+  `cmd/experimental/sbl-ic-study/main.go:1214,1318`（走訪的是 slice）。
+
+- **已知限制**：① 只固定了**這一個 writer**；`internal/replay.Dataset.ByDate` 仍是 map ⇒ 任何新的 writer 若不排序會再犯
+  （本條的同型清單即為此而列）。② 沒有把「最後一行＝最新資料日」寫成 `GetLatestDate` 自己的契約測試；本 PR 改由輸出端的
+  `OutputIgnoresInputRowOrder` 守日期軸（`GetLatestDate` 屬下游，未改動其行為）。③ 同型清單未修，且掃描器的判準是
+  「同檔宣告為 `map[` 的識別字」，不涵蓋「經由 helper 間接走訪 map」的情形。
+
 
 ## 相關文件
 

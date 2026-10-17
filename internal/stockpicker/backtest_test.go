@@ -316,3 +316,69 @@ func TestRunBacktest_NilRegimesKeepsEmpty(t *testing.T) {
 		}
 	}
 }
+
+// TestBacktest_SkipsNonPositiveForwardClose locks FU-20260930-04 in the
+// stockpicker panel backtest: the trigger-day close was guarded, but the
+// FORWARD close was not, so a stored Close=0 on the horizon day was written
+// into SignalOutcome as a real -100% outcome and then entered the win-rate
+// aggregates.
+func TestBacktest_SkipsNonPositiveForwardClose(t *testing.T) {
+	bars := risingSeries(t, "2330", "2026-01-05", 40)
+	// Trigger 2026-01-10 has its 5-day horizon on 2026-01-15 — stamp the bad
+	// stored value there.
+	for i := range bars {
+		if bars[i].Date.Equal(mustDate(t, "2026-01-15")) {
+			bars[i].Close = 0
+		}
+	}
+	flows := flowsFor(t, "2026-01-05", 40, 1000)
+	panel := &staticPanel{
+		bars:  map[string][]HistoricalBar{"2330": bars},
+		flows: map[string][]FlowPoint{"2330": flows},
+	}
+
+	cfg := BacktestConfig{
+		Universe:    []string{"2330"},
+		Start:       mustDate(t, "2026-01-05"),
+		End:         mustDate(t, "2026-01-30"),
+		AsOf:        mustDate(t, "2026-02-20"),
+		ForwardDays: 5,
+		CostRate:    0.00585,
+		Source:      "stockpicker",
+	}
+	outcomes, err := RunBacktest(context.Background(), cfg, panel)
+	if err != nil {
+		t.Fatalf("RunBacktest: %v", err)
+	}
+	if len(outcomes) == 0 {
+		t.Fatal("expected outcomes for a monotonic uptrend")
+	}
+	for _, o := range outcomes {
+		if o.ForwardReturn <= -0.5 {
+			t.Errorf("outcome %s @ %s has ForwardReturn %v: a missing forward close was recorded as a return",
+				o.Source, o.TriggerDate, o.ForwardReturn)
+		}
+		if o.TriggerDate == "2026-01-10" {
+			t.Errorf("outcome for 2026-01-10 recorded despite its 5-day horizon bar being a missing close")
+		}
+	}
+
+	// Control: the clean panel produces the same outcomes as before the guard.
+	cleanPanel := &staticPanel{
+		bars:  map[string][]HistoricalBar{"2330": risingSeries(t, "2330", "2026-01-05", 40)},
+		flows: map[string][]FlowPoint{"2330": flows},
+	}
+	cleanOutcomes, err := RunBacktest(context.Background(), cfg, cleanPanel)
+	if err != nil {
+		t.Fatalf("RunBacktest (clean): %v", err)
+	}
+	if len(cleanOutcomes) <= len(outcomes) {
+		t.Errorf("clean panel produced %d outcomes, want more than the corrupted panel's %d", len(cleanOutcomes), len(outcomes))
+	}
+	for _, o := range cleanOutcomes {
+		if o.TriggerDate == "2026-01-10" {
+			return // the 2026-01-10 sample still exists on clean data
+		}
+	}
+	t.Error("clean panel lost the 2026-01-10 outcome; normal data must not change")
+}

@@ -567,3 +567,54 @@ func TestJSONLRow_RoundTrip(t *testing.T) {
 		t.Fatal("round-trip mismatch")
 	}
 }
+
+// TestForwardReturn_NegativeClose verifies the FU-20260930-04 guard: a stored
+// negative close is not a price. The pre-fix check was `Close == 0`, so a
+// negative close produced a nonsense return instead of "no data".
+func TestForwardReturn_NegativeClose(t *testing.T) {
+	dir := t.TempDir()
+	csv := strings.Join([]string{
+		"Date,Code,Name,TradeVolume,TradeValue,Open,High,Low,Close,Change,Transaction",
+		"2026-03-20,0001,Neg,10000,100000,-5,-5,-5,-5,0,500",
+		"2026-03-21,0001,Neg,10000,100000,50,52,49,51,1,500",
+	}, "\n") + "\n"
+	path := filepath.Join(dir, "negative_close.csv")
+	if err := os.WriteFile(path, []byte(csv), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	ds, err := LoadTWSEOpenDataCSV(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	date, _ := time.Parse("2006-01-02", "2026-03-20")
+	if _, ok := ds.ForwardReturn("0001.TW", date, 1); ok {
+		t.Error("ForwardReturn reported success for a negative current close; want ok=false")
+	}
+}
+
+// TestForwardReturn_NonFiniteClose verifies the same guard for a NaN close:
+// `Close == 0` did not reject NaN, so the caller received a NaN forward return.
+func TestForwardReturn_NonFiniteClose(t *testing.T) {
+	dir := t.TempDir()
+	csv := strings.Join([]string{
+		"Date,Code,Name,TradeVolume,TradeValue,Open,High,Low,Close,Change,Transaction",
+		"2026-03-20,0002,Nanish,10000,100000,50,52,49,50,0,500",
+		"2026-03-21,0002,Nanish,10000,100000,50,52,49,NaN,1,500",
+	}, "\n") + "\n"
+	path := filepath.Join(dir, "nan_close.csv")
+	if err := os.WriteFile(path, []byte(csv), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	ds, err := LoadTWSEOpenDataCSV(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	date, _ := time.Parse("2006-01-02", "2026-03-20")
+	if _, ok := ds.ForwardReturn("0002.TW", date, 1); ok {
+		t.Error("ForwardReturn reported success for a NaN forward close; want ok=false")
+	}
+}
