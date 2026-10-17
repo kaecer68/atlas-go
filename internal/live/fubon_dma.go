@@ -15,6 +15,7 @@ import (
 
 	"github.com/kaecer68/atlas-go/internal/constants"
 	"github.com/kaecer68/atlas-go/internal/domain"
+	"github.com/kaecer68/atlas-go/internal/redact"
 )
 
 // fubonDMARequest 是傳送給 Python wrapper 的 JSONL 指令。
@@ -282,7 +283,10 @@ func (a *FubonDMAAdapter) sendRequest(req fubonDMARequest) (fubonDMAResponse, er
 
 	var resp fubonDMAResponse
 	if err := json.Unmarshal([]byte(line), &resp); err != nil {
-		return fubonDMAResponse{}, fmt.Errorf("fubon dma: unmarshal response: %w (raw: %s)", err, line)
+		// FU-20261016-12: the raw line comes from the broker subprocess and can
+		// carry the account or the API key.
+		return fubonDMAResponse{}, fmt.Errorf("fubon dma: unmarshal response: %w (raw: %s)", err,
+			redact.Text(line, a.apiKey, a.personalID))
 	}
 
 	return resp, nil
