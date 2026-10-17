@@ -16,6 +16,9 @@ package risk
 //     the same commit.
 //   - wired == true while nothing references the symbol ⇒ red. Claiming
 //     enforcement that does not exist is the defect this guard exists for.
+//   - wiredVia naming a row that is not wired ⇒ red. A symbol whose only
+//     caller sits inside its declaring file cannot satisfy the external scan, so
+//     it stays wired == false and records that caller instead.
 //
 // The scan is deliberately textual and deliberately over-triggering (the same
 // choice as TestSiliconPhaseWeightMultiplierHasNoConsumer in
@@ -45,7 +48,13 @@ type declaredOnlyLever struct {
 	defining  string   // file that declares it; excluded from the consumer scan
 	extraSkip []string // additional non-test files to skip (declaration-adjacent docs)
 	wired     bool     // true = a production consumer is expected
-	reason    string
+	// wiredVia names the wired symbol this one is reached from, for symbols
+	// whose only production caller lives inside the declaring file (and is
+	// therefore invisible to the external-reference scan). Such a row keeps
+	// wired == false — the scan cannot see the reference — but it must not be
+	// reported as unenforced.
+	wiredVia string
+	reason   string
 }
 
 func declaredOnlyLevers() []declaredOnlyLever {
@@ -73,17 +82,19 @@ func declaredOnlyLevers() []declaredOnlyLever {
 		{
 			symbol:   "SetHaltTrading",
 			defining: "internal/live/risk_gate.go",
-			reason:   "the only writer of RiskGate.haltTrading, so the hard-halt branch of the wired Check is unreachable; wiring it needs an owner decision plus an end-to-end test",
+			reason:   "operator-facing halt setter; the production halt writer is SyncRiskGateFromCircuitBreaker, and no manual-halt control surface or clearing rule exists yet",
 		},
 		{
 			symbol:   "SyncHaltFromCircuitState",
 			defining: "internal/live/risk_gate.go",
-			reason:   "second writer of the halt flag; same wiring decision as SetHaltTrading",
+			wiredVia: "SyncRiskGateFromCircuitBreaker",
+			reason:   "live, but its only caller is SyncRiskGateFromCircuitBreaker inside the declaring file, which the external-reference scan excludes; it is not an independent entry point",
 		},
 		{
 			symbol:   "SyncRiskGateFromCircuitBreaker",
 			defining: "internal/live/risk_gate.go",
-			reason:   "documented wire point between CircuitBreaker and RiskGate; no caller at all, so circuit state never reaches the gate",
+			wired:    true,
+			reason:   "Orchestrator.onIntradayCycle mirrors the breaker state after every circuit evaluation; the nil VaR provider keeps the uncalibrated estimate off the reject path",
 		},
 		{
 			symbol:    "GetPositionSizeAdjustment",
@@ -97,6 +108,28 @@ func declaredOnlyLevers() []declaredOnlyLever {
 func TestExportedRiskLeversHaveNoProductionConsumer(t *testing.T) {
 	levers := declaredOnlyLevers()
 	root := moduleRoot(t)
+
+	// wiredVia must point at a row that is really wired, otherwise a symbol can
+	// claim transitive reachability from a symbol that is itself dead.
+	bySymbol := make(map[string]declaredOnlyLever, len(levers))
+	for _, lv := range levers {
+		bySymbol[lv.symbol] = lv
+	}
+	for _, lv := range levers {
+		if lv.wiredVia == "" {
+			continue
+		}
+		if lv.wired {
+			t.Fatalf("%s: wired and wiredVia are mutually exclusive — either the scan sees a consumer, or it does not", lv.symbol)
+		}
+		via, ok := bySymbol[lv.wiredVia]
+		if !ok {
+			t.Fatalf("%s: wiredVia names %s, which is not a row of this table (FU-20261016-32)", lv.symbol, lv.wiredVia)
+		}
+		if !via.wired {
+			t.Fatalf("%s: wiredVia names %s, whose own row is not declared wired — the reachability claim is stale (FU-20261016-32)", lv.symbol, lv.wiredVia)
+		}
+	}
 
 	seen := make(map[string]string, len(levers))
 	for _, lv := range levers {
@@ -133,6 +166,9 @@ func TestExportedRiskLeversHaveNoProductionConsumer(t *testing.T) {
 func leverState(lv declaredOnlyLever) string {
 	if lv.wired {
 		return "wired"
+	}
+	if lv.wiredVia != "" {
+		return "reached only via " + lv.wiredVia
 	}
 	return "DECLARED ONLY / NOT ENFORCED"
 }

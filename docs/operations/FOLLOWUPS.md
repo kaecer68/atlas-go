@@ -5749,6 +5749,21 @@ gen_routes_determinism_test.go: PASS（同輸入兩次呼叫逐位元組相同�
      （`order_manager.go:128`），但 `haltTrading` 的三個寫入端（`SetHaltTrading`／`SyncHaltFromCircuitState`／
      `SyncRiskGateFromCircuitBreaker`）**全部 0 生產呼叫者** ⇒ 硬停分支不可達。
      提案三個選項見稽核文件 §2.6；**未動任何生產風控行為**。
+     **處置（2026-10-16，PR #2280）：已依 §2.6 選項 2 接線（只鏡射 halt、不鏡射 VaR）。**
+     `Orchestrator.onIntradayCycle` 在每次電路評估（`circuitBreaker.Evaluate` + `State()`）後呼叫
+     `SyncRiskGateFromCircuitBreaker(o.riskGate, o.circuitBreaker, nil)`；參數型別由 `*CircuitBreaker` 改為
+     orchestrator 持有的 `CircuitBreakerOps`（免型別斷言），`nil` 的 VaR provider 是刻意的（live VaR 未校準）。
+     回滾＝移除該呼叫行。端到端測試
+     `internal/live/orchestrator_risk_gate_wiring_test.go`（3% 日虧 ⇒ `CircuitHalted` ⇒ `halt_trading=true`
+     ⇒ `OrderManager.Run` 被 `risk gate: trading halted` 拒且 broker 0 次送單；清盤後下一輪解除 ⇒ 訂單放行）；
+     守門表 `SyncRiskGateFromCircuitBreaker` 改 `wired: true`。
+     **更正本條敘述一處（讀碼）：**「`RiskGate.Check` 有生產呼叫者（`order_manager.go:128`）」只在
+     `OrderManager` **帶 gate** 時才成立，而唯一帶 gate 的 manager（`o.orderMgr`）只被
+     `Orchestrator.executeOrder` 使用 —— 後者**0 生產呼叫者**；可達的 `Orchestrator.ExecuteOrder` 走
+     `ExecutionManager.ExecuteOrder`，其 `OrderManager` 以 **nil** gate 建立（`execution.go:45,74`）。
+     所以 5a 讓旗標成真、並讓「帶 gate 的 manager」會拒單，但**實盤路徑原本就由 `CircuitBreaker.CanPlaceOrder`
+     先擋**（`TestExecuteOrderBlockedByCircuitBreaker`）。要讓 gate 也坐在實盤路徑上，須把它傳進
+     `ExecutionManager`（未做：`CanPlaceOrder` 已先擋，屬重複防線，且屬另一條決策）。
   7. `ShouldHaltTrading`（`internal/risk/macro_aware_drawdown.go:248`）→ **其實不是缺陷**：述詞已在生產內聯
      （`strategy_evolver.go:200` 的 `drawdown.Action >= risk.DrawdownSevere` ⇒ `StrategySuspended`；`:183` 同式繞冷卻）。
   8. `GetPositionSizeAdjustment`（同檔 `:243`）→ **該接線，只提案**。`Evaluate` 有生產呼叫者
@@ -5785,8 +5800,11 @@ gen_routes_determinism_test.go: PASS（同輸入兩次呼叫逐位元組相同�
 
 - **已知限制**：① 掃描器的選擇子近似（`x.Name` 一律算引用）⇒ 零引用清單**傾向低估**（保守方向）。
   ② `DynamicThresholdEngine` 讀取端全空 —— 比 `GetRegimeMultiplier` 大得多的缺口，需改生產門檻計算 ⇒ 未動。
-  ③ 兩條「該接線」的**行為變更未執行**（依「模糊決策只提案」）：
-  停止交易寫入端（3 選項）與回撤曝險上限（3 條件）都需業主決定。
+  ③ 兩條「該接線」的**行為變更**：停止交易寫入端已於 5a 接線（見上「處置」）；回撤曝險上限（3 條件）
+  仍需業主決定，未動。
+  ⑤ 5a 的兩個殘留缺口：開盤（`ResetDayState` ⇒ `CircuitNormal`）後到下一個 intraday cycle 之間，閘門可能仍持有
+  前一日的 halt（fail-closed 一個週期，未在 `onMarketOpen` 同步）；`RiskGate.Status()` 的 `halt_trading`
+  **沒有任何對外曝露者**（`Orchestrator.Status()` 不含它、無 alert 規則）⇒ 重新認證條件 3 的告警路徑仍未完成。
   ④ 附錄 A 其餘 84 條候選未判定。
 
 
