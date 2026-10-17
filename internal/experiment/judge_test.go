@@ -13,14 +13,14 @@ import (
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/eval"
 	"github.com/kaecer68/atlas-go/internal/ledger"
+	"github.com/kaecer68/atlas-go/internal/testutil/reporoot"
 )
 
 func TestEvaluateUpdatesStatus(t *testing.T) {
-	wd, err := os.Getwd()
+	root, err := reporoot.FromCwd()
 	if err != nil {
-		t.Fatalf("getwd: %v", err)
+		t.Fatalf("resolve module root: %v", err)
 	}
-	root := filepath.Clean(filepath.Join(wd, "../.."))
 	stateDir := t.TempDir()
 	store := ledger.NewStore(stateDir).(ledger.ExperimentStore)
 	judge := NewJudge(store, filepath.Join(root, "samples", "replay", "twse_stock_day_all_sample.csv"), filepath.Join(stateDir, "baseline_policy.json"))
@@ -295,11 +295,10 @@ func TestEvaluateRejectsMalformedResultContract(t *testing.T) {
 }
 
 func TestEvaluateRejectsInvalidStatusTransition(t *testing.T) {
-	wd, err := os.Getwd()
+	root, err := reporoot.FromCwd()
 	if err != nil {
-		t.Fatalf("getwd: %v", err)
+		t.Fatalf("resolve module root: %v", err)
 	}
-	root := filepath.Clean(filepath.Join(wd, "../.."))
 	stateDir := t.TempDir()
 	store := ledger.NewStore(stateDir).(ledger.ExperimentStore)
 	judge := NewJudge(store, filepath.Join(root, "samples", "replay", "twse_stock_day_all_sample.csv"), filepath.Join(stateDir, "baseline_policy.json"))
@@ -485,11 +484,10 @@ func TestJudge_WithParameters(t *testing.T) {
 }
 
 func TestEvaluatePopulatesMonetaryFields(t *testing.T) {
-	wd, err := os.Getwd()
+	root, err := reporoot.FromCwd()
 	if err != nil {
-		t.Fatalf("getwd: %v", err)
+		t.Fatalf("resolve module root: %v", err)
 	}
-	root := filepath.Clean(filepath.Join(wd, "../.."))
 	stateDir := t.TempDir()
 	store := ledger.NewStore(stateDir).(ledger.ExperimentStore)
 	replayPath := filepath.Join(root, "samples", "replay", "twse_stock_day_all_sample.csv")
@@ -648,11 +646,10 @@ func TestMaxDrawdownSignConversion(t *testing.T) {
 // Before fix: OOSResult is nil (OOS runs only if passesAcceptance returns true).
 // After fix: OOSResult is populated (OOS runs unconditionally before passesAcceptance).
 func TestEvaluateNoDrawdownSpikeGateRunsOOSBeforePassesAcceptance(t *testing.T) {
-	wd, err := os.Getwd()
+	root, err := reporoot.FromCwd()
 	if err != nil {
-		t.Fatalf("getwd: %v", err)
+		t.Fatalf("resolve module root: %v", err)
 	}
-	root := filepath.Clean(filepath.Join(wd, "../.."))
 	stateDir := t.TempDir()
 	store := ledger.NewStore(stateDir).(ledger.ExperimentStore)
 	judge := NewJudge(store, filepath.Join(root, "samples", "replay", "twse_stock_day_all_sample.csv"), filepath.Join(stateDir, "baseline_policy.json"))

@@ -14,6 +14,7 @@ import (
 
 	"github.com/kaecer68/atlas-go/internal/industry"
 	"github.com/kaecer68/atlas-go/internal/sectorallocation"
+	"github.com/kaecer68/atlas-go/internal/testutil/reporoot"
 )
 
 // TestClosureStorePathMatchesFileClosureStoreWriteTarget is the regression test
@@ -98,9 +99,9 @@ func TestClosureStorePathIsSharedWithStoreConstruction(t *testing.T) {
 // preflight validates stays the path the writer uses. Tests are excluded (they
 // use t.TempDir()).
 func TestClosureStoreConstructionUsesSharedResolver(t *testing.T) {
-	root, err := filepath.Abs(filepath.Join("..", "..", ".."))
+	root, err := reporoot.FromCwd()
 	if err != nil {
-		t.Fatalf("abs root: %v", err)
+		t.Fatalf("resolve module root: %v", err)
 	}
 
 	fset := token.NewFileSet()

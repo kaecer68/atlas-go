@@ -16,7 +16,6 @@ package stockpicker
 
 import (
 	"context"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -25,6 +24,7 @@ import (
 
 	"github.com/kaecer68/atlas-go/internal/ledger"
 	"github.com/kaecer68/atlas-go/internal/testdb"
+	"github.com/kaecer68/atlas-go/internal/testutil/reporoot"
 )
 
 // unreachableDSN is never dialed: the pool under test is created with
@@ -80,9 +80,9 @@ func stubTargetGuard(t *testing.T) {
 // artifact, so no data/state/atlas.db is created.
 func workDirForRun(t *testing.T) string {
 	t.Helper()
-	abs, err := filepath.Abs(filepath.Join("..", ".."))
+	abs, err := reporoot.FromCwd()
 	if err != nil {
-		t.Fatalf("abs repo root: %v", err)
+		t.Fatalf("resolve module root: %v", err)
 	}
 	return abs
 }

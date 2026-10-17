@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/config"
+	"github.com/kaecer68/atlas-go/internal/testutil/reporoot"
 )
 
 // retiredOddLotIDs are the two spellings of the retired channel. The dash form
@@ -160,9 +161,9 @@ func TestDeriveChannelStatus_TwseOddlotRetirementClosesTheAlertLoop(t *testing.T
 // all: the retirement write in register_adapters.go legitimately mentions both
 // spellings (composite literal, not a call), and comments are exempt.
 func TestNoProductionPathProbesRetiredOddLotChannel(t *testing.T) {
-	root, err := filepath.Abs("../..")
+	root, err := reporoot.FromCwd()
 	if err != nil {
-		t.Fatalf("resolve repo root: %v", err)
+		t.Fatalf("resolve module root: %v", err)
 	}
 	// "probe(... "twse_oddlot")" on one line = the retired ID handed to a probe or
 	// registry call. Go call arguments do not span lines in this codebase.

@@ -5,22 +5,32 @@ import (
 	"testing"
 
 	"github.com/kaecer68/atlas-go/internal/config"
+	"github.com/kaecer68/atlas-go/internal/testutil/reporoot"
 )
+
+// repoPath resolves a repo-relative path from the module root found by walking
+// up to go.mod (FU-20261016-20: "../.." assumes the package sits exactly two
+// levels below the root, and silently resolves to the PARENT of the checkout
+// when it does not).
+func repoPath(t *testing.T, rel ...string) string {
+	t.Helper()
+	root, err := reporoot.FromCwd()
+	if err != nil {
+		t.Fatalf("resolve module root: %v", err)
+	}
+	return filepath.Join(append([]string{root}, rel...)...)
+}
 
 // TestBuildPrismTrainingExecutor_WiresReplayBackedExecutor verifies the
 // PRISM Phase A wiring: when a replay dataset is resolvable, the executor is
 // non-nil and carries a non-empty agent registry (so the prism_training BTM
 // can schedule real per-agent training and produce real cohort metrics).
 func TestBuildPrismTrainingExecutor_WiresReplayBackedExecutor(t *testing.T) {
-	sample, err := filepath.Abs(filepath.Join("..", "..", "samples", "replay", "twse_stock_day_all_sample.csv"))
-	if err != nil {
-		t.Fatalf("abs sample path: %v", err)
-	}
-	t.Setenv("ATLAS_REPLAY_DATA_PATH", sample)
+	t.Setenv("ATLAS_REPLAY_DATA_PATH", repoPath(t, "samples", "replay", "twse_stock_day_all_sample.csv"))
 
 	cfg := config.Config{
 		WorkDir:           ".",
-		AgentRegistryPath: filepath.Join("..", "..", "configs", "agents.json"),
+		AgentRegistryPath: repoPath(t, "configs", "agents.json"),
 	}
 
 	exec, registry := buildPrismTrainingExecutor(cfg)
@@ -41,7 +51,7 @@ func TestBuildPrismTrainingExecutor_NilWhenDatasetMissing(t *testing.T) {
 
 	cfg := config.Config{
 		WorkDir:           ".",
-		AgentRegistryPath: filepath.Join("..", "..", "configs", "agents.json"),
+		AgentRegistryPath: repoPath(t, "configs", "agents.json"),
 	}
 
 	exec, registry := buildPrismTrainingExecutor(cfg)
@@ -58,18 +68,14 @@ func TestBuildPrismTrainingExecutor_NilWhenDatasetMissing(t *testing.T) {
 // #1), matching the production iMac setting
 // ATLAS_REPLAY_DATA_PATH=data/replay/tw_extended_90days.csv.
 func TestBuildPrismTrainingExecutor_PrefersEnvPath(t *testing.T) {
-	sample, err := filepath.Abs(filepath.Join("..", "..", "samples", "replay", "twse_stock_day_all_sample.csv"))
-	if err != nil {
-		t.Fatalf("abs sample path: %v", err)
-	}
-	t.Setenv("ATLAS_REPLAY_DATA_PATH", sample)
+	t.Setenv("ATLAS_REPLAY_DATA_PATH", repoPath(t, "samples", "replay", "twse_stock_day_all_sample.csv"))
 
 	// A VERSION-file / default path would resolve to the extended CSV (which
 	// is not checked into the worktree); the env override must win so the
 	// executor loads the provided dataset.
 	cfg := config.Config{
 		WorkDir:           ".",
-		AgentRegistryPath: filepath.Join("..", "..", "configs", "agents.json"),
+		AgentRegistryPath: repoPath(t, "configs", "agents.json"),
 		ReplayDataPath:    "unused/fallback.csv",
 	}
 

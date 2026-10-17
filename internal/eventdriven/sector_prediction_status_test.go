@@ -16,6 +16,7 @@ import (
 	"github.com/kaecer68/atlas-go/internal/industry"
 	"github.com/kaecer68/atlas-go/internal/marketdata"
 	"github.com/kaecer68/atlas-go/internal/sectorallocation"
+	"github.com/kaecer68/atlas-go/internal/testutil/reporoot"
 )
 
 // ── I4 / I5 / I6 (#1944 Batch 3) ─────────────────────────────────────────
@@ -403,9 +404,9 @@ func TestSectorPredictions_HasNoFrontendReader(t *testing.T) {
 		t.Fatal("SectorPredictionsFrontendConsumer must be false while no frontend page reads the field")
 	}
 
-	root, err := filepath.Abs(filepath.Join("..", ".."))
+	root, err := reporoot.FromCwd()
 	if err != nil {
-		t.Fatalf("abs root: %v", err)
+		t.Fatalf("resolve module root: %v", err)
 	}
 	// Generated type mirrors: they list every field of the scanned Go types and
 	// are not consumers.

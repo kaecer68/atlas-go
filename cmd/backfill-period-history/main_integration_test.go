@@ -13,6 +13,7 @@ import (
 
 	"github.com/kaecer68/atlas-go/internal/marketdata"
 	"github.com/kaecer68/atlas-go/internal/testdb"
+	"github.com/kaecer68/atlas-go/internal/testutil/reporoot"
 )
 
 // 本檔是 #2107 的 PG 端到端證據：在**生產形狀**（ATLAS_STORE_BACKEND=postgres、
@@ -70,9 +71,9 @@ func itPeriodMacroTree(t *testing.T) string {
 func itPeriodWorkDir(t *testing.T) string {
 	t.Helper()
 	workDir := itPeriodMacroTree(t)
-	root, err := filepath.Abs(filepath.Join("..", ".."))
+	root, err := reporoot.FromCwd()
 	if err != nil {
-		t.Fatalf("abs repo root: %v", err)
+		t.Fatalf("resolve module root: %v", err)
 	}
 	if err := os.Symlink(filepath.Join(root, "sql"), filepath.Join(workDir, "sql")); err != nil {
 		t.Fatalf("symlink <workdir>/sql → %s/sql: %v", root, err)
