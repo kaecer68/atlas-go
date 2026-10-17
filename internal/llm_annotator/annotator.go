@@ -17,6 +17,8 @@ import (
 	"time"
 
 	"golang.org/x/time/rate"
+
+	"github.com/kaecer68/atlas-go/internal/redact"
 )
 
 // MockAnnotator is a test-friendly Annotator that returns a configurable
@@ -425,7 +427,8 @@ func (k *KimiClient) doRequest(ctx context.Context, raw []byte) (string, Usage, 
 
 	resp, err := k.hc.Do(req)
 	if err != nil {
-		return "", Usage{}, true, 0, fmt.Errorf("%w: http: %v", ErrUnavailable, err)
+		// FU-20261016-13: *url.Error formats the whole request URL.
+		return "", Usage{}, true, 0, fmt.Errorf("%w: http: %v", ErrUnavailable, redact.Error(err))
 	}
 	defer func() { _ = resp.Body.Close() }()
 
@@ -435,8 +438,12 @@ func (k *KimiClient) doRequest(ctx context.Context, raw []byte) (string, Usage, 
 	}
 	if resp.StatusCode/100 != 2 {
 		retryable := resp.StatusCode == 429 || resp.StatusCode/100 == 5
+		// FU-20261016-13: an auth failure quotes the key the provider was
+		// given, and this error reaches atlas_llm_* records. Redact it and cap
+		// the size — the previous form copied up to 1 MiB of body into a log
+		// line.
 		return "", Usage{}, retryable, resp.StatusCode, fmt.Errorf("%w: status %d: %s",
-			ErrUnavailable, resp.StatusCode, string(respBody))
+			ErrUnavailable, resp.StatusCode, redact.Text(truncateBodyForError(respBody), k.cfg.APIKey))
 	}
 
 	var parsed chatResponse
@@ -566,4 +573,15 @@ type chatResponse struct {
 		CompletionTokens int64 `json:"completion_tokens"`
 		TotalTokens      int64 `json:"total_tokens"`
 	} `json:"usage"`
+}
+
+// truncateBodyForError caps how much of an upstream body an error message may
+// carry. 512 bytes is enough for a provider's error envelope and small enough
+// that a log line stays a log line.
+func truncateBodyForError(body []byte) string {
+	const maxBodyInError = 512
+	if len(body) <= maxBodyInError {
+		return string(body)
+	}
+	return string(body[:maxBodyInError]) + "..."
 }

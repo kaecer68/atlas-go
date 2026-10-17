@@ -15,6 +15,7 @@ import (
 
 	"github.com/kaecer68/atlas-go/internal/apigateway/httpclient"
 	"github.com/kaecer68/atlas-go/internal/config"
+	"github.com/kaecer68/atlas-go/internal/redact"
 )
 
 // TEJ API configuration.
@@ -200,13 +201,16 @@ func (c *TEJClient) GetStockPriceDaily(ctx context.Context, stockID, startDate, 
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("tej http request: %w", err)
+		// FU-20261016-11: the api_key rides in the query string, and Go
+		// formats the whole URL into *url.Error, so the raw error would put
+		// the credential into channel_health (adapter_tej.go LastError).
+		return nil, fmt.Errorf("tej http request: %w", redact.Error(err, c.apiKey))
 	}
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("tej api error: status %d, body: %s", resp.StatusCode, string(body))
+		return nil, fmt.Errorf("tej api error: status %d, body: %s", resp.StatusCode, redactUpstreamText(string(body), c.apiKey))
 	}
 
 	var apiResp tejResponse
@@ -215,7 +219,7 @@ func (c *TEJClient) GetStockPriceDaily(ctx context.Context, stockID, startDate, 
 	}
 
 	if apiResp.Error != nil {
-		return nil, fmt.Errorf("tej api error: %s - %s", apiResp.Error.Code, apiResp.Error.Message)
+		return nil, fmt.Errorf("tej api error: %s - %s", apiResp.Error.Code, redactUpstreamText(apiResp.Error.Message, c.apiKey))
 	}
 
 	rows := make([]TEJStockPriceRow, 0, len(apiResp.Datatable.Data))
@@ -273,13 +277,13 @@ func (c *TEJClient) GetFinancialStatements(ctx context.Context, stockID, tableCo
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("tej http request: %w", err)
+		return nil, fmt.Errorf("tej http request: %w", redact.Error(err, c.apiKey))
 	}
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("tej api error: status %d, body: %s", resp.StatusCode, string(body))
+		return nil, fmt.Errorf("tej api error: status %d, body: %s", resp.StatusCode, redactUpstreamText(string(body), c.apiKey))
 	}
 
 	var apiResp tejResponse
@@ -288,7 +292,7 @@ func (c *TEJClient) GetFinancialStatements(ctx context.Context, stockID, tableCo
 	}
 
 	if apiResp.Error != nil {
-		return nil, fmt.Errorf("tej api error: %s - %s", apiResp.Error.Code, apiResp.Error.Message)
+		return nil, fmt.Errorf("tej api error: %s - %s", apiResp.Error.Code, redactUpstreamText(apiResp.Error.Message, c.apiKey))
 	}
 
 	// Return as []map for flexibility; caller knows column order.

@@ -41,6 +41,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/kaecer68/atlas-go/internal/redact"
 )
 
 const (
@@ -196,6 +198,17 @@ func (a *yahooAuth) ensure(ctx context.Context, client *http.Client) {
 	}
 }
 
+// secrets reports the credential material this session holds, so a call site
+// that quotes an upstream body into an operator-readable error can hand it to
+// redact.Text. A nil auth (bare requests, used by tests) holds none, and
+// redact itself ignores values shorter than its literal floor.
+func (a *yahooAuth) secrets() []string {
+	if a == nil {
+		return nil
+	}
+	return []string{a.cookie, a.crumb}
+}
+
 // apply attaches the auth headers + crumb query param to a chart request.
 // The Referer/Accept headers are set unconditionally so bare requests still
 // carry the headers production's yahooSession sends.
@@ -348,7 +361,13 @@ func fetchHistory(ctx context.Context, client *http.Client, auth *yahooAuth, ch 
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
-		return nil, fmt.Errorf("yahoo %s: HTTP %d: %s", ch.ticker, resp.StatusCode, strings.TrimSpace(string(body)))
+		// The 512-byte cap bounds the size of the quoted body but hides nothing:
+		// an upstream error body is not guaranteed to be credential-free, and
+		// this error is printed to the operator's terminal and into logs/.
+		// Redaction is fed this session's own cookie/crumb, which is the only
+		// credential the caller can name with certainty (FU-20261016-16).
+		return nil, fmt.Errorf("yahoo %s: HTTP %d: %s",
+			ch.ticker, resp.StatusCode, redact.Text(strings.TrimSpace(string(body)), auth.secrets()...))
 	}
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {

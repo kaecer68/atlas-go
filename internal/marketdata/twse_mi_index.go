@@ -259,7 +259,7 @@ func (c *TWSEClient) GetQuotesForDate(ctx context.Context, date string) (DatedQu
 			bodyStr = "(empty body)"
 		}
 		c.breakerRecordFailure()
-		return DatedQuotes{}, fmt.Errorf("api error: status %d, body: %s", resp.StatusCode, bodyStr)
+		return DatedQuotes{}, fmt.Errorf("api error: status %d, body: %s", resp.StatusCode, redactUpstreamText(bodyStr))
 	}
 
 	// Buffer the body so DecodeJSON sees a fresh reader (charset transcode).

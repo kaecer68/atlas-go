@@ -14,6 +14,7 @@ import (
 
 	"github.com/kaecer68/atlas-go/internal/llm"
 	obsotel "github.com/kaecer68/atlas-go/internal/observability/otel"
+	"github.com/kaecer68/atlas-go/internal/redact"
 )
 
 // BaseClient provides shared HTTP infrastructure for LLM provider clients.
@@ -176,7 +177,9 @@ func (b *BaseClient) doHTTP(ctx context.Context, method, url string, headers map
 
 	resp, err := b.HTTPClient.Do(req)
 	if err != nil {
-		return nil, nil, 0, true, fmt.Errorf("http: %w", err)
+		// FU-20261016-13: *url.Error formats the whole request URL, so a
+		// credential in the query string would ride along into the error.
+		return nil, nil, 0, true, fmt.Errorf("http: %w", redact.Error(err))
 	}
 	defer func() { _ = resp.Body.Close() }()
 
@@ -187,8 +190,12 @@ func (b *BaseClient) doHTTP(ctx context.Context, method, url string, headers map
 
 	if resp.StatusCode/100 != 2 {
 		retryable := resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode/100 == 5
+		// FU-20261016-13: the provider body is the diagnostic, but an auth
+		// failure quotes the key it was given ("Incorrect API key provided:
+		// sk-…"), so it is redacted here and the literal credential is
+		// removed by the caller, which holds it.
 		return nil, nil, resp.StatusCode, retryable,
-			fmt.Errorf("http status %d: %s", resp.StatusCode, truncateForError(respBody))
+			fmt.Errorf("http status %d: %s", resp.StatusCode, redact.Text(truncateForError(respBody)))
 	}
 
 	return resp, respBody, resp.StatusCode, false, nil

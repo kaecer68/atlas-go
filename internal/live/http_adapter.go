@@ -18,6 +18,7 @@ import (
 	"github.com/kaecer68/atlas-go/internal/apigateway/httpclient"
 	"github.com/kaecer68/atlas-go/internal/domain"
 	livestore "github.com/kaecer68/atlas-go/internal/live/store"
+	"github.com/kaecer68/atlas-go/internal/redact"
 )
 
 type HTTPBrokerAdapterConfig struct {
@@ -291,7 +292,8 @@ func (a *HTTPBrokerAdapter) sendOrderRequest(ctx context.Context, body []byte, i
 		if errors.Is(err, context.Canceled) {
 			retryable = false
 		}
-		return BrokerResult{}, &brokerHTTPError{message: fmt.Sprintf("http request failed: %v", err), code: "transport.request_failed", retryable: retryable}
+		// FU-20261016-12: *url.Error formats the whole request URL.
+		return BrokerResult{}, &brokerHTTPError{message: fmt.Sprintf("http request failed: %v", redact.Error(err, a.apiKey, a.apiSecret)), code: "transport.request_failed", retryable: retryable}
 	}
 	defer func() { _ = resp.Body.Close() }()
 
@@ -303,7 +305,10 @@ func (a *HTTPBrokerAdapter) sendOrderRequest(ctx context.Context, body []byte, i
 			prefix = "broker server error"
 		}
 		code := classifyBrokerErrorCode(resp.StatusCode)
-		return BrokerResult{}, &brokerHTTPError{message: fmt.Sprintf("%s: code=%s status=%d body=%s", prefix, code, resp.StatusCode, strings.TrimSpace(string(respBody))), code: code, retryable: retryable}
+		// FU-20261016-12: the broker echoes the account and the credential it
+		// saw; this message ends up in order records and risk alerts.
+		return BrokerResult{}, &brokerHTTPError{message: fmt.Sprintf("%s: code=%s status=%d body=%s", prefix, code, resp.StatusCode,
+			redact.Text(strings.TrimSpace(string(respBody)), a.apiKey, a.apiSecret)), code: code, retryable: retryable}
 	}
 
 	var payload struct {

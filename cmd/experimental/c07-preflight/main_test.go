@@ -2,6 +2,8 @@ package main
 
 import (
 	"io"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"strings"
 	"testing"
@@ -117,6 +119,41 @@ func TestPrintResult(t *testing.T) {
 				if !strings.Contains(got, want) {
 					t.Errorf("printResult output missing %q\n got: %q", want, got)
 				}
+			}
+		})
+	}
+}
+
+// preflightKey is a fake credential shaped like the one an upstream echoes in
+// its rejection body.
+const preflightKey = "FAKE-preflight-key-3c4d5e6f7a8b9c0d"
+
+// TestChecks_Non200BodiesAreRedacted is the FU-20261016-16 probe for this
+// preflight tool: the check message is printed to the operator's terminal, so
+// an upstream body must arrive there without credential material.
+func TestChecks_Non200BodiesAreRedacted(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusUnauthorized)
+		_, _ = w.Write([]byte(`{"msg":"Token is illegal.","status":401,"token_tail":"` + preflightKey + `"}`))
+	}))
+	t.Cleanup(srv.Close)
+
+	for name, check := range map[string]func(string) checkResult{
+		"health":            checkHealthEndpoint,
+		"macro snapshot":    checkMacroSnapshot,
+		"events prediction": checkEventsPredictionShape,
+	} {
+		t.Run(name, func(t *testing.T) {
+			got := check(srv.URL)
+			t.Logf("%s -> %s", name, got.Message)
+			if strings.Contains(got.Message, preflightKey) {
+				t.Errorf("%s message leaks the upstream credential: %s", name, got.Message)
+			}
+			if strings.Contains(got.Message, "token_tail") {
+				t.Errorf("%s message keeps the credential field name: %s", name, got.Message)
+			}
+			if !strings.Contains(got.Message, "status=401") || !strings.Contains(got.Message, "Token is illegal.") {
+				t.Errorf("%s message dropped the diagnosis: %s", name, got.Message)
 			}
 		})
 	}

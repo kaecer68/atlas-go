@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/kaecer68/atlas-go/internal/llm"
+	"github.com/kaecer68/atlas-go/internal/redact"
 )
 
 // Default MiniMax model constant.
@@ -131,7 +132,10 @@ func (c *MiniMaxClient) Chat(ctx context.Context, model string, messages []Messa
 
 	resp, body, err := c.DoRequest(ctx, "POST", url, headers, raw)
 	if err != nil {
-		return nil, fmt.Errorf("minimax: %w", err)
+		// FU-20261016-13: hand the credential to the redactor so a provider
+		// body that quotes it ("Incorrect API key provided: sk-…") cannot
+		// reach the atlas_llm_* records verbatim.
+		return nil, fmt.Errorf("minimax: %w", redact.Error(err, apiKey))
 	}
 	defer func() { _ = resp.Body.Close() }()
 

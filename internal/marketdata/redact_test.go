@@ -124,11 +124,13 @@ func TestRedactUpstreamText_ShortSecretsAreNotLiterals(t *testing.T) {
 	}
 }
 
-// TestUpstreamSecretJSONKeys_Coverage fails when a credential member is
-// deleted from the list. The corpus above only proves that the members it
-// exercises are redacted; this assertion makes a silent shrink of the list —
-// the cheapest way to reintroduce FU-20260926-02 — a red test.
-func TestUpstreamSecretJSONKeys_Coverage(t *testing.T) {
+// TestRedactUpstreamText_CredentialMemberCoverage fails when a credential
+// member stops being redacted. The corpus above only proves that the members
+// it exercises are redacted; this assertion makes a silent shrink of the list —
+// the cheapest way to reintroduce FU-20260926-02 — a red test. It drives the
+// package entry point (redactUpstreamText) rather than the internal list, so it
+// keeps guarding this call site now that the list lives in internal/redact.
+func TestRedactUpstreamText_CredentialMemberCoverage(t *testing.T) {
 	required := []string{
 		"token", "token_tail",
 		"api_key", "apikey", "api-key", "x-api-key",
@@ -137,15 +139,25 @@ func TestUpstreamSecretJSONKeys_Coverage(t *testing.T) {
 		"password", "passwd",
 		"authorization", "cookie", "set-cookie",
 	}
-	for _, want := range required {
-		if !isUpstreamSecretKey(want) {
-			t.Errorf("upstreamSecretJSONKeys no longer covers %q", want)
-		}
-		if !isUpstreamSecretKey(strings.ToUpper(want)) {
-			t.Errorf("secret key matching must be case-insensitive (missing %q)", strings.ToUpper(want))
+	for _, key := range required {
+		for _, variant := range []string{key, strings.ToUpper(key)} {
+			body := `{"` + variant + `":"` + redactionFixtureSecret + `","msg":"diag","status":500}`
+			got := redactUpstreamText(body, redactionFixtureKey)
+			if strings.Contains(got, redactionFixtureSecret) {
+				t.Errorf("credential member %q is no longer redacted: %s", variant, got)
+			}
+			if strings.Contains(strings.ToLower(got), strings.ToLower(variant)) {
+				t.Errorf("credential member NAME %q survives redaction: %s", variant, got)
+			}
+			if !strings.Contains(got, "diag") || !strings.Contains(got, "500") {
+				t.Errorf("diagnostics lost for member %q: %s", variant, got)
+			}
 		}
 	}
-	if isUpstreamSecretKey("msg") || isUpstreamSecretKey("status") || isUpstreamSecretKey("data") {
-		t.Error("diagnostic members (msg/status/data) must never be treated as credentials")
+	for _, keep := range []string{"msg", "status", "data"} {
+		body := `{"` + keep + `":"please keep me","status":500}`
+		if got := redactUpstreamText(body); !strings.Contains(got, "please keep me") {
+			t.Errorf("diagnostic member %q must never be treated as a credential: %s", keep, got)
+		}
 	}
 }

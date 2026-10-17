@@ -87,7 +87,7 @@ func fetchTWSETAIEXFallback(ctx context.Context) (MacroDataPoint, error) {
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		return MacroDataPoint{}, fmt.Errorf("taiex_twse: HTTP %d from %s: %s", resp.StatusCode, url, strings.TrimSpace(string(body)))
+		return MacroDataPoint{}, fmt.Errorf("taiex_twse: HTTP %d from %s: %s", resp.StatusCode, url, redactUpstreamText(strings.TrimSpace(string(body))))
 	}
 
 	var tw twseTAIEXResponse

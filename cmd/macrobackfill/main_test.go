@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func setupTWSEStub(t *testing.T, wantStatus int, body string) {
@@ -302,4 +303,106 @@ func absDiff(a, b float64) float64 {
 		return a - b
 	}
 	return b - a
+}
+
+// The credentials in these fixtures are fake. They are long enough to clear
+// redact's literal-length floor and shaped like the real thing so a failure
+// message reads like the incident it guards.
+const (
+	fakeMacroBodyKey  = "FAKE-macro-key-4b7c1d2e"
+	fakeMacroURLKey   = "FAKE-macro-url-9a8b7c6d"
+	fakeMacroParseKey = "FAKE-macro-parse-0a1b2c3d"
+	fakeMacroStatKey  = "FAKE-macro-stat-2f3e4d5c"
+)
+
+// TestFetchTWSEClosingIndexHTTPErrorRedactsUpstreamBody drives the non-200
+// branch (main.go, "HTTP %d from %s: %s"). The error must keep the status code
+// and the upstream message skeleton — that is what makes it diagnosable — and
+// must not carry the credential the body came back with (FU-20261016-16).
+func TestFetchTWSEClosingIndexHTTPErrorRedactsUpstreamBody(t *testing.T) {
+	setupTWSEStub(t, http.StatusUnauthorized,
+		`{"msg":"Token is illegal.","status":401,"token_tail":"`+fakeMacroBodyKey+`"}`)
+
+	_, _, err := fetchTWSEClosingIndex(time.Date(2026, 7, 24, 0, 0, 0, 0, time.Local))
+	if err == nil {
+		t.Fatal("want an error for HTTP 401, got nil")
+	}
+	msg := err.Error()
+	if strings.Contains(msg, fakeMacroBodyKey) {
+		t.Errorf("error leaks the upstream credential: %s", msg)
+	}
+	if !strings.Contains(msg, "HTTP 401") {
+		t.Errorf("error dropped the status code: %s", msg)
+	}
+	if !strings.Contains(msg, "Token is illegal.") {
+		t.Errorf("error dropped the upstream message skeleton: %s", msg)
+	}
+}
+
+// TestFetchTWSEClosingIndexHTTPErrorRedactsQueryCredential covers the other
+// half of the same sink: the URL is printed next to the status, and a
+// credential in its query string must be masked while the parameter NAME stays
+// visible (otherwise "which credential did the exchange refuse" is unanswerable).
+func TestFetchTWSEClosingIndexHTTPErrorRedactsQueryCredential(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = w.Write([]byte("upstream exploded"))
+	}))
+	t.Cleanup(srv.Close)
+	t.Cleanup(func() { twseMIIndexURL = "https://www.twse.com.tw/exchangeReport/MI_INDEX" })
+	twseMIIndexURL = srv.URL + "/exchangeReport/MI_INDEX?api_key=" + fakeMacroURLKey
+
+	_, _, err := fetchTWSEClosingIndex(time.Date(2026, 7, 24, 0, 0, 0, 0, time.Local))
+	if err == nil {
+		t.Fatal("want an error for HTTP 500, got nil")
+	}
+	msg := err.Error()
+	if strings.Contains(msg, fakeMacroURLKey) {
+		t.Errorf("error leaks the query-string credential: %s", msg)
+	}
+	if !strings.Contains(msg, "api_key=") {
+		t.Errorf("error dropped the parameter name: %s", msg)
+	}
+	if !strings.Contains(msg, "HTTP 500") || !strings.Contains(msg, "upstream exploded") {
+		t.Errorf("error dropped the diagnosis: %s", msg)
+	}
+}
+
+// TestFetchTWSEClosingIndexParseErrorRedactsBody covers the unparseable-body
+// branch (main.go, "parse JSON: %w (body=%s)"). The body here is an envelope
+// cut in half, the shape a read cap produces, and it carries the credential.
+func TestFetchTWSEClosingIndexParseErrorRedactsBody(t *testing.T) {
+	setupTWSEStub(t, http.StatusOK,
+		`{"msg":"Token is illegal.","token_tail":"`+fakeMacroParseKey)
+
+	_, _, err := fetchTWSEClosingIndex(time.Date(2026, 7, 24, 0, 0, 0, 0, time.Local))
+	if err == nil {
+		t.Fatal("want an error for an unparseable body, got nil")
+	}
+	msg := err.Error()
+	if strings.Contains(msg, fakeMacroParseKey) {
+		t.Errorf("error leaks the truncated-envelope credential: %s", msg)
+	}
+	if !strings.Contains(msg, "parse JSON") || !strings.Contains(msg, "Token is illegal.") {
+		t.Errorf("error dropped the diagnosis: %s", msg)
+	}
+}
+
+// TestFetchTWSEClosingIndexStatErrorRedactsBody covers the stat != OK branch
+// (main.go, "TWSE stat != OK: %q (body=%s)").
+func TestFetchTWSEClosingIndexStatErrorRedactsBody(t *testing.T) {
+	setupTWSEStub(t, http.StatusOK,
+		`{"stat":"CLOSE","tables":[],"token_tail":"`+fakeMacroStatKey+`"}`)
+
+	_, _, err := fetchTWSEClosingIndex(time.Date(2026, 7, 24, 0, 0, 0, 0, time.Local))
+	if err == nil {
+		t.Fatal("want an error for stat != OK, got nil")
+	}
+	msg := err.Error()
+	if strings.Contains(msg, fakeMacroStatKey) {
+		t.Errorf("error leaks the upstream credential: %s", msg)
+	}
+	if !strings.Contains(msg, `stat != OK`) || !strings.Contains(msg, "CLOSE") {
+		t.Errorf("error dropped the diagnosis: %s", msg)
+	}
 }

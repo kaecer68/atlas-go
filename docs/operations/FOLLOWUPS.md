@@ -3852,7 +3852,7 @@ rc=1                            # ⇒ 修前無宣告常數、無守門測試：
 
 ### FU-20261016-11 — TEJ：`api_key` 放在 **query string**，且 transport error 會把**整條 URL**寫進 error（channel health 直接顯示）
 
-- **狀態**：`open`
+- **狀態**：`done`（2026-10-16 收斂，處置見條文末；#2271）
 - **記錄日期**：2026-10-16
 - **來源**：`FU-20260926-02` 的同型掃描（PR [#2243](https://github.com/kaecer68/atlas-go/pull/2243) 實作時以 `grep` 掃全 repo 的 body/error 組合後登記；**刻意不在該 PR 修**，見該 PR 說明）。
 - **事實（程式碼；`internal/marketdata/tej_provider.go`）**：
@@ -3872,11 +3872,38 @@ rc=1                            # ⇒ 修前無宣告常數、無守門測試：
 - **驗收條件**：TEJ 的 transport／非 2xx error 字串**不含** `api_key` 原值，且仍含 `status`／上游 `Error.Code`／
   `Error.Message`；負對照（拿掉遮蔽）⇒ 新測試紅燈。
 
+**處置（2026-10-16，分支 `fix/20261016-redact-exit-family`，#2271）**
+
+**根因（比原敘述更精確：三條路徑共用同一個缺口，其中一條遮蔽器當時根本沒有規則可套）**
+
+原敘述寫「`api_key` 在 query string ＋ transport error 把整條 URL 寫進 error」，**兩點都成立**
+（實測 `http.Client.Do` 對關閉的埠回 `Get "http://127.0.0.1:62848/api/datatables/TRAIL/TAPRCD.json?api_key=…&coid=2330…": dial tcp …`）。
+但只修那兩行**不夠**，因為同一支 provider 還有第三個出口，而且**共用的遮蔽器對 `api_key=…` 這種形狀本來無效**
+（`redactUpstreamText` 當時只有 JSON 成員規則與文字 key/value 規則，後者的 value 類別會把 `&coid=…` 一起吃進去，屬「遮錯形狀」）。
+三條出口：① transport（`*url.Error` 格式化完整 URL）；② 非 200 的 body 原文；
+③ TEJ 錯誤信封 `apiResp.Error.Message` 原文。三者都經 `internal/apigateway/adapter_tej.go` 的 `LastError` 進
+`channel_health`（持久化 ＋ API 可讀）。
+
+**修法**：先做 `FU-20261016-15`（遮蔽器提升為 `internal/redact` ＋ 新增 URL／query 規則），再把四個錯誤點接上：
+`redact.Error(err, c.apiKey)`（transport，回傳的 error **保留 Unwrap**，`errors.Is` 不受影響）、
+`redactUpstreamText(string(body), c.apiKey)`（非 200）、`redactUpstreamText(apiResp.Error.Message, c.apiKey)`（錯誤信封）。
+URL 規則**保留參數名**（`api_key=[REDACTED]`），因為「上游拒絕的是 api_key」是可診斷資訊；其餘 query（`coid`、`mdate.*`、
+`opts.columns`）與 `status`／`Error.Code`／`Message` 骨架原樣保留。
+
+**負向證明（fixture `FAKE-tej-api-key-9f3c1f0b7a2e4d5c`；`cp` 備份後突變、sha256 回驗）**
+
+- 修前（測試首次執行即紅，假機密原文）：
+  `tej http request: Get "http://127.0.0.1:62808/api/datatables/TRAIL/TAPRCD.json?api_key=FAKE-tej-api-key-9f3c1f0b7a2e4d5c&coid=2330&mdate.gte=2025-01-03…": dial tcp 127.0.0.1:62808: connect: connection refused`
+- 修後（同一測試 `-v` 的 `t.Logf`）：
+  `…TAPRCD.json?api_key=[REDACTED]&coid=2330&mdate.gte=2025-01-03&mdate.lte=2025-01-03&opts.columns=…": dial tcp …: connection refused`
+- 突變（把三個呼叫點還原成原文寫法）⇒ `TestTEJClient_Errors_HideAPIKey` 四個子測試全紅，紅燈原文含 `FAKE-tej-api-key-…`；
+  `cp` 還原後 sha256 與突變前**逐位元組相等**，同一 fixture 轉綠。
+
 ---
 
 ### FU-20261016-12 — `internal/live`：券商回應 body 原文進下單／風控錯誤訊息
 
-- **狀態**：`open`
+- **狀態**：`done`（2026-10-16 收斂，處置見條文末；#2271）
 - **記錄日期**：2026-10-16
 - **來源**：同 `FU-20260926-02` 的同型掃描（PR [#2243](https://github.com/kaecer68/atlas-go/pull/2243) 實作時的掃描結果）。
 - **事實（程式碼）**：
@@ -3892,11 +3919,41 @@ rc=1                            # ⇒ 修前無宣告常數、無守門測試：
   建議提升為跨套件套件，見 `FU-20261016-15`），保留 `status`／`code`。
 - **驗收條件**：以假 body（含假憑證／帳號）驅動三條錯誤路徑 ⇒ message 不含原值、仍含 status 與 code。
 
+**處置（2026-10-16，分支 `fix/20261016-redact-exit-family`，#2271）**
+
+**根因（原敘述站得住，但漏了兩件事）**：`internal/live` 的六個出口——`twse_adapter.go` 三條（委託／查詢／取消）、
+`http_adapter.go` 兩條（4xx body／transport）、`fubon_dma.go` 一條（unmarshal 失敗的整行回應）——都把上游文字原樣放進
+下單／風控錯誤訊息；這些訊息進 order record 與 alert。原敘述漏的兩件事：
+① transport 那條在 `http_adapter.go` 是包成 `brokerHTTPError.message`（不是 `fmt.Errorf`），所以「只搜 `fmt.Errorf`」的掃描會漏掉；
+② **帳號**：TWSE 與 Fubon DMA 各自持有 `accountID`／`personalID`，通用 `HTTPBrokerAdapter` 則**不持有**帳號 ⇒ 帳號只能靠
+「結構化成員名」規則（見下）遮蔽，不能靠字面值。
+
+**修法**：六個出口全部改走 `internal/redact`；持有憑證／帳號的 adapter 一律把值當字面 secret 傳入
+（`redact.Text(body, a.apiKey, a.apiSecret, a.accountID)`），transport 用 `redact.Error`（保留 `Unwrap`）。
+`redact` 的機密成員清單同時補上 PII 成員名（`account`／`account_id`／`account_no`／`accountno`／`acct`／`cust_no`／
+`personal_id`／`id_number`），讓「不持有帳號的 adapter」也能靠**成員名**遮蔽 JSON 內的帳號。
+
+**負向證明（fixture `FAKE-live-api-key-…`／`FAKE-live-api-secret-…`／`ACC-SECRET-99887766`）**
+
+- 修前（假機密原文，實測）：
+  `twse_adapter: API error status=400 body={"code":"ORDER_REJECTED","account_id":"ACC-SECRET-99887766","message":"invalid X-Api-Key FAKE-live-api-key-1a2b3c4d5e6f","detail":"api_key=FAKE-live-api-secret-7a8b9c0d1e2f"}`
+  以及 `submit order failed after 1 attempts: … http request failed: Post "http://127.0.0.1:62993/orders?api_key=FAKE-live-api-key-1a2b3c4d5e6f/orders": dial tcp …: connection refused`
+- 修後（同一測試 `-v`）：
+  `twse_adapter: API error status=400 body={"code":"ORDER_REJECTED","detail":"api_key=[REDACTED]","message":"invalid X-Api-Key [REDACTED]"}`
+  、`… http request failed: Post "http://127.0.0.1:63026/orders?api_key=[REDACTED]": dial tcp …`
+  、`fubon dma: unmarshal response: invalid character 'o' in literal null (expecting 'u') (raw: not-json {[REDACTED],[REDACTED]})`
+- 突變（`twse_adapter.go` 三處還原成原文）⇒ `TestTWSEBrokerAdapter_Errors_HideCredentials` 三個子測試全紅，
+  紅燈原文含三個 fixture 值；`cp` 還原後 sha256 相等、恢復綠燈。
+
+**已知限制**：帳號若出現在 body 的**自由文字**裡（而非 `account_id` 這類成員），只有**持有該帳號**的 adapter（TWSE／Fubon DMA）
+遮得掉；通用 `HTTPBrokerAdapter` 不持有帳號 ⇒ 該情境仍會留下。這一條已寫進測試檔註解，追蹤於
+`FU-20261016-14` 的「同型未修者」清單（不自配新 id）。
+
 ---
 
 ### FU-20261016-13 — LLM client 家族：provider 錯誤 body 原文進 error（401 常回帶 key 前綴）
 
-- **狀態**：`open`
+- **狀態**：`done`（2026-10-16 收斂，處置見條文末；#2271）
 - **記錄日期**：2026-10-16
 - **來源**：同 `FU-20260926-02` 的同型掃描（PR [#2243](https://github.com/kaecer68/atlas-go/pull/2243) 實作時的掃描結果）。
 - **事實（程式碼）**：
@@ -3912,11 +3969,43 @@ rc=1                            # ⇒ 修前無宣告常數、無守門測試：
 - **驗收條件**：以 `{"error":{"message":"Incorrect API key provided: <假 key>"}}` 驅動 ⇒ error 不含假 key，
   仍含 `status=401` 與 provider 的 message 骨架。
 
+**處置（2026-10-16，分支 `fix/20261016-redact-exit-family`，#2271）**
+
+**根因（原敘述正確，但少了一個出口與一個量體問題）**：① `internal/llm/clients/base.go` 只做 200-byte 截斷、沒有任何欄位遮蔽；
+② `internal/llm_annotator/annotator.go` 連截斷都沒有（`io.LimitReader(resp.Body, 1<<20)` ⇒ 一次 401 可以把 1 MiB 上游 body
+塞進一行 error）；③ 原敘述漏了**三個 provider client 的呼叫點**（`deepseek.go`／`kimi.go`／`minimax.go` 都是
+`fmt.Errorf("%w", err)` 直接往上丟）—— 而**只有呼叫端知道自己的 key**，所以「字面值規則」只能在那裡套；
+④ transport 那條（`fmt.Errorf("http: %w", err)`）會把 `*url.Error` 的完整 URL 一起帶走（與 `-11` 同型）。
+
+**修法（三層，互為備援）**：
+1. `base.go`：非 2xx body 走 `redact.Text(truncateForError(respBody))`；transport 走 `redact.Error(err)`。
+2. 三個 provider 呼叫點：`redact.Error(err, apiKey)`（把**自己的** key 當字面 secret；保留 `Unwrap`，`errors.Is` 仍可分類 429/5xx）。
+3. `llm_annotator`：`redact.Text(truncateBodyForError(respBody), k.cfg.APIKey)`，新增 512-byte 上限。
+`internal/redact` 另外新增**形狀規則**（`sk-`／`ALTAK-`／`ghp_`／`xoxb-`／`hf_` 等前綴，後接 ≥12 字元），
+用來遮蔽「呼叫端從未持有」的憑證（例如上游自己在錯誤訊息裡引用別把 key）。
+
+**負向證明（三層各自可獨立證偽；fixture 皆為 `FAKE…`／`sk-FAKE…`）**
+
+- 修前（假機密原文，實測）：`deepseek: http status 401: {"error":{"message":"Incorrect API key provided: sk-FAKE9f3c1f0b7a2e4d5c6b7a","type":"invalid_request_error"}}`
+  、`minimax: http status 401: {"base_resp":{"status_msg":"invalid api key: sk-FAKE9f3c…"}}`
+  、`llm annotator unavailable: status 401: {"error":{"message":"Incorrect API key provided: FAKEannotator4b7c…"}}xxxx…（4 KiB 尾巴）`
+- 修後：三處都變成 `… Incorrect API key provided: [REDACTED]`，status／`invalid api key`／`denied` 等骨架保留；
+  annotator 錯誤長度被壓到 ≤1 KiB（測試斷言）。
+- 突變三連（每次都 `cp` 備份、還原後 sha256 相等）：
+  ① 拿掉 `base.go` 的 `redact.Text` ⇒ `TestBaseClient_DoRequest_RedactsBodySecrets` 紅
+  （紅燈原文 `http status 403: {"error":{"code":"denied","token":"FAKE-upstream-sidekey-4b1d2e3f4a5b"}}`）；
+  ② 拿掉 `deepseek.go` 的 `redact.Error(err, apiKey)` ⇒ 子測試「無前綴金鑰」紅
+  （`faKEplainkey…` 原樣出現；刻意用**沒有 `sk-` 前綴**的 fixture，否則形狀規則會替字面規則頂罪 ⇒ 探針失去鑑別力）；
+  ③ 拿掉 annotator 的 `redact.Text` ⇒ `TestKimiClient_StatusError_HidesAPIKey` 紅。
+
+**已知限制**：provider 若把 key「部分遮蔽」後回傳（例如 `sk-abc***xyz`），那 3 位中間片段仍會留下 —— 那是上游自己遮的，
+不是完整憑證；形狀規則會遮掉可辨識前綴之後的連續字元。
+
 ---
 
 ### FU-20261016-14 — `internal/marketdata` 其餘 provider 的 raw-body error 站點（遮蔽器已就位，屬機械式套用）
 
-- **狀態**：`open`
+- **狀態**：`done`（2026-10-16 收斂，處置見條文末；#2271）
 - **記錄日期**：2026-10-16
 - **來源**：同 `FU-20260926-02` 的同型掃描（PR [#2243](https://github.com/kaecer68/atlas-go/pull/2243) 只修 FinMind 家族 ＋ 共用的 `retry.go`，**刻意不動其他 provider**）。
 - **事實（程式碼；2026-10-16 掃描，非測試檔中「把 body 原文以 `%s` 併進 error」的站點）**：
@@ -3932,11 +4021,46 @@ rc=1                            # ⇒ 修前無宣告常數、無守門測試：
   負向測試；③ 有憑證的 provider（fugle／fubon／tej／yahoo session）優先。
 - **驗收條件**：上列站點全部經遮蔽；每個 provider 至少一個「餵假憑證 body ⇒ 不得出現在 error／log」的測試。
 
+**處置（2026-10-16，分支 `fix/20261016-redact-exit-family`，#2271）**
+
+**根因**：與原敘述一致 —— 這批站點是「上游 body 原文以 `%s`／`%q` 併進 error」，清單本身正確；
+查證後補一處**漏列**：`taifex_futures_bars.go` 的 `verifyFuturesCSVHeader`（HTTP 200 卻回非 CSV 時，把 body
+首列 120 字元以 `%q` 併進 schema 哨兵 error —— HTML／JS 錯誤頁常帶 `Authorization`／`Cookie`）。
+另兩類站點也改走遮蔽器：fugle 的 transport error（今天 key 在 header、URL 不含憑證，仍包 `redact.Error` 以免未來改 query 就漏）、
+yahoo session 的 body（把 session 自己的 `crumb`／`cookie` 當字面 secret，這樣「非 JSON 的 header dump」也遮得到）。
+
+**修法**：18 個清單站點 ＋ 1 個漏列站點全部改走 `redactUpstreamText(...)`（body）／`redact.Error(...)`（transport）；
+有憑證的 provider 傳入自身憑證當字面 secret。哨兵錯誤（`ErrTAIFEXFuturesBarsSchema` 等）與 `status`／上游訊息骨架一律保留。
+
+**負向證明**：新增 `internal/marketdata/upstream_body_redaction_test.go`，**每 provider 一個**負向測試（18 個），全部以
+`httptest` 注入假機密並同時斷言「機密不在」＋「診斷在」。修前／修後原文（節錄）：
+
+- TWSE OPENAPI：`api error: status 404, body: {"msg":"upstream schema changed","status":404,"token":"FAKE-twse-openapi-token-7a1b"}`
+  ⇒ `…body: {"msg":"upstream schema changed","status":404}`；
+- Fugle：`api error: status 500, body: upstream failure: invalid timestamp header` ＋ `X-API-KEY: FAKE-fugle-key-5c1d2e3f`
+  ⇒ 後者消失、前者保留；
+- Yahoo session：`{"msg":"Invalid Cookie","status":500,"token":"FAKE-yahoo-crumb-9d8e7f6a"}` ⇒ 無 `token` 成員；
+- Fubon proxy：`"token":"FAKE-fubon-token-5a6b7c"` ⇒ 無 `token` 成員；
+- TAIEX fallback：`{"msg":"MI_INDEX unavailable","status":503,"token":"FAKE-taiex-twse-token-2b3c4d"}` ⇒ 無 `token` 成員，URL 與 `type=IND` 保留。
+
+**突變證明**（`cp` 備份 → 突變 → 紅 → `cp` 還原 → sha256 逐位元組相等 → 綠）：
+把 `twse_openapi.go` 的 `redactUpstreamText(bodyStr)` 還原成 `bodyStr` ⇒ `TestTWSEOpenAPI_UpstreamBodyRedacted` 紅，
+紅燈原文 `credential leaked into error string: api error: status 404, body: {…"token":"FAKE-twse-openapi-token-7a1b"}`；
+還原後 sha256 相同、同測試綠。
+
+**已知限制（同型未修者清單，不自配 id）**：改後重跑同一支掃描，仍會把上游文字帶進 error／log 但**未修**的只剩：
+① `finmind_*`（`FU-20260926-02` 已處理的家族，本條刻意不動）；
+② `read body: %w` 這類 `io.ReadAll` 失敗（錯誤來自本機 I/O，不含上游 body）；
+③ `daily_quota` 讀**本地** state 檔（非上游）；
+④ `taifex` 的 `raw.PutVolume` 等單值 `%q` 診斷（單一數值，無憑證面）。
+另有兩類**本條不含**的殘留面：`internal/narrative/geopolitical/*`（只回 `xml/json` unmarshal 錯誤，不回吐 body）與
+`internal/subscription/auth.go`（JWKS 只回 parse 錯誤）—— 皆已查證無 raw-body 出口。
+
 ---
 
 ### FU-20261016-15 — 遮蔽器**不可跨套件重用**（且沒有 URL／query 類機密遮蔽器）
 
-- **狀態**：`open`
+- **狀態**：`done`（2026-10-16 收斂，處置見條文末；#2271）
 - **記錄日期**：2026-10-16
 - **來源**：`FU-20260926-02`（PR [#2243](https://github.com/kaecer68/atlas-go/pull/2243)）修復時的架構觀察。
 - **事實**：本 PR 的 `redactUpstreamText` 定義在 `internal/marketdata/redact.go`，是**未匯出**的套件內函式
@@ -3951,11 +4075,37 @@ rc=1                            # ⇒ 修前無宣告常數、無守門測試：
 - **驗收條件**：`internal/marketdata` 以外的套件可 import 同一個遮蔽器；且刪掉任一 provider 的呼叫
   ⇒ 該 provider 的負向測試紅燈（而不是「安靜地少一層防護」）。
 
+**處置（2026-10-16，分支 `fix/20261016-redact-exit-family`，#2271）**
+
+**根因（成立，且查證後補了一項原敘述沒說的事）**：`redactUpstreamText` 是 `internal/marketdata` 的未匯出函式
+⇒ 其餘六類出口只能各自複製，複本會漂移。原敘述說「另外沒有任何 URL／query 遮蔽器」——**成立，而且更嚴重**：
+當時那條文字 key/value 規則的 value 類別是 `[^",}\s]+`，遇到 `…?api_key=abc&coid=2330` 會把 `&coid=2330` 一起吃進 match
+（遮蔽「正確」但**毀掉可診斷性**），所以「拿現成規則去遮 URL」是行不通的，必須新增專門的 URL 規則。
+
+**修法**：新增 `internal/redact`（單一實作）：
+- `Text(s, secrets...)`：URL query 值 → JSON 機密成員（含 PII 成員名） → 文字 key/value → 字面 secret → 憑證形狀。
+  **會 parse 成 JSON 的文字不再走文字規則**，因此 `{"msg":"token: expired"}` 這種「訊息提到 token」不會被誤遮。
+- `URL(raw)`：只遮 query 的敏感參數**值**與 userinfo 密碼，參數名／host／path／其他參數**逐位元組保留**。
+- `Error(err, secrets...)`：回傳一個 `Error()` 已遮蔽、但 `Unwrap()` 指向原 error 的包裝 ⇒ `errors.Is`／`errors.As` 不受影響。
+`internal/marketdata` 的 `redactUpstreamText` 保留為**三行 wrapper**（20+ 個呼叫點不必改），其套件內語料測試原樣保留。
+
+**跨套件重用（驗收條件 a）**：`grep -rn 'internal/redact' --include='*.go' internal cmd` 命中
+`internal/marketdata`、`internal/live`、`internal/llm/clients`、`internal/llm_annotator`、`cmd/macrobackfill`、
+`cmd/backfill-macro-history`、`cmd/backfill-taifex-oi-v2`、`cmd/experimental/c07-*`、`cmd/atlas-mcp/server`。
+
+**「刪掉呼叫 ⇒ 負向測試紅燈」（驗收條件 b）**：已逐條以「突變 ＋ `cp` 還原 ＋ sha256 回驗」證明，
+見 `-11`／`-12`／`-13`／`-14`／`-16` 各條的處置（每條都附突變後的紅燈原文）。
+
+**②（`internal/logging` 層自動遮蔽）不做，理由寫在這裡而不是默默跳過**：在 slog handler 這一層攔截會**改變所有**既有 log
+的輸出（含大量以 `string(body)`／`err` 形式傳入的非結構化值），而本 repo 的 log 契約有監控與 runbook 依賴；
+以本批六條的實證，「忘記呼叫遮蔽器」已經被**每個出口的行為測試**覆蓋（突變即紅），
+再加一層全域改寫的風險大於收益。若之後仍要 ②，應先量測 log 體積與 key 名分佈，屬獨立變更。
+
 ---
 
 ### FU-20261016-16 — `cmd/*` CLI 與 `atlas-mcp` 的 raw body／fullURL 進 error（輸出到終端與 log 檔）
 
-- **狀態**：`open`
+- **狀態**：`done`（2026-10-16 收斂，處置見條文末；#2271）
 - **記錄日期**：2026-10-16
 - **來源**：同 `FU-20260926-02` 的同型掃描（PR [#2243](https://github.com/kaecer68/atlas-go/pull/2243) 實作時的掃描結果）。
 - **事實（程式碼）**：`cmd/macrobackfill/main.go:266`／`:270`／`:273`、
@@ -3969,6 +4119,39 @@ rc=1                            # ⇒ 修前無宣告常數、無守門測試：
 - **建議（未實作）**：待 `-15` 落地後套用；`atlas-mcp` 的 `fullURL` 需要 URL 遮蔽器。
 - **驗收條件**：同 `-14`（假憑證不得出現在 CLI 的錯誤輸出）。
 
+**處置（2026-10-16，分支 `fix/20261016-redact-exit-family`，#2271）**
+
+**根因**：與原敘述一致 —— `cmd/*` 與 `atlas-mcp` 把 raw body／`fullURL` 併進 error，而 CLI 的 error 直接印到終端機
+與 `logs/`。查證後補上原掃描漏掉的**四類**站點（都在同一個「raw 文字 → 操作者可讀輸出」家族裡）：
+① `cmd/atlas-mcp/server/http_client.go` 的 `new request: %w`／`do: %w`（`*url.ParseError`／`*url.Error` 會引用完整 URL，
+含 query 憑證）；② `cmd/backfill-taifex-oi-v2` 的 `unexpected TAIFEX response (not CSV): %.100s`（非 200 之外的 raw body）；
+③ `cmd/experimental/c07-preflight`（3 處 `status=%d, body=%s`）與 ④ `cmd/experimental/l2-4-preflight`（1 處同型）——
+後兩者是**同檔 check 訊息**，印在操作者終端。
+
+**修法**：body 走 `redact.Text(...)`、`fullURL` 走 `redact.URL(...)`、transport error 走 `redact.Error(...)`（保留 `Unwrap`）。
+`cmd/backfill-macro-history` 另外把 yahoo session 自己的 `cookie`／`crumb` 當字面 secret 傳入（新增 `(*yahooAuth).secrets()`），
+因為該 CLI 的 512-byte body 上限**只截長度、不遮蔽內容**。
+
+**負向證明（修前紅燈皆來自 HEAD 原碼 ＋ 同批測試）**
+
+- macrobackfill：`HTTP 401 from http://127.0.0.1:49547/exchangeReport/MI_INDEX?response=json&date=20260724&type=IND: {"msg":"Token is illegal.","status":401,"token_tail":"FAKE-macro-key-4b7c1d2e"}`
+  ⇒ 修後 `…?api_key=[REDACTED]&date=20260724&type=IND: {"msg":"Token is illegal.","status":401}`；
+- atlas-mcp：`HttpClient: GET http://127.0.0.1:49559/api/stock/quote?api_key=FAKE-mcp-url-5a6b7c8d9e0f1a2b&symbol=2330 -> 500: {"error":"upstream exploded"}`
+  ⇒ 修後 `…?api_key=[REDACTED]&symbol=2330 -> 500: …`。
+- 突變證明（`cp` 備份 → 突變 → 紅 → `cp` 還原 → sha256 相等 → 綠）：
+  ① `cmd/atlas-mcp/server/http_client.go` 的 `redact.Text`／`redact.URL` 還原 ⇒ `TestHTTPClientStatusError*` 兩條紅，
+  紅燈 `error leaks "FAKE-mcp-body-6f7a8b9c1d2e3f40": HttpClient: GET … -> 401: {"msg":"Token is illegal.","token_tail":"FAKE-mcp-body-…"}`；
+  ② `cmd/experimental/c07-preflight` 的 `redact.Text` 還原 ⇒ 三個子測試紅，紅燈
+  `health message leaks the upstream credential: status=401, body={…"token_tail":"FAKE-preflight-key-3c4d5e6f7a8b9c0d"}`。
+
+**已知限制（同型未修者清單，不自配 id）**：
+- `cmd/fetch-historical`／`cmd/fetch-historical-capital-flow`：查證後**不是漏點** —— 兩者只把 `status` 放進 error，
+  body 交給 `internal/marketdata` 的解析器（其 error 只帶 `stat`／日期）。已補守護測試
+  `TestFetchDayErrorDoesNotEchoTheUpstreamBody` 釘住「body 不得回吐」。
+- `cmd/fetch-historical-capital-flow` 的 URL 由 `internal/constants.TWSEBaseURL` 硬編、函式只吃日期 ⇒ **無注入點**，
+  本車道（禁改 `internal/**`）無法為它寫行為測試；已在此逐條標記，未假裝覆蓋。
+- `cmd/experimental/l2-4-preflight/main_test.go` 需 `git add -f`：該目錄被 `.gitignore` 的 `l2-4-preflight`（建置產物名）
+  整包忽略，測試檔屬連帶受害；本 PR 以 `-f` 明確加入版控，未改 `.gitignore`。
 ### FU-20261016-17 — `internal/marketdata` 的 integration 測試在 CI **確定性 SKIP** ⇒ 該目錄目前是「白名單豁免」、零 CI 覆蓋
 
 - **狀態**：`open`

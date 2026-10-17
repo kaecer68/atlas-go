@@ -146,7 +146,7 @@ func (e *ExportStatisticsProvider) fetchLatestTwoMonths(ctx context.Context) (Cu
 		if bodyStr == "" {
 			bodyStr = "(empty body)"
 		}
-		return CustomsExportImport{}, CustomsExportImport{}, fmt.Errorf("export statistics HTTP %d, body: %s", resp.StatusCode, bodyStr)
+		return CustomsExportImport{}, CustomsExportImport{}, fmt.Errorf("export statistics HTTP %d, body: %s", resp.StatusCode, redactUpstreamText(bodyStr))
 	}
 
 	body, err := io.ReadAll(resp.Body)

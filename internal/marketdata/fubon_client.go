@@ -228,7 +228,7 @@ func (c *FubonClient) GetQuote(ctx context.Context, symbol string) (domain.Quote
 			bodyStr = "(empty body)"
 		}
 		c.breakerRecordFailure()
-		return domain.Quote{}, fmt.Errorf("fubon proxy: status %d, body: %s", resp.StatusCode, bodyStr)
+		return domain.Quote{}, fmt.Errorf("fubon proxy: status %d, body: %s", resp.StatusCode, redactUpstreamText(bodyStr))
 	}
 
 	var fubonResp FubonQuoteResponse
@@ -312,7 +312,7 @@ func (c *FubonClient) GetQuotes(ctx context.Context, symbols []string) ([]domain
 			bodyStr = "(empty body)"
 		}
 		c.breakerRecordFailure()
-		return nil, fmt.Errorf("fubon proxy: status %d, body: %s", resp.StatusCode, bodyStr)
+		return nil, fmt.Errorf("fubon proxy: status %d, body: %s", resp.StatusCode, redactUpstreamText(bodyStr))
 	}
 
 	var fubonResps []FubonQuoteResponse
@@ -371,7 +371,7 @@ func (c *FubonClient) CheckMarketStatus(ctx context.Context) (bool, error) {
 			bodyStr = "(empty body)"
 		}
 		c.breakerRecordFailure()
-		return false, fmt.Errorf("fubon proxy: status %d, body: %s", resp.StatusCode, bodyStr)
+		return false, fmt.Errorf("fubon proxy: status %d, body: %s", resp.StatusCode, redactUpstreamText(bodyStr))
 	}
 
 	var status FubonMarketStatus
