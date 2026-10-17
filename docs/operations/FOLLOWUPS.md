@@ -5003,6 +5003,97 @@ log 目錄：`/tmp/fu29-logs/`；shim 目錄：`/tmp/fu29-emptyset-shim/`（假 
   （例如「外部命令失敗被 `set -e` 條件語境吸收」屬 `-28`／`-27` 家族的假綠面，不在本條範圍）。
   ⑤ 本條**未動** `-28` 的內文（含其「已知限制 ④」仍寫「本 PR 未修」）—— 依 root 指示「不得動 18–29」；`-30` 即該 ④ 所指的收斂條目。
 
+### FU-20261016-31 — CSV→JSONL 轉檔的**列序非決定性**：同一天的股票以 Go map 走訪序寫出 ⇒ 同一份 CSV 兩次轉檔得到不同檔案（下游 diff／雜湊／尾行讀取全受影響）
+
+- **狀態**：`done`
+- **記錄日期**：2026-10-16 ／ **完成於**：2026-10-16（PR #2266；branch `fix/20261016-jsonl-row-order`）
+- **嚴重度**：**P2** —— 沒有資料錯誤（列集合完全相同），但「同樣的輸入」不再等於「同樣的位元組」：replay diff、檔案的完整性雜湊、以及 `GetLatestDate` 尾行讀取所依賴的「最後一行＝最新資料日」都失去可驗證性。
+- **來源**：PR #2263 的「已知限制 ⑥」（該車道實測發現、僅列出、未修、未配 ID）。本車道**獨立複現**後才動手。
+
+- **★ F-item 敘述更正一處（動手前讀碼＋最小複現的結果）**：候選敘述寫缺陷在 `internal/importer/twse_csv.go` 的 `ByDate`。
+  **路徑需更正**：`internal/importer/` 底下**沒有** `twse_csv.go`；`ByDate` 在 `internal/replay/twse_csv.go:23`（`Dataset.ByDate map[string]map[string]domain.DailyBar`）。
+  其餘敘述（「同一天內列序非決定性」「同一份輸入轉檔兩次會互換」「PR #2263 已記錄未修」）**逐字成立**。
+  另外要指出真正的**寫出點**不在 `internal/replay`：`internal/replay` 只提供資料，走訪 map 的是 writer 本身。
+
+- **§0 最小複現（修前 `bfac872d8`；探針有鑑別力：修前／修後結果必須不同）**
+  **fixture**：`samples/replay/twse_stock_day_all_sample.csv`（7 個資料日 × 共 53 列；首日 5 檔）。
+  **手法**：同一個 process 內連續呼叫 `importer.ImportTWOpenDataCSVToJSONL(src, out_N)` 10 次，逐檔算 sha256。
+  **修前實測**：**10 次 ⇒ 10 個不同的 sha256**（`e37db4e8…`、`2b06c120…`、`b247924a…`、`7e929799…`、`f84d8bdb…`、`3ef283ec…`、`9e96cec9…`、`47704fa4…`、`55b7e0dc…`、`e18c83b1…`）。
+  **列序差異（`diff -u run00.jsonl run01.jsonl`，第 1 行起就不同）**：
+  `- {"date":"2026-03-20T00:00:00Z","symbol":"2317.TW",…}` 對 `+ {"date":"2026-03-20T00:00:00Z","symbol":"2603.TW",…}`
+  ⇒ 同一天的 5 檔在兩次轉檔間互換位置。
+  **只有順序不同（不是內容不同）**：`sort run00.jsonl | shasum -a 256` 與 `sort run01.jsonl | shasum -a 256` **同值**
+  （`f60bfa2219cf93c72ffc760a23402d0e4c58dc23186fa93e2e2e4e25516ae779`），兩檔都是 53 行。
+
+- **根因（指名到行；修前 `origin/main`）**：`internal/importer/twmarket.go:60-66`
+  內層迴圈寫成 `for _, bar := range ds.ByDate[date.Format("2006-01-02")]` —— 直接走訪 `map[string]domain.DailyBar`
+  （欄位在 `internal/replay/twse_csv.go:23`；逐日的內層 map 於 `:74` 建立、`:90` 填入）。Go 的 map 走訪序**每次執行都隨機**
+  ⇒ 同一天的列在每次轉檔得到不同排列。（外層 `ds.Dates` 由 `internal/replay/twse_csv.go:96` 的 `sort.Slice` 排過，
+  所以**日期軸本來就穩定**；不穩定的是日內順序。）`internal/importer/twmarket.go` 的原子寫入（temp→fsync→rename，FU-20260927-07）
+  與本缺陷正交：修好原子性之後，讀端拿到的仍是「每次排列都不同的完整檔」。
+
+- **下游依賴列序的清單（本 PR 只列出，未改動這些元件的行為）**：
+
+  | 下游 | 與列序的關係 |
+  |---|---|
+  | `internal/replay.GetLatestDate`（`:213`；`.jsonl` 分支＝`latestDateJSONL`，`internal/replay/twse_csv.go:227-278`） | **有依賴（日期軸）**：只讀**最後一行**非空行的 `date` ⇒ 「最後一行＝最新資料日」必須成立。呼叫者：`cmd/atlas/replay_freshness_metrics_task.go:192`（新鮮度指標與轉檔閘門）。日內順序對它無影響。 |
+  | `internal/portfolio.HistoricalPrices.LoadFromExtendedJSONL`（`internal/portfolio/historical_prices.go:58-92`） | **無依賴**：逐列 append 後按 symbol 的日期排序；順序不影響結果。 |
+  | `internal/replay.ComputeChecksum`（`internal/replay/version.go:40`） | **有依賴（位元組）**：byte 級 sha256 ⇒ 修前對 JSONL 使用會得到「內容沒變、雜湊卻變」。**現況：只在 `version_test.go` 被呼叫，沒有 production caller**（故列為潛在依賴，非現行故障）。 |
+  | `cmd/merge-replay`（`cmd/merge-replay/main.go:96-101`） | **幾乎無依賴**：自己按 (date, code) 排序；只有「同鍵重複列」時採 first-wins，才與列序有關（本 writer 以 map 建檔 ⇒ 不可能產生重複鍵）。 |
+  | `internal/importer/twmarket_atomic_test.go`、`cmd/atlas/replay_conversion_convergence_test.go` | **無依賴**：以「排序後列集合」比對。 |
+
+- **修法（唯一改動的 production 檔＝`internal/importer/twmarket.go`）**：寫入前對列排序，定出**全序**：
+  **date 遞增 → symbol 遞增（byte order）**。外層沿用 loader 已遞增的 `ds.Dates`，內層改為
+  `for _, symbol := range slices.Sorted(maps.Keys(day))`（修後 `:85-88`）。
+  排序契約寫進函式 doc 的 `# Row-order contract (FU-20261016-31)` 段（修後 `:37-55`），並在契約裡指名
+  「為什麼順序是格式的一部分」（`GetLatestDate` 的尾行讀取、位元組可比較性）。
+  **未改**：CSV 解析語意、原子寫入流程（temp→fsync→rename）、權限語意、任何下游行為。
+
+- **負向證明（三段；`cp` 備份還原並以 sha256 證明）**
+  ① **修前**：10 次同輸入轉檔 ⇒ **10 個不同 sha256**（見 §0）。
+  ② **修後**：同 10 次 ⇒ **只有 1 個 sha256**，且**等於修前 `sort | shasum` 的值**（`f60bfa22…`）
+     ⇒ 同時證明「逐位元組穩定」與「內容集合不變（只換順序）」。新增的契約測試也留下同型證據：
+     `[evidence] 8 conversions, 1 distinct sha256 = 5d1dfba4c095cdb2716abce6b59e1499a4dba8715e9917312545d00583ebcacc`。
+  ③ **突變 ⇒ 契約測試必紅**：把**行為行** `internal/importer/twmarket.go:86` 的 `slices.Sorted(maps.Keys(day))`
+     改成 `slices.Collect(maps.Keys(day))`（同一行、只拿掉排序；`maps` 與 `slices` 都仍被使用 ⇒ 紅燈來自斷言，不是編譯錯誤）。
+     紅燈原文（三條契約測試全紅）：
+     - `twmarket_order_test.go:113: converting the same CSV 8 times produced 8 distinct sha256 digests ([94d3639c… 40a86db1… 9e8ba09d… d9c3bc47… c8318634… 71db72fb… 45581fc1… bcb2d7fe…]); the file must be byte-identical across conversions`
+     - `twmarket_order_test.go:148: rows 3/4 on 2026-01-05T00:00:00Z are out of symbol order (2603.TW before 2317.TW)`
+     - `twmarket_order_test.go:205: the same rows in a different input order produced different files`（附兩份 sha：`07973860…` vs `ac85502a…`）
+     `cp` 還原後 `shasum -a 256`：`7915fe2fa139822939b63703ab2e27c301296c17a5cd2a3953dec64f5d797cbc`（備份與還原後逐位元組相等）。
+
+- **新增契約測試（同 commit）**：`internal/importer/twmarket_order_test.go`
+  ① `RowOrderIsDeterministic`：同輸入轉 8 次 ⇒ 逐位元組相同；
+  ② `RowsAreTotallyOrdered`：直接對輸出檔斷言 date→symbol 全序，並與 loader 看到的 (date, symbol) 集合逐鍵比對（內容集合不變）；
+  ③ `OutputIgnoresInputRowOrder`：兩份「內容集合相同、排列不同（日期區塊反轉＋區塊內列序反轉）」的 fixture ⇒ 輸出**逐位元組相同**
+  （同時守住日期軸：若 loader 不再回傳遞增日期，尾行讀取契約與本測試一起失效）。
+  並更新 `internal/importer/twmarket_atomic_test.go` 的**過時註解**（原註解寫「列序在合法範圍內不保證穩定」—— 修後已不成立）。
+
+- **同型掃描（機械式；指令＝自寫的 Go AST-lite 掃描器：`range` 到「同檔宣告為 `map[` 的識別字」＋ 同一函式內有寫檔／雜湊呼叫；**只列清單，新 ID 由 root 配**）**
+  命中 23 處、逐處讀碼分類後的真同形候選（同一組輸入 ⇒ 輸出位元組可能不同）：
+
+  | 位置 | 形狀 |
+  |---|---|
+  | `internal/marketdata/government_broker_aggregator.go:606`（`writeBrokerDetails`） | `for _, acc := range details`（map）⇒ 依序 append 成 `brokers[]`，**未排序**就 `json.Marshal` 寫檔（`brokers/<date>_brokers.json`）⇒ 檔案順序＝map 走訪序。 |
+  | `internal/monitoring/universe_scheduler.go:1565`（`CheckD6Expiry`） | `for sym := range previouslyRankedSet` 產生 `newEntries` ⇒ 併入 `wl.Symbols` 後**持久化**（`watchlist.json`，tmp+rename）⇒ 陣列順序＝map 走訪序。 |
+  | `cmd/mapgen/gen_routes.go:109,129`（`buildRoutesMarkdown`） | 「不在 canonical order 的 group」以 `for groupName, gr := range groups` 逐列輸出 ⇒ 生成文件的該段順序不穩。 |
+  | `internal/monitoring/prometheus.go:26`（`PrometheusHandler`） | `for name, group := range byName` ⇒ `/metrics` 本文順序不穩（**語意無害**：Prometheus 不以順序解讀；但任何位元組比對／golden 測試會不穩）。 |
+  | `internal/repository/postgres_metrics.go:88`（`QueryLatest`） | `for key, value := range labels` 決定 `$N` 佔位與 `args` 的順序 ⇒ 同一組條件的 **SQL 文字不同**（結果相同；影響 pgx prepared-statement 快取命中率）。 |
+
+  **已排除（讀碼確認「看起來同形、其實不是」）**：`internal/monitoring/metrics.go:303` 與 `internal/llm_annotator/observability.go:118`
+  （`metricKey`：先 `sort` 再組字串）、`internal/ledger/futures_bar_store_jsonl.go:70,221`、`internal/ledger/futures_shadow_store_jsonl.go:65`
+  （改寫前先 `sort.Strings(keys)`；掃描器命中的是**收集鍵**那個迴圈，不是寫入迴圈）、`cmd/gentags/main.go:607`、`cmd/atlas-mcp/docsgen/main.go:54`
+  （codegen 先排序）、`cmd/backfill-fundamentals-ps-sector/main.go:32`（`json.MarshalIndent` 會排序 map 鍵）、
+  `cmd/mapgen/gen_fe_be.go:69`、`cmd/experimental/jev-eval-sympanel/main.go:205`、`cmd/calibrate-seasonal/main.go:313`、
+  `cmd/backfill-industry-tree/main.go:108,137`、`internal/marketdata/yahoo_session.go:186`（`url.Values.Encode` 會排序）、
+  `cmd/experimental/sbl-ic-study/main.go:1214,1318`（走訪的是 slice）。
+
+- **已知限制**：① 只固定了**這一個 writer**；`internal/replay.Dataset.ByDate` 仍是 map ⇒ 任何新的 writer 若不排序會再犯
+  （本條的同型清單即為此而列）。② 沒有把「最後一行＝最新資料日」寫成 `GetLatestDate` 自己的契約測試；本 PR 改由輸出端的
+  `OutputIgnoresInputRowOrder` 守日期軸（`GetLatestDate` 屬下游，未改動其行為）。③ 同型清單未修，且掃描器的判準是
+  「同檔宣告為 `map[` 的識別字」，不涵蓋「經由 helper 間接走訪 map」的情形。
+
+
 ## 相關文件
 
 - [universe-scoring-ranked-zero-20260925.md](universe-scoring-ranked-zero-20260925.md)
