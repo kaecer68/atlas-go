@@ -26,6 +26,7 @@ import (
 	"github.com/kaecer68/atlas-go/internal/risk"
 	"github.com/kaecer68/atlas-go/internal/storage"
 	"github.com/kaecer68/atlas-go/internal/taskexec"
+	"github.com/kaecer68/atlas-go/internal/testutil/reporoot"
 )
 
 func TestDashboardAPI_SetStorageReporter(t *testing.T) {
@@ -278,8 +279,12 @@ func TestHandleIndustryLinkage_ReturnsLeoAndMining(t *testing.T) {
 	if err != nil {
 		t.Fatalf("getwd: %v", err)
 	}
-	if err := os.Chdir("../.."); err != nil {
-		t.Skipf("cannot chdir to project root: %v", err)
+	root, err := reporoot.FromCwd()
+	if err != nil {
+		t.Fatalf("resolve module root: %v", err)
+	}
+	if err := os.Chdir(root); err != nil {
+		t.Fatalf("chdir to module root %s: %v", root, err)
 	}
 	defer func() { _ = os.Chdir(origDir) }()
 
@@ -347,8 +352,12 @@ func TestHandleIndustryOverview_ReturnsLeoAndMining(t *testing.T) {
 	if err != nil {
 		t.Fatalf("getwd: %v", err)
 	}
-	if err := os.Chdir("../.."); err != nil {
-		t.Skipf("cannot chdir to project root: %v", err)
+	root, err := reporoot.FromCwd()
+	if err != nil {
+		t.Fatalf("resolve module root: %v", err)
+	}
+	if err := os.Chdir(root); err != nil {
+		t.Fatalf("chdir to module root %s: %v", root, err)
 	}
 	defer func() { _ = os.Chdir(origDir) }()
 
@@ -409,8 +418,12 @@ func TestDashboardAPI_RegisterAllRoutes(t *testing.T) {
 	if err != nil {
 		t.Fatalf("getwd: %v", err)
 	}
-	if err := os.Chdir("../.."); err != nil {
-		t.Skipf("cannot chdir to project root: %v", err)
+	root, err := reporoot.FromCwd()
+	if err != nil {
+		t.Fatalf("resolve module root: %v", err)
+	}
+	if err := os.Chdir(root); err != nil {
+		t.Fatalf("chdir to module root %s: %v", root, err)
 	}
 	defer func() { _ = os.Chdir(origDir) }()
 

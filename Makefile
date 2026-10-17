@@ -1245,6 +1245,9 @@ ci-gate: embed-dirs
 	@echo "  → PG/SQLite schema 逐欄比對守門（FU-20261012-07/-09：同表兩份 schema，一邊漏補欄 ⇒ 2026-10-12 的 503）"
 	@bash tests/scripts/test-check-schema-parity.sh
 	@bash scripts/ci/check_schema_parity.sh
+	@echo "  → 測試不得用固定相對層數定位 repo 根（Tier A 硬禁止／Tier B 額度；lane 假綠、CI 紅；FU-20261016-20）"
+	@bash tests/scripts/test-test-repo-root-guard.sh
+	@bash scripts/ci/check_test_repo_root.sh
 	@echo "    ✅"
 	@echo "  → monitoring 單一設定樹自我測試（hermetic fixtures；PR 階段攔『改錯棵』）"
 	@bash tests/scripts/test-monitoring-single-source.sh

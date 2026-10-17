@@ -15,13 +15,23 @@ import (
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/ledger"
 	"github.com/kaecer68/atlas-go/internal/testdb"
+	"github.com/kaecer68/atlas-go/internal/testutil/reporoot"
 )
 
 // pgFuturesCLIContract 是本檔測試專用的契約代碼（避免與生產 TX/MTX 資料互踩）。
 const pgFuturesCLIContract = "PGFUTCLI"
 
-// repoRootFromCmd 回傳 repo 根（cmd/backfill-futures-bars → ../..）。
-const repoRootFromCmd = "../.."
+// repoRootFromCmd 回傳 repo 根：從 cwd 往上找 go.mod。
+//
+// 不用 "../.."：那假設「cmd/<name> 正好在 module root 下兩層」（FU-20261016-20）。
+func repoRootFromCmd(t *testing.T) string {
+	t.Helper()
+	root, err := reporoot.FromCwd()
+	if err != nil {
+		t.Fatalf("resolve module root: %v", err)
+	}
+	return root
+}
 
 // TestResolveStore_PostgresWritesFuturesBars 是 2026-09-29 生產缺口的端到端證據。
 //
@@ -38,7 +48,7 @@ const repoRootFromCmd = "../.."
 func TestResolveStore_PostgresWritesFuturesBars(t *testing.T) {
 	dsn := testdb.URL(t)
 	// 用既有 testdb seam 套 migrations（CI 缺 PG 硬失敗、本機缺 PG skip 的政策在 testdb）。
-	testdb.Pool(t, filepath.Join(repoRootFromCmd, "sql", "migrations"))
+	testdb.Pool(t, filepath.Join(repoRootFromCmd(t), "sql", "migrations"))
 
 	raw := testdb.Connect(t, dsn)
 	cleanupPGFuturesCLI(t, raw)
@@ -69,7 +79,7 @@ func TestResolveStore_PostgresWritesFuturesBars(t *testing.T) {
 
 	cfg := cliConfig{
 		contracts: []string{pgFuturesCLIContract}, start: day("2026-06-17"), end: day("2026-07-16"),
-		source: "csv", rollovers: true, workDir: repoRootFromCmd,
+		source: "csv", rollovers: true, workDir: repoRootFromCmd(t),
 	}
 
 	store, closeStore, err := resolveStore(context.Background(), cfg, appCfg, defaultStoreDeps())
@@ -130,7 +140,7 @@ func TestResolveStore_PostgresWritesFuturesBars(t *testing.T) {
 // （CLI 的 run() 依賴它；關不掉的池會讓短期 CLI 進程累積連線）。
 func TestResolveStore_PostgresEndToEndClosesPool(t *testing.T) {
 	dsn := testdb.URL(t)
-	testdb.Pool(t, filepath.Join(repoRootFromCmd, "sql", "migrations"))
+	testdb.Pool(t, filepath.Join(repoRootFromCmd(t), "sql", "migrations"))
 
 	ctx := context.Background()
 	t.Setenv("ATLAS_STORE_BACKEND", "postgres")
@@ -139,7 +149,7 @@ func TestResolveStore_PostgresEndToEndClosesPool(t *testing.T) {
 
 	cfg := cliConfig{
 		contracts: []string{pgFuturesCLIContract}, start: time.Now(), end: time.Now(),
-		workDir: repoRootFromCmd, pgDSN: dsn,
+		workDir: repoRootFromCmd(t), pgDSN: dsn,
 	}
 	store, closeStore, err := resolveStore(ctx, cfg, appCfg, defaultStoreDeps())
 	if err != nil {

@@ -1,6 +1,7 @@
 package industry
 
 import (
+	"github.com/kaecer68/atlas-go/internal/testutil/reporoot"
 	"math"
 	"os"
 	"slices"
@@ -506,8 +507,12 @@ func TestNewLinkageAnalyzer_IncludesLeoAndMining(t *testing.T) {
 	if err != nil {
 		t.Fatalf("getwd: %v", err)
 	}
-	if err := os.Chdir("../.."); err != nil {
-		t.Skipf("cannot chdir to project root: %v", err)
+	root, err := reporoot.FromCwd()
+	if err != nil {
+		t.Fatalf("resolve module root: %v", err)
+	}
+	if err := os.Chdir(root); err != nil {
+		t.Fatalf("chdir to module root %s: %v", root, err)
 	}
 	defer func() { _ = os.Chdir(origDir) }()
 

@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
+	"github.com/kaecer68/atlas-go/internal/testutil/reporoot"
 )
 
 // TestAgentPrimaryMetricsWired_IsFalse pins the inert-by-design status of
@@ -28,9 +29,9 @@ func TestAgentPrimaryMetricsWired_IsFalse(t *testing.T) {
 // influence a decision. If a real reader is added, this test fails and the flag
 // must be revisited in the same change.
 func TestAgentPrimaryMetrics_HasNoNonTestReader(t *testing.T) {
-	root, err := filepath.Abs(filepath.Join("..", ".."))
+	root, err := reporoot.FromCwd()
 	if err != nil {
-		t.Fatalf("abs root: %v", err)
+		t.Fatalf("resolve module root: %v", err)
 	}
 
 	// Allowed non-test occurrences: declarations, seed/clone writes, and the
@@ -82,9 +83,9 @@ func TestDriverAdapterReserved_HasNoNonTestCaller(t *testing.T) {
 		t.Fatal("LLMSectorAgentDriverWired must be false while NewDriverAdapter has no production caller")
 	}
 
-	root, err := filepath.Abs(filepath.Join("..", ".."))
+	root, err := reporoot.FromCwd()
 	if err != nil {
-		t.Fatalf("abs root: %v", err)
+		t.Fatalf("resolve module root: %v", err)
 	}
 
 	fset := token.NewFileSet()
@@ -197,9 +198,9 @@ func TestLLMSectorAgentLoop_IsPassThrough(t *testing.T) {
 	// The driver injection point must have no production caller either: with the
 	// flag defaulting to false, WithLLMSectorAgents is only reachable from
 	// factory.go behind LLM_SECTOR_AGENTS_ENABLED.
-	root, err := filepath.Abs(filepath.Join("..", ".."))
+	root, err := reporoot.FromCwd()
 	if err != nil {
-		t.Fatalf("abs root: %v", err)
+		t.Fatalf("resolve module root: %v", err)
 	}
 	const gatedCall = "WithLLMSectorAgents("
 	// The injection point may exist in production, but only behind the opt-in

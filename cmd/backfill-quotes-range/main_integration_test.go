@@ -33,6 +33,7 @@ import (
 
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/testdb"
+	"github.com/kaecer68/atlas-go/internal/testutil/reporoot"
 )
 
 const (
@@ -40,12 +41,22 @@ const (
 	itQuotesSymbol = "PGQR1996"
 	// itQuotesKey 是 CLI 應該寫入的 quotes 鍵（= 生產 FinMind 路徑的形式）。
 	itQuotesKey = itQuotesSymbol + ".TW"
-	// repoRootFromCmd 是 repo 根（cmd/backfill-quotes-range → ../..）。
-	repoRootFromCmd = "../.."
 	// 1996-01-04(四) / 01-05(五) / 01-08(一) 是交易日；01-06 是週六（必須被丟棄）。
 	itQuotesStart = "1996-01-04"
 	itQuotesEnd   = "1996-01-08"
 )
+
+// repoRootFromCmd 回傳 repo 根：從 cwd 往上找 go.mod。
+//
+// 不用 "../.."：那假設「cmd/<name> 正好在 module root 下兩層」（FU-20261016-20）。
+func repoRootFromCmd(t *testing.T) string {
+	t.Helper()
+	root, err := reporoot.FromCwd()
+	if err != nil {
+		t.Fatalf("resolve module root: %v", err)
+	}
+	return root
+}
 
 // cleanupPGQuotesRange 刪掉本檔自己插入的列（可重跑）。
 func cleanupPGQuotesRange(t *testing.T, pool *pgxpool.Pool) {
@@ -60,7 +71,7 @@ func cleanupPGQuotesRange(t *testing.T, pool *pgxpool.Pool) {
 func TestRun_PostgresDeclaredWritesQuotesRangeAndResumes(t *testing.T) {
 	dsn := testdb.URL(t)
 	// 用既有 testdb seam 套 migrations（CI 缺 PG 硬失敗、本機缺 PG skip 的政策在 testdb）。
-	testdb.Pool(t, filepath.Join(repoRootFromCmd, "sql", "migrations"))
+	testdb.Pool(t, filepath.Join(repoRootFromCmd(t), "sql", "migrations"))
 
 	raw := testdb.Connect(t, dsn)
 	cleanupPGQuotesRange(t, raw)
@@ -78,7 +89,7 @@ func TestRun_PostgresDeclaredWritesQuotesRangeAndResumes(t *testing.T) {
 	var out bytes.Buffer
 	err := run([]string{
 		"-start", itQuotesStart, "-end", itQuotesEnd,
-		"-symbols", itQuotesSymbol, "-workdir", repoRootFromCmd,
+		"-symbols", itQuotesSymbol, "-workdir", repoRootFromCmd(t),
 	}, &out)
 	restore()
 	if err != nil {
@@ -128,7 +139,7 @@ func TestRun_PostgresDeclaredWritesQuotesRangeAndResumes(t *testing.T) {
 	out.Reset()
 	err = run([]string{
 		"-start", itQuotesStart, "-end", itQuotesEnd,
-		"-symbols", itQuotesSymbol, "-workdir", repoRootFromCmd,
+		"-symbols", itQuotesSymbol, "-workdir", repoRootFromCmd(t),
 	}, &out)
 	restore2()
 	if err != nil {
