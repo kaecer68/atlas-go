@@ -31,6 +31,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -1622,6 +1623,19 @@ func CheckD6Expiry(workDir string, ranked []RankedSymbol, previousUniverseSymbol
 			"expired_symbols", expiredCount,
 			"total_tracked", len(wl.Symbols))
 	}
+
+	// Ordering contract: wl.Symbols is persisted in ascending Symbol order, so
+	// the same watchlist state always serializes to the same bytes. The new
+	// entries above are appended in the iteration order of previouslyRankedSet
+	// (a map), and Go randomizes map iteration order, so without this sort two
+	// runs of the same input produce different files (FU-20261016-33). Sorting
+	// the whole slice — not just the new batch — makes the file canonical no
+	// matter how the existing entries were ordered on disk. All pointer reads
+	// through entryBySymbol are finished by now; consumers only filter by
+	// symbol or count entries, so the order carries no meaning for them.
+	sort.SliceStable(wl.Symbols, func(i, j int) bool {
+		return wl.Symbols[i].Symbol < wl.Symbols[j].Symbol
+	})
 
 	wl.UpdatedAt = now.Format(time.RFC3339)
 

@@ -5117,6 +5117,149 @@ log 目錄：`/tmp/fu29-logs/`；shim 目錄：`/tmp/fu29-emptyset-shim/`（假 
   `OutputIgnoresInputRowOrder` 守日期軸（`GetLatestDate` 屬下游，未改動其行為）。③ 同型清單未修，且掃描器的判準是
   「同檔宣告為 `map[` 的識別字」，不涵蓋「經由 helper 間接走訪 map」的情形。
 
+### FU-20261016-33 — 「map 迭代序 → 寫檔／雜湊」的**決定性缺陷**（3 處真同形；`-31` 的姊妹條：同一份輸入兩次執行得到不同位元組）
+
+- **狀態**：`done`
+- **記錄日期**：2026-10-16 ／ **完成於**：2026-10-16（branch `fix/20261016-map-iter-order-nondet`）
+- **嚴重度**：**P2** —— 沒有資料錯誤（集合完全相同），但「同樣的輸入」不等於「同樣的位元組」：
+  檔案完整性雜湊、`git diff`／replay 比對、以及任何 golden 測試都失去可驗證性。
+- **來源**：`FU-20261016-31`（PR #2266）的「同型掃描」表列出的前 3 列（該車道只列未修、未配 ID）。
+  本車道**逐項獨立複現**後才動手；3 列的敘述與行號在 `origin/main` 上**逐字成立**（無需更正）。
+  反之，該表後 2 列（`internal/monitoring/prometheus.go:26`、`internal/repository/postgres_metrics.go:88`）
+  依 root 判定**無害**，本條**未動**。
+
+- **修前狀態**：3 處皆為「`range` map ⇒ 直接輸出」，且該輸出就是**持久化的位元組**。
+
+#### §0 逐項最小複現（修前 `origin/main`；探針具鑑別力：同輸入跑兩次，比 sha256）
+
+| # | 位置（修前） | 輸入 | 兩次執行 sha256 |
+|---|---|---|---|
+| ① | `internal/marketdata/government_broker_aggregator.go:606`（`writeBrokerDetails`） | 40 筆 `detailKey`（20 code × {gov, ins}） | `d85888dd242d986fff1e121d13dc29074741fb72a464ec6009318fa34853c2fe` ≠ `4fe2c7f52a7f0e9e65e6cdd7e2ae0bd48037e8e5a5a314ab3b834cc2da0a28d5` |
+| ② | `internal/monitoring/universe_scheduler.go:1565`（`CheckD6Expiry`） | 40 檔上一輪 ranked、今日全數消失 ⇒ 40 筆新 entry | `ffadaecd9a9bbf6cf056b91f456dc9b62f65d7cb5c4aa18aea3180b0b1ba3129` ≠ `6257cdfdf0e48ecfe45299b0493b8bedd4f4ca000d84bb29b8aa752ac9a4be02`（`updated_at` 正規化後） |
+| ③ | `cmd/mapgen/gen_routes.go:109,129`（`buildRoutesMarkdown`） | 1 個 canonical group（`system`）＋ 8 個非 canonical group（`a`–`h`） | 同輸入兩次呼叫 ⇒ 摘要表列序 `[system b c e f h a d g]` vs `[system a d g b c e f h]`、詳情段 `[System F H A D G B C E]` vs `[System B C E F H A D G]` |
+
+紅燈原文（契約測試，修前／突變態）：
+```
+government_broker_aggregator_determinism_test.go:91: brokers file is not byte-identical across two runs of the same input (sha256 d85888dd… vs 4fe2c7f5…)
+universe_watchlist_determinism_test.go:82: watchlist is not byte-identical across two runs of the same input (sha256 ffadaecd… vs 6257cdfd…)
+gen_routes_determinism_test.go:46: api-routes.md is not byte-identical across two calls with the same input
+```
+② 的 sha 是**把 `updated_at` 正規化後**算的 —— 該檔唯一的牆鐘欄位就是它（`universe_scheduler.go:1626`），
+不同步的只有**排序**，不是時間；③ 同理，只正規化 `> Generated:` 那一行（`time.Now()` 的分鐘級時間戳）。
+
+#### 根因（指名到行）
+
+① `writeBrokerDetails` 以 `for _, acc := range details`（`map[detailKey]*detailAccumulator`）append 成 `brokers[]`，
+   **未排序**就 `json.Marshal` 寫 `brokers/<date>_brokers.json`。Go 的 map 走訪序每次執行都隨機。
+② `CheckD6Expiry` 以 `for sym := range previouslyRankedSet` 產生 `newEntries`，併入 `wl.Symbols` 後持久化
+   `data/state/universe_watchlist.json`（tmp+rename）⇒ 陣列順序＝map 走訪序。
+③ `buildRoutesMarkdown` 的「非 canonical group」兩段（摘要表、詳情段）直接 `for groupName, gr := range groups`。
+
+三處的**共同根因**與 `-31` 相同：**把 map 的走訪序當成輸出序**。差別只在輸出媒體（JSON 陣列 / JSON 陣列 / markdown 列）。
+
+#### 修法（只做排序，不動任何內容）
+
+| 檔 | 改動 | 排序契約 |
+|---|---|---|
+| `internal/marketdata/government_broker_aggregator.go` | `sort.SliceStable(rows, …)` 於 marshal 前；寫進函式 doc | `(code, type, name)` 全序 —— 與 `detailKey` 的合併鍵同一個 tuple；同檔案的姊妹 writer `FinMindGovernmentBankProvider.writeBrokerDetails`（`finmind_government_bank_provider.go:198`）本來就 `sort.Slice(..., Code)` |
+| `internal/monitoring/universe_scheduler.go` | `sort.SliceStable(wl.Symbols, …)` 於 `json.MarshalIndent` 前；寫進註解 | `symbol` 遞增（**整份**陣列排序，不只新批次 ⇒ 不論既有檔案怎麼排都收斂到同一份 canonical 檔） |
+| `cmd/mapgen/gen_routes.go` | 新增 `nonCanonicalGroups()`（收集＋`sort.Strings`），兩段迴圈改用它；寫進函式 doc | `groupOrder` 之後的其餘 group 依名稱遞增；摘要表與詳情段**共用同一份清單** |
+
+未改：任何 JSON 欄位／schema、`source`／`date` 值、原子寫入（tmp→rename）、權限、`groupOrder` 本身、資料集合。
+
+#### 消費者檢查（先查誰讀這些檔；皆與順序無關）
+
+| 檔 | 讀者 | 與順序的關係 |
+|---|---|---|
+| `<date>_brokers.json` | `internal/portfolio/period_calculator.go:674`（`isValidGovernmentFlowDate`） | **只 `os.Stat`**，不讀內容。 |
+| 同上 | `internal/portfolio/period_calculator.go:748`（`EnrichGovernmentBroker` 主體） | 只讀**legacy** `<date>.json` 的 `total_net`；`_brokers.json` 僅作存在性判準。 |
+| 同上 | `internal/apigateway/adapter_government_broker_test.go:83` 等測試 | 逐列找 `Code`／比對 `Net`，順序無關。 |
+| 同上 | `internal/capitalflow/history_import.go:111` | **明確跳過** `_brokers.json`。 |
+| `universe_watchlist.json` | `cmd/atlas/main.go:3265`（live scheduler 接線） | 逐 entry 過濾 `ConsecutiveFailures >= 60` ⇒ 排序後 `d6Symbols` 反而變成穩定順序（行為差異只有 log 列的順序）。 |
+| 同上 | `cmd/atlas/main.go:2335`（watchlist 大小告警） | 只 `len(wl.Symbols)`。 |
+| `api-routes.md` | `.omo/maps/` 產物；`cmd/mapgen` 內無其他讀者 | 純文件產物。 |
+
+⇒ 三者都只「換順序」，`內容集合不變`（§2 有逐位元組證明）。
+
+#### 負向證明
+
+**① 修前兩份 sha 不同**：見 §0 表（每個 item 一組 sha）。
+
+**② 突變（移除排序）⇒ 契約測試必紅**：把 3 個 production 檔 `git show origin/main:<file> > <file>` 還原（＝只拿掉排序行），
+三條契約測試全紅（rc 皆 1），紅燈原文即 §0 的三行。`cp` 還原後逐檔 `shasum -a 256` 與備份**逐位元組相等**：
+```
+4c5dd9c3dfe24a2a22e439bb458ba2406c00f7635dc27b6955cfac9b114fc833  internal/marketdata/government_broker_aggregator.go
+9f2238c0d784f17bf7b1de264e8abbbbe03274b8b8c1f18d1a6b974f6a0d1130  internal/monitoring/universe_scheduler.go
+e4367e6c215e79821c98e0700f55ff558922546a0cca32ada2ee060077ba78f0  cmd/mapgen/gen_routes.go
+```
+
+**③ 修後同一輸入兩次逐位元組相同**：
+```
+sha256 A = sha256 B = a1a201a5998cd59fd2ed53006582cf7382b9d17fc210c3d1a1058a7e76736625   (brokers.json)
+sha256 A = sha256 B = c312f2b871f8b69e578f71e37a876d1549efda6b855673fd8a73aa2aea54a0cb   (watchlist.json, updated_at 正規化)
+gen_routes_determinism_test.go: PASS（同輸入兩次呼叫逐位元組相同，且摘要表與詳情段順序皆為 canonical→名稱遞增）
+```
+
+**④ 內容集合不變（修前產物 vs 修後產物，只比內容不比順序）**：
+
+| 產物 | 比對方式 | 結果 |
+|---|---|---|
+| `brokers.json` | 40 列 `(code,type,name,buy,sell,net)` 排序後比對 | **相同**（sorted-content sha256 `5ac6ee632c072a6f…`） |
+| `watchlist.json` | 40 筆 entry 依 `symbol` 排序後、去掉 `updated_at` 比對 | **相同**（`4a440cfefecb94c8…`） |
+| `routes.md` | 全部 70 行的**行多重集**比對 | **相同**（`350fe3c5e42850f8…`） |
+
+#### 新增契約測試（同 commit）
+
+- `internal/marketdata/government_broker_aggregator_determinism_test.go` —— 同輸入寫兩個目錄 ⇒ 逐位元組相同；
+  且 `brokers[]` 必須是 `(code,type,name)` 全序、集合與輸入 map 的鍵集合逐鍵相等。
+- `internal/monitoring/universe_watchlist_determinism_test.go` —— 同輸入跑兩次 ⇒（去掉 `updated_at` 後）逐位元組相同；
+  且 `symbols[]` 必須是 `symbol` 遞增。
+- `cmd/mapgen/gen_routes_determinism_test.go` —— 同輸入呼叫兩次 ⇒（去掉 `> Generated:` 後）逐位元組相同；
+  且摘要表與詳情段的 group 順序皆為 `groupOrder` → 名稱遞增。
+
+- **同型掃描補充（本條新增；只列清單，皆**未修**）**
+  判準同 `-31`（`range` 同檔宣告為 `map[` 的識別字 ＋ 同一函式內有寫檔／雜湊呼叫），另補兩種 `-31` 明示的盲點形狀：
+  **(A) 產生器字串**（生成的程式碼裡才有的 map 走訪）、**(B) 經 helper 間接走訪 map**（helper 回傳 slice，呼叫端直接輸出／寫檔）。
+  第一輪（自寫 AST-lite）：非測試 `.go` **1,293** 檔中命中 **19** 處；逐處讀碼分類如下：
+
+  | 類別 | 位置 | 判定 |
+  |---|---|---|
+  | **本條修好（3）** | `internal/marketdata/government_broker_aggregator.go:615`（修前 `:606`）、`internal/monitoring/universe_scheduler.go:1566`（修前 `:1565`）、`cmd/mapgen/gen_routes.go:109,129` | 已排序，見上 |
+  | 已排序、無需動（8） | `cmd/gentags/main.go:607,670`、`cmd/mapgen/gen_fe_be.go:69`、`internal/ledger/futures_bar_store_jsonl.go:70,221`、`internal/ledger/futures_shadow_store_jsonl.go:65`、`internal/monitoring/metrics.go:303`（先 `sort` 再組 key）、`internal/stockflows/store.go:67` | 無缺陷 |
+  | 掃描器誤判（走訪的其實是 slice／回傳 map 由 JSON 編碼排序鍵）（2） | `internal/llm_annotator/observability.go:118`、`cmd/backfill-fundamentals-ps-sector/main.go:32`（`json.MarshalIndent` 會排序 map 鍵） | 無缺陷 |
+  | **root 已判無害、本條未動（2）** | `internal/monitoring/prometheus.go:26`（`/metrics` 本文序；Prometheus 不以順序解讀）、`internal/repository/postgres_metrics.go:88`（`$N` 佔位序 ⇒ SQL 文字不同、結果相同） | 依指示未動 |
+  | 無持久化依賴（2） | `internal/config/parameters.go:2393`（逐 key 各寫**獨立**檔案；檔名由 key 決定、內容與寫入序無關）、`internal/monitoring/dashboard_api.go:2312`（就地改值後回傳 map，JSON 編碼排序鍵） | 無缺陷 |
+  | **候選：只有輸出序不穩、非檔案／雜湊（3）** | `cmd/check-persistence-format/main.go:289`（`issues` 清單順序不穩 ⇒ **螢幕輸出**每次不同）、`cmd/atlas-mcp/descgen/main.go:119`（盲點 A：生成檔內的 `autoDescKeys()` 回傳未排序；現況只有 conformance 測試取 `len`）、`internal/monitoring/service/control.go:184`（盲點 B：`mapKeys()` 未排序 ⇒ `GetActiveOverrides()` 的 `pausedAgents`／`bannedSectors` 陣列序不穩 ⇒ **HTTP/MCP 回應本文**每次不同） | 未修；若要修，應先把判準擴到「HTTP 回應本文」 |
+
+  註：`internal/monitoring/universe_scheduler.go:1598`（`for sym := range currentSet`）也被掃描器命中，但它只就地改 entry 欄位、不改變陣列序，**由本條的整份排序一併覆蓋**。
+
+  **第二輪（型別感知的第二意見，補第一輪的盲點 B）**：另一支用 `go/ast`＋`go/types` 的分析器
+  （判定 **681** 個真 `range`-map 迴圈、**46,602** 條呼叫邊、taint 傳遞 3 跳；對 **151** 個「map→append→return」helper
+  逐一檢查呼叫端是否落地寫檔／hash／DB）給出一個第一輪**漏掉**的**高信心**命中，理由正是第一輪的判準限制
+  （`s.positions` 是**結構欄位**、不是同函式宣告的 map 識別字）：
+
+  | 信心 | 位置 | 形狀 | 判定 |
+  |---|---|---|---|
+  | **高** | `internal/live/store/store.go:145-152`（`StateStore.Save`） | `s.positions`（`map[string]domain.Position`，結構欄位）→ `positions` slice（`:145-147`）→ `json.Marshal`（`:148`）→ `WriteFileAtomic(state/positions.json)`（`:152`），**函式內無排序**；活路徑 `internal/live/orchestrator.go:308,439`，store 由 `cmd/atlas/main.go:3152,3226` 建 | **真同形，本條未修**（依 root 指示「同型掃描只列清單」）⇒ 建議另配 ID：同內容不同位元組的 `<workdir>/state/positions.json` |
+  | 中 | `cmd/migrate-data/main.go:295` | `metrics`（來自 `s.AlertsByType`）→ 迴圈內 `pool.Exec` 逐列 INSERT | DB **列插入序**不固定；內容集合相同，非檔案位元組 |
+  | 低（休眠） | `internal/portfolio/darwinian_weights.go:1142,1147` | `m.weights` → `allAgents`，`sort.Slice` 只比 `Weight`（並列序＝map 序）→ `SaveReport` `json.Marshal` → 寫檔 | 全 repo **無呼叫者**（休眠路徑） |
+  | 低 | `internal/monitoring/alert_api.go:408` | `ruleStats` → `out` → `WriteJSON` | HTTP 回應本文序漂（非檔案） |
+  | 低 | `internal/reporting/report.go:65` | `RegimeCounts` → markdown 表格列 | 回傳字串，2 個呼叫端目前都未寫檔 |
+  | 低 | `internal/portfolio/sector_rotator.go:124,136` | 同「並列鍵 sort」形狀 | 追下游只轉回 map，未落地 |
+  | 低 | `cmd/parameter-health-check/main.go:87` | config map → `report.Modules` → `MarshalIndent` → stdout | 只有螢幕輸出 |
+
+  該輪**明確測過而沒有**的：32 個含 hash 的檔案中，**0** 個把 map 走訪迴圈與 `sha256`/`hmac`/`fnv`/`md5` 放在同一函式
+  （151 個 helper 種子的呼叫端也是 0）⇒ 「map 序 → 雜湊」目前**沒有**命中；`json.Marshal(map)` 與 `url.Values.Encode()`
+  一律排除（Go 會排序鍵）。兩輪掃描的差集只有上表第一位（結構欄位型 map），其餘互相印證。
+  掃描器的**已知限制**：只認「同一函式內宣告的 map 識別字」，且「函式內出現 `sort.`」就當成已排序（同一函式裡若有多個輸出點，會漏）；盲點 A/B 為人工補掃。
+
+#### 已知限制
+
+① 只修了這 3 個 writer。`detailKey`／`previouslyRankedSet`／`groups` 仍以 map 存在，未來新增 writer 若不排序會再犯。
+② `gen_routes.go` 的 **canonical** 段（`groupOrder`）本來就穩定、未改動；本條只碰非 canonical 段。
+③ `writeGroupSection` 內部對 `gr` 按 `Pattern` 排序用的是非 stable 的 `sort.Slice`；同 `Pattern` 多列的相對順序
+   取決於 `ExtractRoutes` 的檔案掃描序（**非 map 走訪**，不在本條範圍），未改動。
+④ ② 的契約測試對 `updated_at`、③ 對 `> Generated:` 做了正規化（兩者是牆鐘欄位，與順序無關）；其餘位元組仍逐位元組比對。
 
 ## 相關文件
 
