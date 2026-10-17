@@ -89,6 +89,11 @@ func newDarwinianCfg() (*config.InferenceEngine, *config.ParametersConfig) {
 func TestCalibrateDarwinian_RiskVolInBandStillWrites(t *testing.T) {
 	writeDarwinianOutcomes(t, 0.01) // per-observation σ ≈ 0.0016/day ⇒ inside the band
 	ie, cfg := newDarwinianCfg()
+	// The previous value must be inside the single-step window as well, otherwise
+	// this test would be decided by that gate instead of by the band it is about
+	// (computed 0.001581 / 0.0035 = 0.452, inside [1/3, 3], and still 0.0019 away
+	// so the change threshold is met).
+	cfg.Darwinian.RiskVolatilityThreshold.Value = 0.0035
 
 	res := CalibrateDarwinian(ie, 100, cfg)
 	entry := findRiskVol(t, res)

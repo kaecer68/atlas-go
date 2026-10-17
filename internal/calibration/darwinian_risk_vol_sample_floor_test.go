@@ -135,6 +135,9 @@ func TestCalibrateDarwinian_RiskVolAdequateSampleUnchanged(t *testing.T) {
 
 	writeDarwinianOutcomes(t, 0.01)
 	ie, cfg := newDarwinianCfg()
+	// Previous value inside the single-step window (0.001581 / 0.0035 = 0.452),
+	// so the pinned value exercises the estimator and not that gate.
+	cfg.Darwinian.RiskVolatilityThreshold.Value = 0.0035
 
 	res := CalibrateDarwinian(ie, 100, cfg)
 	entry := findRiskVol(t, res)

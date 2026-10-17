@@ -5808,6 +5808,58 @@ gen_routes_determinism_test.go: PASS（同輸入兩次呼叫逐位元組相同�
   ④ 附錄 A 其餘 84 條候選未判定。
 
 
+### FU-20261016-34 — `darwinian.risk_volatility_threshold` 5.9× 變化的**收場**：SSOT 對齊（#2276 已併）＋ 寫入端單步窗（#2277）
+
+- **狀態**：`in-progress`（程式與 SSOT 都在，等部署；**告警會持續到 SSOT PR 部署後**）
+- **記錄日期**：2026-10-16（2026-10-17 依 `FU-20261017-01` 的重算結論收斂敘述）
+- **來源**：部署 `844f590f2` 觸發的自動校準（k3 決策 1「風控門檻 0.012324 收場」）
+- **現象**：生效值 **`0.07265911146663549`（overlay `calibrated_at 2026-10-13T23:38:07Z`）
+  → `0.012323875595980305`（`2026-10-17T06:22:58Z`）**，ratio **0.154**
+  ⇒ `atlas_calibration_drift_out_of_window_keys` = 1 ⇒ `CalibrationEffectiveDriftUnexplained` **firing** ✓
+- **根因：已由 `FU-20261017-01` 驗證，本條不重述**（單點 p75、`n=13`、rank `int(0.75×13)=9`
+  = `energy-desk-01` 的日報酬 σ，重算相對差 **1.4e-15**）；完整推導見
+  `docs/specs/risk-vol-threshold-recompute-20261017.md` ✓
+- **★ 對派工敘述的更正（讀碼，附證據）**：原敘述「＝部署 `FU-20260930-04` 移除污染序列所致」
+  **對這條路徑不成立** ✗ —— darwinian 校準只讀 ledger 的 `recommendation_outcomes`
+  （`internal/calibration/calibrate.go:207-243` `darwinianOutcomes` → `LoadOutcomesFromSessions`，
+  生產走 PG store），**不經過** `internal/calibration/load.go:117` 的「replay bars → 日報酬」路徑
+  （`Close<=0`／非有限價的過濾在那裡，服務 garch／var／factor）⇒ 5.9× 是**單點百分位估計的性質**
+  ＋ **合格樣本組成改變**（10-13 那輪 rank-9 是另一個 agent），不是「同一序列被修正後縮小」✓
+  （旁證：今天用同一支程式重算 ⇒ `after=0.012461 … n=15`，rank-9 換人 ✓）
+  ⇒ 判定不變（**對齊 SSOT、不釘回 `0.08`**），但**理由要換**：`0.08` 無序列支撐，且讓 ratio 永遠
+  0.154 ⇒ 永久 firing ✓
+- **處置 A（SSOT 對齊，PR [#2276](https://github.com/kaecer68/atlas-go/pull/2276)，**已併** `7a2b114e`）**：
+  `configs/parameters.json` 與 `configs/parameters/darwinian.json` 的
+  `darwinian.risk_volatility_threshold.value` **0.08 → 0.012324**（overlay 實際值
+  `0.012323875595980305` 取 6 位小數＝可審閱；殘差 ratio 0.99999 仍在窗內），
+  並改寫 `rationale`／`citation.source_reference`（單點 p75、n=13、rank 9、指向重算規格）✓
+  **不動** `data/state/parameters.calibrated.json`（生產 overlay，a2a-dev 管）與 Go 內建預設
+  `defaults_portfolio.go`（`0.08`＝無 SSOT 的 fresh host 的 fallback）✓
+  ★ **生效值不變**：overlay 已經是 `0.012324`；部署後該 entry 因 SSOT 基準變動被丟棄
+  （`reason=ssot_moved`，**不 page**），生效值改由 SSOT 供給**同一個數** ✓
+- **處置 B（寫入端單步窗，PR [#2277](https://github.com/kaecer68/atlas-go/pull/2277)）**：
+  `internal/calibration/calibrate.go` 的 `darwinian.risk_volatility_threshold` 寫入前比較 `new/old`，
+  落在 `[1/3, 3]` 之外（`config.RatioOutsideSingleStepWindow`，與 loader／監控**同一常數**）⇒
+  **拒寫** ＋ log `skipped_single_step_window` ＋ 報告 `method=skipped_single_step_window`
+  （`After == Before` ⇒ SSOT／overlay 零變更）✓ **首次寫入（`before <= 0`）不套窗** ✓；
+  樣本不足／帶外兩道既有閘不動 ✓ ⇒ 修的是「**先寫後 page**」的機制
+  （本次 5.9× 跳變發生在**新規則上線前**）✓
+- **告警時程**：A 部署前 ratio 仍 0.154 ⇒ **持續 firing**；A 部署後 ratio 1.000
+  ⇒ `out_of_window_keys` = 0 ⇒ **告警自動停** ✓（之後每次 tick 只要值在 `[1/3, 3]` 內就不再 page ✓）
+- **已知限制**：
+  ① **拒寫沒有部分收斂**：合法的 >3× 政權轉換每一輪都會被同一道窗拒絕 ⇒ 需 operator 手動套用；
+     提案（未做）：改為「夾在窗緣」（每輪最多 3×）以逐輪收斂。
+  ② SSOT 對齊校準產物後，該鍵的 **drift 訊號在下次 tick 前近乎恆 0**（guard 對該鍵暫時退化）；
+     真正的保護移到寫入端（B）⇒ 兩者不可同時拿掉。
+  ③ 估計量本身（單點 p75、n=13）**未改** ⇒ 下一個低波動 agent 進入 rank-9 時值仍會跳；
+     改穩健估計／提高樣本下限屬**閾值政策**（`FU-20260930-09`，未做）。
+  ④ Go 內建預設 `internal/config/defaults_portfolio.go` 仍為 `0.08`（**未改**）。
+  ⑤ 窗只加在 `risk_volatility_threshold`；同函式其他鍵各有自己的 clamp／百分位下限，**未逐一加窗**。
+- **驗收條件**：①`atlas_calibration_drift_out_of_window_keys{artifact="parameters_overlay"}` 在 A 部署後回 **0**；
+  ② `GET /api/parameters/metadata` 的 `darwinian.risk_volatility_threshold.value` = **0.012324**，且生效值相同；
+  ③ `go test ./internal/calibration/ -run 'RiskVol|SingleStepWindow'`：修前紅（`method = "percentile_based"`）／
+  修後綠 ✓；④ 窗外確實拒寫：log `skipped_single_step_window`（`ratio` 與窗印在同一行）✓
+
 ### FU-20261017-01 — `darwinian.risk_volatility_threshold` 掉到 0.0123（−83%）**是算出來的**：p75 指標指向單一 agent 的日波動（已重算驗證）
 
 - **狀態**：`done`

@@ -49,6 +49,33 @@ func CalibrateModuleWithStore(module string, ie *config.InferenceEngine, returns
 	}
 }
 
+// singleStepWindowRejects reports whether writing `after` over `before` is a jump
+// the calibration loops' documented per-round window cannot explain.
+//
+// The window ([1/3, 3] — config.CalibrationOverlaySingleStepWindowMin/Max) already
+// existed, but only on the READ side: ApplyCalibratedOverlayLayer warns about an
+// applied entry whose value/SSOT ratio falls outside it, and the drift metric turns
+// that into the paging rule CalibrationEffectiveDriftUnexplained. Nothing stopped
+// the write, so a bad round produced the jump first and paged afterwards: on
+// 2026-10-16 the deployed auto-calibration moved
+// darwinian.risk_volatility_threshold from 0.0726591 to 0.012324 (ratio 0.170,
+// outside the window) and the alert only described the result.
+//
+// A first write has no previous value to compare against (before <= 0, where the
+// ratio is also undefined), and absence of a comparison is not evidence of an
+// anomaly — the same rule config.RatioOutsideSingleStepWindow applies to a zero
+// ratio — so the window never blocks the first value.
+//
+// A rejection is deliberately loud, not adaptive: converging onto a new regime by a
+// sequence of out-of-window steps is exactly what the window forbids, so a
+// legitimate regime change has to be reviewed and applied by an operator.
+func singleStepWindowRejects(before, after float64) bool {
+	if before <= 0 || after <= 0 {
+		return false
+	}
+	return config.RatioOutsideSingleStepWindow(after / before)
+}
+
 func CalibrateGARCH(ie *config.InferenceEngine, returns []float64, n int, cfg *config.ParametersConfig) CalibrationResult {
 	res := CalibrationResult{Module: "garch"}
 
@@ -592,6 +619,26 @@ func CalibrateDarwinianWithStore(ie *config.InferenceEngine, n int, cfg *config.
 				Method: "skipped_out_of_band", Confidence: 0, SampleSize: len(agentVols),
 				CalibrationNotes: fmt.Sprintf("computed daily volatility %.6f outside sane band [%.4f, %.2f]; not written",
 					dailyRiskVol, minDailyRiskVolatility, maxDailyRiskVolatility),
+			})
+		} else if writeRiskVol && singleStepWindowRejects(beforeRiskVol, dailyRiskVol) {
+			// Do NOT write (see singleStepWindowRejects). Before == After keeps the
+			// SSOT and the overlay untouched, and the ratio is on both the log line
+			// and the report so the rejected round stays auditable.
+			logging.Warn("calibration", "skipped_single_step_window",
+				logging.FStr("parameter", "darwinian.risk_volatility_threshold"),
+				logging.FStr("previous_value", fmt.Sprintf("%.6f", beforeRiskVol)),
+				logging.FStr("computed_daily_volatility", fmt.Sprintf("%.6f", dailyRiskVol)),
+				logging.FStr("ratio", fmt.Sprintf("%.4f", dailyRiskVol/beforeRiskVol)),
+				logging.FStr("window", fmt.Sprintf("[%.4f, %.2f]",
+					config.CalibrationOverlaySingleStepWindowMin, config.CalibrationOverlaySingleStepWindowMax)),
+				logging.FInt("agents", len(agentVols)),
+				logging.FStr("action", "value NOT written; one calibration round cannot explain this jump (operator review required)"))
+			res.Parameters = append(res.Parameters, CalibratedParameter{
+				Path: "darwinian.risk_volatility_threshold", Before: beforeRiskVol, After: beforeRiskVol,
+				Method: "skipped_single_step_window", Confidence: 0, SampleSize: len(agentVols),
+				CalibrationNotes: fmt.Sprintf("computed daily volatility %.6f is %.4fx the previous value %.6f, outside the calibration single-step window [%.4f, %.2f]; not written",
+					dailyRiskVol, dailyRiskVol/beforeRiskVol, beforeRiskVol,
+					config.CalibrationOverlaySingleStepWindowMin, config.CalibrationOverlaySingleStepWindowMax),
 			})
 		} else if writeRiskVol {
 			_ = ie.SetParameter("darwinian_risk_volatility_threshold", dailyRiskVol)
