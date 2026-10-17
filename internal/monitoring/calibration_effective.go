@@ -117,6 +117,31 @@ const (
 	// MetricCalibrationDriftDroppedKeys：overlay 宣告了但**沒生效**的 entry 數量，
 	// 以 `reason` 區分（見 DriftDropReason*）。同樣是「宣告與事實不符」的可見化。
 	MetricCalibrationDriftDroppedKeys = "atlas_calibration_drift_dropped_keys"
+	// MetricCalibrationDriftUnexplainedTotal：**逐 key** 的「無法解釋的偏離」計數,
+	// 以 `key`（參數路徑）與 `reason` 標記。
+	//
+	// 為什麼需要它（上面的 gauge 族不夠用）：`_out_of_window_keys` /
+	// `_dropped_keys{reason="not_applicable"}` 只回答**幾個**,而「哪一個 key」
+	// 原本只寫在 `drift_unexplained` 那則 WARN 日誌裡 ⇒ 日誌對 Prometheus 不可見,
+	// 值班看到「有 1 個 key 例外」卻不知道是哪個。這個 counter 就是把那一行日誌的
+	// **內容**（key 名 + 原因）變成可查詢的序列。
+	//
+	// 語意刻意是 counter 而不是 gauge：每一輪匯出（5m）只要該 key 仍無法解釋就 +1,
+	// 與「每一輪寫一則 WARN」一一對應 ⇒ `increase(...[15m]) > 0` 就是
+	// 「最近出現過 drift_unexplained」。**目前有幾個 key** 仍然看上面的 gauge
+	// （counter 單調遞增,不可讀成現況數量）。
+	MetricCalibrationDriftUnexplainedTotal = "atlas_calibration_drift_unexplained_total"
+)
+
+// MetricCalibrationDriftUnexplainedTotal 的 reason 標籤值。
+//
+// `not_applicable` 與 gauge 那一族共用同一個字串（DriftDropReasonNotApplicable）:
+// 兩個出口描述的是同一件事,不該有兩套拼法。
+const (
+	// DriftUnexplainedReasonOutOfWindow：比值落在單步窗 [1/3, 3] 之外。
+	DriftUnexplainedReasonOutOfWindow = "out_of_window"
+	// DriftUnexplainedReasonNotApplicable：overlay 宣告了套不上的 entry。
+	DriftUnexplainedReasonNotApplicable = DriftDropReasonNotApplicable
 )
 
 // MetricCalibrationDriftDroppedKeys 的 reason 標籤值。
@@ -358,6 +383,39 @@ func emitCalibrationDriftGauges(collector *MetricsCollector, obs CalibrationDrif
 	// 在「第一次出現」之前不存在，規則的 `> 0` 就會有一段看不到的窗。
 	collector.RecordGauge(MetricCalibrationDriftDroppedKeys, float64(len(obs.InvalidatedKeys)), withLabel(labels, "reason", DriftDropReasonSSOTMoved))
 	collector.RecordGauge(MetricCalibrationDriftDroppedKeys, float64(len(obs.UnknownKeys)), withLabel(labels, "reason", DriftDropReasonNotApplicable))
+	recordCalibrationDriftUnexplained(collector, labels, obs)
+}
+
+// recordCalibrationDriftUnexplained 把「哪個 key 無法解釋」從日誌搬到序列上。
+//
+// 條件與 `cmd/atlas/calibration_freshness_metrics_task.go` 的 `drift_unexplained`
+// WARN **逐條對應**（out_of_window 或 not_applicable）:兩者由同一個 observation
+// 驅動 ⇒ 日誌與序列不可能說不同的話。`ssot_moved` 不在此列——那是設計行為,
+// 不是「說不通」。
+//
+// 每一輪對每個命中的 key +1（見 MetricCalibrationDriftUnexplainedTotal 的語意）。
+// 只在 RunOK 時呼叫:不可比較時「無法解釋」是未知,不是事實（呼叫端已先 return）。
+func recordCalibrationDriftUnexplained(collector *MetricsCollector, labels map[string]string, obs CalibrationDriftObservation) {
+	for _, key := range obs.OutOfWindowKeys {
+		collector.RecordCounter(MetricCalibrationDriftUnexplainedTotal, 1,
+			withKeyReason(labels, key, DriftUnexplainedReasonOutOfWindow))
+	}
+	for _, key := range obs.UnknownKeys {
+		collector.RecordCounter(MetricCalibrationDriftUnexplainedTotal, 1,
+			withKeyReason(labels, key, DriftUnexplainedReasonNotApplicable))
+	}
+}
+
+// withKeyReason 回傳 labels 的副本再加上 key 與 reason（與 withLabel 同契約:
+// 不改輸入的 map）。
+func withKeyReason(labels map[string]string, key, reason string) map[string]string {
+	out := make(map[string]string, len(labels)+2)
+	for k, v := range labels {
+		out[k] = v
+	}
+	out["key"] = key
+	out["reason"] = reason
+	return out
 }
 
 // withLabel 回傳 labels 的副本再加上一組 key/value（不修改輸入的 map：

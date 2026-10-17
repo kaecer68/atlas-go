@@ -106,8 +106,17 @@ atlas_calibration_freshness_age_seconds{artifact="parameters"}   7206752   ≈ 8
 | `atlas_calibration_drift_out_of_window_keys{artifact="parameters_overlay"}` | gauge | 其中 `生效值/基準值` 落在單步窗 `[1/3, 3]` 之外的數量（`config.RatioOutsideSingleStepWindow`，與 loader 的 WARN 同判定） |
 | `atlas_calibration_drift_dropped_keys{artifact="parameters_overlay",reason}` | gauge | overlay 宣告了但**沒生效**的 entry 數量。`reason="ssot_moved"`＝基準已移動（設計行為，只呈現）；`reason="not_applicable"`＝參數/路徑不存在或值型別不可套用（**缺陷**） |
 
-> 命名：drift 這一族刻意**沒有** `_total` 後綴——它們是 gauge（last-write-wins 的
+| `atlas_calibration_drift_unexplained_total{artifact="parameters_overlay",key,reason}` | **counter** | **逐 key** 的「無法解釋的偏離」：每一輪匯出（5m）只要該 `key` 仍命中 `reason="out_of_window"`（比值在單步窗 `[1/3,3]` 外）或 `reason="not_applicable"`（entry 套不上）就 **+1**。與 `drift_unexplained` 那則 WARN **同一份判定**、一一對應（一輪一則 WARN ⇔ 一輪 +1） |
+
+> 命名：上面三個 drift 序列刻意**沒有** `_total` 後綴——它們是 gauge（last-write-wins 的
 > **現況**），不是單調累加的事件計數；加 `_total` 會讓使用者對它們做 `rate()`。
+>
+> ⚠️ 唯一的 counter 是 `atlas_calibration_drift_unexplained_total`，它存在的理由是
+> **gauge 只說「幾個」、日誌才說「哪一個」**：`key` 標籤把日誌的內容搬到序列上。
+> 它的絕對值沒有意義 ⇒ 只讀 `increase(...[15m]) > 0`（= 最近出現過）。
+> **目前沒有 Prometheus rule 讀它**（刻意）：送達通道是 Mac Mini 的 `~/bin/notify.sh`
+> watcher，event `atlas.drift_unexplained`、source `atlas-calibration`、severity `warning`、
+> 內建 6h 去重，由 a2a-dev 接線（見 `docs/specs/calibration-drift-unexplained-per-key-20261017.md`）。
 
 ### 2.3 判讀順序（**照這個順序，不要跳**）
 

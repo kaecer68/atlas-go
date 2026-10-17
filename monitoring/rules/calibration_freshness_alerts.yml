@@ -79,6 +79,13 @@
 #       其中比值落在校準迴圈單步窗 `[1/3, 3]`（`config.CalibrationOverlaySingleStepWindow*`）
 #       之外的數量。**不是** drift 的存在與否,而是「這個生效值不是單一輪被接受的校準
 #       能解釋的」——與 `logOverlayApplication` 的既有 WARN 同一個判定。
+#   atlas_calibration_drift_unexplained_total{artifact,key,reason}
+#       **逐 key** 的「無法解釋的偏離」counter(每一輪匯出 +1,與 `drift_unexplained`
+#       那則 WARN 一一對應;reason="out_of_window"|"not_applicable")。gauge 族只回答
+#       「幾個」,這個 counter 回答「**哪一個**」。**沒有任何規則讀它**(刻意):送達通道是
+#       Mac Mini 的 ~/bin/notify.sh watcher(event `atlas.drift_unexplained`,source
+#       `atlas-calibration`,severity warning,內建 6h 去重;由 a2a-dev 接線)。
+#       ⇒ 想加規則時請先確認該 watcher 不會造成重複通知。
 #   atlas_calibration_drift_dropped_keys{artifact="parameters_overlay",reason}
 #       overlay 宣告了但**沒生效**的 entry 數量:
 #         reason="ssot_moved"    基準已移動 ⇒ loader 讓它失效（**設計行為**:受審查的

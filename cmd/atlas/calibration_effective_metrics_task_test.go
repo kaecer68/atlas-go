@@ -232,3 +232,78 @@ func TestCalibrationOverlayPath_PrefersRegisteredPath(t *testing.T) {
 		t.Errorf("已註冊時 got %q, want %q（必須看 runtime 真正讀寫的那個檔）", got, registered)
 	}
 }
+
+// `drift_unexplained` 那則 WARN 的**內容**（哪一個 key）必須出現在 /metrics 上：
+// gauge 只回答「幾個」,而「哪個」原本只存在於日誌裡（Prometheus 看不到）。
+// 這條測試走完整任務路徑（真基準檔 + 真 overlay 檔 + PrometheusHandler）,
+// 因此同時證明標籤渲染（artifact/key/reason）與 counter 型別。
+func TestExportCalibrationMetrics_UnexplainedDriftIsPerKeyOnMetrics(t *testing.T) {
+	workDir := t.TempDir()
+	now := time.Date(2026, 10, 17, 6, 27, 20, 0, time.UTC)
+	installRealBaseline(t, workDir)
+	useBaselineOnly(t)
+
+	// risk_max_daily_loss_pct: 0.03 → 0.0001 ⇒ 比值 0.0033 遠在單步窗 [1/3,3] 之外。
+	// nonexistent_tuning_knob: 基準裡沒有這個參數 ⇒ not_applicable。
+	writeOverlay(t, workDir, now.Add(-4*time.Minute), map[string]any{
+		"risk_max_daily_loss_pct": map[string]any{
+			"value":         0.0001,
+			"before":        0.03,
+			"ssot":          map[string]any{"present": true, "value": 0.03},
+			"calibrated_at": now.Add(-4 * time.Minute).UTC().Format(time.RFC3339Nano),
+			"method":        "risk_gate_calibrate",
+		},
+		"nonexistent_tuning_knob": map[string]any{
+			"value":  1.0,
+			"method": "test",
+		},
+	})
+
+	collector := monitoring.NewMetricsCollector()
+	obs := exportCalibrationMetrics(workDir, collector, now)
+	if !obs.Drift.RunOK {
+		t.Fatalf("drift 必須可比較，got code=%q", obs.Drift.UnverifiableCode)
+	}
+	if len(obs.Drift.OutOfWindowKeys) != 1 || obs.Drift.OutOfWindowKeys[0] != "risk_max_daily_loss_pct" {
+		t.Fatalf("OutOfWindowKeys = %v, want [risk_max_daily_loss_pct]", obs.Drift.OutOfWindowKeys)
+	}
+
+	body := scrapeMetrics(t, collector)
+	for _, want := range []string{
+		`atlas_calibration_drift_unexplained_total{artifact="parameters_overlay",key="risk_max_daily_loss_pct",reason="out_of_window"} 1.000000`,
+		`atlas_calibration_drift_unexplained_total{artifact="parameters_overlay",key="nonexistent_tuning_knob",reason="not_applicable"} 1.000000`,
+		`# TYPE atlas_calibration_drift_unexplained_total counter`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("/metrics 缺少 %q\n--- 全文 ---\n%s", want, body)
+		}
+	}
+}
+
+// 乾淨的一輪（overlay 的值都在單步窗內、沒有套不上的 entry）⇒ /metrics 上不得
+// 出現 unexplained counter。這正是 `drift_unexplained` WARN 在第一個案例裡
+// **不寫**的同一件事。
+func TestExportCalibrationMetrics_CleanDriftHasNoUnexplainedCounter(t *testing.T) {
+	workDir := t.TempDir()
+	now := time.Date(2026, 10, 17, 6, 27, 20, 0, time.UTC)
+	installRealBaseline(t, workDir)
+	useBaselineOnly(t)
+
+	writeOverlay(t, workDir, now.Add(-time.Minute), map[string]any{
+		"risk_max_daily_loss_pct": map[string]any{
+			"value":  0.0108, // 0.36x 基準 ⇒ 可解釋
+			"before": 0.03,
+			"ssot":   map[string]any{"present": true, "value": 0.03},
+		},
+	})
+
+	collector := monitoring.NewMetricsCollector()
+	obs := exportCalibrationMetrics(workDir, collector, now)
+	if len(obs.Drift.OutOfWindowKeys) != 0 || len(obs.Drift.UnknownKeys) != 0 {
+		t.Fatalf("fixture 應該是乾淨的：out_of_window=%v unknown=%v", obs.Drift.OutOfWindowKeys, obs.Drift.UnknownKeys)
+	}
+	body := scrapeMetrics(t, collector)
+	if strings.Contains(body, "atlas_calibration_drift_unexplained_total") {
+		t.Errorf("乾淨的一輪不得出現 unexplained counter\n%s", body)
+	}
+}
