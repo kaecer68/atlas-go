@@ -175,7 +175,7 @@ git -C <repo> grep -l "$SYM" origin/main -- internal cmd | grep _test.go
   3. 不接線，改為**移除**這三個寫入端（須先確認 `Status()` 的 `halt_trading` 沒被外部運維依賴）。
 - **處置**：doc 標 `DECLARED ONLY / NOT ENFORCED` ＋ 4 條重新認證條件（含端到端測試要求：斷路器 Halted ⇒ 下單被拒）；
   3 個寫入端（`SetHaltTrading`／`SyncHaltFromCircuitState`／`SyncRiskGateFromCircuitBreaker`）全列進守門測試。
-- **後續（2026-10-16，5a，PR #2280）**：已依**選項 2**接線 —— `Orchestrator.onIntradayCycle` 每次電路評估後
+- **後續（2026-10-16，5a，PR #2279）**：已依**選項 2**接線 —— `Orchestrator.onIntradayCycle` 每次電路評估後
   呼叫 `SyncRiskGateFromCircuitBreaker(o.riskGate, o.circuitBreaker, nil)`（只鏡射 halt、**不鏡射 VaR**）。
   守門表 `SyncRiskGateFromCircuitBreaker` 改 `wired: true`；`SetHaltTrading` 仍 `wired: false`（操作端仍無呼叫者）。
   本節「只提案」的敘述因此**已過期**，行為變更與端到端測試見 `FU-20261016-32` 該條「處置」。
