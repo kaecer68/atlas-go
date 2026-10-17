@@ -35,14 +35,22 @@ func TestNewArchiver(t *testing.T) {
 func TestArchiver_ArchivableFiles(t *testing.T) {
 	a := NewArchiver(t.TempDir())
 	files := a.ArchivableFiles()
-	if len(files) != 4 {
-		t.Errorf("expected 4 archivable files, got %d: %v", len(files), files)
+	// FU-20261012-05 (2026-10-16): the list must cover every append-only JSONL
+	// file the stores actually write under data/state. The previous 4-name list
+	// missed recommendation_outcomes.jsonl (the largest grower) and pointed at
+	// "alerts.jsonl", which does not exist (the alert store writes alerts/alerts.jsonl).
+	if len(files) != 8 {
+		t.Errorf("expected 8 archivable files, got %d: %v", len(files), files)
 	}
 	want := map[string]bool{
-		"experiments.jsonl":         true,
-		"human_interventions.jsonl": true,
-		"spawn_records.jsonl":       true,
-		"alerts.jsonl":              true,
+		"recommendation_outcomes.jsonl": true,
+		"darwinian_history.jsonl":       true,
+		"metrics.jsonl":                 true,
+		"quotes.jsonl":                  true,
+		"experiments.jsonl":             true,
+		"human_interventions.jsonl":     true,
+		"spawn_records.jsonl":           true,
+		"alerts/alerts.jsonl":           true,
 	}
 	for _, f := range files {
 		if !want[f] {
@@ -297,9 +305,12 @@ func TestArchiver_Run_AllArchivableFiles(t *testing.T) {
 		maxFileSize:   10,
 		retentionDays: defaultRetentionDays,
 	}
-	// Create all 4 archivable files
+	// Create every archivable file (alerts/alerts.jsonl lives in a subdirectory).
 	for _, name := range a.ArchivableFiles() {
 		path := filepath.Join(baseDir, name)
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatalf("mkdir for %s: %v", name, err)
+		}
 		if err := os.WriteFile(path, []byte(`{"id":1,"data":"exceeds 10 byte limit for testing"}
 `), 0o644); err != nil {
 			t.Fatalf("write %s: %v", name, err)

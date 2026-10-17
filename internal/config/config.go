@@ -84,6 +84,16 @@ type Config struct {
 
 	Stage3TasksEnabled  bool // STAGE3_TASKS_ENABLED — gates registerStage3Tasks (default true)
 	Stage3AlertsEnabled bool // STAGE3_ALERTS_ENABLED — gates registerStage3AlertTasks (default true)
+
+	// Ledger JSONL archival policy (FU-20261012-05). The archiver moves
+	// append-only ledger files into <LedgerDir>/archive; it never destroys
+	// them unless ArchivePruneDays is explicitly set.
+	LedgerArchiveEnabled       bool     // ATLAS_LEDGER_ARCHIVE_ENABLED — gates the ledger_archive background task (default true)
+	LedgerArchiveRetentionDays int      // ATLAS_LEDGER_ARCHIVE_RETENTION_DAYS — a ledger file untouched this many days is moved into archive/ (default 365)
+	LedgerArchiveMaxFileSizeMB int      // ATLAS_LEDGER_ARCHIVE_MAX_FILE_SIZE_MB — a live ledger file at/above this size is gzip-copied into archive/ and truncated (default 100)
+	LedgerArchiveFilesPerRun   int      // ATLAS_LEDGER_ARCHIVE_FILES_PER_RUN — per-run bound on how many files are touched (default 50)
+	LedgerArchivePruneDays     int      // ATLAS_LEDGER_ARCHIVE_PRUNE_DAYS — delete archives older than this; 0 = keep every archive (default 0)
+	LedgerArchiveGlobs         []string // ATLAS_LEDGER_ARCHIVE_GLOBS — baseDir-relative patterns scanned for retention (default "*.jsonl,alerts/*.jsonl")
 }
 
 func Load() Config {
@@ -165,6 +175,13 @@ func Load() Config {
 		CharterMode:                    envOrBool("ATLAS_CHARTER_MODE", false),
 		Stage3TasksEnabled:             envOrBool("STAGE3_TASKS_ENABLED", true),
 		Stage3AlertsEnabled:            envOrBool("STAGE3_ALERTS_ENABLED", true),
+
+		LedgerArchiveEnabled:       envBoolDefaultTrue("ATLAS_LEDGER_ARCHIVE_ENABLED"),
+		LedgerArchiveRetentionDays: envOrInt("ATLAS_LEDGER_ARCHIVE_RETENTION_DAYS", 365),
+		LedgerArchiveMaxFileSizeMB: envOrInt("ATLAS_LEDGER_ARCHIVE_MAX_FILE_SIZE_MB", 100),
+		LedgerArchiveFilesPerRun:   envOrInt("ATLAS_LEDGER_ARCHIVE_FILES_PER_RUN", 50),
+		LedgerArchivePruneDays:     envOrInt("ATLAS_LEDGER_ARCHIVE_PRUNE_DAYS", 0),
+		LedgerArchiveGlobs:         parseExtraPaths(envOr("ATLAS_LEDGER_ARCHIVE_GLOBS", "*.jsonl,alerts/*.jsonl")),
 	}
 	validateMaturityFirstStart(cfg.MaturityFirstStart)
 	return cfg

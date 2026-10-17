@@ -18,7 +18,10 @@ package main
 // 兩個任務（auto_government_flow + government_flow_aggregate）各自用一份
 // in-memory 成功日守衛，互不共用。
 
-import "time"
+import (
+	"sync"
+	"time"
+)
 
 // gateSkipReason 是 shouldRunGovFlow 的反向語意：當 shouldRun 為 false 時
 // 提供「為什麼不跑」的具體 reason，給 logging.Info 帶上，避免 silent skip。
@@ -33,12 +36,17 @@ const (
 
 // taipeiLocation 回傳 Asia/Taipei *time.Location。tzdata 缺失時 fallback UTC
 // （與 operations_tasks.go:currentTaipeiTradingDate 同樣的容忍策略）。
-func taipeiLocation() *time.Location {
+//
+// 整個 package 共用同一個 *time.Location 實例（sync.OnceValue 快取）：
+// 每次 time.LoadLocation 都回一個新指標，讓「兩個時間是否同一時區」的比較
+// 變得不可靠（FU-20260927-09 修復時新增 replay_backfill_window.go 需要用到
+// 這個單一來源）。
+var taipeiLocation = sync.OnceValue(func() *time.Location {
 	if loc, err := time.LoadLocation("Asia/Taipei"); err == nil {
 		return loc
 	}
 	return time.UTC
-}
+})
 
 // taipeiDateString 把 time.Time 收斂成 Asia/Taipei 的 YYYY-MM-DD 字串。
 // 用於「每日一次」守衛的成功日儲存與比對。

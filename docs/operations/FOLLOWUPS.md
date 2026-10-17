@@ -2076,7 +2076,7 @@ glob 空集合=紅／**預算覆寫=清單內放寬後綠、放寬後仍超時�
 
 ### FU-20260927-09 — **時區錯位**（pre-existing）：`getLatestReplayDate` 回 **UTC 00:00**、`end` 是 **Asia/Taipei 午夜** ⇒ 差的 8h 讓「還有一天缺口」被當成 `gap: none`
 
-- **狀態**：`open`
+- **狀態**：`done`
 - **記錄日期**：2026-09-27
 - **來源**：PR #2079 的未驗項 ④（**pre-existing**，非該 PR 引入；`origin/main` 同形）。
 - **事實（位置由我複核；行號＝`origin/main` `b15105cd`）**：
@@ -2098,6 +2098,35 @@ glob 空集合=紅／**預算覆寫=清單內放寬後綠、放寬後仍超時�
   或全部 `time.Date(..., time.UTC)`）；並在日誌同時印出 `timezone` 與 `now`，讓相位可稽核。
 - **驗收條件**：「CSV 落後 1 個交易日」的 fixture ⇒ `gap: none` **不再**出現（日誌與實際缺口一致）；
   台北 `00:00~08:00` 與 `15:30` 前後的邊界各有一個測試（雙向）。
+- **處置（2026-10-17 完成；本 PR #2270）**：
+  - **根因複驗（最小複現，先做才動手）**：F-item 敘述**成立**，且能量化成**逐字 8h**。以
+    `csv_latest=2026-03-24`、`now=2026-03-25T23:30Z`（＝台北 03-26 07:30，未過 15:30 收盤 ⇒ 最後結算日＝台北 03-25）實測
+    修前三個值：`latestDate=2026-03-24T00:00:00Z`、`start=2026-03-25T00:00:00Z`、`end=2026-03-25T00:00:00+08:00`
+    ⇒ `start.After(end)=true`、`start-end=8h0m0s`，日誌印出**自相矛盾**的一行：
+    `backfill gap: none (csv_latest=2026-03-24 target=2026-03-25)`（同一 instant 的台北寫法
+    `2026-03-26T07:30+08:00` 得到完全相同的錯誤結論 ⇒ 不是「某個時區輸入」的問題，是比較基準不一致）。
+  - **修法（語意統一選 Asia/Taipei，寫進檔頭）**：新增 `cmd/atlas/replay_backfill_window.go`，檔頭明寫
+    「**本 package 的交易日日期一律表示為 Asia/Taipei 午夜**；date-only parser 仍回 `time.Parse` 原值（UTC 午夜，
+    該 instant 無意義），任何比較前必須過 `recordTaipeiDate()`」。`replayBackfillWindow(latestRecordDate, now)`
+    回 `start`/`end`，**兩者皆台北午夜**：`end` 直接 delegate 既有的 `currentTaipeiTradingDate(now)`（刪掉
+    `runAutoBackfill` 內**重複的第二份**收盤 cutoff＋週末回捲實作，這也是漂移來源），`start` = `recordTaipeiDate(最新資料日)+1 天`
+    再以 `nextTradingDate()` 跳週末。`runAutoBackfill` 只剩 `replayBackfillWindow()` 一行，並在 `gap: none` 日誌
+    補上 `timezone=Asia/Taipei now=<RFC3339>`（F-item 要求的可稽核欄位）。
+  - **同批清掉同族的「多份時區載入」**：`taipeiLocation()` 改成 `sync.OnceValue` 快取（原本每次
+    `time.LoadLocation` 都回**新指標**，讓「是否同一時區」不可比較）；`currentTaipeiTradingDate` 改用它。
+  - **未動（刻意）**：CSV→JSONL 閘門（`replayFreshness.conversionNeeded`）兩側都走 `internal/replay.GetLatestDate`
+    且比的是**資料日期字串**、不比 instant ⇒ 無相位問題，保持原狀（檔頭已寫明理由，避免下一個人「順手統一」而製造新不一致）。
+  - **負向證明（探針有鑑別力）**：同一個 fixture 走**真實** `runAutoBackfill`
+    ⇒ 修前 `backfill gap: none (csv_latest=2026-03-24 target=2026-03-25)`；
+    修後 `backfill gap detected: 2026-03-25 to 2026-03-25`（**兩份原文不同**）。
+    另把 `git checkout -- cmd/atlas/operations_tasks.go` 回到修前版本跑新測試
+    `TestRunAutoBackfill_SingleDayGapAcrossUTCBoundary` ⇒ **紅**並印出修前那行原文（rc=1）；
+    以 `cp` 備份還原後 `sha256=49d65cb0010a58232e1cfe79f9c8bac386dccccc3cbf084c9b72a890f7042c8c` 相符、測試轉綠。
+    再把 `replayBackfillWindow` 的 normalize 拿掉（`recordTaipeiDate(latestRecordDate)` → `latestRecordDate`）
+    ⇒ 單元測試 7 個子案例**全紅**（含 `UTC_23:30` 那格），還原後 sha256 相符。
+  - **測試**：`cmd/atlas/replay_backfill_window_test.go` —— 8 個 table 案例（UTC 23:30／台北 07:30 同 instant、
+    15:30 前後、週五收盤、週一盤前回捲週五、週六回捲、落後 2 日）＋ `TestReplayBackfillWindow_RecordDatePhase`
+    （釘住 8h 相位本身）＋ 2 個端到端（gap 偵測、`gap: none` 日誌帶 timezone/now）。
 
 ---
 
@@ -3271,13 +3300,58 @@ rc=1                            # ⇒ 修前無宣告常數、無守門測試：
 
 ### FU-20261012-05 — JSONL ledger **無上限成長**：`archiver` 從未接線
 
-- **狀態**：`open`
+- **狀態**：`done`
 - **記錄日期**：2026-10-12
 - **來源**：Q2「為何不能全上 PG」調查
 - **事實**：`internal/ledger/archiver.go` 的 rotation **從未上線**（`NewArchiver` 除自身檔與測試外**零呼叫者**）⇒ 實測 **1,035 檔／1,572,908 行**持續成長且無上限。
 - **風險**：磁碟與掃描成本線性成長；`Load*` 的延遲與記憶體隨之上升。
 - **最小處置**：接線 archiver，或明確記錄「不歸檔」的理由與容量上限。
 - **查法**：`grep -rn "NewArchiver" --include='*.go' . | grep -v _test`。
+- **處置（2026-10-17 完成；本 PR #2270）**：
+  - **根因複驗（唯讀）**：①`grep -rn "NewArchiver" --include='*.go' .` 只命中 `archiver.go` 自身
+    ⇒ **零呼叫端**，F-item 敘述**成立**。②★ **F-item 漏掉的第二個缺陷**：`ArchivableFiles()` 的 4 個名字
+    **不含真正的成長源**，其中 `alerts.jsonl` 在 `data/state/` **根本不存在**（alert store 寫的是 `alerts/alerts.jsonl`，
+    見 `internal/monitoring/alert_store.go:28`）。把 `maxFileSize` 調成 10 bytes 餵 9 個真實檔名實測 ⇒ 只有
+    `experiments.jsonl`／`human_interventions.jsonl`／`spawn_records.jsonl`／`alerts.jsonl`（幻影名）被輪替；
+    `recommendation_outcomes.jsonl`、`darwinian_history.jsonl`、`metrics.jsonl`、`quotes.jsonl`、`alerts/alerts.jsonl`
+    **一個都沒動** ⇒ **光是「接線」不足以止住成長**（這也是本條不能只做 wiring 的原因）。
+  - **量測更新（唯讀，2026-10-17）**：F-item 記 1,035 檔／1,572,908 行；實測 `data/` 下 **2,304 個 JSONL／864 MB**
+    （`data/state` 2,291 檔／1,458,072 行），前三大：`recommendation_outcomes.jsonl` **172,662,842 bytes／45,668 行**、
+    `darwinian_history.jsonl` 33 MB、`metrics.jsonl` 9.8 MB ⇒ 成長未停，敘述方向正確但數字已過期。
+    另確認既有的 `storage_cleanup`（`storage.LifecycleManager`，7 條 policy）**只刪不歸檔**且**不涵蓋 ledger JSONL**
+    ⇒ 真正缺口＝「ledger JSONL 沒有生命週期」。
+  - **修法**：`internal/ledger.Archiver` 補上**保留政策**（`ArchivePolicy`）並**接到既有任務框架**
+    （`apigateway.BackgroundTaskManager`，新任務 `ledger_archive`，6h；`cmd/atlas/ledger_archive_task.go`，
+    在 `registerOperationsTasks` 內註冊）：①**天數**＝`RetentionDays`（mtime 超過即**搬移**進 `<LedgerDir>/archive`）；
+    ②**大小**＝`MaxFileSizeMB`（仍在寫入的檔 → gzip 複製後就地截斷）；③**歸檔不刪資料**：gzip 完成後**逐行驗證**
+    （archive 行數 == 來源行數，不符即還原/放棄），archive 檔在驗證通過前只以 `.tmp` 存在；`ArchivePruneDays`
+    預設 **0＝永不刪 archive**（舊版 `cleanupOldArchives` 預設 730 天**刪除**已改掉）。④**不在 tick 熱路徑**：
+    背景任務 + 單次 **15 分鐘** ctx 上限 + 單輪 `MaxFilesPerRun`（預設 50）檔數上限，超出留給下一輪。
+    ⑤清單修正：`recommendation_outcomes.jsonl`／`darwinian_history.jsonl`／`metrics.jsonl`／`quotes.jsonl` 補進
+    `ArchivableFiles()`，`alerts.jsonl` 改為真實路徑 `alerts/alerts.jsonl`，並修正「`rel` 含 `/` 時 archive 名直接拼進
+    archive 目錄」的失敗路徑（扁平化為 `alerts-alerts-<ts>.jsonl.gz`）。掃描面用 glob（預設 `*.jsonl,alerts/*.jsonl`）。
+    ⑥設定：`ATLAS_LEDGER_ARCHIVE_ENABLED`（預設 `true`）／`_RETENTION_DAYS`（365）／`_MAX_FILE_SIZE_MB`（100）／
+    `_FILES_PER_RUN`（50）／`_PRUNE_DAYS`（0＝永不刪）／`_GLOBS`，已同步 `configs/allowed_env_vars.md`。
+  - **負向證明（fixture：3 個超過保留期的檔；探針＝既有公開入口 `NewArchiver(dir).Run()`，修前修後同一個探針）**：
+    修前 `ls` 三個檔**原封不動**（`archive/` 空目錄）；
+    修後同一個 fixture ⇒ 三個檔全部消失、`archive/` 出現
+    `recommendation_outcomes-<ts>.jsonl.gz`／`metrics-<ts>.jsonl.gz`／`darwinian_history-<ts>.jsonl.gz`，
+    新寫的 `fresh.jsonl` 不動（修前／修後原文見 PR body）。
+    另外把保留判斷那一行（`info.ModTime().Before(cutoff)`）突變成 `After(cutoff)` ⇒ 5 個 retention 測試**全紅**
+    （含「stale 應搬移不可截斷」那條），以 `cp` 備份還原後 sha256 相符、測試轉綠。
+  - **測試**：`internal/ledger/archiver_retention_test.go`（搬移後 **gunzip 內容與原檔逐位元組相同**、空檔不動、
+    單輪檔數上限、子目錄archive、預設不刪 archive、設定後才 prune、大小輪替後 archive 內容完整、
+    stale 優先搬移不截斷、ctx 取消即停）；`cmd/atlas/ledger_archive_task_test.go`（啟用開關閘門、任務註冊、
+    任務 body 端到端把舊檔搬進 archive 並驗內容）；並更新既有 `TestArchiver_ArchivableFiles`／
+    `TestArchiver_Run_AllArchivableFiles` 以反映新的 8 檔清單與子目錄（**未放寬斷言**：仍是逐一具名比對）。
+  - **已知限制**：①歸檔後 live 檔不再含舊記錄（`Load*` 只看得到未歸檔區間）—— 這是保留政策的語意，資料仍在
+    `archive/*.jsonl.gz`（逐行驗證過），需要時可解壓回填；②大小輪替與同時 append 之間仍有微秒級窗口（已用
+    「copy 後比對 stat 大小，檔案仍在長大就重試 3 次、仍不穩就延後到下一輪」緩解）；③同機多 process 共用同一
+    ledger 目錄時沒有跨 process 鎖（生產為單一 `atlas` process，未引入 flock）；
+    ④**刻意不納入預設掃描面**：`sessions/<id>/*.jsonl`（約 505 檔）與 `price_adjustments/**` 是**replay 輸入與
+    行情快取**（每 session 一次寫定、非 append-only log），歸檔會讓舊 session 的 replay 讀不到 ⇒ 預設 globs 只含
+    `*.jsonl`＋`alerts/*.jsonl`；要一併納入可由 `ATLAS_LEDGER_ARCHIVE_GLOBS` 明確 opt-in（理由是「不是無上限成長的
+    log，而是有限且可重建的輸入」，非「不歸檔」）。
 
 ### FU-20261012-06 — 三道「PG-first」治理機制**本身無效**（引用不存在的條文／規格自相矛盾／檢查恆不紅燈）
 
