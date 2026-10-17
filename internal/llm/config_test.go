@@ -1,6 +1,7 @@
 package llm
 
 import (
+	"github.com/kaecer68/atlas-go/internal/testutil/reporoot"
 	"os"
 	"path/filepath"
 	"strings"
@@ -413,10 +414,11 @@ func TestDefaultRoutingTable_Groups(t *testing.T) {
 // loads configs/llm_router.yaml (ADR-012 follow-up: the file used to be a
 // mirror that no cmd read) and that the loaded table equals the built-in one.
 func TestResolveRouterConfig_LoadsRepoFile(t *testing.T) {
-	path, err := filepath.Abs(filepath.Join("..", "..", "configs", "llm_router.yaml"))
+	root, err := reporoot.FromCwd()
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("resolve module root: %v", err)
 	}
+	path := filepath.Join(root, "configs", "llm_router.yaml")
 	t.Setenv(RouterConfigPathEnv, path)
 
 	cfg, src := ResolveRouterConfig()

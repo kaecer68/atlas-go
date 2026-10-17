@@ -9,6 +9,7 @@ import (
 
 	"github.com/kaecer68/atlas-go/internal/apigateway"
 	"github.com/kaecer68/atlas-go/internal/monitoring"
+	"github.com/kaecer68/atlas-go/internal/testutil/reporoot"
 )
 
 func writeFixture(t *testing.T, rel, content string) string {
@@ -128,9 +129,9 @@ func TestCheckAlertFor_Fixtures(t *testing.T) {
 }
 
 func TestRunChecks_CurrentConfiguration(t *testing.T) {
-	root, err := filepath.Abs(filepath.Join("..", ".."))
+	root, err := reporoot.FromCwd()
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("resolve module root: %v", err)
 	}
 	// The instant is injected (issue #2138 guardrail 2): the governance check is
 	// date-driven, so a test that read the wall clock would change verdict on a
@@ -201,9 +202,9 @@ func TestRunChecks_CurrentConfiguration(t *testing.T) {
 // own instant would make the verdict unreproducible, which is the property the
 // guardrail exists to protect.
 func TestNoProductionPathInjectsNow(t *testing.T) {
-	root, err := filepath.Abs(filepath.Join("..", ".."))
+	root, err := reporoot.FromCwd()
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("resolve module root: %v", err)
 	}
 	var offenders []string
 	walkErr := filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {

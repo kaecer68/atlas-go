@@ -15,6 +15,7 @@ import (
 	"github.com/kaecer68/atlas-go/internal/portfolio"
 	"github.com/kaecer68/atlas-go/internal/prism"
 	"github.com/kaecer68/atlas-go/internal/screener"
+	"github.com/kaecer68/atlas-go/internal/testutil/reporoot"
 )
 
 func TestScreenedRecommendationsFlowThroughExperimentAndJudge(t *testing.T) {
@@ -162,8 +163,10 @@ func TestScreenedRecommendationsFlowThroughExperimentAndJudge(t *testing.T) {
 		t.Fatalf("write baseline: %v", err)
 	}
 
-	wd, _ := os.Getwd()
-	root := filepath.Clean(filepath.Join(wd, "../.."))
+	root, err := reporoot.FromCwd()
+	if err != nil {
+		t.Fatalf("resolve module root: %v", err)
+	}
 	replayPath := filepath.Join(root, "samples", "replay", "twse_stock_day_all_sample.csv")
 	if _, err := os.Stat(replayPath); err != nil {
 		t.Skipf("sample replay data missing, skipping judge integration: %v", err)

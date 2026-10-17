@@ -13,6 +13,7 @@ import (
 	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/domain/experiment"
+	"github.com/kaecer68/atlas-go/internal/testutil/reporoot"
 )
 
 func TestAutoExperimentNilSystemReturnsError(t *testing.T) {
@@ -218,11 +219,10 @@ func TestLoadOldestPendingExperiment_InvalidJSON(t *testing.T) {
 // 把窗口整窗平移對齊 replay 最新日期（[latestDate-6d, latestDate]）並跑完
 // 實驗；寫出的 brief 必須攜帶順延後的 windowID。
 func TestRunExperimentForCandidateDefersWindowOnOneDayStaleReplay(t *testing.T) {
-	wd, err := os.Getwd()
+	root, err := reporoot.FromCwd()
 	if err != nil {
-		t.Fatalf("getwd: %v", err)
+		t.Fatalf("resolve module root: %v", err)
 	}
-	root := filepath.Clean(filepath.Join(wd, "../.."))
 	promptPath := filepath.Join(root, "prompts/agents/growth_momentum.md")
 
 	dir := t.TempDir()

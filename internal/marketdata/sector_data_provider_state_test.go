@@ -2,6 +2,7 @@ package marketdata
 
 import (
 	"context"
+	"github.com/kaecer68/atlas-go/internal/testutil/reporoot"
 	"os"
 	"path/filepath"
 	"testing"
@@ -27,7 +28,10 @@ const sectorDataSample = `{"ai_revenue_growth":45.2,"cowos_utilization":92.5,"ca
 // file the repository actually ships, and the legacy reader paths must not
 // exist (they were what made the channel silently dead).
 func TestResolveSectorDataDirMatchesShippedFile(t *testing.T) {
-	root := filepath.Join("..", "..")
+	root, err := reporoot.FromCwd()
+	if err != nil {
+		t.Fatalf("resolve module root: %v", err)
+	}
 	shipped := filepath.Join(ResolveSectorDataDir(root), "sector_data.json")
 	if _, err := os.Stat(shipped); err != nil {
 		t.Fatalf("ResolveSectorDataDir does not point at the shipped file %s: %v", shipped, err)

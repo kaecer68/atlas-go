@@ -10,6 +10,7 @@ import (
 
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/ledger"
+	"github.com/kaecer68/atlas-go/internal/testutil/reporoot"
 )
 
 func createTestReplayCSV(t *testing.T, path string) {
@@ -28,11 +29,10 @@ func createTestReplayCSV(t *testing.T, path string) {
 func TestExecuteCreatesCandidatePrompt(t *testing.T) {
 	dir := t.TempDir()
 	executor := NewExecutor(ledger.NewStore(dir).(ledger.FullStore), "")
-	wd, err := os.Getwd()
+	root, err := reporoot.FromCwd()
 	if err != nil {
-		t.Fatalf("getwd: %v", err)
+		t.Fatalf("resolve module root: %v", err)
 	}
-	root := filepath.Clean(filepath.Join(wd, "../.."))
 	promptPath := filepath.Join(root, "prompts/agents/growth_momentum.md")
 	briefPath := filepath.Join(dir, "brief.json")
 	replayPath := filepath.Join(dir, "test-replay.csv")
@@ -87,11 +87,10 @@ func TestExecuteCreatesCandidatePrompt(t *testing.T) {
 func TestExecuteUsesRiskRuleTemplate(t *testing.T) {
 	dir := t.TempDir()
 	executor := NewExecutor(ledger.NewStore(dir).(ledger.FullStore), "")
-	wd, err := os.Getwd()
+	root, err := reporoot.FromCwd()
 	if err != nil {
-		t.Fatalf("getwd: %v", err)
+		t.Fatalf("resolve module root: %v", err)
 	}
-	root := filepath.Clean(filepath.Join(wd, "../.."))
 	promptPath := filepath.Join(root, "prompts/agents/cro_risk.md")
 	briefPath := filepath.Join(dir, "brief-risk.json")
 	replayPath := filepath.Join(dir, "test-replay.csv")
@@ -139,11 +138,10 @@ func TestExecuteUsesRiskRuleTemplate(t *testing.T) {
 func TestExecuteUsesPortfolioConstraintTemplate(t *testing.T) {
 	dir := t.TempDir()
 	executor := NewExecutor(ledger.NewStore(dir).(ledger.FullStore), "")
-	wd, err := os.Getwd()
+	root, err := reporoot.FromCwd()
 	if err != nil {
-		t.Fatalf("getwd: %v", err)
+		t.Fatalf("resolve module root: %v", err)
 	}
-	root := filepath.Clean(filepath.Join(wd, "../.."))
 	promptPath := filepath.Join(root, "prompts/agents/cio_seed.md")
 	briefPath := filepath.Join(dir, "brief-portfolio.json")
 	replayPath := filepath.Join(dir, "test-replay.csv")

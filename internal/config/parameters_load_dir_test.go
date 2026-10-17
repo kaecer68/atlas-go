@@ -3,11 +3,17 @@ package config
 import (
 	"path/filepath"
 	"testing"
+
+	"github.com/kaecer68/atlas-go/internal/testutil/reporoot"
 )
 
 func TestLoadParametersDir_MatchesFileLoad(t *testing.T) {
-	// Test paths are relative to repo root
-	root := filepath.Join("..", "..")
+	// Resolve the module root by walking up to go.mod instead of assuming the
+	// test runs exactly two levels below it (FU-20261016-20).
+	root, err := reporoot.FromCwd()
+	if err != nil {
+		t.Fatalf("resolve module root: %v", err)
+	}
 	filePath := filepath.Join(root, "configs", "parameters.json")
 	dirPath := filepath.Join(root, "configs", "parameters")
 
