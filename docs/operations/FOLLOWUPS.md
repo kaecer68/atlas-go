@@ -5773,6 +5773,53 @@ gen_routes_determinism_test.go: PASS（同輸入兩次呼叫逐位元組相同�
   停止交易寫入端（3 選項）與回撤曝險上限（3 條件）都需業主決定。
   ④ 附錄 A 其餘 84 條候選未判定。
 
+---
+
+### FU-20261016-34 — `darwinian.risk_volatility_threshold` 的 **5.9× drift 已解釋**（＝部署 `FU-20260930-04` 移除污染序列所致）⇒ SSOT 對齊 ＋ 寫入端單步窗
+
+- **狀態**：`in-progress`（程式與 SSOT 已交；**告警會持續到 SSOT PR 部署後**）
+- **記錄日期**：2026-10-16
+- **來源**：部署 `844f590f2` 觸發的自動校準（k3 決策 1「風控門檻 0.012324 收場」）
+- **現象**：部署後 `darwinian.risk_volatility_threshold` 生效值 **0.0726591 → 0.012323875595980305**
+  （**5.9×**，ratio 0.170）⇒ `atlas_calibration_drift_out_of_window_keys` = 1
+  ⇒ 規則 `CalibrationEffectiveDriftUnexplained` **firing** ✓
+- **根因（已解釋，**不是**新缺陷）**：`FU-20260930-04`（PR #2274 前的消費端守門）把 `Close<=0` 的列
+  當成缺值跳過 ⇒ 校準的報酬序列不再有 **假的 −100%** 觀測 ⇒ 同一 `percentile_based`
+  （p75 ÷ √252，n=13）算出的日波動從「被 −100% 撐大的 0.0727」回到 **0.0123** ✓
+  ⇒ 舊值才是壞的（污染序列的產物），新值才是誠實的值 ✓
+- **判定（已定案，不釘回 0.08）**：新值通過兩道閘 ①`n=13 ≥ 5`（`FU-20260930-09` 的秩下限）
+  ② 落在 sanity band `[0.0005, 0.25]`（`#2169`）⇒ **預期且應接受** ✓
+  SSOT 停在 0.08 才是錯的：它是一只**沒有序列支撐**的舊人工值，且會讓 drift 永遠 firing ✓
+- **處置 A（SSOT 對齊，PR [#2276](https://github.com/kaecer68/atlas-go/pull/2276)）**：`configs/parameters.json` 與 `configs/parameters/darwinian.json`
+  的 `darwinian.risk_volatility_threshold.value` **0.08 → 0.012324**（overlay 實際值
+  `0.012323875595980305`，在 SSOT 取 6 位小數＝可審閱；殘差 ratio 0.99999 仍在窗內 ✓），
+  並改寫 `rationale`／`citation.source_reference`（percentile-based、污染序列已修、n=13）✓
+  **不動** `data/state/parameters.calibrated.json`（生產 overlay，由 a2a-dev 管）✓
+- **處置 B（寫入端單步窗，PR #PRB）**：`internal/calibration/calibrate.go` 的
+  `darwinian.risk_volatility_threshold` 寫入前比較 `new/old`，落在 `[1/3, 3]` 之外
+  （`config.RatioOutsideSingleStepWindow`，與 loader／監控**同一常數**）⇒ **拒寫** ＋
+  log `skipped_single_step_window` ＋ 報告 `method=skipped_single_step_window`（`After == Before`）✓
+  **首次寫入（`before <= 0`）不套窗** ✓；樣本不足／帶外兩道既有閘不動 ✓
+  ⇒ 這一道才是「**先寫後 page**」的修正：本次 5.9× 跳變發生在**新規則上線前** ✓
+- **告警時程**：A 部署前 ratio 仍 0.170 ⇒ **持續 firing**；A 部署後 overlay 的該 entry 因
+  **SSOT 基準變動**（`baselineMatches`）被丟棄並改寫（`reason=ssot_moved`，**不 page**）
+  ⇒ 生效值 = SSOT ⇒ ratio 1.000 ⇒ `out_of_window_keys` = 0 ⇒ **告警自動停** ✓
+  （下一次 tick 若算出 0.0123 附近 ⇒ 仍在窗內 ⇒ 不再 page ✓）
+- **已知限制**：
+  ① **拒寫沒有部分收斂**：合法的 >3× 政權轉換（例：輸入序列再修一次）每一輪都會被同一道窗拒絕
+     ⇒ 需 operator 手動套用；提案（未做）：改為「夾在窗緣」（每輪最多 3×）以逐輪收斂。
+  ② SSOT 對齊校準產物後，該鍵的 **drift 訊號在下次 tick 前近乎恆 0**（guard 對該鍵暫時退化）；
+     真正的保護已移到寫入端（B）⇒ 兩者不可同時拿掉。
+  ③ Go 內建預設 `internal/config/defaults_portfolio.go` 仍為 `0.08`（**未改**：那是無 SSOT 的
+     fresh host 的 fallback，屬另一個值語意決定）。
+  ④ 只套在 `risk_volatility_threshold`；同函式其他鍵（`hit_rate_*`、`*_quartile_multiplier`、
+     `volatility_penalty_multiplier`）各有自己的 clamp 或百分位下限，**未逐一加窗**（見 `FU-20260930-09`
+     的同型清單）。
+- **驗收條件**：①`curl localhost:9090/api/v1/query --data-urlencode 'query=atlas_calibration_drift_out_of_window_keys'`
+  在 A 部署後回 **0**；② `GET /api/parameters/metadata` 的 `darwinian.risk_volatility_threshold.value`
+  = **0.012324**（SSOT）且生效值相同；③ 新測試 `go test ./internal/calibration/ -run 'RiskVol|SingleStepWindow'`
+  修前紅（`method = "percentile_based"`）／修後綠 ✓；④ 窗外的確拒寫：`skipped_single_step_window` ✓
+
 
 ## 相關文件
 
