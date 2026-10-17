@@ -81,3 +81,67 @@
 - 正常資料不變：各測試內含 clean-data 對照（硬編碼期望值），且受影響套件既有測試全數通過。
 
 （逐字 log 見 PR body 與 `/tmp/fu20260930-04-*.log`。）
+
+---
+
+## 6. 後續落地：k3 決策 3-1／3-3／3-4（2026-10-17）
+
+§3 的三項提案已裁決並落地（其餘仍只提案）。**動機**：§1 的守門只認得「非正／非有限」，而
+`FU-20260930-03` 的第二類壞值是**倍數**（`5904.TW` 存成 720 而官方 72）——兩端都是可用價格，所以
+§1 的守門不會擋，`+900%` 直接進入動能／波動／標籤／勝率。
+
+### 6.1 3-1 跳空倍數門檻（`internal/pricegate`）
+
+| 條件 | 實作 |
+|---|---|
+| `\|r\|` 超出門檻即壞值 | `shared.MaxPlausibleReturn(horizon)`：單日 = 50%（TW 漲跌停 10%／20% ⇒ 正常資料不可能）；長天期按 `1.5^h-1` 複利（5 日 = 659%，避免把合法的 `1.1^5-1` 61% 誤殺） |
+| 新股上市首 5 日豁免 | `shared.InIPOExemptWindow(pos, horizon)`：窗口落在該檔前 5 個交易日內即豁免（截斷序列只會**放寬**，屬 fail-open） |
+| 被拒列可審計 | `logging.Warn(component, "gap_multiple_rejected", symbol/pos/horizon/prev/curr/return/bound)`；豁免記 `Info(gap_multiple_ipo_exempt)`；**每 component 上限 100 行**＋1 行 `gap_multiple_rejected_suppressed` |
+| 正常資料不變 | `pricegate.Check` 只回「可否使用」，**不負責除法**——各消費端保留原本算式（`(curr-prev)/prev` 或 `curr/prev-1`），故正常觀測逐位元組同值 |
+
+接下來的消費端（皆為 §1 已修過的同一批）：`portfolio`（`MomentumReturn`／`Volatility`／
+`extractReturnMatrix`）、`feature`（`return_1d`／`return_5d`／`return_autocorr`／`ForwardReturnLabel`）、
+`monitoring.realizedVolatility`、`replay.Dataset.ForwardReturn`、`calibration.LoadReturnsFromCSV`、
+`scheduler.extractLabels`（經 `sampleIndexes`）、`orchestrator.ml_scorer.Train`、`stockpicker` 前向報酬。
+`optimizer_math.go` 的 `extractReturnMatrix` 同時吃到 3-1 與 3-4。
+
+### 6.2 3-3 總經／即時報價 `(Last-Open)/Open`
+
+`orchestrator.quoteChangePct` 只守**分母**：`Open` 非正／非有限 ⇒ 該觀測略過（欄位維持零值）並記
+`Warn(quote_change_skipped)`。套用於 `QuotesToNarrativeData`（11 個 symbol 分支）與
+`QuotesToMacroDataSnapshot`（7 個分支）。
+
+### 6.3 3-4 `optimizer_math.go` 均值分母
+
+`means[i] = sum / float64(Tret)` → `sum / float64(n)`（`n` = 實際累積的可用報酬數）；`n == 0` 時維持 0。
+**值語意微變**：有缺值的資產，其 Markowitz 期望報酬會回到「可用樣本平均」（例如跳過 1 天時由 23/24 縮放
+變回原值）。無缺值的資產不變。
+
+### 6.4 本批負向證明（突變 ⇒ 必紅）
+
+把 10 個消費端原始碼還原成 `HEAD`（測試保留、`internal/pricegate` 與 `shared/price_gate.go` 保留）：
+
+| 套件 | 修前紅燈原文（節錄） |
+|---|---|
+| `portfolio` | `Volatility with a 10x stored close = 1.815170446542142, want 0`；`means[BAD.TW] = 0.33749999999999997`；`MomentumReturn(1) with a 10x latest close = 9` |
+| `feature` | `return_1d with a 10x close = 9.091743119266056`；`label into a 10x close = 9.095238095238095` |
+| `monitoring` | `realizedVolatility with a 10x stored close = 2.8774989139876315` |
+| `replay` | `ForwardReturn reported success across a 10x stored close; want ok=false` |
+| `calibration` | `got 8 returns [0 0 0 0 0 0 9 -0.9], want 6` |
+| `scheduler` | `got 6 samples, want 4` |
+| `orchestrator` | `trained on 8 samples, want 6` |
+| `stockpicker` | `outcome stockpicker-foreign-3d-net-buy @ 2026-01-10 has ForwardReturn 9.476190476190476` |
+
+還原方式：`cp` 備份 → `git checkout HEAD -- <10 檔>` → 紅燈 → `cp` 還原 → `sha256sum` 逐檔位元組相等 → 全綠。
+
+### 6.5 已知限制（本批不動）
+
+1. **`Last` 非正仍未被擋**（3-3 只守分母）：`Open>0 && Last<=0` 會得到 `-100%`。屬同一缺陷族，但決策只授權
+   最小守門 ⇒ 留在 §3 待裁決。
+2. **未調整的公司行為可超過門檻**：`MomentumReturn` 用的是**未調整**價格（見套件 doc）；減資／分割造成的
+   帳面跳空若 `>50%` 會被本門檻當成壞值丟棄。這是「事後調整才有正確答案」的既有結構問題，非本門檻能解。
+3. **`prevClose` 鏈汙染仍在**：`calibration` 與 `replay` 的壞值被拒後，下一列仍以壞值為分母；該列通常也落在
+   門檻外而被拒（等效於跳過兩列），但沒有「跳過壞值改用前一可用值」的重建。
+4. **跳過樣本後共變異數仍含 0 填充**（`optimizer_math.sampleCov` 對 `ret[t][i]==0` 視為 0 報酬）；3-4 只修均值
+   分母。
+5. **`cmd/experimental/**` 研究 CLI 未接門檻**（非生產路徑，§3 原就只提案）。

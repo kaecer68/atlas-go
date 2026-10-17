@@ -2933,6 +2933,21 @@ rc=1                            # ⇒ 修前無宣告常數、無守門測試：
     `cmd/experimental/**` 研究工具 ⇒ 見盤點 §3。
   - **資料面**：`FU-20260930-03` 的 `close<=0`／10 倍價**仍需 operator 修資料**（本 PR 不動任何資料；
     10 倍價在消費端仍會穿透）⇒ 03 維持 `open`。
+  - **後續落地（2026-10-17，k3 決策 3-1／3-3／3-4；承接本條「未修（提案）」）**：
+    ① **3-1 跳空倍數門檻已做** ⇒ `|r|` 超出 `shared.MaxPlausibleReturn(horizon)`（單日 50%，長天期按
+    `1.5^h-1` 複利）即視為壞值，由新套件 `internal/pricegate` 統一守門並記 WARN（可審計、每 component
+    上限 100 行）；**新股上市首 5 個交易日豁免**（`shared.InIPOExemptWindow`，無漲跌幅限制 ⇒ >50% 可為真，
+    豁免本身記 INFO）。已接到本條修過的 16 處同族：`portfolio`（momentum／volatility／optimizer）、
+    `feature`（`return_1d`／`return_5d`／`return_autocorr`／`ForwardReturnLabel`）、`monitoring`
+    `realizedVolatility`、`replay.ForwardReturn`、`calibration` 校準標籤、`scheduler.extractLabels`、
+    `orchestrator` `ml_scorer.Train`、`stockpicker` 前向報酬。
+    ② **3-3 總經／即時報價 `(Last-Open)/Open` 已做最小守門** ⇒ `Open` 非正／非有限即略過該觀測並記 WARN
+    （`orchestrator.quoteChangePct`，涵蓋 `QuotesToNarrativeData` 與 `QuotesToMacroDataSnapshot`）；
+    只守分母，`Last` 非正仍屬未守（見 §3 限制）。
+    ③ **3-4 `optimizer_math.go` 均值分母已做** ⇒ 除以**實際可用樣本數**（原本固定 `T-1`，跳過 1 天即把
+    Markowitz 期望報酬縮成 23/24）；無可用樣本時維持 0（不會變 NaN）。**值語意微變**，正常資料
+    （無缺值）逐位元組不變。
+    仍**只提案未做**：`SMA`／`ma_ratio` 等價格水準消費者、`cmd/experimental/**` 研究工具、資料修復本體。
 
 ---
 
