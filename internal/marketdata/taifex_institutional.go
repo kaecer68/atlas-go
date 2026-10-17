@@ -71,7 +71,7 @@ func (t *TAIFEXProvider) FetchInstitutionalFuturesDaily(ctx context.Context) (*I
 		return nil, fmt.Errorf("taifex institutional read body: %w", err)
 	}
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("taifex institutional api error: status %d, body=%s", resp.StatusCode, string(body))
+		return nil, fmt.Errorf("taifex institutional api error: status %d, body=%s", resp.StatusCode, redactUpstreamText(string(body)))
 	}
 
 	var rawList []rawInstitutionalTrader

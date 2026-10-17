@@ -17,6 +17,7 @@ import (
 	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/logging"
+	"github.com/kaecer68/atlas-go/internal/redact"
 )
 
 const (
@@ -293,7 +294,13 @@ func (c *FugleClient) doGet(ctx context.Context, endpoint string) ([]byte, error
 		resp, err := c.httpClient.Do(req)
 		if err != nil {
 			c.breakerRecordFailure()
-			return nil, fmt.Errorf("http request: %w", err)
+			// The v1.0 API takes the key in the X-API-KEY header, so the
+			// transport error's URL carries no credential TODAY. Wrap anyway:
+			// redact.Error returns the original error untouched when there is
+			// nothing to mask (errors.Is/As still see *url.Error), and it is
+			// the only thing standing between a future query-parameter
+			// migration and a live key in a channel-health row.
+			return nil, fmt.Errorf("http request: %w", redact.Error(err, c.currentAPIKey()))
 		}
 
 		if resp.StatusCode == http.StatusTooManyRequests {
@@ -333,7 +340,7 @@ func (c *FugleClient) doGet(ctx context.Context, endpoint string) ([]byte, error
 				return nil, fmt.Errorf("fugle: %w", ErrFugleUnauthorized)
 			}
 			c.breakerRecordFailure()
-			return nil, fmt.Errorf("api error: status %d, body: %s", resp.StatusCode, string(body))
+			return nil, fmt.Errorf("api error: status %d, body: %s", resp.StatusCode, redactUpstreamText(string(body), c.currentAPIKey()))
 		}
 		c.breakerRecordSuccess()
 		return body, readErr

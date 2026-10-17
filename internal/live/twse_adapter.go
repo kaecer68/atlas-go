@@ -17,6 +17,7 @@ import (
 
 	"github.com/kaecer68/atlas-go/internal/apigateway/httpclient"
 	"github.com/kaecer68/atlas-go/internal/domain"
+	"github.com/kaecer68/atlas-go/internal/redact"
 )
 
 // TWSEBrokerAdapterConfig holds configuration for the TWSE broker adapter.
@@ -194,7 +195,9 @@ func (a *TWSEBrokerAdapter) SubmitOrder(ctx context.Context, order domain.Order)
 
 	resp, err := a.client.Do(req)
 	if err != nil {
-		return BrokerResult{}, fmt.Errorf("twse_adapter: http request: %w", err)
+		// FU-20261016-12: *url.Error formats the whole request URL, and a
+		// broker URL can carry parameters the user does not want in an alert.
+		return BrokerResult{}, fmt.Errorf("twse_adapter: http request: %w", redact.Error(err, a.apiKey, a.apiSecret))
 	}
 	defer func() { _ = resp.Body.Close() }()
 
@@ -204,7 +207,10 @@ func (a *TWSEBrokerAdapter) SubmitOrder(ctx context.Context, order domain.Order)
 	}
 
 	if resp.StatusCode >= 400 {
-		return BrokerResult{}, fmt.Errorf("twse_adapter: API error status=%d body=%s", resp.StatusCode, strings.TrimSpace(string(respBody)))
+		// FU-20261016-12: the broker echoes the account and the credential it
+		// saw; these messages end up in order records and risk alerts.
+		return BrokerResult{}, fmt.Errorf("twse_adapter: API error status=%d body=%s", resp.StatusCode,
+			redact.Text(strings.TrimSpace(string(respBody)), a.apiKey, a.apiSecret, a.accountID))
 	}
 
 	var twseResp TWSEOrderResponse
@@ -258,7 +264,7 @@ func (a *TWSEBrokerAdapter) QueryOrderStatus(ctx context.Context, orderID string
 
 	resp, err := a.client.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("twse_adapter: http status request: %w", err)
+		return nil, fmt.Errorf("twse_adapter: http status request: %w", redact.Error(err, a.apiKey, a.apiSecret))
 	}
 	defer func() { _ = resp.Body.Close() }()
 
@@ -268,7 +274,8 @@ func (a *TWSEBrokerAdapter) QueryOrderStatus(ctx context.Context, orderID string
 	}
 
 	if resp.StatusCode >= 400 {
-		return nil, fmt.Errorf("twse_adapter: status API error status=%d body=%s", resp.StatusCode, strings.TrimSpace(string(respBody)))
+		return nil, fmt.Errorf("twse_adapter: status API error status=%d body=%s", resp.StatusCode,
+			redact.Text(strings.TrimSpace(string(respBody)), a.apiKey, a.apiSecret, a.accountID))
 	}
 
 	var result TWSETradeResult
@@ -309,7 +316,7 @@ func (a *TWSEBrokerAdapter) CancelOrder(ctx context.Context, orderID string) err
 
 	resp, err := a.client.Do(req)
 	if err != nil {
-		return fmt.Errorf("twse_adapter: http cancel request: %w", err)
+		return fmt.Errorf("twse_adapter: http cancel request: %w", redact.Error(err, a.apiKey, a.apiSecret))
 	}
 	defer func() { _ = resp.Body.Close() }()
 
@@ -319,7 +326,8 @@ func (a *TWSEBrokerAdapter) CancelOrder(ctx context.Context, orderID string) err
 	}
 
 	if resp.StatusCode >= 400 {
-		return fmt.Errorf("twse_adapter: cancel API error status=%d body=%s", resp.StatusCode, strings.TrimSpace(string(respBody)))
+		return fmt.Errorf("twse_adapter: cancel API error status=%d body=%s", resp.StatusCode,
+			redact.Text(strings.TrimSpace(string(respBody)), a.apiKey, a.apiSecret, a.accountID))
 	}
 	return nil
 }

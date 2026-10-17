@@ -1,6 +1,8 @@
 package main
 
 import (
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -668,4 +670,30 @@ func TestUpdateObsLogAtomic(t *testing.T) {
 
 func minimalObsLog() string {
 	return "# Sector Prediction Observation Log\n\n## Records\n\n"
+}
+
+// ---------------------------------------------------------------------------
+// FU-20261016-16 — the non-200 branch must not echo the upstream credential
+// ---------------------------------------------------------------------------
+
+const fakeSpotCheckKey = "FAKE-c07spotcheck-key-8a9b0c1d2e3f4a5b"
+
+func TestFetchPredictionReportHTTPErrorRedactsUpstreamBody(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusUnauthorized)
+		_, _ = w.Write([]byte(`{"msg":"Token is illegal.","status":401,"token_tail":"` + fakeSpotCheckKey + `"}`))
+	}))
+	t.Cleanup(srv.Close)
+
+	_, err := fetchPredictionReport(srv.URL)
+	if err == nil {
+		t.Fatal("want an error for HTTP 401, got nil")
+	}
+	msg := err.Error()
+	if strings.Contains(msg, fakeSpotCheckKey) {
+		t.Errorf("error leaks the upstream credential: %s", msg)
+	}
+	if !strings.Contains(msg, "status 401") || !strings.Contains(msg, "Token is illegal.") {
+		t.Errorf("error dropped the diagnosis: %s", msg)
+	}
 }

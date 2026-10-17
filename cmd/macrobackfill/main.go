@@ -19,6 +19,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/kaecer68/atlas-go/internal/redact"
 )
 
 const (
@@ -262,15 +264,19 @@ func fetchTWSEClosingIndex(target time.Time) (float64, int64, error) {
 	if err != nil {
 		return 0, 0, fmt.Errorf("read body: %w", err)
 	}
+	// Diagnostics keep the status, the URL's non-secret parameters and the
+	// upstream message skeleton, but no credential material: this error lands on
+	// an operator terminal and in logs/ (FU-20261016-16).
 	if resp.StatusCode != http.StatusOK {
-		return 0, 0, fmt.Errorf("HTTP %d from %s: %s", resp.StatusCode, url, strings.TrimSpace(string(body)))
+		return 0, 0, fmt.Errorf("HTTP %d from %s: %s",
+			resp.StatusCode, redact.URL(url), redact.Text(strings.TrimSpace(string(body))))
 	}
 	var tw twseResponse
 	if err := json.Unmarshal(body, &tw); err != nil {
-		return 0, 0, fmt.Errorf("parse JSON: %w (body=%s)", err, truncate(string(body), 200))
+		return 0, 0, fmt.Errorf("parse JSON: %w (body=%s)", err, redact.Text(truncate(string(body), 200)))
 	}
 	if tw.Stat != "OK" {
-		return 0, 0, fmt.Errorf("TWSE stat != OK: %q (body=%s)", tw.Stat, truncate(string(body), 200))
+		return 0, 0, fmt.Errorf("TWSE stat != OK: %q (body=%s)", tw.Stat, redact.Text(truncate(string(body), 200)))
 	}
 	if len(tw.Tables) == 0 {
 		return 0, 0, errors.New("TWSE response has no tables")

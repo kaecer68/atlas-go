@@ -1,10 +1,12 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -474,4 +476,54 @@ func newTestRepo(t *testing.T) (string, string) {
 		t.Fatal(err)
 	}
 	return root, macroDir
+}
+
+// The credentials in these fixtures are fake.
+const (
+	fakeTaifexBodyKey  = "FAKE-taifex-body-7b8c9d0e1f2a3b4c"
+	fakeTaifexParseKey = "FAKE-taifex-parse-1c2d3e4f5a6b7c8d"
+)
+
+// TestFetchOnceHTTPErrorRedactsUpstreamBody drives the non-200 branch
+// ("HTTP %d: %.160s"). The precision cap only bounds the LENGTH — the body can
+// still carry a credential — so the assertion is on the credential, not on the
+// length, and the status must survive (FU-20261016-16).
+func TestFetchOnceHTTPErrorRedactsUpstreamBody(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = w.Write([]byte(`{"msg":"Token is illegal.","token_tail":"` + fakeTaifexBodyKey + `"}`))
+	}))
+	t.Cleanup(srv.Close)
+
+	f := &taifexFetcher{client: srv.Client(), url: srv.URL}
+	_, _, err := f.fetchOnce(context.Background(), url.Values{})
+	if err == nil {
+		t.Fatal("want an error for HTTP 500, got nil")
+	}
+	msg := err.Error()
+	if strings.Contains(msg, fakeTaifexBodyKey) {
+		t.Errorf("error leaks the upstream credential: %s", msg)
+	}
+	if !strings.Contains(msg, "HTTP 500") || !strings.Contains(msg, "Token is illegal.") {
+		t.Errorf("error dropped the diagnosis: %s", msg)
+	}
+}
+
+// TestParseCSVUnexpectedBodyRedactsUpstreamCredential covers the second
+// body-in-error site in this package (parseForeignOINetCSVMulti, "%.100s" of a
+// non-CSV body). Redacting it must keep the reason a reader needs.
+func TestParseCSVUnexpectedBodyRedactsUpstreamCredential(t *testing.T) {
+	body := `<html><body>429 Too Many Requests<br>token_tail=` + fakeTaifexParseKey + `</body></html>`
+
+	_, _, err := parseForeignOINetCSV(body)
+	if err == nil {
+		t.Fatal("want an error for a non-CSV body, got nil")
+	}
+	msg := err.Error()
+	if strings.Contains(msg, fakeTaifexParseKey) {
+		t.Errorf("error leaks the upstream credential: %s", msg)
+	}
+	if !strings.Contains(msg, "not CSV") || !strings.Contains(msg, "429 Too Many Requests") {
+		t.Errorf("error dropped the diagnosis: %s", msg)
+	}
 }

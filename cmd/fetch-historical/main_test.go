@@ -463,3 +463,34 @@ func containsHelper(s, substr string) bool {
 	}
 	return false
 }
+
+// TestFetchDayErrorDoesNotEchoTheUpstreamBody pins the property FU-20261016-16
+// scanned this tool for. The non-200 branch ("api error: status %d") reports
+// the status and nothing else, so no upstream body — and therefore no
+// credential it may carry — can reach the terminal or logs/. A future edit that
+// starts quoting the body has to redact it or this test goes red.
+func TestFetchDayErrorDoesNotEchoTheUpstreamBody(t *testing.T) {
+	const fakeCredential = "FAKE-fetchhistorical-body-4e5f6a7b8c9d0e1f"
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusUnauthorized)
+		_, _ = w.Write([]byte(`{"msg":"Token is illegal.","token_tail":"` + fakeCredential + `"}`))
+	}))
+	t.Cleanup(srv.Close)
+	fetcher := &Fetcher{
+		client:      &http.Client{Timeout: 10 * time.Second},
+		baseURL:     srv.URL,
+		rateLimiter: rate.NewLimiter(rate.Inf, 1),
+	}
+
+	quotes, err := fetcher.FetchDay(context.Background(), time.Date(2026, 1, 2, 0, 0, 0, 0, time.Local))
+	if err == nil {
+		t.Fatalf("want an error for HTTP 401, got %d quotes and no error", len(quotes))
+	}
+	if strings.Contains(err.Error(), fakeCredential) {
+		t.Errorf("error leaks the upstream credential: %s", err.Error())
+	}
+	if !strings.Contains(err.Error(), "status 401") {
+		t.Errorf("error dropped the status code: %s", err.Error())
+	}
+}
