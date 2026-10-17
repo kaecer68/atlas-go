@@ -13,6 +13,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -601,6 +602,14 @@ func (a *GovernmentBrokerAggregator) writeInsuranceReading(r GovernmentFlowReadi
 }
 
 // writeBrokerDetails writes the daily per-broker detail file.
+//
+// Ordering contract: brokers[] is a canonical total order on
+// (code, type, name) — the same tuple that detailKey merges on — so the same
+// aggregate always serializes to the same bytes. `details` is a map, and Go
+// randomizes map iteration order, so the rows are sorted before marshalling
+// (FU-20261016-33). FinMindGovernmentBankProvider.writeBrokerDetails writes the
+// same file shape and already sorts by code; this writer was the odd one out.
+// Consumers only filter/sum the rows, so the order carries no meaning for them.
 func (a *GovernmentBrokerAggregator) writeBrokerDetails(dateStr string, details map[detailKey]*detailAccumulator) error {
 	rows := make([]BrokerDailyDetail, 0, len(details))
 	for _, acc := range details {
@@ -613,6 +622,15 @@ func (a *GovernmentBrokerAggregator) writeBrokerDetails(dateStr string, details 
 			Net:  acc.Net,
 		})
 	}
+	sort.SliceStable(rows, func(i, j int) bool {
+		if rows[i].Code != rows[j].Code {
+			return rows[i].Code < rows[j].Code
+		}
+		if rows[i].Type != rows[j].Type {
+			return rows[i].Type < rows[j].Type
+		}
+		return rows[i].Name < rows[j].Name
+	})
 
 	payload := struct {
 		Date    string              `json:"date"`

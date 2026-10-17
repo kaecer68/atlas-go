@@ -105,11 +105,9 @@ func buildRoutesMarkdown(routes []maps.RouteInfo, groups map[string][]maps.Route
 		fmt.Fprintf(&sb, "| %s | %d | %d | %d |\n",
 			groupName, len(gr), stubCount, active)
 	}
-	// Include any groups not in the canonical order.
-	for groupName, gr := range groups {
-		if containsString(groupOrder, groupName) || len(gr) == 0 {
-			continue
-		}
+	// Include any groups not in the canonical order, in ascending name order.
+	for _, groupName := range nonCanonicalGroups(groups) {
+		gr := groups[groupName]
 		stubCount := countStubs(gr)
 		active := len(gr) - stubCount
 		fmt.Fprintf(&sb, "| %s | %d | %d | %d |\n",
@@ -125,15 +123,32 @@ func buildRoutesMarkdown(routes []maps.RouteInfo, groups map[string][]maps.Route
 		}
 		writeGroupSection(&sb, groupName, gr)
 	}
-	// Non-canonical groups.
+	// Non-canonical groups, in the same ascending name order as the summary.
+	for _, groupName := range nonCanonicalGroups(groups) {
+		writeGroupSection(&sb, groupName, groups[groupName])
+	}
+
+	return sb.String()
+}
+
+// nonCanonicalGroups returns the names of the groups that are not in
+// groupOrder, in ascending name order, skipping empty ones.
+//
+// Ordering contract for the generated api-routes.md: the report lists groups in
+// groupOrder first, then every remaining group in ascending name order. The
+// caller used to range over the groups map directly for the non-canonical part,
+// and Go randomizes map iteration order, so the same input produced a different
+// report on every run (FU-20261016-33).
+func nonCanonicalGroups(groups map[string][]maps.RouteInfo) []string {
+	names := make([]string, 0, len(groups))
 	for groupName, gr := range groups {
 		if containsString(groupOrder, groupName) || len(gr) == 0 {
 			continue
 		}
-		writeGroupSection(&sb, groupName, gr)
+		names = append(names, groupName)
 	}
-
-	return sb.String()
+	sort.Strings(names)
+	return names
 }
 
 // writeGroupSection writes a section header and route table for one group.
