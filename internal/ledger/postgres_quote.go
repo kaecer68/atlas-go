@@ -39,6 +39,12 @@ func (s *PostgresQuoteStore) RecordQuotes(quotes []domain.DailyBar) error {
 		return nil
 	}
 
+	total := len(quotes)
+	quotes, rejected := filterWritableQuotes(QuoteBackendPostgres, quotes)
+	if err := allRejectedError(QuoteBackendPostgres, total, rejected); err != nil {
+		return err
+	}
+
 	ctx := context.Background()
 	batch := &pgx.Batch{}
 	for _, q := range quotes {

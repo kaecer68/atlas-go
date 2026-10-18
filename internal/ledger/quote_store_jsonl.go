@@ -21,9 +21,22 @@ func NewJSONLQuoteStore(baseDir string) *JSONLQuoteStore {
 	return &JSONLQuoteStore{baseDir: baseDir}
 }
 
+// RecordQuotes persists a batch of daily bars (first-wins on (symbol, date)).
+// Rows refused by the write-path validity guard are skipped, with the same
+// contract as the sqlite and postgres stores (see quote_write_guard.go).
 func (s *JSONLQuoteStore) RecordQuotes(quotes []domain.DailyBar) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+
+	total := len(quotes)
+	quotes, rejected := filterWritableQuotes(QuoteBackendJSONL, quotes)
+	if err := allRejectedError(QuoteBackendJSONL, total, rejected); err != nil {
+		return err
+	}
+	if len(quotes) == 0 {
+		return nil
+	}
+
 	if err := os.MkdirAll(s.baseDir, 0o755); err != nil {
 		return fmt.Errorf("mkdir all: %w", err)
 	}

@@ -61,3 +61,46 @@
   但仍可能在「新假日未入表」當天誤判新鮮 —— 長假後第一個交易日請人工對照
   交易所行事曆。
 - 刻意**不加 silence**：連假形狀由交易日感知判定正確處理，剩餘假陽性走 §2 判讀。
+
+## 6. 寫入端拒收（`quote_write_rejected` WARN）— 源頭阻擋，**不是告警**
+
+> 本節記錄**寫入端守門**（`FU-20260930-03` 的最小處置①）。它**沒有** Prometheus 指標、
+> 也**沒有**告警：告警化改由 **a2a-dev 的 postgres_exporter extended query** 負責
+> （純設定、直接查 `quotes` 現況值、能涵蓋**既有**壞列）。本 repo 刻意**不**再放第二個
+> 來源，避免重複計數／重複告警。
+
+## 6.1 守的是什麼
+
+`RecordQuotes`（`internal/ledger/quote_write_guard.go`）在**寫入前**擋掉壞值：
+
+| 欄位 | 守什麼 | 為什麼 |
+|------|--------|--------|
+| `close` | 非正（<= 0）或非有限（NaN/±Inf） | `Close=0` 是 `FU-20260930-03` 的既有壞值；任何未守門的 return/volatility 消費者都會讀成 **−100%** |
+| `open` / `high` / `low` | **只守非有限** | `Open/High/Low = 0` 而 `close` 可用是合法列（`cmd/cron-quote-backfill` 只填 `Close`/`Volume`）；擋掉它等於丟掉可用的收盤價 |
+
+被拒收的列**不入庫**，每列一則 WARN（`ledger_quote_write_guard` / `quote_write_rejected`，
+帶 `backend`／`reason`／`symbol`／`date`／`source`）。`reason ∈ non_positive｜non_finite`。
+每 process 上限 **100 行**，第 101 列起只留一則 `quote_write_rejection_suppressed`
+（被拒收的列數不再遞增記錄，所以**不以 log 行數當指標**）。
+
+**`RecordQuotes` 的錯誤語意**：單列壞值**不會**讓整批失敗（好列照寫）；
+但若一批**全部**被拒收，回傳 `*ledger.QuoteRejectionsError`
+（`errors.Is(err, ledger.ErrAllQuotesRejected)`）—— 呼叫端不會誤以為該 symbol 已落地。
+
+## 6.2 triage（看到 `quote_write_rejected` 時）
+
+1. 找出被擋的具體列（每 process 上限 100 行）：
+   `docker logs atlas-go --since 2h 2>&1 | grep quote_write_rejected | tail -20`
+2. 是否同一個 backfill 任務造成（`auto_quote_backfill` 24h interval；停牌股常有 `Last=0`）：
+   `docker logs atlas-go --since 2h 2>&1 | grep -E 'quote_backfill|quote_write_rejected'`
+3. 表內**既有**壞值列（守門只擋新列，不修舊列）：
+   `docker exec atlas-postgres psql -U atlas -d atlas -c "select count(*) from quotes where close <= 0"`
+   —— 這個數字與其趨勢由 a2a-dev 的 exporter 查詢曝露，不是本 repo 的指標。
+4. 處置：資料源／provider 修正，或由 operator 修資料（`FU-20260930-03` 的資料面）。
+
+## 6.3 已知限制
+
+- 只覆蓋走 `QuoteStore.RecordQuotes` 的寫入；直接下 SQL 的工具（`cmd/migrate-data`）
+  不受保護。
+- 既有 109 列 `close<=0`／10 倍價／垃圾列**不因本守門消失**；本守門只保證**不再新增**。
+- 拒收是**缺值**語意：該 `(symbol, date)` 沒有列，下游走既有「無資料」路徑。

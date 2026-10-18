@@ -38,9 +38,21 @@ func NewSQLiteQuoteStoreFromPath(path string) (*SQLiteQuoteStore, error) {
 var _ QuoteStore = (*SQLiteQuoteStore)(nil)
 
 // RecordQuotes persists a batch of daily bars using INSERT OR REPLACE.
+//
+// Rows the write-path validity guard refuses (non-positive / non-finite close,
+// non-finite open/high/low — see quote_write_guard.go) are skipped: they are
+// missing observations, not prices. The batch is never aborted for one bad row;
+// a batch whose rows were ALL refused returns *QuoteRejectionsError so the
+// caller does not believe it persisted a symbol that produced no valid bar.
 func (s *SQLiteQuoteStore) RecordQuotes(quotes []domain.DailyBar) error {
 	if len(quotes) == 0 {
 		return nil
+	}
+
+	total := len(quotes)
+	quotes, rejected := filterWritableQuotes(QuoteBackendSQLite, quotes)
+	if err := allRejectedError(QuoteBackendSQLite, total, rejected); err != nil {
+		return err
 	}
 
 	tx, err := s.db.Begin()
