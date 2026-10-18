@@ -119,6 +119,13 @@ func (s *StateStore) Load() error {
 }
 
 // Save 保存状态到磁盘
+//
+// Row-order contract (FU-20261016-35): state/positions_current.json is written
+// with the positions sorted by Symbol ascending. s.positions is a map, so
+// ranging over it yields a different order on every run; without the sort the
+// same input produced different bytes from run to run, which breaks file
+// hashes, replay/diff comparison and golden tests. Only the order is
+// canonicalized — no value is added, dropped or rewritten.
 func (s *StateStore) Save() error {
 	s.mutex.RLock()
 	defer s.mutex.RUnlock()
@@ -141,10 +148,7 @@ func (s *StateStore) Save() error {
 
 	// 保存持仓状态
 	positionsPath := filepath.Join(stateDir, PositionsStateFile)
-	positions := make([]domain.Position, 0, len(s.positions))
-	for _, p := range s.positions {
-		positions = append(positions, p)
-	}
+	positions := s.sortedPositionsLocked()
 	positionsJSON, err := json.Marshal(positions)
 	if err != nil {
 		return fmt.Errorf("marshal positions: %w", err)
@@ -330,10 +334,7 @@ func (s *StateStore) GetState() *State {
 	s.mutex.RLock()
 	defer s.mutex.RUnlock()
 
-	positions := make([]domain.Position, 0, len(s.positions))
-	for _, p := range s.positions {
-		positions = append(positions, p)
-	}
+	positions := s.sortedPositionsLocked()
 
 	return &State{
 		Portfolio: s.portfolio,
@@ -349,6 +350,29 @@ type State struct {
 	Positions []domain.Position
 	Regime    RegimeState
 	Events    []Event
+}
+
+// sortedPositionsLocked returns the held positions in canonical order.
+//
+// Row-order contract (FU-20261016-35): s.positions is a map, so ranging over it
+// yields a different order on every run. Every producer that turns that map
+// into a slice MUST sort it by Symbol ascending before the slice becomes an
+// output — file bytes (Save), an in-memory snapshot whose order is observable
+// (GetState), a hash input or an HTTP body. The map is keyed by Position.Symbol
+// (UpdatePosition / LoadLastPositions), so Symbol is unique and this is a total
+// order. Only the order is canonicalized: no value is added, dropped or
+// rewritten.
+//
+// Callers must hold at least the read lock.
+func (s *StateStore) sortedPositionsLocked() []domain.Position {
+	positions := make([]domain.Position, 0, len(s.positions))
+	for _, p := range s.positions {
+		positions = append(positions, p)
+	}
+	slices.SortFunc(positions, func(a, b domain.Position) int {
+		return strings.Compare(a.Symbol, b.Symbol)
+	})
+	return positions
 }
 
 // Helper functions
