@@ -6219,6 +6219,46 @@ C1／C2 是 0–100 ⇒ 直接接會是**單位錯誤**。
 - **驗收條件**：`session_summary_reconcile` 執行後日誌不再有 `store_backend_empty_default_jsonl`，
   且仍寫入同一條 `<LedgerDir>/sessions/…`。
 
+### FU-20261018-01 — DB 憑證上游化 ＋ 守門**覆蓋缺口**（#2288：compose 7 處改插值；#2290：第二份部署 compose 的字面 user 與守門只掃單檔）
+
+- **狀態**：`done`（2026-10-18 收斂；#2288 已併入 `main`、#2290 已開 PR 且檢查全綠、**待併**）
+- **記錄日期**：2026-10-18
+- **來源**：2026-10-18 生產 DB 密碼輪替（步驟 1–4，`DB-ROTATION-20261018-0007.md`）＋ 同日部署時發現的**未提交輪替編輯**（`DEPLOY-RUN-2026-10-18.md` §偏離 1）。
+- **根因（三層，皆已實測）**：
+  1. **字面憑證**：repo 根 `docker-compose.yml` 的 DB user/password 原本是字面 `atlas`
+     （5 處 DSN ＋ `POSTGRES_USER`／`POSTGRES_PASSWORD` ＋ exporter `DATA_SOURCE_NAME`）。
+     DB 輪替成 `atlas_rota` 之後，**乾淨樹** `compose up` 會讓容器拿到舊帳號 ⇒ `SQLSTATE 28P01`
+     （= 2026-10-18 08:05 那次修復失敗的形狀）。生產 clone 當時靠**2 個未提交編輯**頂著 ⇒
+     `git checkout .`／重裝／`git clean` 都會讓它消失。
+  2. **既有守門是假綠**：`scripts/secret-scan.sh` 掃的是「**像機密**」的字串；字面 DB user `atlas`
+     **不像機密**。實測（本條查證）餵它一份含 `POSTGRES_USER=atlas`／`POSTGRES_PASSWORD=atlas`／
+     `postgres://atlas:atlas@…` 的 compose ⇒ **`✅ 無命中`、rc=0** ⇒ 這條不變式**沒有**既有守門。
+  3. **新守門的覆蓋缺口（#2288 之後才看得見）**：`check_db_credential_interpolation.sh` 只掃
+     `$ROOT/docker-compose.yml` ⇒ 同一條部署路徑的**第二份 compose** 掃不到：
+     `docs/operations/docker-compose.prod.yml:54` `DATABASE_URL=postgres://atlas:…`、`:110` `POSTGRES_USER=atlas`，
+     以及 `docs/operations/docker-compose.crons.yml` 的 **3 處** `postgres://atlas:…`。
+     實測（本條查證）：在 repo 根跑守門 ⇒ **`✅ … PASS`、rc=0**（假綠），而上述字面 user 就在樹裡。
+     同一支守門另有**假紅**：DSN userinfo 用 naive `index(seg, ":")` 切分 ⇒
+     `${DB_USER:?訊息}:${DB_PASSWORD:?訊息}` 被切成 `${DB_USER` / `?訊息}` ⇒ 合規寫法被判違規（實測 rc=1）。
+- **處置**：
+  - **#2288**（已併 `main`，`ee9ce800`）：repo 根 compose 的 **7 處**改 `${DB_USER}`／`${DB_PASSWORD}`；
+    `.env.example` 補 `DB_USER=`／`DB_PASSWORD=` 空值 key；新增守門
+    `scripts/ci/check_db_credential_interpolation.sh`（122 行，釘住 compose 插值 ＋ `.env.example` 空值）
+    與契約測試 `tests/scripts/test-db-credential-interpolation.sh`（246 行）。
+    ⇒ 生產 clone 的 2 個未提交編輯即可丟棄（**2026-10-18 19:05 CST 實測 `git status --porcelain` 已為空**）。
+  - **#2290**（PR 已開，`fix/20261016-docs-operations-compose-db-cred-interp`，檢查全綠、待併）：
+    兩份 `docs/operations/docker-compose.{prod,crons}.yml` 的字面 user 改 `${DB_USER:?…}`／`${DB_PASSWORD:?…}`
+    （保留本檔原有的 fail-closed `:?` 語意，不引入「未設 ⇒ 靜默空值」）；守門改 **glob** 掃
+    repo 根 ＋ `docs/operations/docker-compose*.yml`（新檔自動納入；`docs/operations` 存在卻一檔都沒掃到 ⇒ **rc=2**）；
+    並修掉上述 DSN userinfo 切分的**假紅**。
+- **證據（差異探針：同一輸入，舊／新守門結果必須不同）**：
+  - 假綠（舊守門，repo 根）⇒ `✅ check_db_credential_interpolation PASS`、rc=0，但 `docs/operations/*.yml` 有字面 `atlas`。
+  - 紅燈（#2290 版守門，同一棵假樹）⇒ `❌ …/docs/operations/docker-compose.prod.yml:4 DSN 的 user 不是插值（user=atlas）`、rc=1（並印出受測檔清單 `受測 compose（2 檔）`）。
+  - `secret-scan` 假綠原文：`✅ 無命中` / `✅ secret-scan PASS`、rc=0。
+- **限制**：(1) **#2290 尚未併入** ⇒ 在 `main` 上，`docs/operations` 兩份 compose 仍是字面 user、
+  守門仍只掃單檔；(2) 新守門**不取代** `secret-scan`（前者管「插值不變式」、後者管「像機密的字串」），
+  兩者互補；(3) 生產若在 #2290 併入前輪替，仍須確認 `docs/operations` 兩份 compose 未被實際部署使用。
+
 
 ## 相關文件
 
