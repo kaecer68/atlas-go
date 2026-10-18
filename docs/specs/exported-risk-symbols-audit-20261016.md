@@ -209,7 +209,7 @@ git -C <repo> grep -l "$SYM" origin/main -- internal cmd | grep _test.go
   3. 端到端測試：`DrawdownEmergency` ⇒ 實際曝險 ≤ `MaxExposure`。
 - **處置**：doc 標 `DECLARED ONLY / NOT ENFORCED` ＋ 條件；進守門表；
   並更正 `internal/risk/doc.go` 的「Decision flow」（原把兩步都寫成流程的一部分，未說哪一步沒生效）。
-- **後續（2026-10-18，5b）**：已接線，生效層＝**下單 sizing 層**（k3 決策）。
+- **後續（2026-10-18，5b，PR [#2284](https://github.com/kaecer68/atlas-go/pull/2284)）**：已接線，生效層＝**下單 sizing 層**（k3 決策）。
   `System.applyDrawdownExposureCap` 在每個 session 開跑前評估回撤決策，
   `System.applyExposureCapForDecision` 經 `GetPositionSizeAdjustment` 讀 `MaxExposure` 並
   `sim.Engine.WithExposureCap(cap)`；`sim.Engine.RunDay` 把上限換成買方 notional 預算

@@ -5815,7 +5815,7 @@ gen_routes_determinism_test.go: PASS（同輸入兩次呼叫逐位元組相同�
      （`system_risk_session.go:380`），但 `decision.MaxExposure` 的兩個讀取者（本方法、`CalculatePortfolioAdjustment`）
      **都 0 呼叫者**，`EvaluateWithPortfolio` 與 `PortfolioRiskAdjuster.AdjustWeights` 的唯一呼叫者是 `cmd/stress-test`
      ⇒ `DrawdownLevel.MaxExposure`（1.0/0.85/0.65/0.40/0.10）只是一張意圖表，緊急回撤不會把曝險壓到 10%。
-     **處置（2026-10-18，5b）：已接線 —— 生效層＝下單 sizing 層。**
+     **處置（2026-10-18，5b，PR [#2284](https://github.com/kaecer68/atlas-go/pull/2284)；branch `fix/20261016-maxexposure-sizing-wire`）：已接線 —— 生效層＝下單 sizing 層。**
      ① **接線點**：`System.applyDrawdownExposureCap`（`system_risk_session.go`）在每個 session **開跑前**評估回撤決策
      （與執行後 `updateCapitalMetrics` 同一組輸入：當日 quotes ＋ sector snapshot ⇒ 兩次評估一致），
      `System.applyExposureCapForDecision` 以 `GetPositionSizeAdjustment(decision)` 讀出 `MaxExposure`，
