@@ -97,10 +97,10 @@ func declaredOnlyLevers() []declaredOnlyLever {
 			reason:   "Orchestrator.onIntradayCycle mirrors the breaker state after every circuit evaluation; the nil VaR provider keeps the uncalibrated estimate off the reject path",
 		},
 		{
-			symbol:    "GetPositionSizeAdjustment",
-			defining:  "internal/risk/macro_aware_drawdown.go",
-			extraSkip: []string{"internal/risk/doc.go"},
-			reason:    "the drawdown exposure cap never reaches position sizing; MaxExposure is read only by this accessor and CalculatePortfolioAdjustment, neither of which has a caller",
+			symbol:   "GetPositionSizeAdjustment",
+			defining: "internal/risk/macro_aware_drawdown.go",
+			wired:    true,
+			reason:   "System.applyExposureCapForDecision reads the decision's MaxExposure through this accessor and pushes it into the simulation engine's buy sizing (Engine.WithExposureCap) before every session run, so the DrawdownLevel.MaxExposure table is a live ceiling",
 		},
 	}
 }

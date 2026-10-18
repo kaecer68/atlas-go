@@ -848,6 +848,8 @@ func (s *System) RunDailySimulation(asOf time.Time) (domain.SimulationResult, er
 	s.applyCharterReserveCash(researchResult.Period)
 	// Phase C3: periodized conviction floor (CharterMode ConvictionFloor only).
 	s.applyCharterConvictionFloor(researchResult.Period)
+	// Drawdown exposure ceiling for this session's buy sizing (FU-20261016-32).
+	s.applyDrawdownExposureCap(s.Sim().ctx, quotes)
 	var result domain.SimulationResult
 	if s.Sim().persistentState != nil {
 		result = s.Sim().engine.RunWithState(s.Sim().persistentState, regime, quotes, finalRecs)
