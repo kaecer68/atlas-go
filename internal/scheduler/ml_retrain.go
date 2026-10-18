@@ -217,29 +217,49 @@ func extractFeatures(bars []domain.DailyBar) [][]float64 {
 		return nil
 	}
 
-	var sumO, sumH, sumL, sumC, sumV float64
+	// The close z-score (row[3]) is measured against the mean and standard
+	// deviation of the close LEVEL, so a close that is not a usable price is a
+	// MISSING observation there too (k3 decision 3-2): it is left out of the
+	// close mean/std and of their denominator. The other fields keep the plain
+	// whole-series statistics they had.
+	var sumO, sumH, sumL, sumV float64
+	sumC, usedC := 0.0, 0
 	for _, b := range bars {
 		sumO += b.Open
 		sumH += b.High
 		sumL += b.Low
-		sumC += b.Close
 		sumV += float64(b.Volume)
+		if !shared.IsUsablePrice(b.Close) {
+			continue
+		}
+		sumC += b.Close
+		usedC++
 	}
-	meanO, meanH, meanL, meanC, meanV := sumO/float64(n), sumH/float64(n), sumL/float64(n), sumC/float64(n), sumV/float64(n)
+	meanO, meanH, meanL, meanV := sumO/float64(n), sumH/float64(n), sumL/float64(n), sumV/float64(n)
+	meanC := 0.0
+	if usedC > 0 {
+		meanC = sumC / float64(usedC)
+	}
 
 	var so, sh, sl, sc, sv float64
 	for _, b := range bars {
 		so += (b.Open - meanO) * (b.Open - meanO)
 		sh += (b.High - meanH) * (b.High - meanH)
 		sl += (b.Low - meanL) * (b.Low - meanL)
-		sc += (b.Close - meanC) * (b.Close - meanC)
 		sv += (float64(b.Volume) - meanV) * (float64(b.Volume) - meanV)
+		if !shared.IsUsablePrice(b.Close) {
+			continue
+		}
+		sc += (b.Close - meanC) * (b.Close - meanC)
 	}
 	stdO := math.Sqrt(so / float64(n))
 	stdH := math.Sqrt(sh / float64(n))
 	stdL := math.Sqrt(sl / float64(n))
-	stdC := math.Sqrt(sc / float64(n))
 	stdV := math.Sqrt(sv / float64(n))
+	stdC := 0.0
+	if usedC > 0 {
+		stdC = math.Sqrt(sc / float64(usedC))
+	}
 
 	idxs := sampleIndexes(bars)
 	X := make([][]float64, 0, len(idxs))
@@ -254,7 +274,10 @@ func extractFeatures(bars []domain.DailyBar) [][]float64 {
 		row[4] = zScore(float64(b.Volume), meanV, stdV)
 
 		ma5Open := (bars[i-4].Open + bars[i-3].Open + bars[i-2].Open + bars[i-1].Open + b.Open) / 5
-		ma5Close := (bars[i-4].Close + bars[i-3].Close + bars[i-2].Close + bars[i-1].Close + b.Close) / 5
+		// The 5-day mean close is a LEVEL (k3 decision 3-2): unusable closes in
+		// the window are missing observations and are skipped, instead of being
+		// summed in and dragging the reference down.
+		ma5Close := meanUsableClose(bars[i-4 : i+1])
 		ma5Vol := float64(bars[i-4].Volume+bars[i-3].Volume+bars[i-2].Volume+bars[i-1].Volume+b.Volume) / 5
 
 		row[5] = safeDiv(b.Open, ma5Open) - 1
@@ -295,6 +318,24 @@ func datasetToBars(ds *replay.Dataset) []domain.DailyBar {
 		}
 	}
 	return bars
+}
+
+// meanUsableClose returns the mean of the usable closes in window, skipping
+// closes that are not a usable price (a missing observation, k3 decision 3-2).
+// It returns 0 when the window holds no usable close at all.
+func meanUsableClose(window []domain.DailyBar) float64 {
+	sum, used := 0.0, 0
+	for _, b := range window {
+		if !shared.IsUsablePrice(b.Close) {
+			continue
+		}
+		sum += b.Close
+		used++
+	}
+	if used == 0 {
+		return 0
+	}
+	return sum / float64(used)
 }
 
 func zScore(v, mean, std float64) float64 {

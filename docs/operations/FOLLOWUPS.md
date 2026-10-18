@@ -2949,6 +2949,15 @@ rc=1                            # ⇒ 修前無宣告常數、無守門測試：
     Markowitz 期望報酬縮成 23/24）；無可用樣本時維持 0（不會變 NaN）。**值語意微變**，正常資料
     （無缺值）逐位元組不變。
     仍**只提案未做**：`SMA`／`ma_ratio` 等價格水準消費者、`cmd/experimental/**` 研究工具、資料修復本體。
+    ④ **3-2 價格水準消費者已做（2026-10-18，獨立小 PR；上句「只提案未做」的價格水準半邊已被本項取代）**：
+    8 處把 `Close` 當**水準值**的消費者補上「非可用價＝缺值」守門 —— `portfolio.SMA`、`feature`
+    （`ma_ratio`／`bb_pct_b`／`hl_range_pct`／`price_position` 的 20 日均值／`emaClose`（`macd` 家族））、
+    `scheduler.extractFeatures`（close 的 z 分數基準 `meanC`／`stdC` 與 `ma5Close`）、`stocktools.sma`
+    （`sma20`／`sma50` 端點）。守門一律用**既有** `shared.IsUsablePrice`，語意同本條：跳過該觀測、平均除以
+    實際可用筆數，全窗無可用值時沿用該函式原有的「無資料」值。機械式盤點（`internal/`＋`cmd/` **1,116 行／
+    292 檔**）與「改 8／已由 3-1 期覆蓋／不改 9」逐筆判定見 `docs/specs/close-positive-consumer-audit-20261016.md`
+    §7。每處同 commit 附測試且都有 clean-data 對照 ⇒ **正常資料逐位元組不變**。仍**只提案未做**：
+    `obv`／`rsi_14`／`atr_14`（方向／差分／區間類，非水準類）、`cmd/experimental/**` 研究工具、資料修復本體。
 
 ---
 

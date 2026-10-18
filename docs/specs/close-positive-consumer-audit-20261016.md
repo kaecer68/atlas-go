@@ -146,3 +146,86 @@
 4. **跳過樣本後共變異數仍含 0 填充**（`optimizer_math.sampleCov` 對 `ret[t][i]==0` 視為 0 報酬）；3-4 只修均值
    分母。
 5. **`cmd/experimental/**` 研究 CLI 未接門檻**（非生產路徑，§3 原就只提案）。
+
+---
+
+## 7. 後續落地：k3 決策 3-2 — 價格水準消費者補「非可用價＝缺值」守門（2026-10-18）
+
+§3 的提案「單純『價格水準』消費者」已裁決**做**（低優先、獨立小 PR）。選定語意與 `FU-20260930-04`
+完全相同：**非可用價（`shared.IsUsablePrice` 為 false ⇒ `<=0`／NaN／±Inf）＝缺值 ⇒ 跳過該觀測，平均除以
+實際使用的筆數**；窗內若無任何可用值，沿用該函式既有的「無資料」回傳值（`0`／`1.0`）。
+⇒ 只影響本來就是壞值的列，正常資料逐位元組不變（每個修動都附 clean-data 對照測試）。
+
+那一節的另外三項（報酬類、`Open` 守門、optimizer 分母）已於 3-1／3-3／3-4 落地，**本 PR 不重做**。
+
+### 7.1 機械式盤點（候選 → 判定）
+
+掃描方式：`grep -rn 'Close' --include=*.go internal/ cmd/`（**1,116 行／292 檔**）→ 取同一行含價格識別字
+與算術運算子（或 `+=`）者（39 行）＋ `sum|total +=` 全表（346 行）→ 逐筆讀碼判定「水準值（level）」
+或「報酬值（return）」。判定**不靠印象**：每筆都讀到函式體。
+
+| # | 位置（`origin/main` 行號） | 類別 | 判定 |
+|---|---|---|---|
+| 1 | `internal/portfolio/historical_prices.go:127` `SMA` | 水準（N 日均價） | **改** |
+| 2 | `internal/feature/feature.go:58` `ma_ratio` | 水準（`close / MA20`） | **改**（決策點名） |
+| 3 | `internal/feature/feature.go:193` `bb_pct_b` | 水準（通道中心＋寬度） | **改** |
+| 4 | `internal/feature/feature.go:215` `hl_range_pct` | 水準（分母 `MA20`） | **改** |
+| 5 | `internal/feature/feature.go:324` `price_position` | 水準（減 `MA20`） | **改**：分子已於 3-1 期守門，**均值未守**（窗內壞值會移動比較基準） |
+| 6 | `internal/feature/feature.go:517` `emaClose`（`macd`／`macd_signal` 共用） | 水準（EMA） | **改** |
+| 7 | `internal/scheduler/ml_retrain.go:214` `extractFeatures`（`:225` `meanC`／`stdC`、`:257` `ma5Close`） | 水準（z 分數基準／5 日均價） | **改** |
+| 8 | `internal/stocktools/handler.go:411` `sma`（`sma20`／`sma50` 端點） | 水準 | **改** |
+| 9 | `internal/feature/feature.go:19` `close` 特徵 | 水準（原值輸出） | **不改**：它輸出的就是原始觀測；樣本層已於 3-1 期跳過（`scheduler.sampleIndexes`、`ml_scorer.Train`）。改它等於把壞值偽裝成 0 特徵 |
+| 10 | `internal/feature/feature.go:307` `obv` | 方向（`Close` 大小比較） | **不改**：非水準值（只取方向），屬報酬／方向類 ⇒ 另案 |
+| 11 | `internal/feature/feature.go:176` `atr_14`、`:390` `rsi_14` | 區間／差分類 | **不改**：3-2 只授權水準類。`atr_14` 的 TR 用 `max()`，缺值不會放大；`rsi_14` 是差分收斂 ⇒ 屬 3-1 家族 |
+| 12 | `internal/monitoring/service/session.go:226-241`（5 日高低標籤） | 水準（極值） | **不改**：已有 `b.Close > 0`／`low5 > 0` 前置；殘留邊界只有在**整個前 4 日窗皆壞值**時才出現且無實測可達性（見 §7.4） |
+| 13 | `internal/domain/volume_divergence.go:107-113`（視窗高低） | 水準（極值） | **不改**：`high <= low \|\| high <= 0 \|\| low <= 0` ⇒ 回 `false`（等效缺值），壞值不會產生訊號 |
+| 14 | `internal/portfolio/period_calculator.go:329` `computeSMA` | 水準（總經／指數） | **不改**：來源是 macro 快照（TAIEX／SOX／USD-TWD…），非 `quotes`；且已跳過 0 並以實際筆數為分母 |
+| 15 | `internal/monitoring/risk_exclusion.go:324-341`（`maxDrawdown` 內同一模式）、`feature.go` 的 `price_position`／`quality_intra` 分子 | 水準 | **已由 3-1 期覆蓋**（`shared.IsUsablePrice`）⇒ 不重做 |
+| 16 | `optimizer_math.go:96` 均值分母、`orchestrator.quoteChangePct` 的 `Open` 分母 | — | **已由 3-4／3-3 覆蓋** ⇒ 不動 |
+| 17 | `cmd/experimental/**` 研究 CLI | 混合 | **不改**：非生產路徑（§3 原本就只提案） |
+
+### 7.2 修法（8 處，逐處同 commit 補測試）
+
+| 消費端 | 修前 | 修後 |
+|---|---|---|
+| `portfolio.SMA` | 窗內壞值全部加進分子，分母固定 `days` | 跳過非可用價，分母＝可用筆數；全窗無可用值 ⇒ `0` |
+| `ma_ratio` | `sum += bars[j].Close`（含壞值）、`sum > 0` 才回傳，否則 `1.0` | 新增 `meanUsableClose(window)`；當前 `Close` 非可用 ⇒ `1.0`（既有中性值） |
+| `bb_pct_b` | 均值與**離差平方和**都吃壞值 | 均值／`std` 只由可用值計算、分母＝可用筆數；當前 `Close` 非可用 ⇒ `0.0` |
+| `hl_range_pct` | 分母是含壞值的 `MA20` | 分母改 `meanUsableClose` |
+| `price_position` | 分子守門、均值未守 | 均值改 `meanUsableClose` |
+| `emaClose` | 種子 SMA 與傳遞都吃壞值 | 種子＝可用值均值；傳遞跳過壞值（維持前值）；種子無可用值 ⇒ `0` |
+| `scheduler.extractFeatures` | `meanC`／`stdC`／`ma5Close` 吃壞值 | `close` 的均值／標準差與 `ma5Close` 只用可用值、分母＝可用筆數；其餘欄位（`Open`／`High`／`Low`／`Volume`）維持原式 |
+| `stocktools.sma` | 全部加總除以 `n` | 跳過非可用價、除以實際筆數；全窗無可用值 ⇒ `0` |
+
+共用守門一律用**既有的** `shared.IsUsablePrice`（`internal/domain/shared/price.go`），未新增 predicate。
+
+### 7.3 負向證明（修前必紅、修後符合語意）
+
+把 4 個原始碼檔還原成 `origin/main`（測試保留），四個套件全紅：
+
+| 套件 | 修前紅燈原文（節錄） |
+|---|---|
+| `portfolio` | `SMA(5) over [0 106 107 108 109] = 86, want 107.5`；`with a -5 close = 85`；`with a NaN close = NaN` |
+| `feature` | `ma_ratio with a stored 0 close in the window = 1.1442307692307692, want 1.0870192307692308`；`ma_ratio with current close -5 = -0.0484027105517909, want 1.0`；`bb_pct_b ... = 0.3000379273290907, want 0.7957368009704224`；`hl_range_pct ... = 0.03836930455635491, want 0.03645083932853717`；`price_position ... = 0.12394957983193278, want 0.07784166298098182`；`macd on a 100-per-day series with one missing close = 2.415028855210764, want 0`（一個缺值造出負值趨勢訊號） |
+| `scheduler` | `row[3] (close z-score) with a stored 0 close = 0.38615176976646903, want 0.7066562511750967`；`row[6] (close / 5-day mean level - 1) = 0.2735849056603774, want 0.018867924528301883` |
+| `stocktools` | `sma over [100 101 0 103 104] = 81.6, want 102`；`[100 101 -5 103 104] = 80.6` |
+
+修後：同一組測試全綠，且四套件既有測試（`go test ./internal/portfolio/ ./internal/feature/ ./internal/scheduler/
+./internal/stocktools/`）全數通過 ⇒ clean-data 對照（每個修動都有一條 `..._CleanDataUnchanged`）證明
+**正常資料數值不變**。
+
+還原方式：`cp` 備份 → `git checkout origin/main -- <4 檔>` → 紅燈 → `cp` 還原 → `sha256sum` 逐檔位元組相等 → 全綠。
+
+（逐字 log 在 PR body 與 `/tmp/f72-price-level-*.log`。）
+
+### 7.4 已知限制（本批不動）
+
+1. **`session.go` 的 5 日高低標籤**：只有「前 4 日窗全部壞值」時 `high5` 會停在初值而使任何正收盤被標成
+   `創5日高`。需要同檔連續 4 個壞收盤才會出現，`FU-20260930-03` 的 109 列分佈在 32 檔、無連續證據
+   ⇒ 只列入清理單，不在本 PR 猜修。
+2. **`obv`／`rsi_14`／`atr_14` 仍吃壞值**（方向／差分／區間類，非水準類）⇒ 屬 3-1 家族的下一批，需另案裁決。
+3. **`close` 原始特徵不變**：呼叫端若沒走 `sampleIndexes`／`Train` 的樣本過濾，特徵仍是壞值本身（設計如此）。
+4. **10 倍價（`5904.TW` 型）在水準類仍會穿透**：本守門只認「非正／非有限」，倍數值仍是可用價格
+   ⇒ 仍須 `FU-20260930-03` 的資料修復（operator 動作）。
+5. **跳過後不均勻加權**：視窗內少 1 筆可用值時，平均值等於「其餘觀測的等權平均」，不是「往回多取 1 筆」
+   ⇒ 與 3-4 的處理一致（分母＝實際樣本數），刻意不回溯補值。
