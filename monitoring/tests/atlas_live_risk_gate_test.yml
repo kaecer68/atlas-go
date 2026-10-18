@@ -1,0 +1,91 @@
+# monitoring/tests/atlas_live_risk_gate_test.yml
+# promtool unit tests for monitoring/rules/atlas_live_risk_gate_alerts.yml
+# （FU-20261016-32 條件 3：halt 旗標的對外曝露 ＋ 告警路徑）。
+#
+# 為什麼需要：`check rules` 只看語法。這裡把「卡住的 halt 會 firing、剛開起來
+# 的 halt 不會、服務掉線時不重複 paging、序列不存在（＝生產現況，live 引擎沒跑）
+# 時沉默」寫成可執行規格。
+#
+# ⚠️ 本檔**不**證明生產受保護：生產跑 `atlas -api`，不輸出本序列（見規則檔檔頭）。
+# 它證明的是「有人在跑 `-live` 時，判定式真的會響、而且只在該響的時候響」。
+#
+# ⚠️ 紀律：expectation 是完整比對（labels + annotations 逐字，自規則檔程式生成）。
+# 改規則檔文案 ⇒ 重新生成本檔。
+rule_files:
+- ../rules/atlas_live_risk_gate_alerts.yml
+evaluation_interval: 1m
+tests:
+- name: A 健康(旗標=0, up=1) ⇒ 沉默
+  interval: 1m
+  input_series:
+  - series: atlas_live_risk_gate_halt_trading
+    values: '0x80'
+  - series: up{job="atlas-go"}
+    values: 1x80
+  alert_rule_test:
+  - eval_time: 1h
+    alertname: AtlasLiveRiskGateHaltStuck
+    exp_alerts: []
+- name: B 卡住的 halt(旗標=1 持續 >=15m, up=1) ⇒ firing
+  interval: 1m
+  input_series:
+  - series: atlas_live_risk_gate_halt_trading
+    values: '1x70'
+  - series: up{job="atlas-go"}
+    values: 1x70
+  alert_rule_test:
+  - eval_time: 1h
+    alertname: AtlasLiveRiskGateHaltStuck
+    exp_alerts:
+    - exp_labels:
+        alertname: AtlasLiveRiskGateHaltStuck
+        severity: warning
+        service: atlas
+        component: live-risk-gate
+        incident_ref: FU-20261016-32
+      exp_annotations:
+        summary: "live 風控閘門的停止交易旗標持續為真（每一張單都會被硬停分支拒絕）"
+        description: "atlas_live_risk_gate_halt_trading 連續 15 分鐘為 1（= 3 個\nintraday cycle；IntradayInterval 預設 5 分鐘）⇒ live 風控閘門會以\n\"trading halted\" 拒絕每一張單（RiskGate.Check 的硬停分支），\n而 up{job=\"atlas-go\"} = 1 ⇒ 服務活著，這是真的卡住的旗標，不是\n目標掉線造成的凍結值。\n\n⚠️ 生產者範圍：本序列只由研究保留的 `-live` 引擎輸出（生產跑 `-api`，\n`-live` 已於 #2072 從生產 compose 移除）⇒ 在生產上本規則不可能 firing。\n看到它 firing 代表**有人正在跑 `-live`**（研究／本機），此時照下面查。\n\n先查什麼（依序）:\n1. 旗標與電路狀態是否同向（正常應該同向）:\n   docker exec atlas-go curl -s localhost:18080/metrics | grep -E \"atlas_live_risk_gate_halt_trading|circuit_breaker_state\"\n2. 斷路器停在 Halted/Paused 的原因（單日虧損門檻／連續停損／冷卻期）:\n   docker logs atlas-go --since 2h 2>&1 | grep -E \"circuit_breaker|trading_restricted\"\n3. 兩者不一致（電路已 Normal 而旗標仍 1）⇒ 最後一次鏡射沒跑完，或有人以\n   SetHaltTrading 手動開啟（目前沒有對外的操作面）；不要只調門檻或加\n   silence —— 那會把「卡住」變成「看起來沒卡住」。\n"
+        runbook_url: "https://github.com/kaecer68/atlas-go/blob/main/docs/specs/exported-risk-symbols-audit-20261016.md"
+- name: 'C 剛開起來的 halt(只 5 分鐘) ⇒ 沉默(for: 15m 的負向對照)'
+  interval: 1m
+  input_series:
+  - series: atlas_live_risk_gate_halt_trading
+    values: '0x55 1x5'
+  - series: up{job="atlas-go"}
+    values: 1x60
+  alert_rule_test:
+  - eval_time: 1h
+    alertname: AtlasLiveRiskGateHaltStuck
+    exp_alerts: []
+- name: 'D 旗標=1 但服務掉線(up=0) ⇒ 沉默(不與 AtlasGoTargetDown 重複 paging)'
+  interval: 1m
+  input_series:
+  - series: atlas_live_risk_gate_halt_trading
+    values: '1x60'
+  - series: up{job="atlas-go"}
+    values: '0x60'
+  alert_rule_test:
+  - eval_time: 1h
+    alertname: AtlasLiveRiskGateHaltStuck
+    exp_alerts: []
+- name: E 序列不存在(live 引擎沒在跑 = 生產現況)且 up=1 ⇒ 沉默(不得永久誤報)
+  interval: 1m
+  input_series:
+  - series: up{job="atlas-go"}
+    values: 1x60
+  alert_rule_test:
+  - eval_time: 1h
+    alertname: AtlasLiveRiskGateHaltStuck
+    exp_alerts: []
+- name: 'F halt 已解除(後 30 分鐘旗標=0) ⇒ 沉默(告警會自行 resolve)'
+  interval: 1m
+  input_series:
+  - series: atlas_live_risk_gate_halt_trading
+    values: '1x30 0x30'
+  - series: up{job="atlas-go"}
+    values: 1x60
+  alert_rule_test:
+  - eval_time: 1h
+    alertname: AtlasLiveRiskGateHaltStuck
+    exp_alerts: []

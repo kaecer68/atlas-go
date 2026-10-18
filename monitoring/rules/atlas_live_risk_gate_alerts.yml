@@ -1,0 +1,75 @@
+# monitoring/rules/atlas_live_risk_gate_alerts.yml
+# 建立:2026-10-18（FU-20261016-32 重新認證條件 3：停止交易旗標的「對外曝露 ＋ 告警路徑」）。
+#
+# 指標
+# ----
+#   atlas_live_risk_gate_halt_trading
+#       1 = live 風控閘門會拒絕每一張單（internal/live/risk_gate.go 的
+#       RiskGate.Check 硬停分支）；0 = 不會。由 Orchestrator.onIntradayCycle
+#       在每次電路評估、鏡射電路狀態進閘門之後記錄一次
+#       （internal/live/orchestrator.go 的 recordRiskGateHalt）。
+#
+# ⚠️⚠️ 生產者範圍（**先讀這段再判讀本檔**）⚠️⚠️
+#   本序列**只由研究保留的 `-live` 引擎輸出**。生產容器跑的是 `atlas -api`
+#   （Dockerfile 的 `CMD ["-api"]`），而 `-live` 已於 #2072／E34 從生產 compose
+#   移除（該旗標在 `-api` 模式下本就被忽略，live 路徑僅為研究保留，見
+#   docs/reference/product-positioning.md §3）。
+#   ⇒ **在生產上這個序列不存在，本規則結構上不可能 firing。**
+#   這**不是**生產保護，也**不**代表生產的停止交易閘門受監控；它守的是
+#   「有人跑 `-live` 時，卡住的 halt 要看得見」。
+#   刻意**不**加 `absent(atlas_live_risk_gate_halt_trading)` 規則：那會讓生產
+#   永久誤報（序列本來就不該存在），正是 repo 內被否決的形狀
+#   （#1972／#1975、FU-20261016-10「有規則、沒指標 ⇒ 假的安心」）。
+#   重新啟用/生效條件：live 路徑回到生產（屆時本規則自動生效，無需改檔）。
+#
+# 為什麼要有這條（FU-20261016-32）
+#   `SetHaltTrading` 的三個寫入端原本全為 0 生產呼叫者 ⇒ 硬停分支不可達；
+#   5a（PR #2279）已把電路斷路器鏡射進閘門，閘門本體是活的。缺的是**看得見**：
+#   在此之前 halt 旗標沒有任何對外曝露（Orchestrator.Status() 不含它、無 alert）。
+#
+# 值班（研究路徑）
+#   1. 確認旗標與電路狀態一致（兩者應該同向）：
+#        docker exec atlas-go curl -s localhost:18080/metrics | grep -E "atlas_live_risk_gate_halt_trading|circuit_breaker_state"
+#   2. 看斷路器為什麼停在 Halted/Paused（單日虧損門檻／連續停損／冷卻）：
+#        docker logs atlas-go --since 2h 2>&1 | grep -E "circuit_breaker|trading_restricted"
+#   3. 旗標與電路**不一致**（電路 Normal 而旗標仍 1）⇒ 迴圈沒有跑完最後一次鏡射，
+#      或閘門被手動 SetHaltTrading 打開（目前沒有對外的操作面）。
+#   4. 不要用 silence 當處置：這條規則的價值就在「卡住要看得見」。
+
+groups:
+  - name: atlas_live_risk_gate
+    interval: 30s
+    rules:
+      - alert: AtlasLiveRiskGateHaltStuck
+        expr: |
+          atlas_live_risk_gate_halt_trading == 1
+          and on()
+          (up{job="atlas-go"} == 1)
+        for: 15m
+        labels:
+          severity: warning
+          service: atlas
+          component: live-risk-gate
+          incident_ref: "FU-20261016-32"
+        annotations:
+          summary: "live 風控閘門的停止交易旗標持續為真（每一張單都會被硬停分支拒絕）"
+          description: |
+            atlas_live_risk_gate_halt_trading 連續 15 分鐘為 1（= 3 個
+            intraday cycle；IntradayInterval 預設 5 分鐘）⇒ live 風控閘門會以
+            "trading halted" 拒絕每一張單（RiskGate.Check 的硬停分支），
+            而 up{job="atlas-go"} = 1 ⇒ 服務活著，這是真的卡住的旗標，不是
+            目標掉線造成的凍結值。
+
+            ⚠️ 生產者範圍：本序列只由研究保留的 `-live` 引擎輸出（生產跑 `-api`，
+            `-live` 已於 #2072 從生產 compose 移除）⇒ 在生產上本規則不可能 firing。
+            看到它 firing 代表**有人正在跑 `-live`**（研究／本機），此時照下面查。
+
+            先查什麼（依序）:
+            1. 旗標與電路狀態是否同向（正常應該同向）:
+               docker exec atlas-go curl -s localhost:18080/metrics | grep -E "atlas_live_risk_gate_halt_trading|circuit_breaker_state"
+            2. 斷路器停在 Halted/Paused 的原因（單日虧損門檻／連續停損／冷卻期）:
+               docker logs atlas-go --since 2h 2>&1 | grep -E "circuit_breaker|trading_restricted"
+            3. 兩者不一致（電路已 Normal 而旗標仍 1）⇒ 最後一次鏡射沒跑完，或有人以
+               SetHaltTrading 手動開啟（目前沒有對外的操作面）；不要只調門檻或加
+               silence —— 那會把「卡住」變成「看起來沒卡住」。
+          runbook_url: "https://github.com/kaecer68/atlas-go/blob/main/docs/specs/exported-risk-symbols-audit-20261016.md"

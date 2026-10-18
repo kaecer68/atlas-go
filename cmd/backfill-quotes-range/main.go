@@ -49,7 +49,14 @@
 //	backfill-quotes-range -start 2026-03-02 -end 2026-06-24              # 全 store 既有標的
 //	backfill-quotes-range -start 2026-03-02 -end 2026-06-24 -symbols 2330,2317
 //	backfill-quotes-range -start 2026-03-02 -end 2026-06-24 -dry-run    # 只抓與統計，不寫入
+//	backfill-quotes-range -start 2026-03-02 -end 2026-06-24 -source fugle_quotes_range
 //	backfill-quotes-range -start 2026-03-02 -end 2026-06-24 -pg-dsn "$DATABASE_URL" -workdir /path/to/atlas
+//
+// 來源（-source，預設 finmind_quotes_range）：可切到 fugle_quotes_range（Fugle
+// historical candles）。加這個旗標的理由是**配額**——FinMind 每日上限耗盡時
+// （fatalUpstreamError 立即中止），原本沒有替代來源，資料修復只能停擺。兩個值
+// 都是 repo 內**已存在**的 provider 路徑，本 CLI 只做轉接。未知的值一律 fail
+// loud（不靜默退回 FinMind）：靜默退回會讓「換來源」變成「以為換了、其實沒換」。
 package main
 
 import (
@@ -86,12 +93,19 @@ const (
 	// （<workDir>/data/state —— 平台既有的權威位置，跨 process 的每日上限
 	// 就是靠所有 process 共用這一個狀態檔才成立）。
 	defaultStateDirRel = "data/state"
-	// quotesRangeSource 是本 CLI 寫入 quotes 的 producer 標籤。
+	// quotesRangeSource 是本 CLI 寫入 quotes 的**預設** producer 標籤
+	// （-source 的預設值）。
 	//
 	// 比 marketdata 的 provider 身分（"finmind"）精確一級：事後稽核要能分辨
 	// 某一列是 per-day 補的（"finmind_backfill"，internal/monitoring）還是
 	// 本 CLI 的 range 補的。
 	quotesRangeSource = "finmind_quotes_range"
+	// fugleRangeSource 是 -source fugle_quotes_range 寫入的 producer 標籤。
+	//
+	// 與 fugle_client.go 內部的 "fugle_candles"（per-day on-demand 快取）分開：
+	// 同一句「這一列是 Fugle 的區間回補寫的」要能被稽核查出來，而 per-day 快取
+	// 與 range 回補的窗口語意不同。
+	fugleRangeSource = "fugle_quotes_range"
 	// allSymbolsKeyword 讓 -symbols all 與「省略 -symbols」同義
 	// （shell wrapper 傳空字串時比較不容易出錯）。
 	allSymbolsKeyword = "all"
@@ -101,11 +115,22 @@ const (
 	defaultSuffix = ".TW"
 )
 
+// quoteSourceNames 是 -source 的可選值，順序固定（供 -h 與錯誤訊息使用；
+// 單一來源，不讓說明文字與驗證清單各自漂移）。
+//
+// 只列 repo 內**已存在**的 provider 路徑：finmind_quotes_range =
+// marketdata.FinMindClient.GetStockPriceRange；fugle_quotes_range =
+// marketdata.FugleClient.GetHistoricalCandles。
+var quoteSourceNames = []string{quotesRangeSource, fugleRangeSource}
+
 type cliConfig struct {
 	start   time.Time // UTC 午夜（見檔頭「日期一律是 UTC 午夜」）
 	end     time.Time // UTC 午夜
 	symbols []string  // 空 = 由 store 既有鍵推導
 	backend string
+	// source 是 -source 的解析結果（producer 標籤）。空 = quotesRangeSource
+	// （測試直接建 cfg 時；見 effectiveSource）。
+	source string
 	// resolvedBackend 是 resolveBackend 的結果（run() 填入；供摘要輸出）。
 	// 空 = 只有 -backend（測試直接建 cfg 時）。
 	resolvedBackend string
@@ -148,6 +173,7 @@ func run(args []string, out io.Writer) error {
 		startFlag  = fs.String("start", "", "回補起日 YYYY-MM-DD（必填，含頭）")
 		endFlag    = fs.String("end", "", "回補迄日 YYYY-MM-DD（預設：今天，以 Asia/Taipei 日曆日為準）")
 		symbolsRaw = fs.String("symbols", "", "逗號分隔的標的（2330 → 2330.TW；也可寫 2330.TW）。空或 all = 用 store 內既有的標的鍵")
+		source     = fs.String("source", quotesRangeSource, "資料來源（= 寫入列的 producer 標籤）："+strings.Join(quoteSourceNames, "|"))
 		backend    = fs.String("backend", "", "儲存後端 jsonl|sqlite|postgres（預設：讀 ATLAS_STORE_BACKEND；不得硬編 sqlite）")
 		workDir    = fs.String("workdir", defaultWorkDir, "atlas repo root；postgres 後端讀 <workdir>/sql/migrations，也是 FinMind 配額狀態目錄")
 		pgDSN      = fs.String("pg-dsn", "", "PostgreSQL DSN（預設：$DATABASE_URL）；僅 postgres 後端需要")
@@ -182,6 +208,13 @@ func run(args []string, out io.Writer) error {
 			start.Format("2006-01-02"), end.Format("2006-01-02"))
 	}
 
+	// 來源先驗證再碰 store／上游：未知值不得有任何副作用（不能先開池、更不能
+	// 先發請求），否則「打錯字」會變成一次白跑的配額消耗。
+	resolvedSource, err := resolveQuoteSource(*source)
+	if err != nil {
+		return err
+	}
+
 	appCfg := config.Load()
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
@@ -205,13 +238,47 @@ func run(args []string, out io.Writer) error {
 	cfg := cliConfig{
 		start: start, end: end, symbols: symbols,
 		backend: *backend, resolvedBackend: resolved, workDir: *workDir, pgDSN: *pgDSN,
-		force: *force, dryRun: *dryRun,
+		source: resolvedSource, force: *force, dryRun: *dryRun,
 	}
-	fetcher, err := newFetcher(appCfg, stateDirFor(*workDir, *stateDir))
+	fetcher, err := buildRangeFetcher(resolvedSource, appCfg, stateDirFor(*workDir, *stateDir))
 	if err != nil {
 		return err
 	}
 	return runWith(ctx, cfg, fetcher, store, out)
+}
+
+// resolveQuoteSource 驗證 -source 並回傳正規化後的值。
+//
+// 未知值**必須**報錯（不靜默退回預設）：靜默退回會讓打錯字的呼叫者以為換了
+// 來源，實際仍在打同一個（可能已耗盡配額的）上游。訊息列出全部可選值。
+func resolveQuoteSource(raw string) (string, error) {
+	s := strings.ToLower(strings.TrimSpace(raw))
+	if s == "" {
+		// flag 有預設值，走到這裡代表呼叫端顯式給了空字串 —— 視為打錯字。
+		return "", fmt.Errorf("empty -source: valid values are %s", strings.Join(quoteSourceNames, ", "))
+	}
+	for _, name := range quoteSourceNames {
+		if s == name {
+			return name, nil
+		}
+	}
+	return "", fmt.Errorf("unknown -source %q: valid values are %s", raw, strings.Join(quoteSourceNames, ", "))
+}
+
+// buildRangeFetcher 依 -source 建出對應的 provider（**唯一**的分派點）。
+//
+// 每個分支都只走 repo 內已存在的路徑；沒有「猜一個 provider 名字」的空間。
+func buildRangeFetcher(source string, appCfg config.Config, stateDir string) (stockPriceRangeFetcher, error) {
+	switch source {
+	case quotesRangeSource:
+		return newFetcher(appCfg, stateDir)
+	case fugleRangeSource:
+		return newFugleFetcher(appCfg, stateDir)
+	default:
+		// resolveQuoteSource 已擋在前面；這裡是「新增可選值卻忘了接 provider」的
+		// 守衛（兩個清單漂移時不會靜默走錯路）。
+		return nil, fmt.Errorf("source %q has no fetcher wired: valid values are %s", source, strings.Join(quoteSourceNames, ", "))
+	}
 }
 
 // newRangeFetcher 建出共用的 FinMind 客戶端（rate limiter ＋ 每日配額 tracker
@@ -242,11 +309,83 @@ func stateDirFor(workDir, explicit string) string {
 	return filepath.Join(workDir, defaultStateDirRel)
 }
 
+// newFugleRangeFetcher 建出共用的 Fugle 客戶端（rate limiter ＋ 每日配額
+// tracker ＋ breaker 都是該 client 的單一實例，與平台其他 Fugle 消費端同一組）。
+//
+// stateDir 與 FinMind 路徑同義：配額狀態檔落在 <workdir>/data/state，跨 process
+// 的每日上限才有效（Fugle 的配額檔名是 fugle_daily_quota.json，與 FinMind 分開）。
+func newFugleRangeFetcher(appCfg config.Config, stateDir string) (stockPriceRangeFetcher, error) {
+	if strings.TrimSpace(appCfg.FugleAPIKey) == "" {
+		// ST1005：訊息不得以大寫字母開頭（"Fugle" 是全小寫字尾的品牌名，
+		// 與未被旗標的 "FinMind" 不同）⇒ 用 "missing ..." 起頭。
+		return nil, errors.New("missing Fugle API key: set FUGLE_API_KEY (the range fetch is authenticated)")
+	}
+	return newFugleRangeFetcherWithClient(marketdata.GetSharedFugleClient(appCfg.FugleAPIKey, stateDir)), nil
+}
+
+// newFugleRangeFetcherWithClient 讓測試注入自帶 httptest transport 的客戶端
+// （不必連網、不需要 key）。
+func newFugleRangeFetcherWithClient(client *marketdata.FugleClient) *fugleRangeFetcher {
+	return &fugleRangeFetcher{client: client}
+}
+
+// fugleRangeFetcher 把 FugleClient.GetHistoricalCandles 轉接成本 CLI 的 range
+// 介面。
+//
+// 兩個 provider 的**鍵形式不同**：quotes 表（與本 CLI 全段）用 2330.TW／
+// 6488.TWO，而 Fugle 的 marketdata API 用裸代碼 —— internal/monitoring/
+// dashboard_api.go 的 warmup 已寫明同一件事（"DefaultSymbols uses \".TW\"
+// suffix; Fugle API uses bare symbols"）。因此本轉接層：
+//
+//  1. 送出前去掉交易所後綴（見 bareSymbol）；
+//  2. 收回後把 Symbol 蓋回 CLI 的鍵形式。第 2 點不是美觀問題：
+//     GetHistoricalCandles 自己會 append ".TW"（fugle_client.go），若原樣寫入
+//     store，列會落在 2330.TW.TW —— 查詢層（LoadQuotes("2330.TW")）看不到，
+//     等於白跑一趟配額。
+//
+// 空結果轉成 marketdata.ErrNoDataForSymbol，與 FinMind 路徑同一語意：對一段
+// 幾十天的窗口而言「一列都沒有」不是暫時性錯誤，CLI 應記 no_data 並繼續下一檔，
+// 而不是把它算成失敗。
+type fugleRangeFetcher struct {
+	client *marketdata.FugleClient
+}
+
+func (f *fugleRangeFetcher) GetStockPriceRange(ctx context.Context, symbol, start, end string) ([]domain.DailyBar, error) {
+	bars, err := f.client.GetHistoricalCandles(ctx, bareSymbol(symbol), start, end)
+	if err != nil {
+		return nil, err
+	}
+	if len(bars) == 0 {
+		return nil, fmt.Errorf("fugle: no candles for %s in %s..%s: %w", symbol, start, end, marketdata.ErrNoDataForSymbol)
+	}
+	for i := range bars {
+		bars[i].Symbol = symbol
+	}
+	return bars, nil
+}
+
+// bareSymbol 把 quotes 的鍵形式（2330.TW／6488.TWO）轉成 Fugle 要的裸代碼。
+//
+// 只去**已知的**交易所後綴；沒有後綴者原樣回傳（Fugle 端本來就吃裸代碼）。
+func bareSymbol(symbol string) string {
+	s := strings.ToUpper(strings.TrimSpace(symbol))
+	for _, suffix := range []string{".TW", ".TWO"} {
+		if strings.HasSuffix(s, suffix) {
+			return strings.TrimSuffix(s, suffix)
+		}
+	}
+	return s
+}
+
 // newFetcher 是 run() 建構 provider 的 seam（生產 = newRangeFetcher）。
+// newFugleFetcher 是同一條 seam 的 Fugle 版本（生產 = newFugleRangeFetcher）。
 //
 // 單元測試換掉它，就能在**不連網、不需要 API key** 的前提下測試「真 flag 解析
 // → 真 store 後端決策 → 真的寫入列」這條完整路徑；生產路徑不覆寫本變數。
 var newFetcher = newRangeFetcher
+
+// newFugleFetcher 是同一個 seam 的 Fugle 版本（見 newFetcher 的說明）。
+var newFugleFetcher = newFugleRangeFetcher
 
 // parseExchangeDay 把 YYYY-MM-DD 解析成**交易所日曆日、以 UTC 午夜表示**。
 //
@@ -336,8 +475,21 @@ func normalizeQuoteSymbol(raw string) string {
 }
 
 // runWith 是可測的核心：fetcher／store／輸出都可由呼叫端注入。
+// effectiveSource 回傳本次寫入要用的 producer 標籤。
+//
+// 空值 = 預設（quotesRangeSource）。這是給**直接建 cliConfig 的呼叫端**（測試、
+// 未來的內部呼叫者）用的，與同檔 backend/resolvedBackend 的 fallback 同形；
+// run() 一律先經 resolveQuoteSource，所以 CLI 路徑不會走到這裡的空值分支。
+func (c cliConfig) effectiveSource() string {
+	if s := strings.TrimSpace(c.source); s != "" {
+		return s
+	}
+	return quotesRangeSource
+}
+
 func runWith(ctx context.Context, cfg cliConfig, fetcher stockPriceRangeFetcher, store ledger.QuoteStore, out io.Writer) error {
 	stats := &runStats{symbols: len(cfg.symbols)}
+	source := cfg.effectiveSource()
 	tradingDays := tradingDaysBetween(cfg.start, cfg.end)
 	window := fmt.Sprintf("%s..%s", cfg.start.Format("2006-01-02"), cfg.end.Format("2006-01-02"))
 	backend := cfg.resolvedBackend
@@ -346,7 +498,7 @@ func runWith(ctx context.Context, cfg cliConfig, fetcher stockPriceRangeFetcher,
 	}
 
 	_, _ = fmt.Fprintf(out, "backfill-quotes-range: plan symbols=%d trading_days=%d window=%s backend=%s source=%s dry_run=%v force=%v (range form: ≤%d upstream calls; per-day form would need ≤%d)\n",
-		len(cfg.symbols), len(tradingDays), window, backend, quotesRangeSource, cfg.dryRun, cfg.force,
+		len(cfg.symbols), len(tradingDays), window, backend, source, cfg.dryRun, cfg.force,
 		len(cfg.symbols), len(cfg.symbols)*len(tradingDays))
 
 	for i, symbol := range cfg.symbols {
@@ -395,7 +547,7 @@ func runWith(ctx context.Context, cfg cliConfig, fetcher stockPriceRangeFetcher,
 				stats.rowsNotWanted++
 				continue
 			}
-			bar.Source = quotesRangeSource
+			bar.Source = source
 			kept = append(kept, bar)
 		}
 
@@ -481,10 +633,13 @@ func fatalUpstreamError(err error) error {
 }
 
 func printSummary(out io.Writer, cfg cliConfig, stats *runStats, window, backend string) {
+	// 來源一律取 effectiveSource（與寫入列同一個值），摘要因此永遠說得出
+	// 「這批列是誰寫的」。
+	source := cfg.effectiveSource()
 	_, _ = fmt.Fprintf(out,
 		"backfill-quotes-range: symbols=%d requests=%d skipped_complete=%d rows_fetched=%d rows_written=%d skipped_not_wanted=%d no_data=%d failures=%d backend=%s source=%s window=%s dry_run=%v force=%v\n",
 		stats.symbols, stats.requests, stats.skippedComplete, stats.rowsFetched, stats.rowsWritten,
-		stats.rowsNotWanted, stats.noData, stats.failures, backend, quotesRangeSource, window, cfg.dryRun, cfg.force)
+		stats.rowsNotWanted, stats.noData, stats.failures, backend, source, window, cfg.dryRun, cfg.force)
 }
 
 // storeDeps 是 store wiring 的可注入依賴：生產走真 atlasdb.Init ＋
