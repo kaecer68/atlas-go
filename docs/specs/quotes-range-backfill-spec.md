@@ -54,9 +54,26 @@ func (c *FinMindClient) GetStockPriceRange(ctx context.Context, symbol, startDat
 backfill-quotes-range \
   -start 2026-03-02 -end 2026-06-24 \
   [-symbols 2330,2317 | 空 = 用 store 內既有標的鍵] \
+  [-source finmind_quotes_range|fugle_quotes_range] \
   [-backend jsonl|sqlite|postgres] [-pg-dsn "$DATABASE_URL"] [-workdir <repo root>] \
   [-dry-run] [-force]
 ```
+
+### 3.0 來源選擇（`-source`）
+
+| 值 | provider 路徑 | 寫入列的 `source` |
+|----|---------------|-------------------|
+| `finmind_quotes_range`（預設） | `marketdata.FinMindClient.GetStockPriceRange`（`TaiwanStockPrice` range 查詢） | `finmind_quotes_range` |
+| `fugle_quotes_range` | `marketdata.FugleClient.GetHistoricalCandles`（`historical/candles`） | `fugle_quotes_range` |
+
+- **為什麼**：FinMind 每日配額耗盡時本 CLI 會立即中止（§3.2 失敗分類），原本**沒有替代來源** ⇒
+  資料修復只能停擺。`-source` 讓同一條命令改打另一個**已存在**的 provider 路徑。
+- **預設不變**：不給 `-source` 與修前完全同形（`finmind_quotes_range`）。
+- **未知值 fail loud**：訊息列出全部可選值；驗證發生在**開 store 之前**（打錯字不得先開池、更不能先發請求）。
+- **鍵形式轉換**：quotes 表用 `2330.TW`／`6488.TWO`，Fugle API 用裸代碼（`internal/monitoring/dashboard_api.go`
+  的 warmup 已寫明同一件事）。轉接層送上游前去後綴、收回後把 `Symbol` 蓋回 CLI 的鍵形式 ——
+  `GetHistoricalCandles` 自己會 append `".TW"`，不蓋回會寫成 `2330.TW.TW`（查詢層看不到）。
+- **空結果語意對齊**：Fugle 空窗口轉成 `marketdata.ErrNoDataForSymbol`，與 FinMind 路徑同分流（記 `no_data` 並繼續）。
 
 ### 3.1 後端決策（完全沿用 #2107／#2118，無例外）
 
@@ -79,7 +96,7 @@ backfill-quotes-range \
 | **既有列不被覆寫** | 只有 `-force` 才重抓整個窗口並覆寫（`-force` 會以空 `name` 覆寫，這是 upsert 語意） |
 | **只寫交易日** | 上游若回了休市日（週末/假日）的列，一律丟棄 —— 休市日的列會污染下游 `ForwardReturn` 的重複偵測（2026-08-23 replay 事故；同一道守門已在 `cmd/backfill-quotes`／`cmd/daily-replay-sync`／`cmd/cron-quote-backfill`） |
 | **日期一律 UTC 午夜** | 見 §4 |
-| **source 標籤** | 寫入列的 `source = "finmind_quotes_range"`（與逐日路徑的 `finmind_backfill` 區分，供事後稽核） |
+| **source 標籤** | 寫入列的 `source` = `-source` 的解析結果（預設 `finmind_quotes_range`，切到 Fugle 時為 `fugle_quotes_range`；與逐日路徑的 `finmind_backfill`／Fugle 逐日快取的 `fugle_candles` 區分，供事後稽核） |
 | **標的鍵形式** | 省略 `-symbols` ⇒ 沿用 store 內既有鍵（原樣，不轉換）；顯式清單的裸代碼（`2330`）補成 `<code>.TW`（生產 FinMind 路徑的形式） |
 | **失敗分類** | 配額用完／IP 被封／breaker open ⇒ **立即中止**（避免把剩餘檔數燒在保證失敗的請求上；2026-09-26 教訓）；`no_data` ⇒ 警告並繼續（1,600 檔裡有一檔下市不該讓整批看起來失敗）；其他錯誤 ⇒ 計數、繼續、最後以非零 exit code 回報 |
 
@@ -123,6 +140,11 @@ ATLAS_STORE_BACKEND=postgres DATABASE_URL="$DATABASE_URL" \
   backfill-quotes-range -start 2026-03-02 -end 2026-06-24 -workdir ~/workspace/atlas
 
 # 2) 中止（配額／SIGINT）後直接重跑同一條指令即可續傳：已完整的標的 requests=0
+
+# 3) FinMind 配額當日耗盡（fatalUpstreamError 立即中止）⇒ 換來源續跑同一個窗口
+#    （已補到的交易日不會重打；寫入列的 source 因此會混合兩種標籤，這是刻意的 provenance）
+FUGLE_API_KEY="$FUGLE_API_KEY" ATLAS_STORE_BACKEND=postgres DATABASE_URL="$DATABASE_URL" \
+  backfill-quotes-range -start 2026-03-02 -end 2026-06-24 -source fugle_quotes_range -workdir ~/workspace/atlas
 ```
 
 - **節奏**：由 FinMind 客戶端**共用** rate limiter 決定（`FINMIND_RATE_LIMIT_PER_HOUR`；
@@ -147,8 +169,10 @@ SELECT count(*) FROM quotes WHERE source = 'finmind_quotes_range';
 |------|------|
 | range 抓取解析 | `internal/marketdata/finmind_stock_price_range_test.go`：單次請求與查詢參數、窗口外列、他人列、同日去重、空結果 typed error、上游錯誤不被誤判為 no-data、UTC 午夜（含負控制） |
 | CLI 單元 | `cmd/backfill-quotes-range/main_test.go`：只補缺、已完整不呼叫上游、一次呼叫/檔、dry-run 不寫、force 覆寫、配額中止、no_data 不失敗、部分失敗回非零、取消、後端決策五條釘子與反假陽性 |
+| CLI 來源選擇 | 同檔：`TestResolveQuoteSource`（合法值正規化／未知值與空字串必紅且列出可選值）、`TestBuildRangeFetcher_RequiresTheSelectedProviderKey`（訊息指名該來源的環境變數）、`TestQuoteSourceNamesAreWired`（清單 ↔ 分派不漂移）、`TestRun_SourceFlagSelectsProvider`（真 flag → 真寫入，預設＝FinMind／顯式＝選中的 provider，另一條 seam 零呼叫）、`TestRun_UnknownSourceFailsLoudlyWithoutSideEffects`（sqlite 檔不得被建出來 ⇒ 驗證在開 store 之前） |
+| Fugle 轉接層（hermetic） | 同檔：`TestBareSymbol`、`TestFugleRangeFetcher_KeyFormConversion`（httptest ＋ host rewrite：上游收到裸代碼、寫回的列是 `2330.TW`）、`TestFugleRangeFetcher_EmptyWindowIsNoData`（空窗口 ⇒ `ErrNoDataForSymbol`） |
 | PG 端到端 | `cmd/backfill-quotes-range/main_integration_test.go`（`//go:build integration`）：生產形狀（宣告 postgres）走真 flag 解析 → 真 wiring → 真寫入；第二次執行 `requests=0` 且列數不變 |
-| 突變紅燈（已實證） | ①拿掉客戶端日期界 ⇒ 窗口外列被寫入（紅）②改回逐日 ⇒ 115 次呼叫（紅）③CLI 送空窗口 ⇒ 呼叫簽章不符（紅）④無 DSN 靜默降級 sqlite ⇒ 三條釘子紅 |
+| 突變紅燈（已實證） | ①拿掉客戶端日期界 ⇒ 窗口外列被寫入（紅）②改回逐日 ⇒ 115 次呼叫（紅）③CLI 送空窗口 ⇒ 呼叫簽章不符（紅）④無 DSN 靜默降級 sqlite ⇒ 三條釘子紅 ⑤`run()` 忽略 `-source`（永遠走 `newFetcher`）⇒ `TestRun_SourceFlagSelectsProvider` 的 explicit_fugle 紅 |
 
 ## 7. 邊界與不確定
 
@@ -159,5 +183,8 @@ SELECT count(*) FROM quotes WHERE source = 'finmind_quotes_range';
 - **未證明**「Range 查詢一定不會回休市日的列」：本 CLI **不依賴**這個假設，而是自行過濾（見 §3.2）；
   過濾掉的列數會出現在摘要中，若長期非零即代表該假設需要重新檢視。
 - **付費窗口**：FinMind 付費層的速率僅影響執行時間，不影響正確性。
+- **Fugle 路徑未做生產端到端驗收**：`fugle_quotes_range` 的轉接層以 httptest 驗證（鍵形式、空窗口語意），
+  **沒有**對真實 Fugle 端點跑過；`historical/candles` 對上櫃（`.TWO`）代碼的回應形式未經實測（轉接層只去掉後綴，
+  交易所由 Fugle 端自行判定）。第一次在生產使用前先 `-dry-run` 看 `fetched` 數。
 - **`name` 欄位**：TaiwanStockPrice 不含股票名稱，本 CLI 寫入的列 `name` 為空字串；
   預設的「不動既有列」語意可避免覆蓋既有名稱。

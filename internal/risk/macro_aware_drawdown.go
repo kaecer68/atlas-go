@@ -239,35 +239,42 @@ func (e *MacroAwareDrawdownEngine) buildRationale(
 	return rationale
 }
 
-// GetPositionSizeAdjustment returns the position size multiplier based on drawdown decision.
+// GetPositionSizeAdjustment returns the drawdown exposure ceiling implied by the
+// decision: the largest share of portfolio value the book may hold in positions.
 //
-// DECLARED ONLY / NOT ENFORCED (FU-20261016-32, verified 2026-10-16).
+// WIRED (FU-20261016-32, k3 decision 5b, 2026-10-18). The ceiling reaches order
+// sizing through exactly one path:
 //
-// The decision itself is computed on the production path — System.evaluateDrawdown
-// (orchestrator/system_risk_session.go:380) calls Evaluate, and StrategyEvolver
-// consumes decision.Action — but the exposure cap never reaches position sizing:
-//   - this accessor has no caller (production or test),
-//   - CalculatePortfolioAdjustment, the other reader of decision.MaxExposure, has
-//     no caller either,
-//   - the breakdown fields FinalMaxExposure / FinalPercentage are only filled by
-//     EvaluateWithPortfolio, whose only caller is cmd/stress-test.
+//	MacroAwareDrawdownEngine.Evaluate           System.evaluateDrawdown, before each session run
+//	  → GetPositionSizeAdjustment(decision)     System.applyExposureCapForDecision
+//	  → sim.Engine.WithExposureCap(cap)         System.applyDrawdownExposureCap
+//	  → buy-order sizing in sim.Engine.RunDay
 //
-// In other words the DrawdownLevel.MaxExposure table (defaults: 1.0 / 0.85 / 0.65
-// / 0.40 / 0.10) describes an intention, not a live cap. Do not read in-review
-// numbers as "the platform caps exposure at 10% in an emergency".
+// System.RunDailySimulation and System.runReplaySimulation both call
+// applyDrawdownExposureCap before the engine runs, so the ceiling is set per
+// session from the same quotes the post-run evaluation reads. Removing that call
+// is the rollback: without it the engine holds no ceiling and the pre-wiring
+// behavior returns. internal/orchestrator/drawdown_exposure_cap_test.go fails
+// when either the wire point or the call site is removed.
 //
-// Wiring it is a production risk-behavior change, so it is proposed (see
-// FU-20261016-32) and not applied here. Re-certification conditions (all of them):
-//  1. An owner decision on where the cap binds (portfolio weight engine, order
-//     sizing, or the sim engine's per-trade gate) and on what it multiplies.
-//  2. Proof the chosen site does not double-apply with the existing
-//     PortfolioRiskAdjuster.AdjustWeights caps (15% / 10% / 5% / 0 weights), which
-//     are themselves only reachable from cmd/stress-test.
-//  3. An end-to-end test: DrawdownEmergency decision ⇒ realized exposure ≤
-//     MaxExposure on the production path.
-//  4. Removal of this entry from
-//     internal/risk/exported_risk_levers_wiring_test.go and closing
-//     FU-20261016-32 in the same commit.
+// Semantics enforced: an absolute ceiling on total exposure (sum of position
+// market values / portfolio value), which is how CalculatePortfolioAdjustment
+// reads the same field and how the DrawdownLevel table reads
+// (1.0 / 0.85 / 0.65 / 0.40 / 0.10). It is NOT a multiplier on existing
+// positions: the ceiling bounds how much new buying is still allowed and never
+// liquidates the existing book — de-risking weights is
+// PortfolioRiskAdjuster.AdjustWeights, which stays unreachable from production.
+// An emergency decision therefore stops new buying once exposure is above 10%,
+// but does not force a sell-down.
+//
+// Reachability caveat: Evaluate reaches at most DrawdownSevere (0.40) on the
+// production path; DrawdownEmergency (0.10) needs the escalation step in
+// EvaluateWithIndustry / EvaluateWithPortfolio, whose only caller is
+// cmd/stress-test. The mechanism is tested at the emergency level, but the
+// production decision path cannot produce that level yet.
+//
+// CalculatePortfolioAdjustment, the other reader of decision.MaxExposure, still
+// has no caller and is not part of this path.
 func (e *MacroAwareDrawdownEngine) GetPositionSizeAdjustment(decision *MacroAwareDrawdownDecision) float64 {
 	return decision.MaxExposure
 }

@@ -5815,6 +5815,34 @@ gen_routes_determinism_test.go: PASS（同輸入兩次呼叫逐位元組相同�
      （`system_risk_session.go:380`），但 `decision.MaxExposure` 的兩個讀取者（本方法、`CalculatePortfolioAdjustment`）
      **都 0 呼叫者**，`EvaluateWithPortfolio` 與 `PortfolioRiskAdjuster.AdjustWeights` 的唯一呼叫者是 `cmd/stress-test`
      ⇒ `DrawdownLevel.MaxExposure`（1.0/0.85/0.65/0.40/0.10）只是一張意圖表，緊急回撤不會把曝險壓到 10%。
+     **處置（2026-10-18，5b，PR [#2284](https://github.com/kaecer68/atlas-go/pull/2284)；branch `fix/20261016-maxexposure-sizing-wire`）：已接線 —— 生效層＝下單 sizing 層。**
+     ① **接線點**：`System.applyDrawdownExposureCap`（`system_risk_session.go`）在每個 session **開跑前**評估回撤決策
+     （與執行後 `updateCapitalMetrics` 同一組輸入：當日 quotes ＋ sector snapshot ⇒ 兩次評估一致），
+     `System.applyExposureCapForDecision` 以 `GetPositionSizeAdjustment(decision)` 讀出 `MaxExposure`，
+     再 `sim.Engine.WithExposureCap(cap)` 落到**下單 sizing 層**：`sim.Engine.RunDay` 於買方 sizing 前把上限換成
+     notional 預算（`exposureBudget = cap × portfolio value − 既有曝險`），legacy 與 optimizer 兩條買方路徑共用同一預算
+     （每筆扣減 ⇒ 整場新買 notional ≤ 預算）。**接線在既有下單路徑上、不是新發明**：
+     模擬引擎是唯一真的在 size 並發出 `domain.Order` 的路徑；實盤 orchestrator 沒有 sizing 點
+     （訂單送到它手上已 size 完，且 `Orchestrator.ExecuteOrder` 0 生產呼叫者）。
+     ② **條件②（不與 `PortfolioRiskAdjuster` 重複套用）已證明不重疊**：`AdjustWeights` 只被 `cmd/stress-test`
+     與自身測試呼叫（該工具自建 weight map、**不跑模擬引擎** ⇒ 收不到本接線設的上限），生產路徑則只跑引擎 sizing、
+     **不建構** `PortfolioRiskAdjuster`；且兩者量的是不同東西（它＝**單一部位權重**上限 15/10/5/0，
+     本接線＝**組合總曝險**上限）。
+     ③ **條件③（端到端）**：`internal/orchestrator/drawdown_exposure_cap_test.go` —— `DrawdownEmergency`（0.10，
+     取自 `risk.DefaultDrawdownLevels`）⇒ 實測曝險 **0.090001**；同一場未接線 ⇒ **0.960092**；
+     `RunDailySimulation` 走紅燈總經（VIX 65 ⇒ `MacroRiskRed` ⇒ **`DrawdownSevere` 0.40**）⇒ 實測 **0.390015**
+     （覆蓋生產入口的呼叫點）。`internal/sim/engine_exposure_cap_test.go` 另有 sizing 層單元測試
+     （含「既有曝險已高於上限 ⇒ 0 筆新買」與 optimizer 路徑）。
+     ④ **回滾**：移除 `RunDailySimulation`／`runReplaySimulation` 的 `applyDrawdownExposureCap` 呼叫（或
+     `WithExposureCap` 那一行）即回現狀；負向證明（兩處突變）見下。
+     ⑤ **★ 根因更正（讀碼，本條敘述的不精確處）**：生產決策路徑（`Evaluate`）**到不了** `DrawdownEmergency` ——
+     `determineAction` 對 Red 最多回 `DrawdownSevere`（0.40），升級到 Emergency 只發生在
+     `EvaluateWithIndustry`／`EvaluateWithPortfolio`，而兩者唯一呼叫者仍是 `cmd/stress-test`
+     ⇒ 即使接線完成，生產上「緊急回撤把曝險壓到 10%」**仍不成立**（實際會壓到 40%）。
+     本條原文「緊急回撤不會把曝險壓到 10%」在接線後依然正確，但原因已變成**層級不可達**而非**上限未接**；
+     要真正到 10% 需另一次決策（是否把 industry／portfolio 升級接進生產）。
+     ⑥ **已知邊界（本接線不做的事）**：上限只約束**新買**，**不強制賣出**既有部位（超過上限時只是停止新買）；
+     把既有部位降到上限屬**組合權重**決策（`PortfolioRiskAdjuster` 那一層），5b 明示不採。
 
 - **★ 動手前對 F-item 敘述的更正三處**（讀碼結果）：
   ① 「`ModulatePosition` 的輸入 `CycleStatusCard` 已在生產消費」→ 卡片有生產消費者，但**這條輸入鏈沒有**：
@@ -5850,6 +5878,22 @@ gen_routes_determinism_test.go: PASS（同輸入兩次呼叫逐位元組相同�
   ⑤ 5a 的兩個殘留缺口：開盤（`ResetDayState` ⇒ `CircuitNormal`）後到下一個 intraday cycle 之間，閘門可能仍持有
   前一日的 halt（fail-closed 一個週期，未在 `onMarketOpen` 同步）；`RiskGate.Status()` 的 `halt_trading`
   **沒有任何對外曝露者**（`Orchestrator.Status()` 不含它、無 alert 規則）⇒ 重新認證條件 3 的告警路徑仍未完成。
+  **處置（2026-10-18，PR #2286）：條件 3 完成（對外曝露 ＋ 告警路徑）。** 新增 `/metrics` gauge
+  `atlas_live_risk_gate_halt_trading`（0/1，`Orchestrator.onIntradayCycle` 在鏡射電路狀態之後每輪記錄，
+  `internal/live/orchestrator.go` 的 `recordRiskGateHalt`）＋ 規則
+  `monitoring/rules/atlas_live_risk_gate_alerts.yml` 的 `AtlasLiveRiskGateHaltStuck`
+  （warning, `for: 15m` = 3 個 intraday cycle，以 `up{job="atlas-go"} == 1` 為閘門避免與
+  `AtlasGoTargetDown` 重複 paging）＋ `monitoring/tests/atlas_live_risk_gate_test.yml` 6 個 promtool 案例
+  （firing／剛開起來不響／掉線不響／序列不存在不響／已解除會 resolve）；常數
+  `internal/live.MetricRiskGateHaltTrading` 與規則檔／fixture 之間有防鏽守衛
+  （`internal/live/risk_gate_metrics_rule_test.go`）。**未新增 heartbeat、未做 log-based 規則。**
+  **★ 本條敘述的更正（查證後）**：條件 3 的告警路徑在**生產上不會 firing** —— 本序列只由**研究保留**的
+  `-live` 引擎輸出，而生產容器跑 `atlas -api`（`Dockerfile` 的 `CMD ["-api"]`）、`-live` 已於
+  **#2072／E34** 從生產 compose 移除（依據 `docs/reference/product-positioning.md` §3「非產品主線」）
+  ⇒ 生產 `-api` 下該序列不存在，規則結構上不可能評估。此事寫在常數註解與規則檔檔頭的最前面，
+  並以 promtool 案例 E 編成可執行規格（序列不存在 + `up=1` ⇒ 沉默）；刻意**不加** `absent(...)`
+  規則（那會讓生產永久誤報，正是 #1972／#1975 與 `FU-20261016-10` 被否決的形狀）。
+  本條**第一個**殘留缺口（開盤後一個週期的 fail-closed halt）**未動**。
   ④ 附錄 A 其餘 84 條候選未判定。
 
 
