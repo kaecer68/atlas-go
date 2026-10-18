@@ -51,7 +51,7 @@ services:
       # 的 prod 不安全訊號。詳見 .claude/skills/atlas-imac-prod-guard/SKILL.md
       # （該 skill 已標 RETIRED，只留事件歷史說明；現行主機 = Mac Mini，見 docs/operations/local-deploy.md）。
       - ATLAS_SKIP_DOCKER=1
-      - DATABASE_URL=postgres://atlas:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required - set it in the shell env or the repo-root .env (gitignored); never hardcode it here}@host.docker.internal:55432/atlas?sslmode=disable
+      - DATABASE_URL=postgres://${DB_USER:?DB_USER is required - set it in the shell env or the repo-root .env (gitignored); never hardcode it here}:${DB_PASSWORD:?DB_PASSWORD is required - set it in the shell env or the repo-root .env (gitignored); never hardcode it here}@host.docker.internal:55432/atlas?sslmode=disable
       - ATLAS_BROKER_NONCE_REDIS_URL=redis://host.docker.internal:6379/8
     volumes:
       - ./data:/app/data
@@ -107,8 +107,8 @@ services:
     container_name: atlas-postgres
     restart: unless-stopped
     environment:
-      - POSTGRES_USER=atlas
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required - see the note above; never hardcode it here}
+      - POSTGRES_USER=${DB_USER:?DB_USER is required - see the note above; never hardcode it here}
+      - POSTGRES_PASSWORD=${DB_PASSWORD:?DB_PASSWORD is required - see the note above; never hardcode it here}
       - POSTGRES_DB=atlas
       - TS_TUNE_MEMORY=2GB
       - TS_TUNE_NUM_CPUS=4

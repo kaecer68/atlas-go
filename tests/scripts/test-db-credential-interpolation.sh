@@ -19,8 +19,13 @@
 #   ⑨ 突變自證（資料層）：把乾淨 fixture 的 ${DB_USER} 改回字面 atlas ⇒ ① 的斷言必須翻紅
 #   ⑩ 突變自證（守門層）：把守門的 exit 1 中和 ⇒ ② 的斷言必須翻紅（證明本測試有鑑別力）
 #   ⑪ 接線契約：Makefile ci-quick 仍呼叫守門；ci-gate 仍跑本測試
-#   ⑫ 真 repo 現況為綠（守門對 repo 根 ⇒ rc=0）
+#   ⑫ 真 repo 現況為綠（守門對 repo 根 ⇒ rc=0，且覆蓋宣告含 docs/operations 的兩檔）
 #   ⑬ 本測試不得動到呼叫者 repo（HEAD／index／受測腳本 sha256 皆不變）
+#   ⑭ 含 docs/operations/ 的乾淨 fixture ⇒ rc=0（擴大範圍不得造成假紅；.env.example 空值 key 不被 A/B 誤判）
+#   ⑮ docs/operations/docker-compose.prod.yml 的字面 POSTGRES_USER ⇒ rc=1，紅燈指名該檔（新覆蓋）
+#   ⑯ docs/operations/docker-compose.crons.yml 的 DSN 字面 user ⇒ rc=1，紅燈指名該檔（新覆蓋）
+#   ⑰ `${VAR:?訊息}`（冒號在 `${…}` 內）算插值 ⇒ rc=0；把守門的 depth 判準突變掉 ⇒ 該 fixture 必翻紅（有鑑別力）
+#   ⑱ docs/operations/ 在、底下卻沒有 compose ⇒ rc=2（覆蓋消失是 fail-closed，不是通過）
 #
 # 執行： bash tests/scripts/test-db-credential-interpolation.sh
 set -uo pipefail
@@ -73,6 +78,54 @@ services:
   exporter:
     environment:
       - DATA_SOURCE_NAME=postgresql://${DB_USER}:${DB_PASSWORD:-atlas}@postgres:5432/atlas?sslmode=disable
+YML
+  printf 'DB_USER=\nDB_PASSWORD=\n' > "$d/.env.example"
+  echo "$d"
+}
+
+# 乾淨 fixture ＋ docs/operations/ 的兩份部署 compose（#2288 未涵蓋的第二條部署路徑）
+mk_clean_with_docs_ops() {
+  local d; d="$(mk_clean "$1")"
+  mkdir -p "$d/docs/operations"
+  cat > "$d/docs/operations/docker-compose.prod.yml" <<'YML'
+services:
+  atlas:
+    environment:
+      - DATABASE_URL=postgres://${DB_USER}:${DB_PASSWORD}@host.docker.internal:55432/atlas?sslmode=disable
+  postgres:
+    environment:
+      - POSTGRES_USER=${DB_USER}
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+      - POSTGRES_DB=atlas
+YML
+  cat > "$d/docs/operations/docker-compose.crons.yml" <<'YML'
+services:
+  cron-geo-ingest:
+    environment:
+      - DATABASE_URL=postgres://${DB_USER}:${DB_PASSWORD}@host.docker.internal:55432/atlas?sslmode=disable
+YML
+  echo "$d"
+}
+
+# 本 PR 在真檔用的 fail-closed 形式：`${VAR:?訊息}`（冒號在 `${…}` 內）
+mk_colon_form() {
+  local d="$TMP/$1"; mkdir -p "$d/docs/operations"
+  cat > "$d/docker-compose.yml" <<'YML'
+services:
+  atlas:
+    environment:
+      - DATABASE_URL=postgres://${DB_USER:?DB_USER is required - see note}:${DB_PASSWORD:?DB_PASSWORD is required - see note}@postgres:5432/atlas?sslmode=prefer
+  postgres:
+    environment:
+      - POSTGRES_USER=${DB_USER:?DB_USER is required - see note}
+      - POSTGRES_PASSWORD=${DB_PASSWORD:?DB_PASSWORD is required - see note}
+      - POSTGRES_DB=atlas
+YML
+  cat > "$d/docs/operations/docker-compose.crons.yml" <<'YML'
+services:
+  cron-geo-ingest:
+    environment:
+      - DATABASE_URL=postgres://${DB_USER:?DB_USER is required - see note}:${DB_PASSWORD:?DB_PASSWORD is required - see note}@host.docker.internal:55432/atlas?sslmode=disable
 YML
   printf 'DB_USER=\nDB_PASSWORD=\n' > "$d/.env.example"
   echo "$d"
@@ -224,6 +277,106 @@ if negproof_expect 0 "⑫ 真 repo（--root ${REPO}）⇒ rc=0" "$LOG" -- bash "
 else
   bad "⑫ 真 repo 竟紅 ⇒ 上游化的內容沒過自己的守門"; negproof_show_log "$LOG"
 fi
+negproof_expect_output "docs/operations/docker-compose.prod.yml" "$LOG" \
+  "⑫ 真 repo 的覆蓋宣告必須含 docs/operations 的 prod compose（否則第二條部署路徑沒被掃到）" \
+  || bad "⑫ 真 repo 沒掃到 docs/operations 的 prod compose（#2288 的缺口復活）"
+negproof_expect_output "docs/operations/docker-compose.crons.yml" "$LOG" \
+  "⑫ 真 repo 的覆蓋宣告必須含 docs/operations 的 crons compose" \
+  || bad "⑫ 真 repo 沒掃到 docs/operations 的 crons compose"
+
+# ── ⑭ 含 docs/operations/ 的乾淨 fixture ⇒ rc=0（擴大範圍不得造成假紅）─────────
+DIR_OPS="$(mk_clean_with_docs_ops ops-clean)"
+LOG="$TMP/14-ops-clean.log"
+if negproof_expect 0 "⑭ 含 docs/operations/（全插值）⇒ rc=0" "$LOG" -- run_guard "$DIR_OPS"; then
+  ok "⑭ 擴大掃描範圍後，乾淨 fixture 仍綠（沒有假紅）"
+else
+  bad "⑭ 擴大範圍造成假紅（例如 .env.example 的空值 key 被 A/B 誤判）"; negproof_show_log "$LOG"
+fi
+negproof_expect_output "docs/operations/docker-compose.prod.yml" "$LOG" \
+  "⑭ 覆蓋宣告必須列出 docs/operations 的 prod compose（否則「掃不到」也會綠）" \
+  || bad "⑭ 覆蓋宣告沒列出 prod compose"
+negproof_expect_output "docs/operations/docker-compose.crons.yml" "$LOG" \
+  "⑭ 覆蓋宣告必須列出 docs/operations 的 crons compose" || bad "⑭ 覆蓋宣告沒列出 crons compose"
+if grep -qF "❌" "$LOG"; then bad "⑭ 乾淨 fixture 出現誤報（❌）"; else ok "⑭ 乾淨 fixture 零誤報"; fi
+
+# ── ⑮ docs/operations 的 compose 字面 POSTGRES_USER ⇒ rc=1（本 PR 的新覆蓋）────────
+DIR_OPS_U="$TMP/ops-user-literal"
+cp -R "$DIR_OPS" "$DIR_OPS_U"
+sed -i.bak 's/^      - POSTGRES_USER=\${DB_USER}$/      - POSTGRES_USER=atlas/' \
+  "$DIR_OPS_U/docs/operations/docker-compose.prod.yml"
+if grep -qF -- "- POSTGRES_USER=atlas" "$DIR_OPS_U/docs/operations/docker-compose.prod.yml"; then
+  ok "⑮ fixture 真的把 docs/operations 的 user 改成字面（探針非空）"
+else
+  bad "⑮ 突變沒生效 ⇒ 後續斷言是空的"
+fi
+LOG="$TMP/15-ops-user.log"
+if negproof_expect 1 "⑮ docs/operations 的字面 POSTGRES_USER ⇒ 必須紅" "$LOG" -- run_guard "$DIR_OPS_U"; then
+  ok "⑮ 守門對第二條部署路徑有牙齒（#2288 的缺口已補）"
+else
+  bad "⑮ 守門仍掃不到 docs/operations ⇒ 缺陷復活"; negproof_show_log "$LOG"
+fi
+negproof_expect_output "docs/operations/docker-compose.prod.yml" "$LOG" \
+  "⑮ 紅燈必須指名 docs/operations 的那一檔" || bad "⑮ 紅燈沒指名檔案（無法定位）"
+
+# ── ⑯ docs/operations 的 crons DSN 字面 user ⇒ rc=1（新覆蓋）────────────────────
+DIR_OPS_C="$TMP/ops-crons-user-literal"
+cp -R "$DIR_OPS" "$DIR_OPS_C"
+sed -i.bak 's#postgres://\${DB_USER}:\${DB_PASSWORD}@#postgres://atlas:${DB_PASSWORD}@#' \
+  "$DIR_OPS_C/docs/operations/docker-compose.crons.yml"
+if grep -qF -- "postgres://atlas:\${DB_PASSWORD}@" "$DIR_OPS_C/docs/operations/docker-compose.crons.yml"; then
+  ok "⑯ fixture 真的把 crons DSN 的 user 改成字面"
+else
+  bad "⑯ 突變沒生效 ⇒ 後續斷言是空的"
+fi
+LOG="$TMP/16-ops-crons.log"
+if negproof_expect 1 "⑯ docs/operations crons 的 DSN 字面 user ⇒ 必須紅" "$LOG" -- run_guard "$DIR_OPS_C"; then
+  ok "⑯ 守門對 crons 的第二條路徑有牙齒"
+else
+  bad "⑯ 守門仍掃不到 crons compose"; negproof_show_log "$LOG"
+fi
+negproof_expect_output "docs/operations/docker-compose.crons.yml" "$LOG" \
+  "⑯ 紅燈必須指名 crons compose" || bad "⑯ 紅燈沒指名 crons compose"
+negproof_expect_output "DSN 的 user 不是插值" "$LOG" "⑯ 紅燈必須指名 DSN user" || bad "⑯ 紅燈沒指名 DSN user"
+
+# ── ⑰ `${VAR:?訊息}`（冒號在 `${…}` 內）算插值 ⇒ rc=0；突變 depth 判準 ⇒ 必翻紅 ──
+DIR_COLON="$(mk_colon_form colon-form)"
+LOG="$TMP/17-colon.log"
+if negproof_expect 0 "⑰ \${VAR:?訊息} 形式算插值 ⇒ rc=0" "$LOG" -- run_guard "$DIR_COLON"; then
+  ok "⑰ 帶冒號的 fail-closed 形式被接受（naive split 會假紅）"
+else
+  bad "⑰ \${VAR:?訊息} 被誤判紅 ⇒ 守門的 userinfo 切分有缺陷"; negproof_show_log "$LOG"
+fi
+MUT_DEPTH="$TMP/guard-naive-split.sh"
+if grep -qF 'if (c == ":" && depth == 0)' "$SRC"; then
+  ok "⑰ 突變錨點存在（改的是行為行，不是註解）"
+else
+  bad "⑰ 突變錨點不存在 ⇒ 下面的自證是空的"
+fi
+sed 's/if (c == ":" \&\& depth == 0)/if (c == ":")/' "$SRC" > "$MUT_DEPTH"
+if cmp -s "$SRC" "$MUT_DEPTH"; then
+  bad "⑰ 守門突變沒有生效（depth 判準行沒被改到）"
+else
+  rc=0
+  bash "$MUT_DEPTH" --root "$DIR_COLON" > "$TMP/17-mutated.log" 2>&1 || rc=$?
+  if [ "$rc" -eq 1 ]; then
+    ok "⑰ 突變 depth 判準後同一 fixture 翻紅 ⇒ ⑰ 的 rc=0 斷言確實抓得到 naive split（有鑑別力）"
+  else
+    bad "⑰ 突變後仍 rc=$rc ⇒ ⑰ 的斷言對「切分缺陷」不敏感"
+  fi
+fi
+
+# ── ⑱ 覆蓋消失（docs/operations 在、底下沒有 compose）⇒ rc=2 ────────────────────
+DIR_OPS_GONE="$TMP/ops-coverage-gone"
+cp -R "$DIR_OPS" "$DIR_OPS_GONE"
+rm -f "$DIR_OPS_GONE/docs/operations/docker-compose.prod.yml" \
+      "$DIR_OPS_GONE/docs/operations/docker-compose.crons.yml"
+LOG="$TMP/18-coverage-gone.log"
+if negproof_expect 2 "⑱ docs/operations 存在卻沒有 compose 被掃到 ⇒ rc=2（覆蓋消失 fail-closed）" "$LOG" -- run_guard "$DIR_OPS_GONE"; then
+  ok "⑱ 覆蓋消失不會被當成通過"
+else
+  bad "⑱ 覆蓋消失竟不 fail loud"; negproof_show_log "$LOG"
+fi
+if no_false_pass "$LOG"; then ok "⑱ 覆蓋消失時不印合規宣告"; else bad "⑱ 覆蓋消失仍印合規宣告（假綠）"; fi
 
 # ── ⑬ 本測試不得動到呼叫者 repo ───────────────────────────────────────────────
 if [ "$(git -C "$REPO" rev-parse HEAD 2>/dev/null || echo none)" = "$CALLER_HEAD" ] \
@@ -243,4 +396,4 @@ if [ "$FAIL" -gt 0 ]; then
   echo "❌ test-db-credential-interpolation: $PASS passed, $FAIL failed"
   exit 1
 fi
-echo "✅ test-db-credential-interpolation: $PASS passed（插值必綠／字面 user・password・DSN 兩段必紅／模板帶值必紅／缺檔 fail loud／未知旗標 rc=2／資料層＋守門層突變自證／接線契約／真 repo 綠／呼叫者不變）"
+echo "✅ test-db-credential-interpolation: $PASS passed（插值必綠／字面 user・password・DSN 兩段必紅／模板帶值必紅／缺檔 fail loud／未知旗標 rc=2／docs/operations 第二條部署路徑必紅且覆蓋宣告可驗／\${VAR:?訊息} 形式不假紅＋depth 突變自證／覆蓋消失 rc=2／資料層＋守門層突變自證／接線契約／真 repo 綠／呼叫者不變）"
