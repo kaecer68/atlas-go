@@ -2882,7 +2882,7 @@ rc=1                            # ⇒ 修前無宣告常數、無守門測試：
 
 ### FU-20260930-03 — `quotes` 壞值（**非公司行為**）待資料修復：`close<=0` ＋ 10 倍價 ＋ 垃圾列
 
-- **狀態**：`open`
+- **狀態**：`done`（2026-10-18：**程式半邊** ＝ 寫入端守門 ＋ 監控；**資料面**（既有 109 列 `close<=0`／10 倍價／垃圾列）仍待 operator，見文末處置）
 - **記錄日期**：2026-09-30
 - **來源**：`#2151`（公司行為調整）調查；`#2095`（`-14`(b)）複核時另一 lane 以官方還原序列逐檔驗證
 - **現況**（生產實測 2026-09-30）：
@@ -2897,8 +2897,44 @@ rc=1                            # ⇒ 修前無宣告常數、無守門測試：
   ③與 `FU-20260930-04` 併做（先盤點再決定修法）。
 - **與 `FU-20260930-04` 的分工（2026-10-16）**：消費端半邊**已於 `FU-20260930-04` 收斂**
   （壞值不再被讀成 −100%；見 `docs/specs/close-positive-consumer-audit-20261016.md`）。
-  本條**仍 `open`**：`close<=0` 的 109 列與 `5904.TW` 10 倍價還在資料裡，且**跳空倍數在消費端仍會穿透**
-  （擋它屬值語意變更 ⇒ 僅提案）。**資料修復是 operator 動作**，不在程式 PR 內。
+  本條的**程式半邊**已於 2026-10-18 收斂（寫入端守門；監控化改由 a2a-dev 的 exporter 查詢負責，見文末處置；`SaveQuote` 敘述有誤）。
+  **仍待 operator** 的是資料面：`close<=0` 的 109 列與 `5904.TW` 10 倍價還在資料裡，
+  且**跳空倍數在消費端仍會穿透**（擋它屬值語意變更 ⇒ 僅提案）。**資料修復是 operator 動作**，
+  不在程式 PR 內。
+
+- **處置（2026-10-18，本車道 PR）**：**先更正稽核敘述** —— 派工寫的 `SaveQuote`（`postgres_quote.go:46`／
+  `quote_store_sqlite.go:57`）**不存在**（`grep -rn SaveQuote --include=*.go` ⇒ 0 命中）；那兩行是
+  `QuoteStore.RecordQuotes` 的 INSERT 語句。真正的寫入端是 `QuoteStore.RecordQuotes` 的三個實作
+  （sqlite／postgres／jsonl），修前**都沒有任何價格守門** ⇒ `close<=0`（與 `NaN`）可入庫（已用同探針在
+  修前版本跑紅，見下）。
+  - **① 寫入端守門**（新檔 `internal/ledger/quote_write_guard.go`）：`close` 非正／非有限 ⇒ **拒收該列**；
+    `open/high/low` **只守非有限**。★ 這是對派工敘述「及 open/high/low」的**刻意更正**：
+    `Open/High/Low=0` 而 `close` 可用是**合法列**（`cmd/cron-quote-backfill/main.go:129-131` 只填
+    `Close`／`Volume`；`postgres_quote_test.go` 的既有案例同形）⇒ 對 OHL 也守非正會丟掉可用的收盤價
+    （資料損失比缺陷本身更糟）。單列壞值**不中斷整批**；**全批被拒** ⇒ 回傳
+    `*ledger.QuoteRejectionsError`（`errors.Is(err, ledger.ErrAllQuotesRejected)`），呼叫端不會誤以為
+    該 symbol 已落地（既有呼叫端都是 per-symbol `failed++`／WARN，不會整批中止）。每列一則 WARN
+    （`quote_write_rejected`，帶 symbol/date/source；每 process 上限 100 行，之後一則 suppression 行）。
+  - **② 監控化：本 repo 不做（刻意）**。原設計是新增 counter
+    `atlas_quotes_invalid_close_total{backend,reason}` ＋ 一條 metric-based 規則；2026-10-18
+    **root 改派** ⇒ 監控化改由 **a2a-dev 的 postgres_exporter extended query** 負責（純設定、
+    直接查 `quotes` 現況值、**能涵蓋既有壞列**），並要求本 repo **移除**已寫好的 counter／rule，
+    避免與 exporter **重複計數／重複告警**。已移除（`internal/monitoring/quote_write_metrics.go`、
+    `monitoring/rules/quotes_write_validity_alerts.yml` 及其 promtool 測試、`bootstrap` 接線），
+    只保留寫入端 WARN 作審計軌跡。**本 repo 因此沒有「壞值」指標**；告警判讀見
+    `docs/operations/quotes-freshness-runbook.md` §6。
+  - **測試**（同 commit）：`internal/ledger/quote_write_guard_test.go`（predicate 10 例；sqlite 三案例＋
+    批次不中斷＋WARN 內容＋warn cap；jsonl 同契約）、
+    `internal/ledger/postgres_quote_guard_integration_test.go`（`-tags=integration`：PG 三案例＋
+    **SQL 直查**證明被拒列真的沒入庫＋全批拒收）。
+  - **修前紅燈原文**（同一探針先跑修前版本，CP 檔還原後 sha256 相符）：
+    sqlite `LoadQuotes: scan quote row: sql: Scan error on column index 6, name "close": converting NULL to
+    float64 is unsupported`（`NaN` 被寫成 NULL ⇒ 讀回整個 symbol 失敗，比 −100% 更糟）；
+    jsonl 讀回 2 列（含 `Close:0`）；PG `refused rows reached the table: 2`；
+    全批拒收 `expected an error when every row is rejected`。
+  - **仍未做（本條不宣稱完成的部分）**：**資料修復**（109 列 `close<=0`、`5904.TW` 10 倍價、`2380` 垃圾列）
+    仍待 operator；`cmd/migrate-data` 直下 SQL 的寫入**不受**此守門保護；10 倍價在消費端仍會穿透（僅提案）。
+
 
 ---
 
