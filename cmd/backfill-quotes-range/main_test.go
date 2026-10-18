@@ -13,6 +13,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -1023,4 +1026,301 @@ func TestRun_QuotaStateDirLandsUnderWorkdir(t *testing.T) {
 			t.Fatalf("%s 出現在 cwd(%s)：runtime state 汙染了套件目錄", name, cwd)
 		}
 	}
+}
+
+// ─── -source（provider 選擇）────────────────────────────────────────────────
+
+// TestResolveQuoteSource 釘住 -source 的驗證面：合法值（容忍大小寫與前後空白）
+// 正規化後回傳；**未知值與空字串一律報錯**（不靜默退回預設來源），且訊息要列出
+// 全部可選值 —— 否則打錯字的人只看到「失敗」，看不到正確拼法。
+func TestResolveQuoteSource(t *testing.T) {
+	ok := map[string]string{
+		"finmind_quotes_range":   quotesRangeSource,
+		"  finmind_quotes_range": quotesRangeSource,
+		"FUGLE_QUOTES_RANGE":     fugleRangeSource,
+		"fugle_quotes_range":     fugleRangeSource,
+	}
+	for in, want := range ok {
+		got, err := resolveQuoteSource(in)
+		if err != nil {
+			t.Errorf("resolveQuoteSource(%q): unexpected error %v", in, err)
+			continue
+		}
+		if got != want {
+			t.Errorf("resolveQuoteSource(%q) = %q, want %q", in, got, want)
+		}
+	}
+
+	for _, bad := range []string{"", "   ", "finmind", "fugle", "twse", "finmind_quotes_range_2"} {
+		got, err := resolveQuoteSource(bad)
+		if err == nil {
+			t.Errorf("resolveQuoteSource(%q) = %q, want an error（未知來源不得靜默退回預設）", bad, got)
+			continue
+		}
+		for _, name := range quoteSourceNames {
+			if !strings.Contains(err.Error(), name) {
+				t.Errorf("resolveQuoteSource(%q) err = %v, want it to list %q", bad, err, name)
+			}
+		}
+	}
+}
+
+// TestBuildRangeFetcher_RequiresTheSelectedProviderKey：換來源最常見的失敗形狀
+// 是缺對應的 API key ⇒ 訊息必須指名**該來源**要設哪個環境變數（不是一句通用的
+// 「missing key」，否則從訊息看不出該補哪一個）。
+func TestBuildRangeFetcher_RequiresTheSelectedProviderKey(t *testing.T) {
+	empty := config.Config{}
+	if _, err := buildRangeFetcher(quotesRangeSource, empty, t.TempDir()); err == nil ||
+		!strings.Contains(err.Error(), "FINMIND_API_KEY") {
+		t.Errorf("finmind without a key: err = %v, want it to mention FINMIND_API_KEY", err)
+	}
+	if _, err := buildRangeFetcher(fugleRangeSource, empty, t.TempDir()); err == nil ||
+		!strings.Contains(err.Error(), "FUGLE_API_KEY") {
+		t.Errorf("fugle without a key: err = %v, want it to mention FUGLE_API_KEY", err)
+	}
+}
+
+// TestQuoteSourceNamesAreWired 是「可選值清單 ↔ 分派」不能漂移的守衛：
+// quoteSourceNames 裡每個值都必須真的被 buildRangeFetcher 接住（否則 -h 會列出
+// 一個永遠失敗的選項），而清單外的值必須失敗。
+func TestQuoteSourceNamesAreWired(t *testing.T) {
+	restoreFM := swapFetcher(t, &fakeRangeFetcher{})
+	defer restoreFM()
+	restoreFG := swapFugleFetcher(t, &fakeRangeFetcher{})
+	defer restoreFG()
+
+	for _, name := range quoteSourceNames {
+		f, err := buildRangeFetcher(name, config.Config{}, t.TempDir())
+		if err != nil {
+			t.Errorf("buildRangeFetcher(%q): %v", name, err)
+			continue
+		}
+		if f == nil {
+			t.Errorf("buildRangeFetcher(%q) returned a nil fetcher", name)
+		}
+	}
+	if _, err := buildRangeFetcher("not_a_source", config.Config{}, t.TempDir()); err == nil {
+		t.Fatal("buildRangeFetcher must fail loudly for a value outside quoteSourceNames")
+	}
+}
+
+// TestRun_SourceFlagSelectsProvider 是 -source 的端到端釘子：走真 flag 解析 →
+// 真後端決策 → 真 sqlite 寫入，provider 由兩條 seam 換成 fake（不連網、不需 key）。
+// 預設（不給 -source）必須維持原行為（FinMind）。
+// 突變（run 忽略 -source、永遠走 newFetcher）⇒ 第二列紅。
+func TestRun_SourceFlagSelectsProvider(t *testing.T) {
+	cases := []struct {
+		name       string
+		args       []string
+		wantSource string
+	}{
+		{"default_is_finmind", nil, quotesRangeSource},
+		{"explicit_finmind", []string{"-source", "finmind_quotes_range"}, quotesRangeSource},
+		{"explicit_fugle", []string{"-source", "fugle_quotes_range"}, fugleRangeSource},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			t.Setenv("ATLAS_STORE_BACKEND", "sqlite")
+			t.Setenv("ATLAS_SQLITE_PATH", filepath.Join(dir, "atlas.db"))
+
+			fm := &fakeRangeFetcher{bars: [][]domain.DailyBar{barsFor("2330.TW", "2026-03-02", "2026-03-03")}}
+			fg := &fakeRangeFetcher{bars: [][]domain.DailyBar{barsFor("2330.TW", "2026-03-02", "2026-03-03")}}
+			restoreFM := swapFetcher(t, fm)
+			restoreFG := swapFugleFetcher(t, fg)
+
+			args := append([]string{
+				"-start", "2026-03-02", "-end", "2026-03-03", "-symbols", "2330", "-workdir", dir,
+			}, tc.args...)
+			var out bytes.Buffer
+			err := run(args, &out)
+			restoreFM()
+			restoreFG()
+			if err != nil {
+				t.Fatalf("run: %v\n%s", err, out.String())
+			}
+
+			want, other := fm, fg
+			if tc.wantSource == fugleRangeSource {
+				want, other = fg, fm
+			}
+			if len(want.calls) != 1 || !strings.HasPrefix(want.calls[0], "2330.TW ") {
+				t.Fatalf("%s calls = %v, want exactly one call on the 2330.TW key", tc.wantSource, want.calls)
+			}
+			if len(other.calls) != 0 {
+				t.Fatalf("the other provider was called: %v（來源分派走錯了）", other.calls)
+			}
+
+			store, err := ledger.NewSQLiteQuoteStoreFromPath(filepath.Join(dir, "atlas.db"))
+			if err != nil {
+				t.Fatalf("reopen store: %v", err)
+			}
+			loaded, err := store.LoadQuotes("2330.TW", mustDay(t, "2026-03-02"), mustDay(t, "2026-03-03"))
+			if err != nil {
+				t.Fatalf("load: %v", err)
+			}
+			if len(loaded) != 2 {
+				t.Fatalf("rows = %d, want 2\n%s", len(loaded), out.String())
+			}
+			for _, b := range loaded {
+				if b.Source != tc.wantSource {
+					t.Errorf("row source = %q, want %q", b.Source, tc.wantSource)
+				}
+			}
+			if !strings.Contains(out.String(), "source="+tc.wantSource) {
+				t.Errorf("summary must name the selected source:\n%s", out.String())
+			}
+		})
+	}
+}
+
+// TestRun_UnknownSourceFailsLoudlyWithoutSideEffects 釘住兩件事：訊息要列出可選值，
+// 且未知來源必須在**開 store 之前**就被擋下 —— 否則打錯字會先開池、再白跑一趟配額。
+// 「sqlite 檔沒被建出來」就是這個順序的證據（同套件既有的 #2107 釘子手法）。
+func TestRun_UnknownSourceFailsLoudlyWithoutSideEffects(t *testing.T) {
+	dir := t.TempDir()
+	sqlitePath := filepath.Join(dir, "atlas.db")
+	t.Setenv("ATLAS_STORE_BACKEND", "sqlite")
+	t.Setenv("ATLAS_SQLITE_PATH", sqlitePath)
+
+	var out bytes.Buffer
+	err := run([]string{
+		"-start", "2026-03-02", "-end", "2026-03-03", "-symbols", "2330", "-workdir", dir, "-source", "fugle",
+	}, &out)
+	if err == nil {
+		t.Fatal("-source fugle must fail loudly（未知來源不得靜默退回預設）")
+	}
+	if !strings.Contains(err.Error(), "unknown -source") {
+		t.Errorf("err = %v, want it to say unknown -source", err)
+	}
+	for _, name := range quoteSourceNames {
+		if !strings.Contains(err.Error(), name) {
+			t.Errorf("err = %v, want it to list %q", err, name)
+		}
+	}
+	if _, statErr := os.Stat(sqlitePath); statErr == nil {
+		t.Fatalf("未知來源沒有在開 store 之前被擋下：%s 被建出來了", sqlitePath)
+	}
+}
+
+// ─── Fugle 轉接層（hermetic：httptest ＋ host rewrite，不連網）──────────────
+
+// fugleRewriteTransport 把硬編在 GetHistoricalCandles 裡的 api.fugle.tw 導到測試
+// 伺服器（與 internal/marketdata 的 retry_test.go 同法；該 host 不可由外部覆寫）。
+type fugleRewriteTransport struct{ target string }
+
+func (tr *fugleRewriteTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	u, err := url.Parse(tr.target)
+	if err != nil {
+		return nil, err
+	}
+	req.URL.Scheme = u.Scheme
+	req.URL.Host = u.Host
+	return http.DefaultTransport.RoundTrip(req)
+}
+
+// newTestFugleFetcher 建出指向 httptest 伺服器的 Fugle 轉接層（配額狀態檔落在
+// t.TempDir()，不在 cwd）。
+func newTestFugleFetcher(t *testing.T, ts *httptest.Server) *fugleRangeFetcher {
+	t.Helper()
+	c := marketdata.NewFugleClientWithStateDir("test-key", t.TempDir())
+	c.SetHTTPClient(&http.Client{Transport: &fugleRewriteTransport{target: ts.URL}})
+	return newFugleRangeFetcherWithClient(c)
+}
+
+func TestBareSymbol(t *testing.T) {
+	cases := map[string]string{
+		"2330.TW":   "2330",
+		"6488.TWO":  "6488",
+		"2330":      "2330",
+		" 2330.tw ": "2330",
+		"":          "",
+	}
+	for in, want := range cases {
+		if got := bareSymbol(in); got != want {
+			t.Errorf("bareSymbol(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+// TestFugleRangeFetcher_KeyFormConversion 釘住兩個方向的鍵形式轉換：
+// 送上游的是**裸代碼**（Fugle API 的形式），寫回 store 的列是 CLI 的鍵形式
+// （2330.TW／6488.TWO）。少了第二個方向，列會落在 2330.TW.TW（fugle_client.go
+// 自己 append ".TW"），查詢層看不到 —— 等於白跑一趟配額。
+func TestFugleRangeFetcher_KeyFormConversion(t *testing.T) {
+	var paths []string
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		paths = append(paths, r.URL.Path+"?"+r.URL.RawQuery)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"data":[
+			{"date":"2026-03-03","open":100,"high":105,"low":99,"close":103,"volume":1000},
+			{"date":"2026-03-02","open":98,"high":102,"low":97,"close":101,"volume":900}
+		]}`))
+	}))
+	defer ts.Close()
+
+	f := newTestFugleFetcher(t, ts)
+	bars, err := f.GetStockPriceRange(context.Background(), "2330.TW", "2026-03-02", "2026-03-03")
+	if err != nil {
+		t.Fatalf("GetStockPriceRange: %v", err)
+	}
+	if len(bars) != 2 {
+		t.Fatalf("bars = %d, want 2", len(bars))
+	}
+	for _, b := range bars {
+		if b.Symbol != "2330.TW" {
+			t.Errorf("bar symbol = %q, want 2330.TW（fugle_client 自己 append .TW ⇒ 必須蓋回）", b.Symbol)
+		}
+		if b.Date.UTC() != b.Date {
+			t.Errorf("date %v is not UTC midnight", b.Date)
+		}
+	}
+	if len(paths) != 1 {
+		t.Fatalf("requests = %v, want exactly 1", paths)
+	}
+	if !strings.Contains(paths[0], "/2330?") || strings.Contains(paths[0], "2330.TW") {
+		t.Errorf("upstream path = %q, want the bare code 2330 (Fugle API 的形式)", paths[0])
+	}
+
+	// 上櫃（.TWO）同樣去後綴，而且**回來的鍵必須是 6488.TWO**：
+	// GetHistoricalCandles 一律 append ".TW"，不蓋回就會得到 6488.TWO.TW ——
+	// 這是本測試對「Symbol 蓋回」那一行的鑑別力所在（`.TW` 的案例看不出差異，
+	// 因為 append 的結果剛好等於原鍵）。
+	bars2, err := f.GetStockPriceRange(context.Background(), "6488.TWO", "2026-03-02", "2026-03-03")
+	if err != nil {
+		t.Fatalf("GetStockPriceRange(.TWO): %v", err)
+	}
+	if len(paths) != 2 || !strings.Contains(paths[1], "/6488?") || strings.Contains(paths[1], "6488.TWO") {
+		t.Errorf("upstream paths = %v, want the bare code 6488 on the second call", paths)
+	}
+	for _, b := range bars2 {
+		if b.Symbol != "6488.TWO" {
+			t.Errorf("bar symbol = %q, want 6488.TWO（fugle_client append .TW ⇒ 6488.TWO.TW 是錯的鍵）", b.Symbol)
+		}
+	}
+}
+
+// TestFugleRangeFetcher_EmptyWindowIsNoData：空結果必須轉成 ErrNoDataForSymbol，
+// 與 FinMind 路徑同語意 —— 否則 CLI 會把「這檔沒有資料」算成失敗（failures>0 ⇒
+// 整批回非零），而不是記一筆 no_data 繼續下一檔。
+func TestFugleRangeFetcher_EmptyWindowIsNoData(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"data":[]}`))
+	}))
+	defer ts.Close()
+
+	f := newTestFugleFetcher(t, ts)
+	_, err := f.GetStockPriceRange(context.Background(), "2330.TW", "2026-03-02", "2026-03-03")
+	if !errors.Is(err, marketdata.ErrNoDataForSymbol) {
+		t.Fatalf("err = %v, want marketdata.ErrNoDataForSymbol", err)
+	}
+}
+
+// swapFugleFetcher 換掉 newFugleFetcher seam 並回傳還原函式。
+func swapFugleFetcher(t *testing.T, f stockPriceRangeFetcher) func() {
+	t.Helper()
+	prev := newFugleFetcher
+	newFugleFetcher = func(config.Config, string) (stockPriceRangeFetcher, error) { return f, nil }
+	return func() { newFugleFetcher = prev }
 }
