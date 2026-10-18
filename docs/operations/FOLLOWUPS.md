@@ -5921,6 +5921,204 @@ gen_routes_determinism_test.go: PASS（同輸入兩次呼叫逐位元組相同�
   ③ `go test ./internal/calibration/ -run 'RiskVol|SingleStepWindow'`：修前紅（`method = "percentile_based"`）／
   修後綠 ✓；④ 窗外確實拒寫：log `skipped_single_step_window`（`ratio` 與窗印在同一行）✓
 
+### FU-20261016-35 — `StateStore.Save` 的 `positions_current.json` **非決定性**：`s.positions`（結構欄位 map）→ slice → `json.Marshal` 未排序 ⇒ 同一份輸入兩次存檔位元組不同（**實盤持倉檔**）
+
+- **狀態**：`done`
+- **記錄日期**：2026-10-16 ／ **完成於**：2026-10-16（PR [#2283](https://github.com/kaecer68/atlas-go/pull/2283)；branch `fix/20261016-positions-determinism-and-threshold-readers`）
+- **嚴重度**：**P2** —— 沒有資料錯誤（集合完全相同），但「同樣的輸入」不等於「同樣的位元組」：檔案雜湊、
+  replay／`git diff` 比對、golden 測試全失去可驗證性。**而且這是實盤持倉檔**：下游有 dashboard
+  （`/api/dashboard/portfolio-state`）、稅務快照、風控規則引擎在讀。
+- **來源**：`FU-20261016-33`（PR #2268）「第二輪型別感知的第二意見」掃描的**高信心**列
+  `internal/live/store/store.go:145-152`，該輪明示「真同形，本條未修 ⇒ 建議另配 ID」。
+
+- **★ 對來源敘述的更正（讀碼，附證據）**：
+  ① **檔名不對** ✗：來源寫 `state/positions.json`；實際常數是
+     `PositionsStateFile = "positions_current.json"`（`internal/live/store/store.go:22`），
+     實際路徑 `<basePath>/state/positions_current.json`（`:143`）。`state/positions.json` 是**另一個檔**
+     （session 目錄 `sessions/<id>/positions.json`，`internal/monitoring/api/tax/handlers.go:96`）⇒ 不可混用。
+  ② 行號修前為 **`:144-152`**（來源寫 `:145-152`；slice 自 `:144` 起、marshal `:148`、`WriteFileAtomic` `:152`）。
+  ③ 來源「函式內無排序」**成立** ✓，但**同檔還有一個同根因的姊妹站點**來源未列：
+     `GetState()`（修前 `:333-336`）也把同一個 map 展成 slice，而它的**順序是可觀察的**
+     （餵 `internal/monitoring/rules.go` 的規則引擎，見下）⇒ 本條**一併修**（同一根因、同一檔、同一契約）。
+
+- **根因（指名到行）**：`s.positions` 是 `map[string]domain.Position`（`store.go:39`）；
+  `Save()`（`:122`）以 `for _, p := range s.positions`（修前 `:145-147`）直接 append 成
+  `[]domain.Position`，**未排序**就 `json.Marshal`（`:148`）→ `WriteFileAtomic`（`:152`）⇒
+  Go 的 map 走訪序每次執行都隨機 ⇒ **同一份輸入兩次存檔得到不同位元組**。
+  與 `FU-20261016-31`／`-33` 同一根因形狀：**把 map 的走訪序當成輸出序**。
+  差別：這次的 map 是**結構欄位**（`s.positions`），而 `-33` 的掃描器只認「同函式內宣告的 map 識別字」
+  ⇒ 第一輪漏掉，第二輪（`go/ast`＋`go/types`）才抓到。
+
+#### §0 最小複現（修前 `origin/main`；探針具鑑別力：同輸入兩次 ⇒ 比 sha256／比順序）
+
+契約測試 `internal/live/store/store_positions_determinism_test.go`（32 檔 fixture：N=32 時兩次獨立 map
+走訪序相同的機率是 1/32! ≈ 0 ⇒ 斷言有鑑別力；2–3 檔的 fixture 會 ~50% 假綠，**不算探針**）。
+
+修前紅燈原文（`go test ./internal/live/store/ -run Determinism -count=1`，rc=1）：
+```
+store_positions_determinism_test.go:109: positions file is not byte-identical across two runs of the same input (sha256 543e8913f3405c96… vs e3cd24c81bc384a2…)
+store_positions_determinism_test.go:130: saved positions are not in ascending symbol order: index 0 = "2615.TW", index 1 = "2301.TW"
+store_positions_determinism_test.go:198: snapshot positions are not in ascending symbol order: index 0 = "3008.TW", index 1 = "1605.TW"
+```
+
+#### 修法（只做排序，不動任何值）
+
+| 檔 | 改動 | 排序契約 |
+|---|---|---|
+| `internal/live/store/store.go` | 新增 `sortedPositionsLocked()`（`:367`）：map → slice ＋ `slices.SortFunc(…, strings.Compare(a.Symbol, b.Symbol))`；`Save()`（`:151`）與 `GetState()`（`:337`）改用它 | `Symbol` 遞增。map 以 `Position.Symbol` 為鍵（`UpdatePosition` `:206`、`LoadLastPositions` `:434`）⇒ `Symbol` 唯一、此為**全序** |
+| 同上 | 契約寫進 `Save()` doc（`:123`）與 `sortedPositionsLocked()` doc（`:357`） | 明寫「任何把這個 map 變成輸出（檔案位元組／快照／雜湊輸入／HTTP body）的生產者都必須排序」 |
+
+未改：JSON 欄位／schema、任何數值、原子寫入（tmp→rename）、權限、`s.events`／`s.recommendations`
+（本來就是 slice，append 序即決定序）。**無值語意變更** ✓（§2 有逐筆值比對證明）。
+
+#### §消費者檢查（先查誰讀這個檔／這份快照，確認排序無副作用）
+
+| 檔 | 讀者 | 與順序的關係 |
+|---|---|---|
+| `state/positions_current.json` | `internal/monitoring/service/live.go:399`（`LoadPortfolioState`） | **自己就 `slices.SortFunc(..., strings.Compare(a.Symbol, b.Symbol))`** ⇒ 本條的排序鍵與**既有 canonical 序一致**（這是選 `Symbol` 的依據） |
+| 同上 | `internal/monitoring/api/live/handlers.go:492` | 依 `MarketValue` 遞減重排；與本條無關（但見 §同型掃描） |
+| 同上 | `internal/monitoring/api/system/handlers.go:327` | 只 `totalMV += p.MarketValue`（聚合，順序無關） |
+| 同上 | `internal/monitoring/service/live.go:266` | 只 `len(posMap)` |
+| 同上 | `internal/monitoring/api/tax/handlers.go:120-140` | 建 `sellPrices`／`dividends` map ＋ 對 `snapshots` 求和 ⇒ 聚合；回傳陣列序改變、集合不變 |
+| `GetState()` 快照 | `internal/monitoring/rules.go:64` → `EvaluateRules` | `high_position_concentration`（`:196`）與 `unrealized_loss_position`（`:214`）**回傳第一個命中者** ⇒ 修前**告警訊息裡的 symbol 是隨機的**，修後固定為 `symbol` 最小者（**由非決定性變決定性**，觸發與否不變） |
+
+#### 負向證明
+
+**① 修前紅**：見 §0（rc=1）。
+
+**② 突變（只移除排序行）⇒ 契約測試必紅**：把 `sortedPositionsLocked()` 內的 `slices.SortFunc(…)`
+三行刪掉（`grep -n SortFunc` 先定位，確認改的是**行為行**不是註解），
+`go test ./internal/live/store/ -run Determinism -count=1` ⇒ **rc=1**：
+```
+store_positions_determinism_test.go:109: positions file is not byte-identical across two runs of the same input (sha256 cea6b02e6a856b60… vs ec209ba9a325b017…)
+store_positions_determinism_test.go:130: saved positions are not in ascending symbol order: index 1 = "2891.TW", index 2 = "2330.TW"
+store_positions_determinism_test.go:198: snapshot positions are not in ascending symbol order: index 5 = "2882.TW", index 6 = "2303.TW"
+```
+（註：`ContentSetUnchanged` 在突變態**仍為綠**——它守的是「值不變」，**刻意對排序不敏感**；
+有鑑別力的是上面兩條 determinism 探針 ✓）
+
+**③ `cp` 還原並以 sha256 證明**：
+```
+c06decab778a77c95bd0b153c2fd230830ea6372a3d9413c1bca603339837207  /tmp/fu35-36-store.go.fixed.bak
+c06decab778a77c95bd0b153c2fd230830ea6372a3d9413c1bca603339837207  internal/live/store/store.go
+```
+還原後 `go test ./internal/live/store/ -count=1` ⇒ **rc=0**。
+
+**④ 內容集合不變（值語意零變更）**：`ContentSetUnchanged` 逐 symbol 把每筆 position
+以**自己的 JSON 文件**比對（順序無關、值精確）⇒ 32/32 相同（修前後皆綠）。
+
+**⑤ 影響面測試**：`go test ./internal/live/... ./internal/monitoring/... -count=1` ⇒ **rc=0**
+（31 個 `ok`，0 個 FAIL；含 `internal/monitoring/service` 讀檔測試與 `internal/monitoring/rules`）。
+
+#### 新增契約測試（同 commit）
+
+`internal/live/store/store_positions_determinism_test.go`：
+① 同輸入兩份 store ⇒ `positions_current.json` 逐位元組相同（sha256）；
+② 存檔後陣列必須是 `symbol` **嚴格遞增**；
+③ 內容集合不變（逐 symbol 的 JSON 逐位元組相等、無重複 symbol）；
+④ `GetState()` 快照的 `Positions` 亦為 `symbol` 遞增。
+
+#### 同型掃描補充（本條新增；只列清單，皆**未修**）
+
+判準同 `-31`／`-33`（同函式內 `range` 一個 map ＋ 同函式有寫檔／雜湊／序列化）。
+本車道把 AST-lite 掃描**限定在 `internal/live/` ＋ `internal/monitoring/`** 重跑一次 ⇒ 命中 **2** 處：
+`internal/live/store/store.go:369`（＝本條修好的 helper 本身）與
+`internal/monitoring/universe_scheduler.go:1607`（走訪的是 `wl.Symbols`＝**slice**，且 `-33` 已排序）⇒ 無新缺陷。
+人工補查同族：
+
+| 位置 | 形狀 | 判定 |
+|---|---|---|
+| `internal/monitoring/api/live/handlers.go:492` | `slices.SortFunc` 只比 `MarketValue`，**相等時 `return 0`** ⇒ 並列序＝上游 map 走訪序（`LoadLastPositions` 回傳 map） | **HTTP 回應本文序在並列時不穩**（非檔案）；**未修**。若要修：`slices.SortStableFunc` ＋ 以 `symbol` 破並列 |
+| `internal/monitoring/api/tax/handlers.go:120` | 讀檔後建 map 再聚合 | 無缺陷（聚合與順序無關） |
+| `internal/monitoring/api/decision/handlers.go:427` | 走訪 `LoadPortfolioState()` 的 `Positions` | 無缺陷（該函式已排序） |
+
+#### 已知限制
+
+① 排序只加在 `StateStore` 的兩個輸出點。任何**未來新增**的「map → slice → 輸出」生產者若不排序會再犯；
+   契約現在寫在 `sortedPositionsLocked()` 的 doc（`store.go:355-366`），但沒有靜態守衛。
+② 本條只碰 `Symbol` 全序；若日後 `s.positions` 的鍵不再等於 `Position.Symbol`，排序契約需重寫。
+③ 讀者端的 `internal/monitoring/api/live/handlers.go:492`（並列序）**未修**，見上表。
+④ `positions_current.json` 由**舊版**寫入的歷史檔仍是隨機序；本條只保證**修後新寫入**的檔為 canonical 序
+   （讀者本來就會自行排序或聚合，故無相容問題）。
+
+### FU-20261016-36 — `DynamicThresholdEngine` 讀取端**全空**：`GetThreshold`／`GetCurrentThreshold`／`GetStats` **0 個生產呼叫者** ⇒ 引擎算了沒人用（**只提案，待業主決定**）
+
+- **狀態**：`open`（**待業主決定**；本條**只提案、未實作**任何接線）
+- **記錄日期**：2026-10-16
+- **嚴重度**：**P2（產品／政策，非缺陷）** —— 沒有資料錯誤：引擎在生產被建構、被注入、也被餵
+  `SetRiskAppetite`，但**算出來的值沒有任何生產路徑讀取** ⇒ 「動態門檻」目前是**裝飾**。
+  接線會直接改變生產門檻值 ⇒ 依「值語意 ⇒ 只提案」原則，**不得由 agent 自行接線**。
+- **來源**：`FU-20261016-32` 的「已知限制 ②」（`docs/operations/FOLLOWUPS.md:5811`：「`DynamicThresholdEngine`
+  讀取端全空 —— 比 `GetRegimeMultiplier` 大得多的缺口，需改生產門檻計算 ⇒ 未動」）＋ 本輪 root 分派的稽核敘述。
+- **★ 稽核敘述查證結果**：**成立** ✓（§0 逐條複現），但**敘述不完整**，本輪補 4 點：
+  ① **生產有兩個互不相干的實例**：`internal/orchestrator/system.go:418`（進 `StrategyLayer`，**收** `SetRiskAppetite`）
+     與 `internal/orchestrator/composition.go:76`（`WithThresholdEngine(sim.NewDynamicThresholdEngine())` 進 `sim.Engine`，
+     **從未被寫入**）⇒ 任何「把 sim 引擎那個接出來讀」的提案會讀到**空的那個**。
+  ② 零生產引用比原敘述**更大**：`SetBaseThreshold`／`GetRiskAppetite`／`DetectRegime`（此型別）／`RegimeFromDomain`
+     **也全為 0** ⇒ 連 `lastVIX`／`currentRegime`／`baseThreshold` 在生產都**從未被寫入** ⇒
+     **即使接線，也只會回固定值**（conservative 0.80／balanced 0.70／aggressive 0.65），不是「動態」。
+  ③ `GetThresholdEngine()` 有**兩個**：`internal/orchestrator/system_plugin_accessors.go:62` 的唯一呼叫者是
+     `internal/orchestrator/system_coverage_test.go:75`；`internal/sim/engine.go:327` 那個**連測試都沒有** ⇒ 0。
+  ④ **文件假綠（本條只記錄、未修）**：`docs/specs/sim-engine-spec.md:19,21,33` 宣稱 `RunDay` 會用 `thresholdEngine`
+     做「相關性過濾／重複符號過濾」（流程圖第 3 步），但 `RunDay` **完全不引用** `thresholdEngine`
+     （`internal/sim/engine.go` 只有 `:44` 宣告、`:124` 賦值、`:328` getter）⇒ 規格描述的機制**不存在**；
+     `docs/ATLAS_METHODOLOGY.md:24` 也把它列為現行機制。
+
+#### §0 機械式複現（逐字指令；「0 生產呼叫者」的判定式 = 剔除定義行與 `_test.go` 後為空集合）
+
+```console
+$ grep -rn 'GetThreshold(' --include=*.go . | grep -v '^./internal/sim/dynamic_threshold.go'
+./internal/sim/dynamic_threshold_test.go:32,49,62,73,111,195,199,203,215,238      ← 全部 _test.go
+$ grep -rn 'GetCurrentThreshold(' --include=*.go .
+./internal/sim/dynamic_threshold.go:84   (定義)  ;  ./internal/sim/dynamic_threshold_test.go:108,112,119
+$ grep -rn 'GetStats()' --include=*.go . | grep -v portfolio | grep -v conviction   # 同名不同型別須剔除
+./internal/sim/dynamic_threshold.go:170  (定義)  ;  ./internal/sim/dynamic_threshold_test.go:217,239
+$ grep -rn 'calculateThresholdUnsafe' --include=*.go .
+./internal/sim/dynamic_threshold.go:87,90,123,179   ← 只被同檔 GetThreshold／GetStats 呼叫
+$ grep -rn 'NewDynamicThresholdEngine()' --include=*.go .
+./internal/sim/dynamic_threshold.go:43 (定義) ; ./internal/orchestrator/system.go:418 ← 生產
+./internal/orchestrator/composition.go:76 ← 生產（第二個實例） ; 其餘 12 處 _test.go
+$ grep -rn 'thresholdEngine' --include=*.go . | grep -v '_test.go'
+internal/sim/engine.go:44,124,328                       ← 只有宣告／賦值／getter，**無讀取**
+internal/orchestrator/system.go:818,831 ; system_dispatcher.go:121,134   ← 只有 SetRiskAppetite
+$ grep -rn '\.GetThresholdEngine()' --include=*.go .
+./internal/orchestrator/system_coverage_test.go:75      ← 唯一命中（測試）⇒ 0
+$ grep -rn 'SetBaseThreshold|GetRiskAppetite|DetectRegime|RegimeFromDomain' --include=*.go .   # 剔除 realtime 同名
+./internal/sim/dynamic_threshold_test.go:100,135,165,183   ← 全部 _test.go ⇒ 0
+```
+判定式：上述「非定義、非測試」命中集合**皆為空** ⇒ **生產呼叫者 = 0** ✓（每條 `grep` rc=0；輸出即證據）。
+
+#### §1 盤點與提案（全文見 `docs/specs/dynamic-threshold-engine-inert-readers-audit-20261016.md`，457 行）
+
+候選消費者（LIVE = 現在真的在決定門檻／INERT = 目前無生產消費者）：
+
+| # | 位置 | 現行門檻 | 狀態 |
+|---|---|---|---|
+| C1 | `internal/orchestrator/plugin_control.go:41`、`executor_control.go:329`（CRO 信心門檻，RISK_OFF ⇒ ≥70） | 0–100 | **LIVE** |
+| C2 | `internal/sim/engine.go:909`（買入門檻；`:801` 同值）、`engine.go:198` | 0–100 | **LIVE** |
+| C3 | `internal/risk/pre_trade.go:23,38,47`（`MaxCorrelation=0.70`；`Check` 目前無 correlation 規則） | 0–1 | INERT |
+| C4 | `internal/portfolio/sizing.go:284`（`CorrelationThreshold=0.70`） | 0–1 | INERT（整個 Sizer 無生產消費者） |
+| C5 | `internal/portfolio/optimizer_pipeline.go:233-248,250-266`（crisisMode／crossRho；setter 0 生產註冊者） | 0–1 | INERT |
+| C6 | `internal/orchestrator/alpha_discovery.go:22,60`（factorThreshold 0.4） | 0–1 | **LIVE** |
+| C7 | `internal/orchestrator/executor_control.go:185,186`（crowding／anti-correlation） | 0–1 | **LIVE** |
+
+單位註記：引擎輸出 ∈ `[0.40, 0.85]`（0–1 量綱）⇒ 只有 C3／C4／C5 同量綱且預設值都恰為 `0.70`；
+C1／C2 是 0–100 ⇒ 直接接會是**單位錯誤**。
+
+提案（**全部未實作**）：
+- **選項 A（最低風險）**：只把 `GetStats()` 接到**觀測面**（零行為變更）。
+- **選項 B（中風險，需先決定語意）**：把 C2（模擬引擎信心門檻）動態化；**前置**：先解 §1.4 的雙實例問題
+  與「誰餵 VIX／regime」。
+- **選項 C（高風險，前置未滿足）**：把 C3（盤前相關性上限）補齊並動態化。
+- **已排除**：接 C4（Sizer 本身是死旋鈕）；直接刪除型別（會撞 API golden `internal/sim/testdata/sim_api.golden.json`）。
+
+- **待業主決定**：是否把動態門檻接進**任何**生產決策路徑（會直接改變選股／風控門檻值 ⇒ 產品決策，
+  不是工程修正）。在業主決定前本條維持 `open`，**不得**由 agent 自行接線。
+- **已知限制**：① 未判定「誰應該餵 VIX／regime」（`vixFromQuotes` vs `realtime.RegimeDetector` vs
+  `portfolio/regime.go`）—— 這是選項 B 的前置設計問題；② 三處 `0.70` 是否同一設計意圖**只有線索沒有證據**
+  （`WithThresholdEngine` 的 doc 寫 "for correlation-based filtering"，但無 commit／doc 連起來）；
+  ③ `docs/specs/sim-engine-spec.md` 的文件假綠**只記錄未修**（見上 ★④）。
+
 ### FU-20261017-01 — `darwinian.risk_volatility_threshold` 掉到 0.0123（−83%）**是算出來的**：p75 指標指向單一 agent 的日波動（已重算驗證）
 
 - **狀態**：`done`
