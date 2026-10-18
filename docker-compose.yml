@@ -254,6 +254,14 @@ services:
     image: quay.io/prometheuscommunity/postgres-exporter:latest
     container_name: atlas-postgres-exporter
     restart: unless-stopped
+    # F74(a)：quotes 壞值（close<=0）的現況指標。extended query 定義在
+    # ./monitoring/postgres-exporter-queries.yaml（**唯讀**掛載），匯出
+    # atlas_quotes_invalid_close_total，由 monitoring/rules/quotes-invalid-close.yml 判讀。
+    # 只加這兩項；DATA_SOURCE_NAME 維持現狀。
+    command:
+      - "--extend.query-path=/queries.yaml"
+    volumes:
+      - ./monitoring/postgres-exporter-queries.yaml:/queries.yaml:ro
     environment:
       - DATA_SOURCE_NAME=postgresql://atlas:${DB_PASSWORD:-atlas}@postgres:5432/atlas?sslmode=disable
     networks:

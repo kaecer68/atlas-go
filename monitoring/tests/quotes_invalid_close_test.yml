@@ -1,0 +1,93 @@
+# monitoring/tests/quotes_invalid_close_test.yml
+# promtool unit tests（`promtool test rules`）for monitoring/rules/quotes-invalid-close.yml（F74(a)）。
+#
+# 為什麼需要：`promtool check rules` 只驗語法。本檔把「壞列一出現就會 firing、健康時沉默、
+# 未滿 `for: 15m` 不 firing」寫成可執行規格；並做 label/annotation **逐字**比對
+# （annotation 是本告警唯一的處置入口 ⇒ 文案被改壞要紅燈）。
+#
+# ⚠️ expectation 是完整比對（labels ＋ annotations 逐字）。改規則檔文案 ⇒ 必須同步改本檔。
+# 執行（CI: quality.yml 的 monitoring-config job；promtool 版本須與生產一致）:
+#   docker run --rm -v "$PWD:/work" -w /work --entrypoint /bin/promtool \
+#     prom/prometheus:v3.14.0 test rules monitoring/tests/quotes_invalid_close_test.yml
+
+rule_files:
+- ../rules/quotes-invalid-close.yml
+evaluation_interval: 1m
+tests:
+- name: A 健康（現況值 0）⇒ 沉默
+  interval: 1m
+  input_series:
+  - series: atlas_quotes_invalid_close_total
+    values: 0x80
+  alert_rule_test:
+  - eval_time: 1h
+    alertname: AtlasQuotesInvalidClose
+    exp_alerts: []
+- name: B 壞列存在且持續（3 列 ≥ 15m）⇒ firing（labels/annotations 逐字比對）
+  interval: 1m
+  input_series:
+  - series: atlas_quotes_invalid_close_total
+    values: 3x80
+  alert_rule_test:
+  - eval_time: 1h
+    alertname: AtlasQuotesInvalidClose
+    exp_alerts:
+    - exp_labels:
+        severity: warning
+        alertname: AtlasQuotesInvalidClose
+      exp_annotations:
+        summary: quotes 有 3 列 close<=0
+        description: |
+          quotes 出現 close<=0 的列（無收盤應表達為缺值，不是 0）。這些列會被未守門的
+          報酬／波動消費者讀成 −100%（見 FU-20260930-03／FU-20260930-04）。
+          先查什麼（依序）:
+          1. 現況值與日期分佈:
+             docker exec atlas-postgres psql -U atlas -d atlas -Atc "select date, count(*) from quotes where close <= 0 group by date order by date"
+          2. 指標是否真的在更新（避免把「查詢掛掉」讀成「沒有壞列」）:
+             docker exec atlas-postgres-exporter wget -qO- http://127.0.0.1:9187/metrics | grep '^atlas_quotes_invalid_close_total'
+          3. 修資料是 operator 動作（本規則只偵測、不改資料）: 以 on-demand 腳本修
+             （a2a-dev scripts/ops/atlas-quotes-repair.sh，檔頭已標 on-demand only）。
+        known_issue: "F74：既有 3 列（2026-06-25×2、2026-06-29×1）為歷史遺留、非新增；寫入端守門已實作（RecordQuotes 三實作拒收 close<=0，PR #2282），合併後新增即被阻擋"
+- name: 'C 壞列只出現 10 分鐘 ⇒ 沉默（for: 15m 的負向對照）'
+  interval: 1m
+  input_series:
+  - series: atlas_quotes_invalid_close_total
+    values: 0x20 3x10 0x50
+  alert_rule_test:
+  - eval_time: 25m
+    alertname: AtlasQuotesInvalidClose
+    exp_alerts: []
+  - eval_time: 1h
+    alertname: AtlasQuotesInvalidClose
+    exp_alerts: []
+- name: D 由 0 變 3（新增壞列）⇒ 未滿 15 分鐘沉默、滿 15 分鐘 firing
+  interval: 1m
+  input_series:
+  - series: atlas_quotes_invalid_close_total
+    values: 0x5 3x75
+  alert_rule_test:
+  - eval_time: 5m
+    alertname: AtlasQuotesInvalidClose
+    exp_alerts: []
+  - eval_time: 15m
+    alertname: AtlasQuotesInvalidClose
+    exp_alerts: []
+  - eval_time: 30m
+    alertname: AtlasQuotesInvalidClose
+    exp_alerts:
+    - exp_labels:
+        severity: warning
+        alertname: AtlasQuotesInvalidClose
+      exp_annotations:
+        summary: quotes 有 3 列 close<=0
+        description: |
+          quotes 出現 close<=0 的列（無收盤應表達為缺值，不是 0）。這些列會被未守門的
+          報酬／波動消費者讀成 −100%（見 FU-20260930-03／FU-20260930-04）。
+          先查什麼（依序）:
+          1. 現況值與日期分佈:
+             docker exec atlas-postgres psql -U atlas -d atlas -Atc "select date, count(*) from quotes where close <= 0 group by date order by date"
+          2. 指標是否真的在更新（避免把「查詢掛掉」讀成「沒有壞列」）:
+             docker exec atlas-postgres-exporter wget -qO- http://127.0.0.1:9187/metrics | grep '^atlas_quotes_invalid_close_total'
+          3. 修資料是 operator 動作（本規則只偵測、不改資料）: 以 on-demand 腳本修
+             （a2a-dev scripts/ops/atlas-quotes-repair.sh，檔頭已標 on-demand only）。
+        known_issue: "F74：既有 3 列（2026-06-25×2、2026-06-29×1）為歷史遺留、非新增；寫入端守門已實作（RecordQuotes 三實作拒收 close<=0，PR #2282），合併後新增即被阻擋"
