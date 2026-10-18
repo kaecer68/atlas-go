@@ -22,7 +22,6 @@ jobs:
       pull-requests: read
     outputs:
       code: ${{ steps.filter.outputs.code }}
-      ci: ${{ steps.filter.outputs.ci }}
       embedded_docs: ${{ steps.filter.outputs.embedded_docs }}
     steps:
     - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
@@ -31,6 +30,8 @@ jobs:
       with:
         filters: |
           # Code-only changes — trigger heavy Go/frontend checks.
+          # (See spec/2026-10-19 ci-overdesign-audit.) — Makefile/scripts/**/.github/workflows/**
+          # moved into `code` for cross-workflow drift safety (FU-20261015-01).
           code:
             - '**/*.go'
             - 'go.mod'
@@ -45,12 +46,8 @@ jobs:
             - '**/*.sql'
             - 'Dockerfile*'
             - 'docker-compose*'
-          # CI/scripts changes — trigger the script-validating jobs (which
-          # run unconditionally below) but NOT the heavy code checks.
-          # Keeps a one-line script fix from paying for full lint+coverage.
-          ci:
-            - 'scripts/**'
             - 'Makefile'
+            - 'scripts/**'
             - '.github/workflows/**'
           # Docs that cmd/atlas-mcp/docsgen embeds into Go code
           # (SSOT: the docFiles map in cmd/atlas-mcp/docsgen/main.go) — trigger
