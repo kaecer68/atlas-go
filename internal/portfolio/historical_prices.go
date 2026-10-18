@@ -124,16 +124,30 @@ func (hp *HistoricalPrices) CloseSeries(symbol string) []marketdata.DatedClose {
 }
 
 // SMA computes the simple moving average over the last N days.
+//
+// A close that is not a usable price (see shared.IsUsablePrice) is a MISSING
+// observation, not a price to average (k3 decision 3-2): the average is taken
+// over the usable closes in the window and divided by how many were actually
+// used, so one stored Close=0 row can no longer drag the level down. A window
+// with no usable close returns 0 — the same "no data" value as a short series.
 func (hp *HistoricalPrices) SMA(symbol string, days int) float64 {
 	series := hp.GetCloseSeries(symbol)
-	if len(series) < days {
+	if days <= 0 || len(series) < days {
 		return 0
 	}
 	sum := 0.0
+	usable := 0
 	for i := len(series) - days; i < len(series); i++ {
+		if !shared.IsUsablePrice(series[i]) {
+			continue
+		}
 		sum += series[i]
+		usable++
 	}
-	return sum / float64(days)
+	if usable == 0 {
+		return 0
+	}
+	return sum / float64(usable)
 }
 
 // MomentumReturn computes (latest / price N days ago - 1).
