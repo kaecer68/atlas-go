@@ -380,6 +380,73 @@ func (s *System) evaluateDrawdown(macroAssessment *narrative.MacroRiskAssessment
 	return s.Risk().macroDrawdownEngine.Evaluate(macroAssessment, structuralAssessment)
 }
 
+// applyDrawdownExposureCap evaluates the drawdown decision for the session that
+// is about to run and pushes its exposure ceiling into the simulation engine's
+// buy sizing (FU-20261016-32, k3 decision 5b, 2026-10-18).
+//
+// Why before the run: the engine sizes buy orders inside RunDay, so a ceiling
+// computed only afterwards — updateCapitalMetrics evaluates the same decision
+// at the end of the run — cannot bind on this session. The inputs are the same
+// quotes and sector snapshot the post-run evaluation reads, so the two
+// evaluations agree by construction.
+//
+// Why the simulation engine and not the live order path: the live orchestrator
+// has no sizing step to attach to (orders reach it already sized and
+// Orchestrator.ExecuteOrder has no production caller), so the sizing layer of
+// the order path that actually emits orders is the simulation engine's buy
+// step. The same ceiling must also bind on the live path before live trading is
+// enabled; see FU-20261016-32.
+//
+// Nil-safe: without a drawdown engine (tests, minimal wiring) it does nothing
+// and the engine keeps its previous ceiling.
+func (s *System) applyDrawdownExposureCap(ctx context.Context, quotes []domain.Quote) {
+	if s.Sim().engine == nil || s.Risk().macroDrawdownEngine == nil {
+		return
+	}
+	macroAssessment := s.assessMacroRisk(quotes)
+	if macroAssessment == nil {
+		return
+	}
+	structuralAssessment, _ := s.assessStructuralTrends(ctx, QuotesToMacroDataSnapshot(quotes))
+	s.applyExposureCapForDecision(s.evaluateDrawdown(macroAssessment, structuralAssessment))
+}
+
+// applyExposureCapForDecision is the single wire point between a drawdown
+// decision and order sizing: the decision's MaxExposure becomes the engine's
+// exposure ceiling for the next run. GetPositionSizeAdjustment is the declared
+// reader of MaxExposure, so the ceiling is read through it rather than by
+// touching the struct field directly.
+//
+// The ceiling is absolute (a fraction of portfolio value), matching
+// CalculatePortfolioAdjustment's targetExposure and the acceptance criterion
+// "DrawdownEmergency ⇒ realized exposure ≤ MaxExposure". It is not a multiplier
+// on existing positions; see Engine.WithExposureCap for what that implies.
+//
+// A nil decision or a >= 1 ceiling is a no-op, so a DrawdownNone decision
+// restores the pre-wiring behavior for that session.
+//
+// No double application with PortfolioRiskAdjuster (audit §2.8 condition 2): the
+// two caps never run on the same path and do not measure the same thing.
+// AdjustWeights caps each position's weight (15% / 10% / 5%) or zeroes the book,
+// and it takes a map[string]float64 of weights; its only callers are
+// cmd/stress-test (internal/risktest/scenarios.go) and its own test file. That
+// tool builds its weight map by hand and never runs the simulation engine, so it
+// cannot also receive the ceiling this function sets. The production path runs
+// the engine's sizing and never constructs a PortfolioRiskAdjuster. If a future
+// change makes both run on one path, this ceiling must be reconsidered rather
+// than stacked.
+func (s *System) applyExposureCapForDecision(decision *risk.MacroAwareDrawdownDecision) {
+	if decision == nil || s.Sim().engine == nil || s.Risk().macroDrawdownEngine == nil {
+		return
+	}
+	cap := s.Risk().macroDrawdownEngine.GetPositionSizeAdjustment(decision)
+	s.Sim().engine.WithExposureCap(cap)
+	logging.Info("risk", "drawdown_exposure_cap_applied",
+		"session", s.Sim().session.ID,
+		"action", decision.Action.String(),
+		"max_exposure", cap)
+}
+
 func (s *System) updateCapitalMetrics(ctx context.Context, result domain.SimulationResult) {
 	if s.Risk().capitalController == nil {
 		return
