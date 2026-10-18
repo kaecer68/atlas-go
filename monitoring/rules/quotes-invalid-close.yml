@@ -1,0 +1,44 @@
+# monitoring/rules/quotes-invalid-close.yml — quotes 壞值（close<=0）的偵測規則（F74(a)）
+#
+# 為什麼存在（F72 裁定 B 的配套 (a)）
+# ----------------------------------
+# F72 裁定**不恢復每日修復排程**（會燒 FinMind 配額，且每日腳本只是事後補救）⇒
+# 偵測面改由本規則負責：`close<=0` 一出現就告警，修復改為**手動按需**。
+#
+# 指標來源（與本檔的 `expr` 逐字耦合）
+# -----------------------------------
+# `atlas_quotes_invalid_close_total` 由 `atlas-postgres-exporter` 的 extended query
+# 產生（`monitoring/postgres-exporter-queries.yaml`：最上層 key `atlas_quotes` ＋
+# 欄位別名 `invalid_close_total`）；`monitoring/prometheus.yml` 的 `job_name: postgres`
+# 已在抓該 exporter。⇒ 改指標名要**同時**改兩處，否則本規則永遠不 firing 且無人發現。
+#
+# 為什麼 `> 0`（而不是 `> N`）與 `for: 15m`
+# ----------------------------------------
+# `close<=0` **不是**合法狀態（無收盤應表達為缺值，不是 0）⇒ 任何一列都值得看。
+# `for: 15m` 吸收單輪 scrape 抖動；健康時指標為 `0` ⇒ 永久沉默。
+# 指標**缺席**（exporter 掛掉 / 查詢改名）不會被本規則咬住 —— 那是
+# `up{job="postgres"} == 0` 的職責，刻意不在此重複 paging。
+#
+# 單元測試：`monitoring/tests/quotes_invalid_close_test.yml`（promtool test rules）。
+
+groups:
+  - name: atlas-quotes-integrity
+    rules:
+      - alert: AtlasQuotesInvalidClose
+        expr: atlas_quotes_invalid_close_total > 0
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "quotes 有 {{ $value }} 列 close<=0"
+          description: |
+            quotes 出現 close<=0 的列（無收盤應表達為缺值，不是 0）。這些列會被未守門的
+            報酬／波動消費者讀成 −100%（見 FU-20260930-03／FU-20260930-04）。
+            先查什麼（依序）:
+            1. 現況值與日期分佈:
+               docker exec atlas-postgres psql -U atlas -d atlas -Atc "select date, count(*) from quotes where close <= 0 group by date order by date"
+            2. 指標是否真的在更新（避免把「查詢掛掉」讀成「沒有壞列」）:
+               docker exec atlas-postgres-exporter wget -qO- http://127.0.0.1:9187/metrics | grep '^atlas_quotes_invalid_close_total'
+            3. 修資料是 operator 動作（本規則只偵測、不改資料）: 以 on-demand 腳本修
+               （a2a-dev scripts/ops/atlas-quotes-repair.sh，檔頭已標 on-demand only）。
+          known_issue: "F74：既有 3 列（2026-06-25×2、2026-06-29×1）為歷史遺留、非新增；寫入端守門已實作（RecordQuotes 三實作拒收 close<=0，PR #2282），合併後新增即被阻擋"

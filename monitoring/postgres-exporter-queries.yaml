@@ -1,0 +1,42 @@
+# monitoring/postgres-exporter-queries.yaml — quotes 壞值（close<=0）的現況指標（F74(a)）
+#
+# 為什麼存在（F72 裁定 B 的配套 (a)）
+# ----------------------------------
+# `quotes` 曾有 **109 列** `close <= 0`（2026-09-30 實測，見 `FU-20260930-03`），
+# 成因是寫入路徑沒有價格守門。F72 裁定**不恢復每日修復排程**（會燒 FinMind 配額，
+# 且每日腳本只是事後補救）⇒ 偵測面改為「一出現就知道」：由
+# `atlas-postgres-exporter` 以 **extended query** 直接查 `quotes` 現況值，
+# 再由 `monitoring/rules/quotes-invalid-close.yml` 的 `AtlasQuotesInvalidClose` 判讀。
+#
+# 指標名推導（promtool 之外無法編譯檢查 ⇒ 兩處必須一起改）
+# --------------------------------------------------------
+# postgres_exporter 的 extended query 以**最上層 key** 當命名空間前綴：
+#   最上層 `atlas_quotes` ＋ 欄位別名 `invalid_close_total`
+#     ⇒ 指標 `atlas_quotes_invalid_close_total`
+# 這與規則檔的 `expr` **逐字耦合**；改任一邊而沒改另一邊 ⇒ 規則永遠不 firing
+# 而且不會有人發現（`> 0` 的規則在指標缺席時是靜默的）。
+#
+# 為什麼是 `count(*)`、為什麼是 GAUGE
+# ----------------------------------
+# · `count(*)` 一定回一列 ⇒ 指標**永遠存在**（健康時為 `0`）；用 `absent()` 才能
+#   區分「沒有壞列」與「查詢根本沒在跑」。
+# · GAUGE 而非 counter：這是**現況快照**，不是累計事件。歷史遺留的列在修資料前
+#   會一直存在，用 counter 會把「一直存在」讀成「一直在增加」。
+#
+# 掛載（`docker-compose.yml` 的 `atlas-postgres-exporter`）
+# --------------------------------------------------------
+#   command: ["--extend.query-path=/queries.yaml"]
+#   volumes: ["./monitoring/postgres-exporter-queries.yaml:/queries.yaml:ro"]
+# ⚠️ `--extend.query-path` 在 `quay.io/prometheuscommunity/postgres-exporter` 的現行
+# 版本已被標記 **DEPRECATED**（功能仍在；本檔實測可載入並匯出指標）。升級 image 時
+# 若該 flag 被移除，改用 `--config.file` 的 `queries:` 區段（同一份 YAML 語意）。
+#
+# 查詢面：只讀 `quotes`（`SELECT count(*)`），**不改任何資料**（修資料屬 operator 動作）。
+
+atlas_quotes:
+  query: |
+    SELECT count(*) AS invalid_close_total FROM quotes WHERE close <= 0
+  metrics:
+    - invalid_close_total:
+        usage: "GAUGE"
+        description: "quotes 中 close<=0 的列數"
