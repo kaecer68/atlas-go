@@ -22,6 +22,7 @@ jobs:
       pull-requests: read
     outputs:
       code: ${{ steps.filter.outputs.code }}
+      ci: ${{ steps.filter.outputs.ci }}
       embedded_docs: ${{ steps.filter.outputs.embedded_docs }}
     steps:
     - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
@@ -30,13 +31,6 @@ jobs:
       with:
         filters: |
           # Code-only changes — trigger heavy Go/frontend checks.
-          # The Makefile/scripts/**/.github/workflows/** triple is intentionally
-          # part of `code` (not a separate `ci` bucket, as it was before 2026-10-19):
-          # keeping a single `code` output makes the CI-path drift trap
-          # (FU-20261015-01 — listing in one but not the other) structurally
-          # impossible, and `ci-cd.yml` already includes these in its own `code`
-          # output. The `ci` output below is removed (zero consumers;
-          # grep -rn 'outputs\.ci' .github/ → only the producer).
           code:
             - '**/*.go'
             - 'go.mod'
@@ -51,8 +45,12 @@ jobs:
             - '**/*.sql'
             - 'Dockerfile*'
             - 'docker-compose*'
-            - 'Makefile'
+          # CI/scripts changes — trigger the script-validating jobs (which
+          # run unconditionally below) but NOT the heavy code checks.
+          # Keeps a one-line script fix from paying for full lint+coverage.
+          ci:
             - 'scripts/**'
+            - 'Makefile'
             - '.github/workflows/**'
           # Docs that cmd/atlas-mcp/docsgen embeds into Go code
           # (SSOT: the docFiles map in cmd/atlas-mcp/docsgen/main.go) — trigger
@@ -108,10 +106,42 @@ jobs:
           exit 1
         fi
 
-  # `lint` was removed (2026-10-19, fix/20261016-ci-overdesign-slim-down).
-  # Same golangci-lint runs in ci-cd.yml's `lint` job (with `only-new-issues: false`
-  # = full scan; required for >20k-line PRs). Running it twice in PR CI was pure
-  # duplicate work. Spec: docs/specs/ci-overdesign-audit-2026-10-19.md §A.
+  # Lint — runs all 9 enabled linters (govet, staticcheck, errcheck, gosec, ineffassign, unused, misspell, unconvert, unparam)
+  lint:
+    needs: [frontend-build, changes]
+    if: needs.changes.outputs.code == 'true'
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+    - uses: actions/download-artifact@v4 # v4
+      with:
+        name: admin-web-dist
+        path: admin_web/dist
+
+    - uses: actions/download-artifact@v4 # v4
+      with:
+        name: client-web-dist
+        path: client_web/dist
+
+    - name: Set up Go
+      uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+      with:
+        go-version-file: go.mod
+
+    - name: Cache Go modules
+      uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+      with:
+        path: ~/go/pkg/mod
+        key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+        restore-keys: |
+          ${{ runner.os }}-go-
+
+    - name: golangci-lint
+      uses: golangci/golangci-lint-action@4afd733a84b1f43292c63897423277bb7f4313a9 # v8
+      with:
+        version: v2.12.2
+        args: --timeout=5m
 
   # Standalone staticcheck — golangci-lint's staticcheck linter is a subset
   # of upstream rules. The validation drill on 2026-07-20 found 5 SA/U warnings
@@ -285,13 +315,50 @@ jobs:
     - name: Check frontend dynamic import consistency
       run: bash scripts/ci/check_frontend_imports.sh
 
-  # `generate` was removed (2026-10-19, fix/20261016-ci-overdesign-slim-down).
-  # ci-cd.yml's `generate` job runs `go generate ./...` (which covers both this
-  # job's `go generate .` + the extra `./cmd/atlas-mcp/...`) and drift-checks
-  # the result with `git diff --exit-code`. The porcelain-based untracked-file
-  # check is redundant with `generate-docs-embed` below (which covers the only
-  # case porcelain mattered: docs-only PR with stale resources_docs.gen.go).
-  # Spec: docs/specs/ci-overdesign-audit-2026-10-19.md §A.
+  # Go generate check — ensures generated files are up-to-date.
+  # Gated on `code`, so a docs-only PR skips it. The subset of docs that
+  # docsgen embeds into Go (the `embedded_docs` path filter) is covered even
+  # for docs-only PRs by the narrow `generate-docs-embed` job below.
+  #
+  # Step scope (E39, 2026-09-27): `go generate .` only reaches the root package
+  # (generate.go -> cmd/gentags). The other directives live in
+  # cmd/atlas-mcp/server (resources.go -> docsgen, tools.go -> descgen) and in
+  # internal/domain/types.go (gentags again), so this job alone was green on a
+  # code PR whose resources_docs.gen.go / auto-desc.gen.* were stale; only
+  # ci-cd.yml's wider `generate` job caught that. The explicit
+  # `go generate ./cmd/atlas-mcp/...` step below closes the gap here too, and it
+  # is porcelain-checked, so an untracked gen file also fails (ci-cd's
+  # `git diff --exit-code` cannot see untracked files).
+  generate:
+    needs: [changes]
+    if: needs.changes.outputs.code == 'true'
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+    - name: Set up Go
+      uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+      with:
+        go-version-file: go.mod
+
+    - name: Run go generate
+      run: go generate .
+
+    # Same command as ci-cd.yml's `generate` job and as the narrow
+    # `generate-docs-embed` job below: covers docsgen (resources_docs.gen.go)
+    # and descgen (auto-desc.gen.go / auto-desc.gen.json).
+    - name: Regenerate MCP embedded docs and tool auto-desc
+      run: go generate ./cmd/atlas-mcp/...
+
+    - name: Check for uncommitted generated changes
+      run: |
+        if [ -n "$(git status --porcelain)" ]; then
+          echo "ERROR: go generate produced uncommitted changes."
+          echo "Run 'go generate . && go generate ./cmd/atlas-mcp/...' locally and commit the results."
+          git status --porcelain
+          git diff --stat
+          exit 1
+        fi
 
   # Embedded-doc generate check — narrow, docs-only-PR gap closer (E39).
   #
