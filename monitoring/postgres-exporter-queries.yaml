@@ -28,8 +28,21 @@
 #   command: ["--extend.query-path=/queries.yaml"]
 #   volumes: ["./monitoring/postgres-exporter-queries.yaml:/queries.yaml:ro"]
 # ⚠️ `--extend.query-path` 在 `quay.io/prometheuscommunity/postgres-exporter` 的現行
-# 版本已被標記 **DEPRECATED**（功能仍在；本檔實測可載入並匯出指標）。升級 image 時
-# 若該 flag 被移除，改用 `--config.file` 的 `queries:` 區段（同一份 YAML 語意）。
+# 版本已被標記 **DEPRECATED**（功能仍在；本檔實測可載入並匯出指標）。
+#
+# ⛔ **沒有 drop-in 替代寫法**（2026-10-18 實測 image v0.20.1；F76 的原敘述有誤）:
+#   `--config.file` 是 exporter **自己的**設定檔，`config.Config` 只有 `auth_modules`
+#   一個 yaml 欄位，**沒有 `queries:` 區段**。拿它當遷移目標會**靜默失去本指標**:
+#     `--config.file=<含 queries: 的檔>` ⇒
+#     WARN "field queries not found in type config.Config"、exporter 照常啟動（exit 0）、
+#     `atlas_quotes_invalid_close_total` **整個消失**，而 `pg_up` 仍是 1
+#     ⇒ `AtlasQuotesInvalidClose` 與 `up{job="postgres"} == 0` **都不會響**。
+#   上游 README 指出的方向是**內建 collector**（本查詢沒有對應者）或改用另一個專案
+#   `sql_exporter`（burningalchemist/sql_exporter）⇒ 那是換 image 的真遷移，不是改 flag。
+#
+# 反過來說，**flag 被移除本身是響的**，所以現況不需要搶先行動:
+#   未知 flag ⇒ `postgres_exporter: error: unknown long flag`、exit code 1、
+#   容器進 restart loop ⇒ `up{job="postgres"} == 0 for 5m` ⇒ AtlasPostgresTargetDown。
 #
 # 查詢面：只讀 `quotes`（`SELECT count(*)`），**不改任何資料**（修資料屬 operator 動作）。
 
