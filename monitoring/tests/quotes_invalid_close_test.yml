@@ -91,3 +91,66 @@ tests:
           3. 修資料是 operator 動作（本規則只偵測、不改資料）: 以 on-demand 腳本修
              （a2a-dev scripts/ops/atlas-quotes-repair.sh，檔頭已標 on-demand only）。
         known_issue: "F74：既有 3 列（2026-06-25×2、2026-06-29×1）為歷史遺留、非新增；寫入端守門已實作（RecordQuotes 三實作拒收 close<=0，PR #2282），合併後新增即被阻擋"
+- name: 'E 指標缺席但 exporter 連得上 DB（pg_up==1）⇒ 守門 firing（未滿 15m 沉默）'
+  interval: 1m
+  input_series:
+  - series: pg_up
+    values: 1x80
+  alert_rule_test:
+  - eval_time: 5m
+    alertname: AtlasQuotesInvalidCloseMetricMissing
+    exp_alerts: []
+  - eval_time: 30m
+    alertname: AtlasQuotesInvalidCloseMetricMissing
+    exp_alerts:
+    - exp_labels:
+        severity: warning
+        alertname: AtlasQuotesInvalidCloseMetricMissing
+      exp_annotations:
+        summary: "quotes 壞值指標缺席（exporter 連得上 DB，卻沒有 atlas_quotes_invalid_close_total）"
+        description: |
+          `atlas_quotes_invalid_close_total` 不見了，而 exporter 仍連得上 DB
+          （`pg_up == 1`）⇒ `AtlasQuotesInvalidClose` 進入零偵測，**不是**「沒有壞列」。
+          先查什麼（依序）:
+          1. 查詢檔是否被載入（只反映 YAML **語法**錯誤；語意漂移時仍為 0）:
+             docker exec atlas-postgres-exporter wget -qO- http://127.0.0.1:9187/metrics | grep '^pg_exporter_user_queries_load_error'
+          2. exporter 的啟動參數是否仍是 `--extend.query-path`（**不可**改成
+             `--config.file`，它沒有 `queries:` 區段，見 monitoring/postgres-exporter-queries.yaml）:
+             docker inspect atlas-postgres-exporter   # 看 Config.Cmd
+          3. 指標與對照組是否整個不見（`pg_up` 應為 1）:
+             docker exec atlas-postgres-exporter wget -qO- http://127.0.0.1:9187/metrics | grep -E '^(atlas_quotes_invalid_close_total|pg_up)'
+  - eval_time: 30m
+    alertname: AtlasQuotesInvalidClose
+    exp_alerts: []
+- name: 'F 指標存在（健康 0）⇒ 兩條都沉默'
+  interval: 1m
+  input_series:
+  - series: pg_up
+    values: 1x80
+  - series: atlas_quotes_invalid_close_total
+    values: 0x80
+  alert_rule_test:
+  - eval_time: 30m
+    alertname: AtlasQuotesInvalidCloseMetricMissing
+    exp_alerts: []
+  - eval_time: 30m
+    alertname: AtlasQuotesInvalidClose
+    exp_alerts: []
+- name: 'G 指標缺席但 DB 連不上（pg_up==0）⇒ 沉默（pg_up 閘門的鑑別力）'
+  interval: 1m
+  input_series:
+  - series: pg_up
+    values: 0x80
+  alert_rule_test:
+  - eval_time: 30m
+    alertname: AtlasQuotesInvalidCloseMetricMissing
+    exp_alerts: []
+- name: 'H 指標與 pg_up 都不存在（exporter 掛掉）⇒ 沉默（由 AtlasPostgresTargetDown 負責）'
+  interval: 1m
+  input_series:
+  - series: atlas_unrelated_probe
+    values: 1x80
+  alert_rule_test:
+  - eval_time: 30m
+    alertname: AtlasQuotesInvalidCloseMetricMissing
+    exp_alerts: []
