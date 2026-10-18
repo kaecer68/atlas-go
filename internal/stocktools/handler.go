@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
+	domainshared "github.com/kaecer68/atlas-go/internal/domain/shared"
 	"github.com/kaecer68/atlas-go/internal/industry"
 	"github.com/kaecer68/atlas-go/internal/ledger"
 	"github.com/kaecer68/atlas-go/internal/marketdata"
@@ -408,15 +409,30 @@ func computeTechnical(bars []domain.DailyBar) map[string]any {
 	}
 }
 
+// sma returns the mean of the last n closes, ignoring closes that are not a
+// usable price.
+//
+// sma20 / sma50 are price LEVELS over stored closes, so a stored Close=0 (or a
+// negative value) is a MISSING observation, not a price to average: it is
+// skipped and the mean divides by the closes actually used (k3 decision 3-2).
+// A window with no usable close reports 0, like a series shorter than n.
 func sma(values []float64, n int) float64 {
-	if len(values) < n {
+	if n <= 0 || len(values) < n {
 		return 0
 	}
 	sum := 0.0
+	used := 0
 	for i := len(values) - n; i < len(values); i++ {
+		if !domainshared.IsUsablePrice(values[i]) {
+			continue
+		}
 		sum += values[i]
+		used++
 	}
-	return math.Round(sum/float64(n)*100) / 100
+	if used == 0 {
+		return 0
+	}
+	return math.Round(sum/float64(used)*100) / 100
 }
 
 func rsi(values []float64, n int) float64 {

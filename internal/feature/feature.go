@@ -59,14 +59,14 @@ var Registry = map[string]Func{
 		if idx < 19 {
 			return 1.0
 		}
-		sum := 0.0
-		for j := idx - 19; j <= idx; j++ {
-			sum += bars[j].Close
+		// The 20-day mean is a price LEVEL, so a close that is not a usable
+		// price is a MISSING observation and must not be averaged (k3 decision
+		// 3-2). An unusable current close has no ratio to report: the neutral
+		// 1.0 is what this feature already returns without a full window.
+		if !shared.IsUsablePrice(b.Close) {
+			return 1.0
 		}
-		if sum > 0 {
-			return b.Close / (sum / 20.0)
-		}
-		return 1.0
+		return b.Close / meanUsableClose(bars[idx-19:idx+1])
 	},
 	"volume_ratio": func(b domain.DailyBar, idx int, bars []domain.DailyBar) float64 {
 		if idx < 19 || b.Volume <= 0 {
@@ -194,17 +194,34 @@ var Registry = map[string]Func{
 		if idx < 19 {
 			return 0.0
 		}
-		sum := 0.0
-		for j := idx - 19; j <= idx; j++ {
-			sum += bars[j].Close
+		// Both the band center and its width are level statistics over the
+		// window, so an unusable close is a MISSING observation there too
+		// (k3 decision 3-2). The %B itself is undefined without a usable
+		// current close.
+		if !shared.IsUsablePrice(b.Close) {
+			return 0.0
 		}
-		ma := sum / 20.0
+		sum, used := 0.0, 0
+		for j := idx - 19; j <= idx; j++ {
+			if !shared.IsUsablePrice(bars[j].Close) {
+				continue
+			}
+			sum += bars[j].Close
+			used++
+		}
+		if used == 0 {
+			return 0.0
+		}
+		ma := sum / float64(used)
 		vr := 0.0
 		for j := idx - 19; j <= idx; j++ {
+			if !shared.IsUsablePrice(bars[j].Close) {
+				continue
+			}
 			d := bars[j].Close - ma
 			vr += d * d
 		}
-		std := math.Sqrt(vr / 20.0)
+		std := math.Sqrt(vr / float64(used))
 		if std < 1e-12 {
 			return 0.0
 		}
@@ -216,11 +233,9 @@ var Registry = map[string]Func{
 		if idx < 19 {
 			return 0.0
 		}
-		sum := 0.0
-		for j := idx - 19; j <= idx; j++ {
-			sum += bars[j].Close
-		}
-		ma := sum / 20.0
+		// The denominator is a 20-day mean of the close LEVEL, so unusable
+		// closes are missing observations and are skipped (k3 decision 3-2).
+		ma := meanUsableClose(bars[idx-19 : idx+1])
 		if ma <= 0 {
 			return 0.0
 		}
@@ -330,12 +345,10 @@ var Registry = map[string]Func{
 		if !shared.IsUsablePrice(b.Close) {
 			return 0.0
 		}
-		sum := 0.0
-		for j := idx - 19; j <= idx; j++ {
-			sum += bars[j].Close
-		}
-		ma := sum / 20.0
-		return (b.Close - ma) / b.Close
+		// The mean this position is measured against is a price LEVEL, so an
+		// unusable close inside the window is a missing observation (k3
+		// decision 3-2) and must not shift the reference.
+		return (b.Close - meanUsableClose(bars[idx-19:idx+1])) / b.Close
 	},
 
 	// quality_intra: 1 - (High-Low)/Close from ml_scorer.
@@ -512,26 +525,61 @@ func mean(vals []float64) float64 {
 }
 
 // emaClose computes the exponential moving average of Close at position idx
-// with the given period. Seeds with SMA of first 'period' bars, then
+// with the given period. Seeds with the mean of the first 'period' bars, then
 // propagates EMA forward to idx.
+//
+// The EMA is a price LEVEL, so a close that is not a usable price is a MISSING
+// observation (k3 decision 3-2): it is left out of the seed mean and does not
+// update the running value (skipping keeps the last usable average, the same
+// treatment maxDrawdown gives a missing close). A period with no usable close
+// at all reports 0, the package's "no data" value.
 func emaClose(bars []domain.DailyBar, idx int, period int) float64 {
-	if idx < period-1 {
+	if period <= 0 || idx < period-1 {
 		return 0
 	}
 	alpha := 2.0 / float64(period+1)
 
-	// Seed: SMA of bars[0..period-1].
-	sum := 0.0
+	// Seed: mean of the usable closes in bars[0..period-1].
+	sum, used := 0.0, 0
 	for j := range period {
+		if !shared.IsUsablePrice(bars[j].Close) {
+			continue
+		}
 		sum += bars[j].Close
+		used++
 	}
-	ema := sum / float64(period)
+	if used == 0 {
+		return 0
+	}
+	ema := sum / float64(used)
 
 	// Propagate from bar[period] to bar[idx].
 	for j := period; j <= idx; j++ {
+		if !shared.IsUsablePrice(bars[j].Close) {
+			continue
+		}
 		ema = alpha*bars[j].Close + (1-alpha)*ema
 	}
 	return ema
+}
+
+// meanUsableClose returns the mean of the usable closes in window, skipping
+// closes that are not a usable price (a missing observation, k3 decision 3-2).
+// It returns 0 when the window holds no usable close at all, which every
+// caller here treats as "no data".
+func meanUsableClose(window []domain.DailyBar) float64 {
+	sum, used := 0.0, 0
+	for _, b := range window {
+		if !shared.IsUsablePrice(b.Close) {
+			continue
+		}
+		sum += b.Close
+		used++
+	}
+	if used == 0 {
+		return 0
+	}
+	return sum / float64(used)
 }
 
 // emaOf computes the EMA of a pre-computed series using the given period.
