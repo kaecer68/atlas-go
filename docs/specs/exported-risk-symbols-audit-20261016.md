@@ -209,6 +209,19 @@ git -C <repo> grep -l "$SYM" origin/main -- internal cmd | grep _test.go
   3. 端到端測試：`DrawdownEmergency` ⇒ 實際曝險 ≤ `MaxExposure`。
 - **處置**：doc 標 `DECLARED ONLY / NOT ENFORCED` ＋ 條件；進守門表；
   並更正 `internal/risk/doc.go` 的「Decision flow」（原把兩步都寫成流程的一部分，未說哪一步沒生效）。
+- **後續（2026-10-18，5b）**：已接線，生效層＝**下單 sizing 層**（k3 決策）。
+  `System.applyDrawdownExposureCap` 在每個 session 開跑前評估回撤決策，
+  `System.applyExposureCapForDecision` 經 `GetPositionSizeAdjustment` 讀 `MaxExposure` 並
+  `sim.Engine.WithExposureCap(cap)`；`sim.Engine.RunDay` 把上限換成買方 notional 預算
+  （legacy 與 optimizer 兩條路徑共用）。**條件②**：與 `PortfolioRiskAdjuster.AdjustWeights` **不重疊**
+  （它只被 `cmd/stress-test` 呼叫、量的是單一部位權重，且該工具不跑模擬引擎）。**條件③**：端到端測試
+  `internal/orchestrator/drawdown_exposure_cap_test.go`（`DrawdownEmergency` ⇒ 曝險 0.090001 ≤ 0.10；
+  未接線 ⇒ 0.960092；`RunDailySimulation` 紅燈總經 ⇒ `DrawdownSevere` 0.40 ⇒ 0.390015）。
+  守門表該列改 `wired: true`。**本節「只提案」的敘述因此已過期**；行為變更、回滾與邊界見
+  `FU-20261016-32` 該條「處置」。
+  **★ 更正（讀碼）**：生產決策路徑 `Evaluate` **到不了** `DrawdownEmergency`
+  （`determineAction` 對 Red 最多給 `DrawdownSevere`＝0.40；升級只在 `EvaluateWithIndustry`／
+  `EvaluateWithPortfolio`，唯一呼叫者仍是 `cmd/stress-test`）⇒ 接線後生產上會壓到 **40%** 而非 10%。
 
 ---
 

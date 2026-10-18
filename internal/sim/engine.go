@@ -33,19 +33,25 @@ type Engine struct {
 	// of constraints.MinRecommendationConviction for the effective conviction
 	// floor. Used by CharterMode period-driven conviction gating (C3).
 	convictionFloorAdjustment *int
-	optimizer                 *portfolio.Optimizer
-	useOptimizer              bool
-	reflexRules               []reflexivity.Rule
-	ctx                       context.Context
-	slippageModel             *SlippageModel
-	marketImpactModel         *MarketImpactModel
-	taxCalc                   *tax.TaiwanTaxCalculator
-	dividends                 map[string]float64
-	thresholdEngine           *DynamicThresholdEngine
-	preTradeGate              *risk.PreTradeGate
-	decisionRecorder          func(risk.RiskDecision)
-	traceWriter               TraceWriter
-	riskCalculator            RiskCalculator
+	// exposureCapPct, when non-nil, is the drawdown exposure ceiling applied to
+	// buy order sizing: total position exposure (sum of position market values)
+	// must not exceed exposureCapPct × portfolio value. nil means "no ceiling",
+	// which preserves the pre-wiring behavior exactly (FU-20261016-32, k3
+	// decision 5b, 2026-10-18).
+	exposureCapPct    *float64
+	optimizer         *portfolio.Optimizer
+	useOptimizer      bool
+	reflexRules       []reflexivity.Rule
+	ctx               context.Context
+	slippageModel     *SlippageModel
+	marketImpactModel *MarketImpactModel
+	taxCalc           *tax.TaiwanTaxCalculator
+	dividends         map[string]float64
+	thresholdEngine   *DynamicThresholdEngine
+	preTradeGate      *risk.PreTradeGate
+	decisionRecorder  func(risk.RiskDecision)
+	traceWriter       TraceWriter
+	riskCalculator    RiskCalculator
 }
 
 // RiskCalculator computes real VaR from portfolio state.
@@ -200,6 +206,62 @@ func (e *Engine) effectiveConvictionFloor() int {
 		return e.constraints.MinRecommendationConviction + *e.convictionFloorAdjustment
 	}
 	return e.constraints.MinRecommendationConviction
+}
+
+// WithExposureCap sets the drawdown exposure ceiling used by buy order sizing:
+// total position exposure (the sum of position market values) must not exceed
+// pct × portfolio value (cash + marked-to-market positions).
+//
+// WIRED (FU-20261016-32, k3 decision 5b, 2026-10-18): the orchestrator calls it
+// before every session run with the value from
+// MacroAwareDrawdownEngine.GetPositionSizeAdjustment, so the
+// DrawdownLevel.MaxExposure table (1.0 / 0.85 / 0.65 / 0.40 / 0.10) is a live
+// ceiling instead of a declared intention. The ceiling is re-set per session,
+// so a later session with a milder decision loosens it again.
+//
+// Values are clamped to [0,1]; a value >= 1 disables the ceiling, because
+// exposure above 100% of portfolio value is not reachable without leverage.
+// Passing 0 blocks all new buying (the book may not grow at all).
+//
+// Scope: the ceiling binds NEW buy orders only. It never liquidates existing
+// positions, so an emergency ceiling of 0.10 stops new buying once exposure is
+// above 10% but does not force a sell-down — de-risking an existing book is a
+// portfolio-weight decision and was deliberately not taken here (decision 5b
+// chose the order-sizing layer; PortfolioRiskAdjuster.AdjustWeights is that
+// other layer and stays unreachable from production).
+func (e *Engine) WithExposureCap(pct float64) *Engine {
+	pct = min(max(pct, 0), 1)
+	e.exposureCapPct = &pct
+	return e
+}
+
+// exposureBudget returns the notional of new buy orders the engine may still
+// place without pushing total position exposure above the ceiling set by
+// WithExposureCap. It returns math.MaxFloat64 when no ceiling is active, so the
+// buy paths can take a plain min() without a second branch.
+//
+// Both sides of the comparison are read from the run's state at buy time — after
+// the mark-to-market step and after the sell/trim steps — so the ceiling is
+// enforced against the same numbers the session reports. The bound is on cash
+// spent, which is strictly larger than the market value added by the fills, so
+// the realized exposure stays at or below cap × portfolio value.
+func (e *Engine) exposureBudget(state *domain.SimulationState) float64 {
+	if e.exposureCapPct == nil {
+		return math.MaxFloat64
+	}
+	cap := *e.exposureCapPct
+	if cap >= 1 {
+		return math.MaxFloat64
+	}
+	var exposure float64
+	for i := range state.Positions {
+		exposure += state.Positions[i].MarketValue
+	}
+	budget := cap*state.PortfolioValue() - exposure
+	if budget < 0 {
+		return 0
+	}
+	return budget
 }
 
 // buildPortfolioState assembles the risk.PortfolioState used by the gate.
@@ -502,7 +564,13 @@ func (e *Engine) RunDay(
 	}
 
 	// 3. Buy logic
-	buyOrders, newPositions := e.executeBuys(state.AvailableCash(day), state.Positions, quoteBySymbol, recs, regime, &fallbackEvents, day)
+	// The drawdown exposure ceiling (WithExposureCap) is turned into a notional
+	// budget here, after the sell/trim steps, so a session that has just been
+	// de-risked by sells gets the freed room back.
+	buyOrders, newPositions := e.executeBuys(
+		state.AvailableCash(day), state.Positions, quoteBySymbol, recs, regime, &fallbackEvents, day,
+		e.exposureBudget(state),
+	)
 	orders = append(orders, buyOrders...)
 	for _, o := range buyOrders {
 		trades = append(trades, domain.TradeRecord{
@@ -751,6 +819,10 @@ func (e *Engine) RunMultiDay(
 	return report
 }
 
+// executeBuys sizes and emits the session's buy orders. exposureBudget is the
+// notional ceiling for this session (math.MaxFloat64 when no drawdown ceiling
+// is active); both buy paths consume it identically, so the ceiling holds
+// whichever sizing engine is active.
 func (e *Engine) executeBuys(
 	cash float64,
 	existingPositions []domain.Position,
@@ -759,14 +831,15 @@ func (e *Engine) executeBuys(
 	regime domain.Regime,
 	fallbackEvents *[]string,
 	day time.Time,
+	exposureBudget float64,
 ) ([]domain.Order, []domain.Position) {
 	if e.preTradeGate != nil {
 		recs = e.filterByPreTradeGate(cash, existingPositions, recs)
 	}
 	if e.useOptimizer && e.optimizer != nil {
-		return e.executeOptimizerBuys(cash, existingPositions, quoteBySymbol, recs, regime, fallbackEvents, day)
+		return e.executeOptimizerBuys(cash, existingPositions, quoteBySymbol, recs, regime, fallbackEvents, day, exposureBudget)
 	}
-	return e.executeLegacyBuys(cash, existingPositions, quoteBySymbol, recs, regime, fallbackEvents, day)
+	return e.executeLegacyBuys(cash, existingPositions, quoteBySymbol, recs, regime, fallbackEvents, day, exposureBudget)
 }
 
 func (e *Engine) executeOptimizerBuys(
@@ -777,6 +850,7 @@ func (e *Engine) executeOptimizerBuys(
 	regime domain.Regime,
 	fallbackEvents *[]string,
 	day time.Time,
+	exposureBudget float64,
 ) ([]domain.Order, []domain.Position) {
 	orders, err := e.optimizer.OptimizeToOrders(e.ctx, recs, quoteBySymbol, cash)
 	if err != nil {
@@ -791,7 +865,7 @@ func (e *Engine) executeOptimizerBuys(
 				"rec_cnt": len(recs),
 			})
 		}
-		return e.executeLegacyBuys(cash, existingPositions, quoteBySymbol, recs, regime, fallbackEvents, day)
+		return e.executeLegacyBuys(cash, existingPositions, quoteBySymbol, recs, regime, fallbackEvents, day, exposureBudget)
 	}
 
 	positions := clonePositions(existingPositions)
@@ -809,6 +883,9 @@ func (e *Engine) executeOptimizerBuys(
 		maxPositionWeight = maxPositionWeight * config.GetParametersConfig().Engine.Simulation.NeutralRegimeSizingFactor.Value
 	}
 	maxPerPosition := maxDeployableCash * maxPositionWeight
+	// Drawdown exposure ceiling: budgetLeft is the notional the session may
+	// still deploy (math.MaxFloat64 when no ceiling is active).
+	budgetLeft := exposureBudget
 
 	for _, order := range orders {
 		if len(positions) >= e.constraints.MaxOpenPositions {
@@ -834,8 +911,9 @@ func (e *Engine) executeOptimizerBuys(
 			continue
 		}
 		positionValue := float64(quantity) * price
-		if positionValue > maxPerPosition {
-			quantity = int(math.Floor(maxPerPosition/price/100.0) * 100)
+		positionLimit := min(maxPerPosition, budgetLeft)
+		if positionValue > positionLimit {
+			quantity = int(math.Floor(positionLimit/price/100.0) * 100)
 			if quantity <= 0 {
 				continue
 			}
@@ -845,6 +923,7 @@ func (e *Engine) executeOptimizerBuys(
 			continue
 		}
 		cash -= cost
+		budgetLeft -= cost
 		filteredOrders = append(filteredOrders, domain.Order{
 			Symbol:   order.Symbol,
 			Side:     domain.SideBuy,
@@ -873,6 +952,7 @@ func (e *Engine) executeLegacyBuys(
 	regime domain.Regime,
 	fallbackEvents *[]string,
 	day time.Time,
+	exposureBudget float64,
 ) ([]domain.Order, []domain.Position) {
 	positions := clonePositions(existingPositions)
 	orders := make([]domain.Order, 0)
@@ -898,6 +978,12 @@ func (e *Engine) executeLegacyBuys(
 		maxPositionWeight = maxPositionWeight * config.GetParametersConfig().Engine.Simulation.NeutralRegimeSizingFactor.Value
 	}
 	maxPerPosition := maxDeployableCash * maxPositionWeight
+	// Drawdown exposure ceiling: budgetLeft is the notional the session may
+	// still deploy (math.MaxFloat64 when no ceiling is active). It is a running
+	// budget, so the sum of the new orders cannot exceed it — that is what makes
+	// realized exposure ≤ cap × portfolio value hold for the whole session, not
+	// just per position.
+	budgetLeft := exposureBudget
 
 	for _, rec := range sortedRecs {
 		if len(positions) >= e.constraints.MaxOpenPositions {
@@ -916,10 +1002,10 @@ func (e *Engine) executeLegacyBuys(
 		}
 
 		slippageBPS := e.getSlippageBPS(rec.Symbol, quoteBySymbol, fallbackEvents)
-		notional := maxPerPosition
+		notional := min(maxPerPosition, budgetLeft)
 		impactBPS := e.getImpactBPS(notional, quote)
 		price := applyBPS(quote.Last, slippageBPS+e.transactionCostBPS(notional)+impactBPS)
-		quantity := int(math.Floor(maxPerPosition/price/100.0) * 100)
+		quantity := int(math.Floor(notional/price/100.0) * 100)
 		if quantity <= 0 {
 			continue
 		}
@@ -930,6 +1016,7 @@ func (e *Engine) executeLegacyBuys(
 		}
 
 		cash -= cost
+		budgetLeft -= cost
 		orders = append(orders, domain.Order{
 			Symbol:   rec.Symbol,
 			Side:     domain.SideBuy,

@@ -5779,6 +5779,34 @@ gen_routes_determinism_test.go: PASS（同輸入兩次呼叫逐位元組相同�
      （`system_risk_session.go:380`），但 `decision.MaxExposure` 的兩個讀取者（本方法、`CalculatePortfolioAdjustment`）
      **都 0 呼叫者**，`EvaluateWithPortfolio` 與 `PortfolioRiskAdjuster.AdjustWeights` 的唯一呼叫者是 `cmd/stress-test`
      ⇒ `DrawdownLevel.MaxExposure`（1.0/0.85/0.65/0.40/0.10）只是一張意圖表，緊急回撤不會把曝險壓到 10%。
+     **處置（2026-10-18，5b）：已接線 —— 生效層＝下單 sizing 層。**
+     ① **接線點**：`System.applyDrawdownExposureCap`（`system_risk_session.go`）在每個 session **開跑前**評估回撤決策
+     （與執行後 `updateCapitalMetrics` 同一組輸入：當日 quotes ＋ sector snapshot ⇒ 兩次評估一致），
+     `System.applyExposureCapForDecision` 以 `GetPositionSizeAdjustment(decision)` 讀出 `MaxExposure`，
+     再 `sim.Engine.WithExposureCap(cap)` 落到**下單 sizing 層**：`sim.Engine.RunDay` 於買方 sizing 前把上限換成
+     notional 預算（`exposureBudget = cap × portfolio value − 既有曝險`），legacy 與 optimizer 兩條買方路徑共用同一預算
+     （每筆扣減 ⇒ 整場新買 notional ≤ 預算）。**接線在既有下單路徑上、不是新發明**：
+     模擬引擎是唯一真的在 size 並發出 `domain.Order` 的路徑；實盤 orchestrator 沒有 sizing 點
+     （訂單送到它手上已 size 完，且 `Orchestrator.ExecuteOrder` 0 生產呼叫者）。
+     ② **條件②（不與 `PortfolioRiskAdjuster` 重複套用）已證明不重疊**：`AdjustWeights` 只被 `cmd/stress-test`
+     與自身測試呼叫（該工具自建 weight map、**不跑模擬引擎** ⇒ 收不到本接線設的上限），生產路徑則只跑引擎 sizing、
+     **不建構** `PortfolioRiskAdjuster`；且兩者量的是不同東西（它＝**單一部位權重**上限 15/10/5/0，
+     本接線＝**組合總曝險**上限）。
+     ③ **條件③（端到端）**：`internal/orchestrator/drawdown_exposure_cap_test.go` —— `DrawdownEmergency`（0.10，
+     取自 `risk.DefaultDrawdownLevels`）⇒ 實測曝險 **0.090001**；同一場未接線 ⇒ **0.960092**；
+     `RunDailySimulation` 走紅燈總經（VIX 65 ⇒ `MacroRiskRed` ⇒ **`DrawdownSevere` 0.40**）⇒ 實測 **0.390015**
+     （覆蓋生產入口的呼叫點）。`internal/sim/engine_exposure_cap_test.go` 另有 sizing 層單元測試
+     （含「既有曝險已高於上限 ⇒ 0 筆新買」與 optimizer 路徑）。
+     ④ **回滾**：移除 `RunDailySimulation`／`runReplaySimulation` 的 `applyDrawdownExposureCap` 呼叫（或
+     `WithExposureCap` 那一行）即回現狀；負向證明（兩處突變）見下。
+     ⑤ **★ 根因更正（讀碼，本條敘述的不精確處）**：生產決策路徑（`Evaluate`）**到不了** `DrawdownEmergency` ——
+     `determineAction` 對 Red 最多回 `DrawdownSevere`（0.40），升級到 Emergency 只發生在
+     `EvaluateWithIndustry`／`EvaluateWithPortfolio`，而兩者唯一呼叫者仍是 `cmd/stress-test`
+     ⇒ 即使接線完成，生產上「緊急回撤把曝險壓到 10%」**仍不成立**（實際會壓到 40%）。
+     本條原文「緊急回撤不會把曝險壓到 10%」在接線後依然正確，但原因已變成**層級不可達**而非**上限未接**；
+     要真正到 10% 需另一次決策（是否把 industry／portfolio 升級接進生產）。
+     ⑥ **已知邊界（本接線不做的事）**：上限只約束**新買**，**不強制賣出**既有部位（超過上限時只是停止新買）；
+     把既有部位降到上限屬**組合權重**決策（`PortfolioRiskAdjuster` 那一層），5b 明示不採。
 
 - **★ 動手前對 F-item 敘述的更正三處**（讀碼結果）：
   ① 「`ModulatePosition` 的輸入 `CycleStatusCard` 已在生產消費」→ 卡片有生產消費者，但**這條輸入鏈沒有**：
