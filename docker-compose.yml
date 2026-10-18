@@ -62,7 +62,7 @@ services:
       # unset. Do NOT add an `environment:` entry for it — an empty shell
       # expansion would shadow the env_file value (2026-09-23 deploy incident:
       # all cron containers got an empty token and their liveness pings died).
-      - DATABASE_URL=postgres://atlas:${DB_PASSWORD:-atlas}@postgres:5432/atlas?sslmode=prefer
+      - DATABASE_URL=postgres://${DB_USER}:${DB_PASSWORD}@postgres:5432/atlas?sslmode=prefer
       # Broker nonce store 的 Redis URL。⚠️ 2026-09-26 生產實測更正原先的註解：
       #   ① 生產**沒有**用 litellm-redis —— 容器實際值就是下面這行（host port 16379 → 本檔的 atlas-redis）；
       #   ② 但 `ATLAS_BROKER_NONCE_STORE` **未設**（預設 `memory`，`internal/config/config.go:134`）
@@ -197,8 +197,8 @@ services:
     container_name: atlas-postgres
     restart: unless-stopped
     environment:
-      - POSTGRES_USER=atlas
-      - POSTGRES_PASSWORD=${DB_PASSWORD:-atlas}
+      - POSTGRES_USER=${DB_USER}
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
       - POSTGRES_DB=atlas
       - TS_TUNE_MEMORY=2GB
       - TS_TUNE_NUM_CPUS=4
@@ -263,7 +263,7 @@ services:
     volumes:
       - ./monitoring/postgres-exporter-queries.yaml:/queries.yaml:ro
     environment:
-      - DATA_SOURCE_NAME=postgresql://atlas:${DB_PASSWORD:-atlas}@postgres:5432/atlas?sslmode=disable
+      - DATA_SOURCE_NAME=postgresql://${DB_USER}:${DB_PASSWORD:-atlas}@postgres:5432/atlas?sslmode=disable
     networks:
       - atlas-network
 
@@ -368,7 +368,7 @@ services:
       - CRON_COMMAND=/app/geo-ingest -work-dir /app
       - CRON_TASK_NAME=cron_geo_ingest
       - ATLAS_LIVENESS_URL=http://atlas-go:18080/api/internal/task-liveness
-      - DATABASE_URL=postgres://atlas:${DB_PASSWORD:-atlas}@postgres:5432/atlas?sslmode=prefer
+      - DATABASE_URL=postgres://${DB_USER}:${DB_PASSWORD}@postgres:5432/atlas?sslmode=prefer
     volumes:
       - ./data:/app/data
       - ./reports:/app/reports
@@ -401,7 +401,7 @@ services:
       - CRON_COMMAND=/app/macro-ingest -work-dir /app
       - CRON_TASK_NAME=cron_macro_ingest
       - ATLAS_LIVENESS_URL=http://atlas-go:18080/api/internal/task-liveness
-      - DATABASE_URL=postgres://atlas:${DB_PASSWORD:-atlas}@postgres:5432/atlas?sslmode=prefer
+      - DATABASE_URL=postgres://${DB_USER}:${DB_PASSWORD}@postgres:5432/atlas?sslmode=prefer
     volumes:
       - ./data:/app/data
       - ./reports:/app/reports
@@ -434,7 +434,7 @@ services:
       - CRON_COMMAND=/app/daily-replay-sync -csv /app/data/replay/tw_extended_90days.csv
       - CRON_TASK_NAME=cron_replay_sync
       - ATLAS_LIVENESS_URL=http://atlas-go:18080/api/internal/task-liveness
-      - DATABASE_URL=postgres://atlas:${DB_PASSWORD:-atlas}@postgres:5432/atlas?sslmode=prefer
+      - DATABASE_URL=postgres://${DB_USER}:${DB_PASSWORD}@postgres:5432/atlas?sslmode=prefer
     volumes:
       - ./data:/app/data
       - ./reports:/app/reports
@@ -584,7 +584,7 @@ services:
     environment:
       - ATLAS_ENV=production
       - ATLAS_WORKER_TYPE=prism
-      - DATABASE_URL=postgres://atlas:${DB_PASSWORD:-atlas}@postgres:5432/atlas?sslmode=prefer
+      - DATABASE_URL=postgres://${DB_USER}:${DB_PASSWORD}@postgres:5432/atlas?sslmode=prefer
     volumes:
       - ./data:/app/data
       - ./reports:/app/reports

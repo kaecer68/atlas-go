@@ -602,7 +602,8 @@ ci-quick: check-production-host
 	              scripts/ci/check_docs_governance.sh \
 	              scripts/ci/check_agents_index.sh \
 	              scripts/ci/check_jev_contract.sh \
-	              scripts/ci/check_monitoring_single_source.sh; do \
+	              scripts/ci/check_monitoring_single_source.sh \
+	              scripts/ci/check_db_credential_interpolation.sh; do \
 		if [ ! -f "$$script" ]; then \
 			echo "    ❌ 清單中的 $$script 不存在（改名／搬移？）⇒ 少跑一支不能算通過"; \
 			failed=$$((failed+1)); \
@@ -1317,6 +1318,9 @@ ci-gate: embed-dirs
 	@echo "    ✅"
 	@echo "  → decide.sh 判定機制契約測試（hermetic：三項安全檢查跑不完 ⇒ 假紅；mutation 自證；FU-20261016-30）"
 	@bash tests/scripts/test-decide-completes-all-checks.sh
+	@echo "    ✅"
+	@echo "  → DB 憑證插值守門契約測試（部署 compose 不得寫死 DB user/password；hermetic fixtures ＋ 資料層/守門層突變自證；2026-10-18）"
+	@bash tests/scripts/test-db-credential-interpolation.sh
 	@echo "    ✅"
 	@echo "  → fast CI scripts"
 	@$(MAKE) --no-print-directory ci-quick
