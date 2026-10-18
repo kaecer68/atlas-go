@@ -410,6 +410,10 @@ func (o *Orchestrator) onIntradayCycle() {
 		o.metrics.RecordPortfolio(portfolio.Cash, portfolio.Cash+portfolio.UnrealizedPnL)
 		o.metrics.RecordGauge("portfolio_day_pnl", portfolio.DayPnL, nil)
 	}
+	// Publish the halt flag itself (FU-20261016-32 condition 3). It is recorded
+	// right after the mirror above, so the value on /metrics is the state that
+	// the next OrderManager.checkRiskGate will see.
+	o.recordRiskGateHalt()
 	if state != CircuitNormal {
 		logging.Warn("circuit_breaker", "trading_restricted", "state", state)
 		if state == CircuitHalted {
@@ -433,6 +437,35 @@ func (o *Orchestrator) onIntradayCycle() {
 	}
 
 	o.executionMgr.SimulateExecution()
+}
+
+// recordRiskGateHalt publishes the risk gate's halt flag as a 0/1 gauge.
+//
+// Why a metric and not just a log line: re-certification condition 3 asks for the
+// stuck halt to be *visible*, and the only alert path this platform has is
+// Prometheus (log-based alert rules are explicitly out of scope). /metrics is
+// also already the surface the live engine writes to (circuit_breaker_state,
+// portfolio_day_pnl), so this adds no new dependency.
+//
+// Nil-safe in both directions: a nil recorder (tests, or a build without the
+// monitoring collector) and a nil gate (the mirror call above tolerates one) are
+// both no-ops rather than panics.
+//
+// ⚠️ This series only exists while the research-only `-live` engine runs; see the
+// scope note on MetricRiskGateHaltTrading and the rule file header.
+func (o *Orchestrator) recordRiskGateHalt() {
+	if o.metrics == nil || o.riskGate == nil {
+		return
+	}
+	o.metrics.RecordGauge(MetricRiskGateHaltTrading, boolGauge(o.riskGate.halted()), nil)
+}
+
+// boolGauge renders a boolean as the 0/1 gauge value Prometheus expects.
+func boolGauge(b bool) float64 {
+	if b {
+		return 1
+	}
+	return 0
 }
 
 func (o *Orchestrator) onMarketClose() {

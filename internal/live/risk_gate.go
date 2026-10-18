@@ -9,6 +9,27 @@ import (
 	"github.com/kaecer68/atlas-go/internal/domain"
 )
 
+// MetricRiskGateHaltTrading is the /metrics gauge that exposes the risk gate's
+// halt flag (FU-20261016-32 re-certification condition 3: "observability for the
+// halt flag plus an alert path").
+//
+// 1 = the gate rejects every order (the hard-halt branch of Check); 0 = it does
+// not. It is recorded once per intraday cycle by Orchestrator.onIntradayCycle,
+// and monitoring/rules/atlas_live_risk_gate_alerts.yml alerts when it stays at 1.
+//
+// Why the constant lives here and not in internal/monitoring (where every other
+// Metric* constant lives): internal/monitoring imports internal/live/store, so
+// the live engine cannot import it back. The name is therefore defined next to
+// its producer, and a test in this package asserts the rule file still names it
+// (see risk_gate_metrics_rule_test.go).
+//
+// ⚠️ Producer scope: this series only exists while the **research-only** live
+// engine runs (`atlas -live`). Production runs `atlas -api` (Dockerfile CMD, and
+// the -live flag was removed from the production compose in #2072 / E34), so the
+// series is absent there and the alert cannot fire in production. That is stated
+// in the rule file's header too; do not read the rule as production protection.
+const MetricRiskGateHaltTrading = "atlas_live_risk_gate_halt_trading"
+
 // RiskGateConfig holds configuration parameters for the risk gate.
 type RiskGateConfig struct {
 	// MaxDailyLossPct is the maximum allowed daily loss as a fraction of the
@@ -196,6 +217,19 @@ func (g *RiskGate) Status() map[string]any {
 		"var_critical_threshold": g.cfg.VaRCriticalThreshold,
 		"date":                   g.today,
 	}
+}
+
+// halted reports the halt flag under the read lock.
+//
+// It is the typed accessor for the value Status() already exposes, used by
+// Orchestrator.recordRiskGateHalt to publish MetricRiskGateHaltTrading. It stays
+// unexported on purpose: the external surface of the flag is the metric and the
+// Status() map, and an exported accessor would be one more symbol to keep
+// truthful (see internal/risk/exported_risk_levers_wiring_test.go).
+func (g *RiskGate) halted() bool {
+	g.mu.RLock()
+	defer g.mu.RUnlock()
+	return g.haltTrading
 }
 
 // maybeResetDaily resets the daily loss if the date has changed.
