@@ -5850,6 +5850,22 @@ gen_routes_determinism_test.go: PASS（同輸入兩次呼叫逐位元組相同�
   ⑤ 5a 的兩個殘留缺口：開盤（`ResetDayState` ⇒ `CircuitNormal`）後到下一個 intraday cycle 之間，閘門可能仍持有
   前一日的 halt（fail-closed 一個週期，未在 `onMarketOpen` 同步）；`RiskGate.Status()` 的 `halt_trading`
   **沒有任何對外曝露者**（`Orchestrator.Status()` 不含它、無 alert 規則）⇒ 重新認證條件 3 的告警路徑仍未完成。
+  **處置（2026-10-18，PR #2286）：條件 3 完成（對外曝露 ＋ 告警路徑）。** 新增 `/metrics` gauge
+  `atlas_live_risk_gate_halt_trading`（0/1，`Orchestrator.onIntradayCycle` 在鏡射電路狀態之後每輪記錄，
+  `internal/live/orchestrator.go` 的 `recordRiskGateHalt`）＋ 規則
+  `monitoring/rules/atlas_live_risk_gate_alerts.yml` 的 `AtlasLiveRiskGateHaltStuck`
+  （warning, `for: 15m` = 3 個 intraday cycle，以 `up{job="atlas-go"} == 1` 為閘門避免與
+  `AtlasGoTargetDown` 重複 paging）＋ `monitoring/tests/atlas_live_risk_gate_test.yml` 6 個 promtool 案例
+  （firing／剛開起來不響／掉線不響／序列不存在不響／已解除會 resolve）；常數
+  `internal/live.MetricRiskGateHaltTrading` 與規則檔／fixture 之間有防鏽守衛
+  （`internal/live/risk_gate_metrics_rule_test.go`）。**未新增 heartbeat、未做 log-based 規則。**
+  **★ 本條敘述的更正（查證後）**：條件 3 的告警路徑在**生產上不會 firing** —— 本序列只由**研究保留**的
+  `-live` 引擎輸出，而生產容器跑 `atlas -api`（`Dockerfile` 的 `CMD ["-api"]`）、`-live` 已於
+  **#2072／E34** 從生產 compose 移除（依據 `docs/reference/product-positioning.md` §3「非產品主線」）
+  ⇒ 生產 `-api` 下該序列不存在，規則結構上不可能評估。此事寫在常數註解與規則檔檔頭的最前面，
+  並以 promtool 案例 E 編成可執行規格（序列不存在 + `up=1` ⇒ 沉默）；刻意**不加** `absent(...)`
+  規則（那會讓生產永久誤報，正是 #1972／#1975 與 `FU-20261016-10` 被否決的形狀）。
+  本條**第一個**殘留缺口（開盤後一個週期的 fail-closed halt）**未動**。
   ④ 附錄 A 其餘 84 條候選未判定。
 
 
