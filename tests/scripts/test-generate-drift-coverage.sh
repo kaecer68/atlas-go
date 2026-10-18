@@ -43,10 +43,15 @@ for f in "${QUALITY}" "${CICD}"; do
   [ -f "${f}" ] || { echo "❌ 找不到 ${f}"; exit 1; }
 done
 
-# ① quality.yml generate job
+# ① quality.yml generate job — 2026-10-19 後可不存在（SSOT 移至 ci-cd.yml）
+# 修法決策（fix/20261016-ci-overdesign-slim-down）：兩條 workflow 各跑一份相同的 drift
+# 檢查是純粹重複 ⇒ 砍掉 quality.yml 的 generate，把 SSOT 收進 ci-cd.yml 的 generate（已涵蓋
+# ./... 與 ./cmd/atlas-mcp/...）。要驗「沒人在 quality.yml 偷加一個只跑 `go generate .` 的
+# 半套檢查」⇒ 改檢查「quality.yml 若有 generate job，它必須涵蓋 cmd/atlas-mcp + porcelain」
+# （不再要求「必須存在」，允許文件說明已遷移）。
 qgen="$(job_block "${QUALITY}" generate)"
 if [ -z "${qgen}" ]; then
-  bad "① quality.yml 找不到 generate job（被改名或移除？）"
+  ok "① quality.yml 無 generate job（2026-10-19 起 SSOT 在 ci-cd.yml；spec §A）"
 else
   if has_mcp_generate <<< "${qgen}"; then
     ok "① quality.yml generate job 涵蓋 cmd/atlas-mcp 生成器（docsgen/descgen）"
