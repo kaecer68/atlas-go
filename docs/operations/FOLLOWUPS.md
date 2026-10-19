@@ -3006,6 +3006,13 @@ rc=1                            # ⇒ 修前無宣告常數、無守門測試：
   而它的 universe 為空 ⇒ 走 `DefaultSymbols()`（**ETF 母體**）。實測被 screening 擋下的 **4 檔 ETF**：
   `0051.TW`／`0053.TW`／`006208.TW`／`00692.TW`（36 rows ÷ 每場 10 pass ⇒ distinct 4 檔），
   實際量能 **45,452–978,191（中位 164,985 ⇒ 門檻的 0.045–0.98×）**。
+- **★ 第二消費點（2026-10-19 root 定位，**原條目未記載**）✗**：`internal/orchestrator/plugin_sector.go:105-108`
+  （`signalParamsFromAgent`）**從同一個 key** 取 `params.volumeThreshold` ✓，用於 `:117`（`quote.Volume > params.volumeThreshold`
+  ⇒ 影響**訊號強度** ✓），預設值 `5_000_000`（`:97` ✓）⇒ ★ **三條候選路都會連帶改動 sector 外掛的行為** ✗
+  ⇒ 評估任何值變更時，**必須同時計算 screening ＋ sector 兩個效果** ✓（原本只算了前者 ✗）
+- **screen 定位（2026-10-19 補，唯讀）**：審查拒絕在 `internal/screener/screener.go:84-91` ✓，
+  拒絕碼 **`volume_intraday_min`** ✓（名稱「Volume intraday」✓）；criteria 型別見
+  `internal/domain/recommendation/screening.go:16`（`VolumeIntraday *MinFilter` ✓）
 - **★ 為何不改（量化理由）**：用**收集器同一個品質閘判準**（`momentum/value/quality/liquidity` 平均 ≥ 0.40）
   對這 36 rows 的 `factor_scores` 重算 ⇒ **0/36 過得了**（min 0.127／中位 0.146／max 0.188）
   ⇒ 把 `volume_intraday` 降到 ETF 可及，只會**換一個閘被擋**（screening → `factor_quality_gate`）
@@ -6218,6 +6225,46 @@ C1／C2 是 0–100 ⇒ 直接接會是**單位錯誤**。
   `docs/specs/store-backend-empty-jsonl-fallback-20261017.md`。
 - **驗收條件**：`session_summary_reconcile` 執行後日誌不再有 `store_backend_empty_default_jsonl`，
   且仍寫入同一條 `<LedgerDir>/sessions/…`。
+
+### FU-20261019-01 — `DualWriteRepository` 的 **PG 側不可注入** ⇒ 錯誤路徑**結構上無法被測**（`FU-20261016-06` 的根因）
+
+- **狀態**：`open`
+- **記錄日期**：2026-10-19
+- **來源**：`FU-20261016-06`（`Record` 吞錯）修復時發現 ⇒ 修完仍**無法**做突變式負向證明
+- **現況**：`DualWriteRepository`（`internal/repository/dual_write.go`）持有 **具體型別** `*PostgresRepository` ✗
+  ⇒ 測試**無法**讓 PG 寫入失敗 ⇒ `Record` 的錯誤分支（`metricsPGErrorTotal.Add(1)` ＋ `logging.Error`）**無任何測試覆蓋** ✗
+- **為何重要**：★ **這正是吞錯能存活至今的機制** ✓ —— 不是「忘了寫測試」✗，而是**結構上寫不出來** ✓
+  （對照：JSONL 側已是介面 `MetricsStore` ✓ 可注入 ✓ ⇒ 只有 PG 側是例外 ✗）
+- **建議修法**：把 PG 側抽為**窄介面**（例如 `metricRecorder interface{ Record(ctx, name, value, labels) error }` ✓）
+  ⇒ 沿用既有 `MetricsStore` 注入樣式 ✓ ⇒ 即可補「PG 失敗 ⇒ counter＋log」的契約測試 ✓（突變：移除 `Add(1)` ⇒ 必紅 ✓）
+- **範圍**：`internal/repository`（低風險 ✓ 該路徑目前休眠 ✓ 呼叫端僅 `internal/bootstrap` ✓）
+
+### FU-20261019-02 — `FU-20260930-08` 的**真缺陷**：`CalibrationArtifactStale` 量的是**永久不動**的 `updated_at` ⇒ **永久誤報**
+
+- **狀態**：`open`
+- **記錄日期**：2026-10-19
+- **來源**：`FU-20260930-08` 複驗（root 以 `file:line` 重讀後**更正原敘述** ✓）
+- **現況**：`internal/monitoring/calibration_effective.go:15-21` **自述**該告警是**永久誤報** ✓
+  —— 它量的 SSOT `updated_at` **永遠停在 image 建置日（2026-07-06）** ⇒ 與真實新鮮度無關 ✗
+- **★ 更正**：原條目描述為「`_ok` 恆為 0」✗ ⇒ **真缺陷是「量錯對象」** ✓（不是數值恆定，而是**指標語意錯誤** ✓）
+- **為何重要**：永久誤報會訓練人**忽略告警** ✗ ⇒ 掩蓋真正的 stale 事件 ✓（「狼來了」效應 ✓）
+- **建議修法**：改量**實際產物**的新鮮度（artifact 檔案 mtime ✓ 或 pipeline 的最後成功時間 ✓）
+  ⇒ 若確實無法量，則**刪除該告警** ✓ 並在 `docs/` 記載 ✓（勝過留一個永遠紅的指標 ✗）
+- **範圍**：`internal/monitoring` ＋ 告警規則 ✓
+
+### FU-20261019-03 — `experiments/003` 的**手寫 fallback 允許清單**會**過時** ⇒ 合法 fallback 被判異常（假紅）
+
+- **狀態**：`open`
+- **記錄日期**：2026-10-19
+- **來源**：#2292／a2a-dev 實測 —— 同日 `ci-full` 抓到**兩處過時**（**不是 flake** ✓）
+- **現況**：① `kimi-k3` fallback 鏈尾**早已是 deepseek** ✓ 但清單仍放**已退役**的 `deepseek-pro` ✗；
+  ② `claude-router` **沒列** `deepseek-flash` ✗ ⇒ **合法 fallback 被當成異常** ✗
+- **為何重要**：★ 這是**守門說謊的反向** ✓ —— 不是漏報 ✓ 而是**假紅**（把正確行為判成違規 ✗）
+  ⇒ 手寫清單**必然過期** ✓（今天就是實例 ✓）⇒ 會消耗人力去查「其實沒問題」的紅燈 ✗
+- **★ 根治方向（a2a-dev 提出，我採納）**：**改成從 LiteLLM config 讀 group 的 deployment** ✓
+  ⇒ 用**運行時真相**當權威 ✓ ⇒ 不再維護與現實脫節的清單 ✓（同 `FU-20260930-08` 的「量錯對象」家族 ✓）
+- **範圍**：`experiments/003` 的檢查腳本 ＋ LiteLLM config 讀取 ✓
+- **暫行**：已補正兩處 ✓（a2a-dev PR #205 同日 ✓）
 
 ### FU-20261018-01 — DB 憑證上游化 ＋ 守門**覆蓋缺口**（#2288：compose 7 處改插值；#2290：第二份部署 compose 的字面 user 與守門只掃單檔）
 
