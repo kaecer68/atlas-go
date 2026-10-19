@@ -40,6 +40,18 @@ const pgHealthCheckTTL = 15 * time.Second
 // to JSONL because PostgreSQL is unavailable or returned an error.
 var fallbackCounter atomic.Int64
 
+// metricsPGErrorTotal counts PostgreSQL metric-write failures inside
+// DualWriteRepository.Record. Until 2026-10-19 those failures were swallowed
+// (`return nil`) with no observable signal: the JSONL half of the dual-write
+// path is snapshot-based (MetricsStore has SaveSnapshot/LoadToday/LoadRecent)
+// and structurally cannot record a named metric, so a PG write failure meant
+// the metric silently vanished. Exposed for monitoring/alerting consumption.
+var metricsPGErrorTotal atomic.Int64
+
+// MetricsPGErrorTotal returns the number of PostgreSQL metric-write failures
+// seen by DualWriteRepository.Record.
+func MetricsPGErrorTotal() int64 { return metricsPGErrorTotal.Load() }
+
 // DualWriteFallbackTotal returns the current count of JSONL fallbacks in
 // LoadAllSessionSummaries. Exposed for monitoring/alerting consumption.
 func DualWriteFallbackTotal() int64 {
@@ -266,16 +278,21 @@ func (r *DualWriteRepository) pgUsable() bool {
 // ============================================
 
 func (r *DualWriteRepository) Record(ctx context.Context, metricName string, value float64, labels map[string]string) error {
-	// Always write to JSONL
+	// NOTE (2026-10-19, FU-20261016-06): MetricsStore is snapshot-based
+	// (SaveSnapshot/LoadToday/LoadRecent) and has no method that records a
+	// named metric with value+labels, so the JSONL mirror only carries the
+	// timestamp snapshot below - it is NOT a metric write. Named metrics are
+	// PostgreSQL-only until a JSONL metric writer exists.
 	_ = r.jsonl.metricsStore.SaveSnapshot(MetricsSnapshot{
 		Timestamp: time.Now(),
 	})
 
-	// Also write to PostgreSQL (best effort)
 	if r.pgUsable() {
 		if err := r.pg.Record(ctx, metricName, value, labels); err != nil {
-			// Log but don't fail - JSONL is the source of truth during transition
-			return nil
+			// Never swallow: a failed PG write means the metric did not land
+			// anywhere, and the JSONL half cannot carry it (see note above).
+			metricsPGErrorTotal.Add(1)
+			logging.Error("dual_write", "record_pg_failed", "metric", metricName, "err", err)
 		}
 	}
 	return nil
