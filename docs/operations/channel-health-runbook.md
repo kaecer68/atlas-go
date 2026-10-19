@@ -183,8 +183,10 @@ gauge 與 API 是「現在重新判定後的狀態」。只看檔案會讀到凍
 
 - 本檔涵蓋的 4 條規則**不含** `atlas_channel_governance_overdue`（#2138 的治理訊號，
   目前**沒有任何規則**讀它，見 `cmd/atlas/channel_health_metrics_task.go`）。
-- `monitoring/tests/*_test.yml` 是 promtool 單元測試 fixture，`promtool` 不驗證 annotation
-  ⇒ 那裡的 `runbook_url` **不在** `scripts/ci/check_monitoring_single_source.py` 的 R4 範圍內。
+- `monitoring/tests/*_test.yml` 的 `runbook_url` **不在** `scripts/ci/check_monitoring_single_source.py` 的 R4 範圍內
+  （R4 只掃 `monitoring/rules/`）。⚠️ **但 promtool `test rules` 會逐字比對 alert 的 annotation（含 `runbook_url`）**
+  —— 有 fixture 的家族，改 URL 必須與 fixture 同 commit 同步，否則 RC=1
+  （2026-10-19 在 replay 家族實測；本家族現況**沒有** fixture）。
 - `overage` 的曆法判定依賴 `internal/taiwanholidays` 的表；新假日未入表時，
   該通道的過窗判定會偏移一天（長假後第一個交易日請人工對照交易所行事曆）。
 - 本檔的門檻數字（`> 0`、`> 90`、`== 2`、`> 0.1`）**以規則檔為準**；規則改了本檔就要跟著改。

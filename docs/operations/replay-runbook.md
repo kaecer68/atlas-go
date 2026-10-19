@@ -315,7 +315,9 @@ AtlasReplayCsvStale 看到的都是**凍結樣本**,不能當現況 —— 先�
    現況 annotation 已含大量設計背景（例如第 2 條的 #2145 交易日推導）⇒ **未來要縮的是 annotation，不是本檔**。
 3. **機器守門只做到「連結不是死的」**：`scripts/ci/check_monitoring_single_source.py` 的 R4 會 fail-closed 檢查
    in-repo `/blob/<ref>/<path>` 目標**存在**（本檔），但**不檢查內容是否對應**。
-   ⇒ 「兩份文字是否一致」目前**沒有自動守門**，靠 review。寫規則 PR 時請同時看本檔對應 §。
+   （另有一道會釘住 **URL 字面值**的守門：`monitoring/tests/atlas_replay_alerts_test.yml` 的 annotation 逐字比對，
+   見 §10 ⇒ 改 URL 時 fixture 必須同 commit 同步。）
+   ⇒ 「兩份文字的**內文**是否一致」目前**沒有自動守門**，靠 review。寫規則 PR 時請同時看本檔對應 §。
 4. 反向也成立：改本檔的步驟時，若與 annotation 衝突，**先修 annotation**（那是值班實際看到的原文），再同步本檔。
 
 ## 10. 已知限制（刻意列舉）
@@ -323,8 +325,11 @@ AtlasReplayCsvStale 看到的都是**凍結樣本**,不能當現況 —— 先�
 - **假日幻影列判不出來**（§4）：Prometheus 端只有 `day_of_week()`，沒有台灣交易日曆
   ⇒ 只有「週末列」與「未來日」會 alert；**週間休市日**的幻影列需要 `internal/taiwanholidays` 才能判。
 - **第 1~3 條是凍結樣本風險**（§2 第 1 點）：匯出任務停止時，值不變、規則照樣不響 ⇒ 只有第 4 條會響。
-- **`promtool` 不驗證 annotation**：`monitoring/tests/*_test.yml` 的 fixture 只驗 expr／labels，
-  `runbook_url` 的正確性不在 promtool 範圍（守門見 §9 第 3 點）。
+- **promtool 會比對 annotation（含 `runbook_url`）**：`monitoring/tests/atlas_replay_alerts_test.yml`
+  的 expectation 是「labels + annotations 逐字」完整比對（見該檔檔頭紀律），
+  ⇒ 改本家族的 `runbook_url` **必須與 fixture 同一個 commit 同步**，否則 `promtool test rules` RC=1。
+  （2026-10-19 實測：只改 5 處 `runbook_url`、未同步 8 處 fixture 期望值 ⇒ RC=1；同步後 ⇒ `SUCCESS` RC=0。）
+  ⇒ 這代表「URL 指到別處／被改壞」在本家族**有機器守門**；但「annotation 與本檔的**內文**是否一致」仍無機器檢查（§9 第 3 點）。
 - **部署順序**：`atlas_replay_jsonl_behind_trading_days` 只有規則的第一 arm 用；規則與 binary 必須同批上，
   否則第一 arm 靜默（缺席 arm 不受影響）。
 - **抓取面只涵蓋 `twse_replay_sync`**：第 5 條只看每日 sync 的通道狀態；
