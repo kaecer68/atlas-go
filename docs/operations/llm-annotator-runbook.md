@@ -144,8 +144,10 @@ channel id `llm_annotator`（`internal/llm_annotator/circuit_breaker.go` 的 fac
 
 - 本家族**不覆蓋** failure attribution 的實際成功率；那要看 router 的
   `llm_client_requests_total` 與 `llm_router_fallback_triggered_total`。
-- `monitoring/tests/*_test.yml` 沒有本家族的 fixture ⇒ `runbook_url` 沒有 promtool
-  單元測試覆蓋（promtool 不驗證 annotation）。
+- `monitoring/tests/*_test.yml` 沒有本家族的 fixture ⇒ 這 5 處 `runbook_url` 沒有 promtool 單元測試覆蓋。
+  ⚠️ 之所以要強調：promtool `test rules` **會**逐字比對 alert 的 annotation（含 `runbook_url`）
+  （2026-10-19 在 replay 家族實測；有 fixture 的家族改 URL 未同步 ⇒ RC=1）——
+  本家族**沒有**這道守門，只有 R4 驗目標存在。
 - §1 的接線事實有時間性：以 `configs/llm_router.yaml` 與
   `cmd/atlas/annotator_wiring.go` 的現況為準。
 

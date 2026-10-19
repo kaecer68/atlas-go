@@ -25,6 +25,7 @@
 | [wave9-runbook.md](wave9-runbook.md) | Wave 9 observability 系統 runbook |
 | [channel-health-runbook.md](channel-health-runbook.md) | 通道資料陳舊／抓取延遲／健康狀態／錯誤率（`ChannelDataStale` / `ChannelFetchLatencyHigh` / `ChannelHealthStatusError` / `ChannelHighErrorRatePerChannel`） |
 | [llm-annotator-runbook.md](llm-annotator-runbook.md) | 失敗歸因 LLM 呼叫（burn rate／斷路器／無流量；**含「這個家族現在休眠」的實證**） |
+| [replay-runbook.md](replay-runbook.md) | replay 資料異常（資料日落點／JSONL 落後／CSV 停滯／匯出任務／sync 未落地；5 條規則的逐條處置，逐字取自規則 `annotation`） |
 
 > 已移至 .omo/：`l2-4-observation-log.md`（.omo/evidence/）、`l2-4-followup.md`（.omo/manifests/）
 | [mcp-deploy.md](mcp-deploy.md) | atlas-mcp server 部署手冊 |

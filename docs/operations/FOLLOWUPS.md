@@ -1809,7 +1809,7 @@ glob 空集合=紅／**預算覆寫=清單內放寬後綠、放寬後仍超時�
 
 ### FU-20260927-03 — replay 異常**沒有專屬 runbook**：5 條新規則的 `runbook_url` 全指向通用部署文件
 
-- **狀態**：`open`
+- **狀態**：`done`（2026-10-19 收斂；**行號已漂移，實查更正見條文末處置**）
 - **記錄日期**：2026-09-27
 - **來源**：PR #2063（`b1a1ee7d`）交付 5 條 replay 規則後刻意留下的界線（前一 lane 明確記載）。
 - **事實（我實查）**：
@@ -1823,6 +1823,24 @@ glob 空集合=紅／**預算覆寫=清單內放寬後綠、放寬後仍超時�
   把 #2063 PR body 的 triage 步驟（**5 條規則逐條**的立即檢查／判讀前提／補救）整段搬過去,再把 5 處 `runbook_url` 改指它。
   - 與 `FU-20260927-04` 的關係：那張是「指到**不存在**的東西」,這張是「指到存在但**不對**的東西」——兩者都要收斂,但驗收方式不同。
 - **驗收條件**：`docs/operations/` 內存在 replay runbook,且 5 條規則的 `runbook_url` 指向它;`promtool check rules` 與 `scripts/ci/check_markdown_links.sh` RC=0。
+- **處置（2026-10-19，PR 收斂；順序＝先建檔後改 URL，避免造出 `FU-20260927-04` 同型的死鏈＝指到不存在的東西）**：
+  - 新增 `docs/operations/replay-runbook.md`：5 條規則逐條「症狀／可能原因／立即檢查／補救／升級」。
+    「立即檢查」段落**逐字照抄**各規則 `description` annotation（規則作者原文），
+    §9 寫明門檻以規則檔為準（防兩份文字漂移）、§10 列已知限制。
+  - `monitoring/rules/atlas_replay_alerts.yml` 5 處 `runbook_url` 改指該檔（**只改 URL**，
+    規則邏輯／門檻／`for`／labels／annotations 未動 ⇒ diff 5 insertions / 5 deletions）。
+  - 索引登記：`docs/operations/README.md`、`docs/documentation-map.md`（後者是內嵌資源 `docs/map`
+    ⇒ 同步重生成 `cmd/atlas-mcp/server/resources_docs.gen.go`）。
+  - **行號更正（實查；票內 2026-09-27 的數字已漂移）**：規則在 `:93`／`:157`／`:203`／`:236`／`:286`，
+    `runbook_url` 在 `:127`／`:192`／`:225`／`:265`／`:312`。核對條件不變（5 條規則、5 個 URL）。
+  - 驗證（實際輸出）：`grep -ic replay docs/operations/replay-runbook.md` ⇒ `83`；
+    `grep -n runbook_url monitoring/rules/atlas_replay_alerts.yml` ⇒ 5 處皆指 `replay-runbook.md`；
+    `python3 -c "import yaml;yaml.safe_load(open(...))"` ⇒ ok；
+    `promtool check rules monitoring/rules/atlas_replay_alerts.yml`（CI 釘版容器 v3.14.0）⇒ `SUCCESS: 5 rules found`；
+    `scripts/ci/check_markdown_links.sh` 與 `scripts/ci/check_monitoring_single_source.sh`（R4 會 fail-closed 驗新目標存在）皆 RC=0。
+  - **未收斂的殘留（本票範圍外，未另立票；只在此標明界線）**：規則 annotation 與本 runbook 是**兩份文字**,
+    目前**沒有機器檢查內容一致性**（R4 只驗目標存在）；`promtool` 不驗 annotation。
+    方向見 runbook §9：未來縮的是 annotation（只留事件當下必看的三步），不是 runbook。
 
 ---
 
