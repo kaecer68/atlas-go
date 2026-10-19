@@ -6355,3 +6355,23 @@ C1／C2 是 0–100 ⇒ 直接接會是**單位錯誤**。
   再對**第二次**執行計時 ✓）；或改用**增量／限定範圍**掃描（排除 `data/` ✓）＋ 保留整樹掃描為**非計時**的完整性檢查 ✓。
 - **範圍**：`Makefile`（ci-quick 區段）＋ 兩支檢查腳本 ✓（**不得**藉此放寬任何真閘門 ✗）
 - **暫行**：本日兩次繞過皆已**在 PR body 寫明理由與完整量測** ✓（可稽核 ✓）
+
+
+### FU-20261019-05 — runbook 與告警 annotation **同一段文字存在兩份** ⇒ 必然漂移（目前「內文一致性」**無自動守門**）
+
+- **狀態**：`open`
+- **記錄日期**：2026-10-19
+- **來源**：`#2301`（`FU-20260927-03`）落地時由 root 複核發現 ✓ —— 該 PR **主動**在 runbook §9 誠實記載此風險 ✓
+  （「兩份文字的**內文**是否一致目前**沒有自動守門**，靠 review」✓）
+- **現況**：`#2301` 新增的 replay runbook（docs/operations/replay-runbook.md；**該檔隨 #2301 併入 main，故刻意不加反引號以免 markdown-links 誤判**）
+  其 §4~§8 判讀步驟與 monitoring/rules/atlas_replay_alerts.yml 5 條規則的 `description` annotation **逐字重複 58 行**（>25 字元者 ✓，root 實測）。
+  ★ **刻意如此**（annotation 是事件當下**不需連線**即可讀到的文字 ✓）⇒ **不應改成一邊刪除** ✗；
+  但「兩份必須一致」目前**只有 review 把關** ✗ ⇒ 改規則或改 runbook 時，另一份會靜默過期 ✗（＝守門假訊號「**清單過期**」型的文件版 ✓）。
+- **既有守門**（**不足以覆蓋** ✗）：`scripts/ci/check_monitoring_single_source.py` 的 R4 只檢查 in-repo `/blob/<ref>/<path>` 目標**存在** ✓
+  ⇒ **不檢查內容對應** ✗；`monitoring/tests/atlas_replay_alerts_test.yml` 釘住 `runbook_url` **字面值** ✓
+  ⇒ 改 URL 時 fixture 必須同 commit 同步 ✓，但仍**不管內文** ✗。
+- **建議修法**：新增一條**窄**檢查（或掛進既有 monitoring 檢查 ✓）：把 runbook 內標記為「逐字引用」的區塊
+  （建議在 runbook 用明確的起訖標記包住 ✓）與對應規則的 `description` 段落做**逐字比對** ⇒ 不一致即 **fail-loud** ✓。
+  ★ 驗收必須含**負向對照**（突變：改動 annotation 一個字 ⇒ 檢查必紅 ✓；改 runbook 一字 ⇒ 亦必紅 ✓）。
+  ★ **不得**為了讓它變綠而放寬既有檢查 ✗；也不得把 annotation 清空 ✗（那會喪失離線可讀性 ✓）。
+- **範圍**：`scripts/ci/`（新檢查或既有檢查擴充 ✓）＋ runbook（加引用標記 ✓）＋ `monitoring/tests/`（fixture ✓）
