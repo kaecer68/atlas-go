@@ -124,7 +124,7 @@ groups:
                  docker logs atlas-cron-replay-sync --since 72h 2>&1 | grep -E "backfill"
             注意:本條只判「週末」與「未來日」;**假日（週間休市）**的幻影列需要交易日曆,
             目前無法在 Prometheus 端判別（見 PR body 的建議票）。
-          runbook_url: "https://github.com/kaecer68/atlas-go/blob/main/docs/operations/local-deploy.md"
+          runbook_url: "https://github.com/kaecer68/atlas-go/blob/main/docs/operations/replay-runbook.md"
 
       # ══ 2. CSV 前進、JSONL 沒跟上（轉檔停擺）══════════════════════════════════
       # 為什麼需要:2026-08-24~09-24 轉檔停擺一個月,JSONL（FactorEngine 的正式輸入）
@@ -189,7 +189,7 @@ groups:
               3. 補救（單次,冪等;CSV 不會被改動）:重啟 atlas-go 讓 auto_backfill
                  重新排程,或在主機上手動跑該轉檔（importer.ImportTWOpenDataCSVToJSONL
                  的入口是 auto_backfill 任務;沒有獨立 CLI,所以優先用前者）。
-          runbook_url: "https://github.com/kaecer68/atlas-go/blob/main/docs/operations/local-deploy.md"
+          runbook_url: "https://github.com/kaecer68/atlas-go/blob/main/docs/operations/replay-runbook.md"
 
       # ══ 3. CSV 真的停止前進（backstop;門檻 = 應用自己的 error 門檻）═══════════
       # 為什麼需要:第 2 條只看「兩檔不一致」;若 CSV 本身也停止前進（寫入端掛掉、
@@ -222,7 +222,7 @@ groups:
                  docker logs atlas-cron-replay-sync --since 7d 2>&1 | grep "not a Taiwan trading day"
               3. 磁碟空間與寫入權限:
                  docker exec atlas-cron-replay-sync df -h /app/data/replay
-          runbook_url: "https://github.com/kaecer68/atlas-go/blob/main/docs/operations/local-deploy.md"
+          runbook_url: "https://github.com/kaecer68/atlas-go/blob/main/docs/operations/replay-runbook.md"
 
       # ══ 4. 匯出任務本身沒在跑（獨立護欄;形狀抄 CalibrationFreshnessExporterDown）══
       # 為什麼需要:第 1~3 條的 gauge 是 last-write-wins,匯出任務若停止（panic、
@@ -262,7 +262,7 @@ groups:
                  docker logs atlas-go --since 30m 2>&1 | grep -E "replay_freshness|background_task"
               3. 檔案是否被搬到非設定路徑（任務讀 cfg.ReplayDataPath）:
                  docker exec atlas-go ls -la /app/data/replay/
-          runbook_url: "https://github.com/kaecer68/atlas-go/blob/main/docs/operations/local-deploy.md"
+          runbook_url: "https://github.com/kaecer68/atlas-go/blob/main/docs/operations/replay-runbook.md"
 
       # ══ 5. 每日 replay sync 沒把資料寫進去（抓取層;既有序列,新的判準）══════════
       # 為什麼需要:這是今天（2026-09-27 事發鏈）唯一**已存在**的 replay 訊號,但既有
@@ -309,4 +309,4 @@ groups:
                  python3 -c "import json;d=json.load(open('/Users/kaecer/workspace/atlas/data/state/channel_health.json'));print(json.dumps(d['channels']['twse_replay_sync'],ensure_ascii=False,indent=1))"
               3. 補救:下一次每日 run 會自動 gap backfill（5 個日曆日的視窗）;
                  若是上游 MI_INDEX 形狀變了,需要人工確認 symbol 對應。
-          runbook_url: "https://github.com/kaecer68/atlas-go/blob/main/docs/operations/local-deploy.md"
+          runbook_url: "https://github.com/kaecer68/atlas-go/blob/main/docs/operations/replay-runbook.md"
