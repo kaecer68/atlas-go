@@ -1955,7 +1955,7 @@ glob 空集合=紅／**預算覆寫=清單內放寬後綠、放寬後仍超時�
 
 ### FU-20260927-06 — `AtlasReplayJsonlBehindCsv` 的門檻以**日曆天**計，但修後的真實落後是**1 個交易日** ⇒ 常態下每週約 96% 相位會 firing
 
-- **狀態**：`open`
+- **狀態**：`done`（2026-10-19 root 複驗：規則已用**交易日** — `monitoring/rules/atlas_replay_alerts.yml:159` 判準為 `atlas_replay_jsonl_behind_trading_days >= 3`，且 `:143` 註解明載「唯一權威 `taiwanholidays.IsTradingDay`」⇒ 原敘述「以日曆天計」**已不成立** ✓）
 - **記錄日期**：2026-09-27
 - **來源**：PR #2079（`fix/20260927-decouple-csv-to-jsonl-conversion`，**未併**）Verification §(c) 的**否證結果**（該 PR 自己寫「✗ 否證：每週仍會 firing 一次」）；本票只把它從 PR body 撈進登記表，**未在本 PR 修**（`monitoring/` 是凍結區）。
 - **事實（位置由我複核；模擬數值引用來源 lane，我未重跑）**：
@@ -3105,7 +3105,7 @@ rc=1                            # ⇒ 修前無宣告常數、無守門測試：
 
 ### FU-20260930-08 — `atlas_calibration_freshness_ok{artifact="parameters"}` **恆為 0**（SSOT 檔久未被校準寫入）⇒ 疑似**永久假訊號**
 
-- **狀態**：`open`
+- **狀態**：`open`（★ 2026-10-19 root 更正敘述：`atlas_calibration_freshness_ok=0` **不是**缺陷 —— `internal/monitoring/calibration_effective.go:15-21` 明載該值為 **0** 且 `run_ok=1`，並自述「**`CalibrationArtifactStale` 是永久誤報**」：它量的 SSOT `updated_at` 永遠停在 image 建置日（2026-07-06）而 overlay 才是當天寫的 ⇒ **真缺陷是「量錯對象」** ✓）
 - **記錄日期**：2026-09-30
 - **來源**：`#2166`（`auto_calibrate` 真的跑）部署第 2 階段驗收時的**附帶觀察**（lane B 唯讀實查 ＋ root 覆核 ✓）
 - **讀數（生產，2026-09-30T04:18Z）**：
