@@ -28,7 +28,9 @@ func TestDualWriteNilPG_Metrics_NoPanic(t *testing.T) {
 	repo := newNilPGDualWrite()
 	ctx := context.Background()
 
-	// Record — writes to JSONL even with nil PG
+	// Record — must not error with nil PG. NOTE (2026-10-19, FU-20261016-06): the JSONL
+	// half is snapshot-based and does NOT carry the named metric; this only
+	// asserts no error, not that the metric landed.
 	if err := repo.Record(ctx, "test_metric", 42.0, map[string]string{"agent_id": "a1"}); err != nil {
 		t.Errorf("Record with nil PG: %v", err)
 	}
