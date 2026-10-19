@@ -59,6 +59,7 @@
 |------|------|------|
 | `docs/reference/constitution.md` | 深度開發憲法（7 條文） | ✅ |
 | `docs/reference/iteration-gate.md` | 5 Gate 自我檢查規範 | ✅ |
+| `docs/reference/gate-integrity.md` | 守門說 X 但 X 不成立：四型 ＋ 三題（守門自身的陷阱） | ✅ |
 | `docs/reference/guidelines-index.md` | 規範階層與使用情境路由 | ✅ |
 | `docs/reference/traps.md` | 跨模組陷阱完整參考（單一權威來源） | ✅ |
 | `docs/reference/inert-registry.md` | inert（宣告生效但實際未生效）登記表與 Batch 2 交接 | ✅ |
