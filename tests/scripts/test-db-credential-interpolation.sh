@@ -26,6 +26,12 @@
 #   ⑯ docs/operations/docker-compose.crons.yml 的 DSN 字面 user ⇒ rc=1，紅燈指名該檔（新覆蓋）
 #   ⑰ `${VAR:?訊息}`（冒號在 `${…}` 內）算插值 ⇒ rc=0；把守門的 depth 判準突變掉 ⇒ 該 fixture 必翻紅（有鑑別力）
 #   ⑱ docs/operations/ 在、底下卻沒有 compose ⇒ rc=2（覆蓋消失是 fail-closed，不是通過）
+#   ⑲ 契約 D（F78）：fubon-proxy 少了「顯式清空 DATABASE_URL」⇒ rc=1，紅燈指名該服務
+#   ⑳ 契約 D：fubon-proxy 的 DATABASE_URL 是**合規的插值 DSN** ⇒ **仍** rc=1
+#      （證明 D 不是 A/B 的重複；A/B 對它全綠，只有 D 抓得到）
+#   ㉑ map 風格 `DATABASE_URL: ""` 也算顯式空值 ⇒ rc=0（只認一種寫法會假紅）
+#   ㉒ 全部 compose 都沒有 fubon-proxy ⇒ rc=2（契約 D 覆蓋消失，fail-closed）
+#   ㉓ 契約 D 的突變自證：把 D 的判定中和 ⇒ ⑲ 的 fixture 必須翻綠（證明 ⑲ 有鑑別力）
 #
 # 執行： bash tests/scripts/test-db-credential-interpolation.sh
 set -uo pipefail
@@ -78,6 +84,11 @@ services:
   exporter:
     environment:
       - DATA_SOURCE_NAME=postgresql://${DB_USER}:${DB_PASSWORD:-atlas}@postgres:5432/atlas?sslmode=disable
+  # 契約 D：fubon-proxy 必須在 environment **顯式**清空 DATABASE_URL（空字串＝刻意的覆蓋）
+  fubon-proxy:
+    environment:
+      - FUBON_PROXY_PORT=18081
+      - DATABASE_URL=
 YML
   printf 'DB_USER=\nDB_PASSWORD=\n' > "$d/.env.example"
   echo "$d"
@@ -120,6 +131,10 @@ services:
       - POSTGRES_USER=${DB_USER:?DB_USER is required - see note}
       - POSTGRES_PASSWORD=${DB_PASSWORD:?DB_PASSWORD is required - see note}
       - POSTGRES_DB=atlas
+  fubon-proxy:
+    environment:
+      - FUBON_PROXY_PORT=18081
+      - DATABASE_URL=
 YML
   cat > "$d/docs/operations/docker-compose.crons.yml" <<'YML'
 services:
@@ -283,6 +298,9 @@ negproof_expect_output "docs/operations/docker-compose.prod.yml" "$LOG" \
 negproof_expect_output "docs/operations/docker-compose.crons.yml" "$LOG" \
   "⑫ 真 repo 的覆蓋宣告必須含 docs/operations 的 crons compose" \
   || bad "⑫ 真 repo 沒掃到 docs/operations 的 crons compose"
+negproof_expect_output "✅ fubon-proxy（2 檔 compose）皆在 environment 顯式清空 DATABASE_URL" "$LOG" \
+  "⑫ 真 repo 必須有 2 份 compose（repo 根 ＋ docs/operations/prod）聲明契約 D（F78 修正仍在）" \
+  || bad "⑫ 真 repo 的契約 D 覆蓋不到 2 檔 ⇒ F78 修正被移除或掃描壞掉"
 
 # ── ⑭ 含 docs/operations/ 的乾淨 fixture ⇒ rc=0（擴大範圍不得造成假紅）─────────
 DIR_OPS="$(mk_clean_with_docs_ops ops-clean)"
@@ -378,6 +396,112 @@ else
 fi
 if no_false_pass "$LOG"; then ok "⑱ 覆蓋消失時不印合規宣告"; else bad "⑱ 覆蓋消失仍印合規宣告（假綠）"; fi
 
+# ── ⑲ fubon-proxy 少了「顯式清空 DATABASE_URL」⇒ rc=1 ────────────────────────
+# 由來（F78，2026-10-19）：atlas-fubon-proxy 在兩份 compose 都沒有自己的 DATABASE_URL，
+# DSN 唯一來源是共用 env_file ⇒ 密碼輪替後容器不會跟隨，殘留「烤入」的舊憑證。
+DIR_FB_MISS="$TMP/fubon-missing"
+cp -R "$DIR_CLEAN" "$DIR_FB_MISS"
+sed -i.bak '/^      - DATABASE_URL=$/d' "$DIR_FB_MISS/docker-compose.yml"
+# 探針必須用「整行完全相等」：`- DATABASE_URL=postgres://…`（atlas 服務）也*包含*
+# `- DATABASE_URL=` 這個子字串 ⇒ `grep -F` 會給假「突變沒生效」（2026-10-19 實測踩到）。
+if grep -qxF -- "      - DATABASE_URL=" "$DIR_FB_MISS/docker-compose.yml"; then
+  bad "⑲ 突變沒生效（乾淨 fixture 已無空的 DATABASE_URL 行）⇒ 後續斷言是空的"
+else
+  ok "⑲ fixture 真的把 fubon-proxy 的 DATABASE_URL 拿掉了（探針非空）"
+fi
+LOG="$TMP/19-fubon-missing.log"
+if negproof_expect 1 "⑲ fubon-proxy 缺顯式空值 DATABASE_URL ⇒ 必須紅" "$LOG" -- run_guard "$DIR_FB_MISS"; then
+  ok "⑲ 守門對「繼承 env_file 的 DSN」有牙齒"
+else
+  bad "⑲ 守門沒有紅 ⇒ F78 缺陷可復活"; negproof_show_log "$LOG"
+fi
+negproof_expect_output "fubon-proxy 沒有在 environment 顯式清空 DATABASE_URL" "$LOG" \
+  "⑲ 紅燈必須指名 fubon-proxy 與缺的契約" || bad "⑲ 紅燈沒指名（無法定位）"
+if no_false_pass "$LOG"; then ok "⑲ 有違規時不再印合規宣告"; else bad "⑲ 有違規仍印合規宣告（假綠）"; fi
+
+# ── ⑳ fubon-proxy 把 DATABASE_URL 設成「合規的插值 DSN」⇒ 仍 rc=1（D 不是 A/B 的重複）──
+DIR_FB_DSN="$TMP/fubon-interpolated-dsn"
+cp -R "$DIR_CLEAN" "$DIR_FB_DSN"
+# 用**獨一無二**的 host（fubon-db）當探針：atlas 服務那行 DSN 與「插值後」的字串相同 ⇒
+# 用共用 host 當探針會給假綠（2026-10-19 實測）。
+sed -i.bak 's#^      - DATABASE_URL=$#      - DATABASE_URL=postgres://${DB_USER}:${DB_PASSWORD}@fubon-db:5432/atlas?sslmode=disable#' \
+  "$DIR_FB_DSN/docker-compose.yml"
+if grep -qF '@fubon-db:5432' "$DIR_FB_DSN/docker-compose.yml"; then
+  ok "⑳ fixture 真的把 fubon-proxy 的 DATABASE_URL 改成插值 DSN（A/B 對它全綠）"
+else
+  bad "⑳ 突變沒生效 ⇒ 後續斷言是空的"
+fi
+LOG="$TMP/20-fubon-dsn.log"
+if negproof_expect 1 "⑳ fubon-proxy 的 DATABASE_URL 是插值 DSN ⇒ 仍必須紅" "$LOG" -- run_guard "$DIR_FB_DSN"; then
+  ok "⑳ 契約 D 抓得到「合規插值但本服務不該有」的情形（非 A/B 重複）"
+else
+  bad "⑳ 契約 D 只是 A/B 的影子 ⇒ 插值 DSN 靜默通過"; negproof_show_log "$LOG"
+fi
+negproof_expect_output "fubon-proxy 把 DATABASE_URL 設成非空值" "$LOG" \
+  "⑳ 紅燈必須說明是「非空值」而不是「不是插值」" || bad "⑳ 紅燈訊息不對（分不出 D 與 B）"
+if grep -qF "probepass" "$LOG" || grep -qF "atlas@" "$LOG"; then
+  bad "⑳ 紅燈把 DSN 值印出來了（不得外洩）"
+else
+  ok "⑳ 紅燈不印 DSN 值（已遮蔽）"
+fi
+
+# ── ㉑ map 風格的 `DATABASE_URL: ""` 也算顯式空值 ⇒ rc=0（避免只認一種寫法）────────
+DIR_FB_MAP="$TMP/fubon-map-style"
+cp -R "$DIR_CLEAN" "$DIR_FB_MAP"
+sed -i.bak 's#^      - DATABASE_URL=$#      DATABASE_URL: ""#' "$DIR_FB_MAP/docker-compose.yml"
+if grep -qF 'DATABASE_URL: ""' "$DIR_FB_MAP/docker-compose.yml"; then
+  ok "㉑ fixture 真的改成 map 風格的空值寫法"
+else
+  bad "㉑ 突變沒生效 ⇒ 後續斷言是空的"
+fi
+LOG="$TMP/21-fubon-map.log"
+if negproof_expect 0 "㉑ map 風格 DATABASE_URL: \"\" ⇒ rc=0" "$LOG" -- run_guard "$DIR_FB_MAP"; then
+  ok "㉑ 兩種寫法都被接受（不會假紅）"
+else
+  bad "㉑ map 風格被誤判紅 ⇒ 守門只認 list 寫法"; negproof_show_log "$LOG"
+fi
+
+# ── ㉒ 全部 compose 都沒有 fubon-proxy ⇒ rc=2（契約 D 覆蓋消失，fail-closed）────────
+DIR_FB_GONE="$TMP/fubon-coverage-gone"
+cp -R "$DIR_CLEAN" "$DIR_FB_GONE"
+sed -i.bak '/^  fubon-proxy:$/,/^      - DATABASE_URL=$/d' "$DIR_FB_GONE/docker-compose.yml"
+# 探針必須認「服務定義行」而不是任何提到 fubon-proxy 的行（fixture 有提到它的註解）。
+if grep -qxF "  fubon-proxy:" "$DIR_FB_GONE/docker-compose.yml"; then
+  bad "㉒ 突變沒生效（fixture 仍有 fubon-proxy 服務）⇒ 後續斷言是空的"
+else
+  ok "㉒ fixture 真的沒有 fubon-proxy 了（探針非空）"
+fi
+LOG="$TMP/22-fubon-gone.log"
+if negproof_expect 2 "㉒ 沒有 fubon-proxy ⇒ rc=2（覆蓋消失不是通過）" "$LOG" -- run_guard "$DIR_FB_GONE"; then
+  ok "㉒ 服務被改名／移除時 fail-closed"
+else
+  bad "㉒ 覆蓋消失竟被當成通過"; negproof_show_log "$LOG"
+fi
+negproof_expect_output "契約 D 覆蓋消失" "$LOG" "㉒ 紅燈必須說明是覆蓋消失" || bad "㉒ 紅燈沒說明覆蓋消失"
+if no_false_pass "$LOG"; then ok "㉒ 覆蓋消失時不印合規宣告"; else bad "㉒ 覆蓋消失仍印合規宣告（假綠）"; fi
+
+# ── ㉓ 守門突變自證：把 `declared = 0` 中和成 `declared = 1` ⇒ ⑲ 必須翻綠 ────────
+FB_ANCHOR='if (svc == "fubon-proxy") { seen = 1; declared = 0 }'
+if grep -qF "$FB_ANCHOR" "$SRC"; then
+  ok "㉓ 突變錨點存在（改的是行為行，不是註解）"
+else
+  bad "㉓ 突變錨點不存在 ⇒ 下面的自證是空的"
+fi
+MUT_FB="$TMP/guard-fubon-neutered.sh"
+sed 's/if (svc == "fubon-proxy") { seen = 1; declared = 0 }/if (svc == "fubon-proxy") { seen = 1; declared = 1 }/' \
+  "$SRC" > "$MUT_FB"
+if cmp -s "$SRC" "$MUT_FB"; then
+  bad "㉓ 守門突變沒有生效（D 的判定行沒被改到）"
+else
+  rc=0
+  bash "$MUT_FB" --root "$DIR_FB_MISS" > "$TMP/23-neutered.log" 2>&1 || rc=$?
+  if [ "$rc" -eq 0 ]; then
+    ok "㉓ 中和 D 的判定後 ⑲ fixture 變綠 ⇒ ⑲ 的 rc=1 確實來自契約 D（有鑑別力）"
+  else
+    bad "㉓ 中和 D 的判定後仍 rc=$rc ⇒ ⑲ 的斷言對「D 無牙」不敏感"
+  fi
+fi
+
 # ── ⑬ 本測試不得動到呼叫者 repo ───────────────────────────────────────────────
 if [ "$(git -C "$REPO" rev-parse HEAD 2>/dev/null || echo none)" = "$CALLER_HEAD" ] \
    && [ "$(git -C "$REPO" ls-files 2>/dev/null | wc -l | tr -d ' ')" = "$CALLER_TRACKED" ]; then
@@ -396,4 +520,4 @@ if [ "$FAIL" -gt 0 ]; then
   echo "❌ test-db-credential-interpolation: $PASS passed, $FAIL failed"
   exit 1
 fi
-echo "✅ test-db-credential-interpolation: $PASS passed（插值必綠／字面 user・password・DSN 兩段必紅／模板帶值必紅／缺檔 fail loud／未知旗標 rc=2／docs/operations 第二條部署路徑必紅且覆蓋宣告可驗／\${VAR:?訊息} 形式不假紅＋depth 突變自證／覆蓋消失 rc=2／資料層＋守門層突變自證／接線契約／真 repo 綠／呼叫者不變）"
+echo "✅ test-db-credential-interpolation: $PASS passed（插值必綠／字面 user・password・DSN 兩段必紅／模板帶值必紅／缺檔 fail loud／未知旗標 rc=2／docs/operations 第二條部署路徑必紅且覆蓋宣告可驗／\${VAR:?訊息} 形式不假紅＋depth 突變自證／覆蓋消失 rc=2／契約 D：fubon-proxy 缺顯式空值・設成插值 DSN 皆必紅＋map 風格不假紅＋D 覆蓋消失 rc=2＋D 突變自證／資料層＋守門層突變自證／接線契約／真 repo 綠／呼叫者不變）"
