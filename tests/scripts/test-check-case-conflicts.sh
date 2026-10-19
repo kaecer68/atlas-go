@@ -181,11 +181,21 @@ if cmp -s "$DIR_B/scripts/ci/check_case_conflicts.sh" "$DIR_M/scripts/ci/check_c
   fail "⑤ 突變沒有生效（錨點 '^        exit 1$' 找不到 ⇒ 這條證明是空的）"
 else
   LOGM="$TMP/05-mutation.log"
-  if negproof_expect 1 "⑤（自證）突變後仍應被 ② 判紅" "$LOGM" -- run_fixture "$DIR_M" --strict; then
-    fail "⑤ 突變後仍 rc=1 ⇒ ② 沒有鑑別力（抓不到『忘了 exit 1』這個形狀）"
-    negproof_show_log "$LOGM"
+  # This step proves the OPPOSITE direction from the steps above, so it must NOT be
+  # written with `negproof_expect 1` (that helper asserts "the command was blocked").
+  # What we want here is: with `exit 1` removed, the guard must NOT block any more
+  # (rc=0 = the false-green this ticket closed), and THAT is what makes ②'s
+  # `--strict ⇒ rc=1` assertion meaningful. Before 2026-10-19 this step called
+  # `negproof_expect 1`, so the expected outcome (rc=0) was reported as an
+  # `::error::` annotation on every run while the shell still printed ✅ and exited 0
+  # — a self-proof that reddened CI and asserted nothing.
+  rc_mut=0
+  run_fixture "$DIR_M" --strict >"$LOGM" 2>&1 || rc_mut=$?
+  if [ "$rc_mut" -eq 0 ]; then
+    ok "⑤ 突變（拿掉 exit 1）⇒ 守門不再擋（rc=0 ＝ 修前假綠原文重現）⇒ ② 的斷言確有鑑別力"
   else
-    ok "⑤ 突變（拿掉 exit 1＝修前 rc 行為）⇒ ② 的斷言確實會紅（假綠原文重現：rc=0）"
+    fail "⑤ 突變後仍 rc=${rc_mut}（≠0）⇒ ② 沒有鑑別力：守門還有別處在擋，拿掉 exit 1 動不了它"
+    negproof_show_log "$LOGM"
   fi
 fi
 
