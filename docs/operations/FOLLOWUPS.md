@@ -1420,7 +1420,7 @@ glob 空集合=紅／**預算覆寫=清單內放寬後綠、放寬後仍超時�
 > 「Telegram bot token 無 hot-reload」條目取走（race）⇒ 依 `docs/operations/remediation-manifest.md`
 > §6 的強制分配表改為 **`FU-20260926-20`**（表內明載 lane `fix-E10-retired-imac` = -20）。
 
-- **狀態**：`open`（殘留項落在禁改檔與 B 類，需另一條 lane）
+- **狀態**：`done`（2026-10-19 root 複驗：**已修** ✓ —— `scripts/ops/imac-container-watchdog.sh` 檔頭明載「`imac-` 前綴屬歷史債、不改」，且 **2026-09-26 PR #2041** 已把 `Makefile` 的 `IMAC_HOST` 由退役 `kk@kimac` 改指 `kaecer@kmacmini`、`WATCHDOG_DST` 改指 Mac Mini 實查路徑 ✓ ⇒ 原敘述「2 個入口仍指向不存在的 kk@kimac」**已不成立**）
 - **記錄日期**：2026-09-26
 - **來源（可重現）**：branch `fix/20260926-e10-imac-residue`；盤查指令
   `git grep -n -I -e 'iMac' -e 'kk@kimac'`，並另外掃過 iMac 時代的 Tailscale 數值 IP（本檔刻意不寫出該
@@ -1631,7 +1631,7 @@ glob 空集合=紅／**預算覆寫=清單內放寬後綠、放寬後仍超時�
 
 ### FU-20260926-23 — `scripts/verify-sector-allocation-closure.sh`：**從未被執行過**的死 gate（依賴檔 #1255 移出 repo ＋ `check()` eval bug ⇒ 今 exit 2、呼叫端 0）⇒ **明示停用**（E16）
 
-- **狀態**：`open`（本 PR 只做「明示停用＋登記」；真正重啟的條件見下方「驗收條件」）
+- **狀態**：`done`（2026-10-19 root 複驗：**已處理** ✓ —— 該腳本檔頭已標 `⛔ 已停用（DISABLED，2026-09-26）` 並自述「判定它從來沒有在守任何東西，故明示停用為 no-op」，依賴 manifest 已於 #1255 移出 `docs/` ⇒ 唯一 default 路徑立即 exit 2 ✓；保留檔案作為歷史文件 ✓）
 - **記錄日期**：2026-09-26
 - **來源**：root 交辦（atlas-go 小任務）。本 PR：`fix/20260926-dead-gate-closure`（worktree `atlas-deadgate`，base `origin/main` `0cc32d16`）。
   對應 `docs/operations/remediation-manifest.md` §3 **E16**。
