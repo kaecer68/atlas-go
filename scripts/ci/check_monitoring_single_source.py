@@ -47,7 +47,8 @@ R4 runbook_url 目標：`monitoring/rules/**.yml` 內的 `runbook_url` 必須指
   自訂 anchor/merge key 後再改寫），可能漏抓 ⇒ 生產外側仍有 drift-check [9/9] 做第二道。
 * R3 是「散文層」啟發式標記比對，不是語意分析；正常情況下反例警示一定帶 ✗/不要/歷史 等字。
 * R4 只掃 `monitoring/rules/`（權威樹的**執行期**規則檔）。`monitoring/tests/*_test.yml`
-  的 `runbook_url` 是 promtool fixture 的資料，promtool 不驗證 annotation ⇒ 刻意不納入。
+  的 `runbook_url` 是 promtool fixture 的資料 ⇒ 刻意不納入（其 URL 由 `promtool test rules`
+  逐字比對把關：2026-10-19 實測，只改規則檔 URL、未同步 fixture ⇒ `test rules` RC=1）。
   R4 只驗「目標存在、形狀正確」，**不驗**「目標內容真的涵蓋該告警的處置」——後者不可能離線判定。
 
 用法:
@@ -106,7 +107,7 @@ DST_GUARDED = ("/etc/prometheus", "/etc/alertmanager", "/etc/grafana", "/var/lib
 
 # ── R4 runbook_url 目標存在性（FU-20260927-04/05）────────────────────────────
 # R4 的掃描範圍：權威樹的執行期規則檔。`monitoring/tests/*_test.yml` 是 promtool
-# fixture（promtool 不驗證 annotation）⇒ 刻意不收（見檔頭「已知限制」）。
+# fixture ⇒ 刻意不收（其 URL 由 `promtool test rules` 逐字比對把關；見檔頭「已知限制」）。
 R4_RULE_DIR = "monitoring/rules/"
 R4_RULE_EXTS = (".yml", ".yaml")
 # `runbook_url: "…"` / `runbook_url: …`（值可帶引號；引號外可帶行內註解）。
