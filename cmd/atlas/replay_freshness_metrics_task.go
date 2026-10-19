@@ -177,7 +177,7 @@ func exportReplayFreshnessMetrics(replayCSVPath string, collector *monitoring.Me
 // replayJSONLPath 由 CSV 路徑推導轉檔產物路徑。
 //
 // 這條規則與寫入端完全相同（`cmd/atlas/operations_tasks.go` 的 auto_backfill
-// 把 CSV 轉成 `strings.TrimSuffix(path, ".csv") + ".jsonl"`）——刻意共用同一條推導，
+// 呼叫的是**同一個** replayJSONLPath()，不再自己組字串）——刻意共用同一條推導，
 // 不新增第二個可設定的路徑，否則「檢查 A、寫入 B」會是下一個 E10 級缺陷。
 func replayJSONLPath(replayCSVPath string) string {
 	return strings.TrimSuffix(replayCSVPath, ".csv") + ".jsonl"
