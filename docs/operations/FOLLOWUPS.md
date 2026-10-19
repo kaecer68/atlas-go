@@ -6375,3 +6375,21 @@ C1／C2 是 0–100 ⇒ 直接接會是**單位錯誤**。
   ★ 驗收必須含**負向對照**（突變：改動 annotation 一個字 ⇒ 檢查必紅 ✓；改 runbook 一字 ⇒ 亦必紅 ✓）。
   ★ **不得**為了讓它變綠而放寬既有檢查 ✗；也不得把 annotation 清空 ✗（那會喪失離線可讀性 ✓）。
 - **範圍**：`scripts/ci/`（新檢查或既有檢查擴充 ✓）＋ runbook（加引用標記 ✓）＋ `monitoring/tests/`（fixture ✓）
+
+### FU-20261019-06 — `make ci-full` **不是併發安全的** ✗ ⇒ 同時多個 lane 推送時 `golangci-lint` 互相拒絕（假紅，第五型）
+
+- **狀態**：`open`
+- **記錄日期**：2026-10-19
+- **來源**：root 本日實測 —— ★ **自己造成的** ✗：當時同時有多個背景流程與 child 的 pre-push 在跑 `ci-full`，
+  推送 `fix/20261019-promtool-comment` 時 `make ci-full` 以 **Error 3** 失敗，原文：
+  `Error: parallel golangci-lint is running`／`The command is terminated due to an error: parallel golangci-lint is running`。
+  ⇒ **同一份 commit、序列化後重跑即通過** ✓ ⇒ 內容無問題 ✗。
+- **為何重要**：★ 這是「守門假訊號」的**第五型** —— **判決取決於同時負載** ✗
+  （與 `FU-20261019-04` 的「判決取決於 clone 大小／歷史」同族 ✓）。
+  多 lane 並行是本 repo 的**常態**（herdr／child／背景流程 ✓）⇒ 這個假紅**必然反覆發生** ✗，
+  且症狀像「你的程式有問題」✗ ⇒ 會浪費一輪 push→CI 往返 ✓，也誘人 `--no-verify` ✗。
+- **建議修法（三擇一或合併）**：① `ci-full` 進入前先偵測同類工具是否在跑，**明確輸出「偵測到併發檢查 ⇒ 請序列化」** 並以**專屬 exit code**（例如 3 ✓）區分「環境併發」與「真的檢查失敗」✗；
+  ② 或對 `golangci-lint` 改用**每次執行獨立的 cache/工作目錄** ✓ 使併發可行 ✓；
+  ③ 或（最小作法）在 `docs/operations/pr-lifecycle.md`／runbook **明文**「**同一台機器一次只跑一個 `ci-full`** ✓，多 lane 請排隊」✓。
+- **本日處置**：root 的流程改為**先等併發清空再推送** ✓（`ps` 偵測 ＋ 等待迴圈 ✓），並在後續派工指示中加入此排隊條款 ✓。
+- **★ 一般化教訓**：**「同一份 commit、序列化後即綠」⇒ 先懷疑環境相依，不要先改程式** ✓（本日第二次驗證此規則 ✓）。
