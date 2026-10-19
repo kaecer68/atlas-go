@@ -3112,7 +3112,7 @@ rc=1                            # ⇒ 修前無宣告常數、無守門測試：
 
 ### FU-20260930-08 — `atlas_calibration_freshness_ok{artifact="parameters"}` **恆為 0**（SSOT 檔久未被校準寫入）⇒ 疑似**永久假訊號**
 
-- **狀態**：`open`（★ 2026-10-19 root 更正敘述：`atlas_calibration_freshness_ok=0` **不是**缺陷 —— `internal/monitoring/calibration_effective.go:15-21` 明載該值為 **0** 且 `run_ok=1`，並自述「**`CalibrationArtifactStale` 是永久誤報**」：它量的 SSOT `updated_at` 永遠停在 image 建置日（2026-07-06）而 overlay 才是當天寫的 ⇒ **真缺陷是「量錯對象」** ✓）
+- **狀態**：`done`（★ 2026-10-19 結案：缺陷已修且有規則測試 ⇒ 見下方證據；同日 root 更正敘述：`atlas_calibration_freshness_ok=0` **不是**缺陷 —— `internal/monitoring/calibration_effective.go:15-21` 明載該值為 **0** 且 `run_ok=1`，並自述「**`CalibrationArtifactStale` 是永久誤報**」：它量的 SSOT `updated_at` 永遠停在 image 建置日（2026-07-06）而 overlay 才是當天寫的 ⇒ **真缺陷是「量錯對象」** ✓）
 - **記錄日期**：2026-09-30
 - **來源**：`#2166`（`auto_calibrate` 真的跑）部署第 2 階段驗收時的**附帶觀察**（lane B 唯讀實查 ＋ root 覆核 ✓）
 - **讀數（生產，2026-09-30T04:18Z）**：
@@ -3135,7 +3135,13 @@ rc=1                            # ⇒ 修前無宣告常數、無守門測試：
   ```
 
 ---
-
+- **★ 結案證據（2026-10-19 root 複驗，逐 file:line）**：
+  ① `cmd/atlas/calibration_freshness_metrics_task.go:28-44` —— `exportCalibrationFreshnessMetrics`（`artifact=parameters`）
+  **語意不變**，但「狀態列**不再有告警規則**」；其 log 也不再每 5 分鐘 WARN（「那正是永久誤報的另一半」）。
+  ② 同檔 `:35` —— `exportCalibrationOverlayFreshness`（`artifact=parameters_overlay`）是**告警規則現在的標的**。
+  ③ `internal/monitoring/calibration_effective.go` 全文 —— 以 root cause 記載量錯標的（SSOT `updated_at` 停在 image 建置日）。
+  ④ `monitoring/tests/calibration_freshness_test.yml` —— 兩個 artifact 值**都有**規則測試（含 `alertname: CalibrationArtifactStale`）。
+  ⇒ 兩個半邊（**告警規則** ＋ **WARN 洗版**）都已修 ✓
 ### FU-20260930-09 — `darwinian.risk_volatility_threshold` 的**樣本下限過鬆**（`>= 4` ⇒ N=4 時 p75 ＝ 最大值 ⇒ 離群可穿透）
 
 - **狀態**：`done`
@@ -6239,32 +6245,31 @@ C1／C2 是 0–100 ⇒ 直接接會是**單位錯誤**。
   ⇒ 沿用既有 `MetricsStore` 注入樣式 ✓ ⇒ 即可補「PG 失敗 ⇒ counter＋log」的契約測試 ✓（突變：移除 `Add(1)` ⇒ 必紅 ✓）
 - **範圍**：`internal/repository`（低風險 ✓ 該路徑目前休眠 ✓ 呼叫端僅 `internal/bootstrap` ✓）
 
-### FU-20261019-02 — `FU-20260930-08` 的**真缺陷**：`CalibrationArtifactStale` 量的是**永久不動**的 `updated_at` ⇒ **永久誤報**
+### FU-20261019-02 — 【**已撤回／前提不成立**】原先宣稱 `CalibrationArtifactStale` 仍為永久誤報
 
-- **狀態**：`open`
-- **記錄日期**：2026-10-19
-- **來源**：`FU-20260930-08` 複驗（root 以 `file:line` 重讀後**更正原敘述** ✓）
-- **現況**：`internal/monitoring/calibration_effective.go:15-21` **自述**該告警是**永久誤報** ✓
-  —— 它量的 SSOT `updated_at` **永遠停在 image 建置日（2026-07-06）** ⇒ 與真實新鮮度無關 ✗
-- **★ 更正**：原條目描述為「`_ok` 恆為 0」✗ ⇒ **真缺陷是「量錯對象」** ✓（不是數值恆定，而是**指標語意錯誤** ✓）
-- **為何重要**：永久誤報會訓練人**忽略告警** ✗ ⇒ 掩蓋真正的 stale 事件 ✓（「狼來了」效應 ✓）
-- **建議修法**：改量**實際產物**的新鮮度（artifact 檔案 mtime ✓ 或 pipeline 的最後成功時間 ✓）
-  ⇒ 若確實無法量，則**刪除該告警** ✓ 並在 `docs/` 記載 ✓（勝過留一個永遠紅的指標 ✗）
-- **範圍**：`internal/monitoring` ＋ 告警規則 ✓
+- **狀態**：`done`（★ 2026-10-19 root **撤回本條** —— **登記前未先複驗**，違反 `FU-20261019-01` 家族同一條紀律）
+- **撤回理由（實測）**：該缺陷**早已修完且有規則測試** ✓ ——
+  ① `internal/monitoring/calibration_effective.go` 以完整 root-cause 記載「`CalibrationArtifactStale` 是永久誤報」；
+  ② `cmd/atlas/calibration_freshness_metrics_task.go:35` 明載 `artifact="parameters"` **語意不變但狀態列不再有告警規則**
+  （其不新鮮在生產是**預期**狀態），而 `artifact="parameters_overlay"` 才是**告警規則現在的標的**；
+  ③ 連「每 5 分鐘 WARN 洗版」也一併修掉（同檔 `:28-34` 自述「那正是永久誤報的另一半」）；
+  ④ `monitoring/tests/calibration_freshness_test.yml` 同時涵蓋兩個 artifact 值的規則測試。
+- **★ 本條留存的唯一價值**：作為「**登記前必須先複驗**」的反例 ✓（當日第三次「候選缺陷其實早已處理」✗）
+- **正確的追蹤位置**：`FU-20260930-08`（本日已依同一組證據結案 ✓）
 
-### FU-20261019-03 — `experiments/003` 的**手寫 fallback 允許清單**會**過時** ⇒ 合法 fallback 被判異常（假紅）
+### FU-20261019-03 — 【**已轉交／非本 repo**】`experiments/003` 手寫 fallback 清單會過時（改讀 LiteLLM config）
 
-- **狀態**：`open`
-- **記錄日期**：2026-10-19
-- **來源**：#2292／a2a-dev 實測 —— 同日 `ci-full` 抓到**兩處過時**（**不是 flake** ✓）
-- **現況**：① `kimi-k3` fallback 鏈尾**早已是 deepseek** ✓ 但清單仍放**已退役**的 `deepseek-pro` ✗；
-  ② `claude-router` **沒列** `deepseek-flash` ✗ ⇒ **合法 fallback 被當成異常** ✗
-- **為何重要**：★ 這是**守門說謊的反向** ✓ —— 不是漏報 ✓ 而是**假紅**（把正確行為判成違規 ✗）
-  ⇒ 手寫清單**必然過期** ✓（今天就是實例 ✓）⇒ 會消耗人力去查「其實沒問題」的紅燈 ✗
-- **★ 根治方向（a2a-dev 提出，我採納）**：**改成從 LiteLLM config 讀 group 的 deployment** ✓
-  ⇒ 用**運行時真相**當權威 ✓ ⇒ 不再維護與現實脫節的清單 ✓（同 `FU-20260930-08` 的「量錯對象」家族 ✓）
-- **範圍**：`experiments/003` 的檢查腳本 ＋ LiteLLM config 讀取 ✓
-- **暫行**：已補正兩處 ✓（a2a-dev PR #205 同日 ✓）
+- **狀態**：`done`（★ 2026-10-19 root **轉交** —— 該檔案在 **a2a-dev** ⇒ 屬 **它的 F75** ✓；本 repo 不需改動 ✓）
+- **轉交依據**：`experiments/003` 與其檢查腳本位於 a2a-dev 側 ✓；a2a-dev 已接受（其 PR #205 先補正兩處過時 allowlist ✓，根修由它做 ✓）
+- **本條留下的價值（給 a2a-dev 的事實）**：LiteLLM config `group → deployment` 對照（root 2026-10-19 唯讀複驗
+  `/Users/kaecer/code/litellm/config.yaml`）：
+  `deepseek` → `openai/deepseek-flash`；`deepseek-pro` → `openai/deepseek-flash`；
+  `MiniMax-M3` → `openai/MiniMax-M3`；`MiniMax-M2.7`／`M2.5` → `openai/MiniMax-M3.1-Flash-Preview`；
+  `MiniMax-M3-Anthropic` → **`anthropic/MiniMax-M3`**；`MiniMax-M3.1-Flash-Anthropic` → **`anthropic/…`**；
+  `kimi-k3`／`kimi-for-coding`／`kimi-k2.7-code` → **`custom_openai/*`**。
+  ★ 判讀：`openai/` 系 group ＋ Anthropic 格式客戶端 ＋ 工具 ⇒ 會踩 F79（工具被掉 ✗）；
+  既有 `*-Anthropic` 部署即為正確形狀 ✓；`custom_openai/*` 是否同型**未證** ✗（提請量測）。
+  實作見 `monitoring/rules/…` 無關；檢查腳本請直接讀此對照而非手寫清單 ✓（**手寫清單必然過期** ✗，當日已有兩處假紅 ✗）。
 
 ### FU-20261018-01 — DB 憑證上游化 ＋ 守門**覆蓋缺口**（#2288：compose 7 處改插值；#2290：第二份部署 compose 的字面 user 與守門只掃單檔）
 
