@@ -84,6 +84,15 @@ services:
       - ${HOME}/.config/atlas-go/.env
     environment:
       - FUBON_PROXY_PORT=18081
+      # ⚠️ 這是**刻意的覆蓋**，不是漏填（F78；2026-10-19；與 repo 根 docker-compose.yml
+      # 同一處理）。`environment` 優先於 `env_file:` ⇒ 空字串會 shadow env_file 的
+      # DATABASE_URL，而本服務的原始碼**不引用** DATABASE_URL（2026-10-19 查證）。
+      # 為什麼要清：DB 密碼輪替只更新 env_file 時，容器不會自動跟隨，會殘留「烤入」的
+      # 舊 DSN ⇒ 舊憑證復活（2026-10-1x atlas-fubon-proxy 事故）。
+      # 邊界 ①：有值但密碼空（postgres://user:@host）仍會讓 DSN 守門 FAIL ⇒ 刻意要它吵。
+      # 邊界 ②：**空值 ≠ 未設** ⇒ 若改成 os.environ.get("DATABASE_URL", <default>)，
+      #        會拿到空字串而不是 default；改動前先確認仍不引用。
+      - DATABASE_URL=
     volumes:
       - ${HOME}/.config/atlas-go/.fubon-env:/home/appuser/.config/atlas-go/.fubon-env:ro
     extra_hosts:

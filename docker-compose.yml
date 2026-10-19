@@ -124,6 +124,17 @@ services:
       # FUBON_PROXY_PORT stays in environment (not env_file) because
       # it is a service-port constant owned by this compose file.
       - FUBON_PROXY_PORT=18081
+      # ⚠️ 這是**刻意的覆蓋**，不是漏填（F78；2026-10-19）。本檔已有多處註解說明
+      # 「`environment` 覆蓋 `env_file:`，空字串會 shadow」的陷阱 —— 這裡刻意用它：
+      # 空字串 = 明確把從 `env_file`（~/.config/atlas-go/.env）繼承來的 DATABASE_URL
+      # 清掉。本服務的原始碼**不引用** DATABASE_URL（2026-10-19 查證）。
+      # 為什麼要清：env_file 是容器 runtime env，DB 密碼輪替後 compose 不會自動跟隨，
+      # 容器會一直抱著「烤入」的舊 DSN（2026-10-1x atlas-fubon-proxy 殘留舊憑證事故）。
+      # 邊界 ①：`postgres://user:@host`（有值但密碼空）仍會讓 DSN 守門 FAIL ⇒ 那是**刻意**
+      #        要它吵（2026-10-18 08:05 同型事故）；不要為了消紅把它改成空密碼。
+      # 邊界 ②：**空值 ≠ 未設** ⇒ 若日後改成 os.environ.get("DATABASE_URL", <default>)，
+      #        會拿到空字串而不是 default。動這個服務前先確認它仍不引用 DATABASE_URL。
+      - DATABASE_URL=
       # .p12 凭证书放在 ~/.config/atlas-go/.fubon-env/,挂进容器对应路径
       # 让 main.py:_find_cert() 的 glob 搜尋(默认 ~/.config/atlas-go/.fubon-env)
       # 可以找到。SDK 本身由 Dockerfile 从官方下載 manylinux wheel install,
