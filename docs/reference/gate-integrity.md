@@ -15,7 +15,7 @@
 - **修法**：改量**實際產物**（overlay，`artifact="parameters_overlay"`，同檔 `:34`）；
   量不到就**刪告警**——`artifact="parameters"` 語意保留但**不再有告警規則**（`:30`），
   「不新鮮」也不再每 5 分鐘 WARN（`:32`，那正是永久誤報的另一半）。
-- **狀態**：已修。★ `docs/operations/FOLLOWUPS.md:6248` 同日**撤回**了「它仍為永久誤報」的登記
+- **狀態**：已修。★ `docs/operations/FOLLOWUPS.md:6266` 同日**撤回**了「它仍為永久誤報」的登記
   ——修完還照抄舊結論，就是本型再犯一次。
 
 ### 2. 清單過期 —— 合法行為被判違規（假紅）
@@ -23,19 +23,19 @@
 - **實例 A（本 repo，已修）**：`check_db_credential_interpolation.sh` 原本只掃 repo 根
   `docker-compose.yml` ⇒ 同一條部署路徑的**第二份** compose 靜默漏掃；且 DSN userinfo 用 naive
   `index(seg, ":")` 切分 ⇒ `${DB_USER:?…}:${DB_PASSWORD:?…}` 被切壞 ⇒ **合規寫法被判違規**
-  （`docs/operations/FOLLOWUPS.md:63-64`、`:80-82`）。
-  修法＝**glob 自動納入**（`scripts/ci/check_db_credential_interpolation.sh:52-55`）
-  ＋只認 `}` 外的冒號（同檔 `:112-113`）。
+  （`docs/operations/FOLLOWUPS.md:6311-6312`）。
+  修法＝**glob 自動納入**（`scripts/ci/check_db_credential_interpolation.sh:70-73`）
+  ＋只認 `}` 外的冒號（同檔 `:130-138`）。
 - **實例 B（非本 repo）**：`experiments/003` 手寫 fallback allowlist 放了**已退役**的 `deepseek-pro`、
-  漏 `deepseek-flash` ⇒ 該檔在 **a2a-dev**，已轉交（`docs/operations/FOLLOWUPS.md:6260`）；
-  修法＝改讀**運行時真相**（LiteLLM config 的 `group → deployment`，同檔 `:6266`）。
+  漏 `deepseek-flash` ⇒ 該檔在 **a2a-dev**，已轉交（`docs/operations/FOLLOWUPS.md:6278`）；
+  修法＝改讀**運行時真相**（LiteLLM config 的 `group → deployment`，同檔 `:6282-6284`）。
 - **判準**：**手寫清單必然過期** ⇒ 能自動納入就 glob、能讀真相就讀真相。
 
 ### 3. 方向寫反 —— 本地綠、CI 紅燈
 
 - **實例**：`tests/scripts/test-check-case-conflicts.sh` 第 ⑤ 步（突變自證）原借用
   `negproof_expect 1`，但該 helper 的語意是「命令**必須被擋**」：
-  rc == 期望值才印 ✅，否則發 `::error::` 並 `return 1`（`scripts/ci/negative-proof-lib.sh:81-86`）。
+  rc == 期望值才印 ✅，否則發 `::error::` 並 `return 1`（`scripts/ci/negative-proof-lib.sh:81-87`）。
   第 ⑤ 步要證的恰好相反（拿掉 `exit 1` ⇒ 應 **rc=0**）⇒ 每次都對**預期結果**發 `::error::`，
   shell 仍印 ✅ 並 exit 0 —— 一條自我否定、什麼都沒斷言的自證。歷史原文留在同檔 `:184-191`。
 - **修法**：不要借用方向相反的 helper，直接檢查 expected rc（`tests/scripts/test-check-case-conflicts.sh:192-195`）。
@@ -53,16 +53,17 @@
   | `check_channel_consistency.sh`（`go run`，`:8`） | **19.10s** | **0.96s** | Go build cache 冷／熱 |
   | `check_constitution.sh`（`grep -rn … .`，`:149`） | **2.56s** | **1.60s** | 走訪樹大小 |
 
-  長壽 clone 的 `data/` = **864M／8088 檔**，乾淨 worktree = **196K／19 檔**
+  長壽 clone 的 `data/` = **864M／8088 檔**（同日另一次量測 8,132；隨寫入漂移），乾淨 worktree = **196K／19 檔**
   （`du -sh data; find data -type f | wc -l`）⇒ 同一份樹、不同 clone，判決可以相反。
 - **修法**：預算改「**預熱後才計時**」；`go run` 類檢查必須先 warm-up 一輪再開始計時，
   否則 10s 在冷 cache 的乾淨 worktree 也必然誤殺（上表首跑 19.10s 已證）。
+- **登記**：本型已立案 —— `docs/operations/FOLLOWUPS.md:6342`（`FU-20261019-04`，`open`）。
 
 ## 三題（動手前先問）
 
 1. 它量的是**對象**嗎？——是它宣稱的那個產物，還是剛好有 `updated_at` 的另一個？（§1）
 2. 它的**清單／門檻今天還成立**嗎？——**動手前先複驗** ✓；本 repo 同日已有三次「候選缺陷其實早已處理」
-   的紀錄（`docs/operations/FOLLOWUPS.md:6257`）。（§2）
+   的紀錄（`docs/operations/FOLLOWUPS.md:6275`）。（§2）
 3. 它的**判決方向**與**執行環境**有關嗎？——方向看 helper 語意（§3），時間看 clone 大小與 cache（§4）。
 
 ## 延伸：儀器／答題者的「身分」

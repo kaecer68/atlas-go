@@ -1809,7 +1809,7 @@ glob 空集合=紅／**預算覆寫=清單內放寬後綠、放寬後仍超時�
 
 ### FU-20260927-03 — replay 異常**沒有專屬 runbook**：5 條新規則的 `runbook_url` 全指向通用部署文件
 
-- **狀態**：`open`
+- **狀態**：`done`（2026-10-19 收斂；**行號已漂移，實查更正見條文末處置**）
 - **記錄日期**：2026-09-27
 - **來源**：PR #2063（`b1a1ee7d`）交付 5 條 replay 規則後刻意留下的界線（前一 lane 明確記載）。
 - **事實（我實查）**：
@@ -1823,6 +1823,24 @@ glob 空集合=紅／**預算覆寫=清單內放寬後綠、放寬後仍超時�
   把 #2063 PR body 的 triage 步驟（**5 條規則逐條**的立即檢查／判讀前提／補救）整段搬過去,再把 5 處 `runbook_url` 改指它。
   - 與 `FU-20260927-04` 的關係：那張是「指到**不存在**的東西」,這張是「指到存在但**不對**的東西」——兩者都要收斂,但驗收方式不同。
 - **驗收條件**：`docs/operations/` 內存在 replay runbook,且 5 條規則的 `runbook_url` 指向它;`promtool check rules` 與 `scripts/ci/check_markdown_links.sh` RC=0。
+- **處置（2026-10-19，PR 收斂；順序＝先建檔後改 URL，避免造出 `FU-20260927-04` 同型的死鏈＝指到不存在的東西）**：
+  - 新增 `docs/operations/replay-runbook.md`：5 條規則逐條「症狀／可能原因／立即檢查／補救／升級」。
+    「立即檢查」段落**逐字照抄**各規則 `description` annotation（規則作者原文），
+    §9 寫明門檻以規則檔為準（防兩份文字漂移）、§10 列已知限制。
+  - `monitoring/rules/atlas_replay_alerts.yml` 5 處 `runbook_url` 改指該檔（**只改 URL**，
+    規則邏輯／門檻／`for`／labels／annotations 未動 ⇒ diff 5 insertions / 5 deletions）。
+  - 索引登記：`docs/operations/README.md`、`docs/documentation-map.md`（後者是內嵌資源 `docs/map`
+    ⇒ 同步重生成 `cmd/atlas-mcp/server/resources_docs.gen.go`）。
+  - **行號更正（實查；票內 2026-09-27 的數字已漂移）**：規則在 `:93`／`:157`／`:203`／`:236`／`:286`，
+    `runbook_url` 在 `:127`／`:192`／`:225`／`:265`／`:312`。核對條件不變（5 條規則、5 個 URL）。
+  - 驗證（實際輸出）：`grep -ic replay docs/operations/replay-runbook.md` ⇒ `83`；
+    `grep -n runbook_url monitoring/rules/atlas_replay_alerts.yml` ⇒ 5 處皆指 `replay-runbook.md`；
+    `python3 -c "import yaml;yaml.safe_load(open(...))"` ⇒ ok；
+    `promtool check rules monitoring/rules/atlas_replay_alerts.yml`（CI 釘版容器 v3.14.0）⇒ `SUCCESS: 5 rules found`；
+    `scripts/ci/check_markdown_links.sh` 與 `scripts/ci/check_monitoring_single_source.sh`（R4 會 fail-closed 驗新目標存在）皆 RC=0。
+  - **未收斂的殘留（本票範圍外，未另立票；只在此標明界線）**：規則 annotation 與本 runbook 是**兩份文字**,
+    目前**沒有機器檢查內容一致性**（R4 只驗目標存在）；`promtool` 不驗 annotation。
+    方向見 runbook §9：未來縮的是 annotation（只留事件當下必看的三步），不是 runbook。
 
 ---
 
@@ -6232,18 +6250,18 @@ C1／C2 是 0–100 ⇒ 直接接會是**單位錯誤**。
 - **驗收條件**：`session_summary_reconcile` 執行後日誌不再有 `store_backend_empty_default_jsonl`，
   且仍寫入同一條 `<LedgerDir>/sessions/…`。
 
-### FU-20261019-01 — `DualWriteRepository` 的 **PG 側不可注入** ⇒ 錯誤路徑**結構上無法被測**（`FU-20261016-06` 的根因）
+### FU-20261019-01 — 【**已結案／前提不成立**】原稱 `DualWriteRepository` 的 PG 側不可注入 ⇒ 錯誤路徑無法被測
 
-- **狀態**：`open`
-- **記錄日期**：2026-10-19
-- **來源**：`FU-20261016-06`（`Record` 吞錯）修復時發現 ⇒ 修完仍**無法**做突變式負向證明
-- **現況**：`DualWriteRepository`（`internal/repository/dual_write.go`）持有 **具體型別** `*PostgresRepository` ✗
-  ⇒ 測試**無法**讓 PG 寫入失敗 ⇒ `Record` 的錯誤分支（`metricsPGErrorTotal.Add(1)` ＋ `logging.Error`）**無任何測試覆蓋** ✗
-- **為何重要**：★ **這正是吞錯能存活至今的機制** ✓ —— 不是「忘了寫測試」✗，而是**結構上寫不出來** ✓
-  （對照：JSONL 側已是介面 `MetricsStore` ✓ 可注入 ✓ ⇒ 只有 PG 側是例外 ✗）
-- **建議修法**：把 PG 側抽為**窄介面**（例如 `metricRecorder interface{ Record(ctx, name, value, labels) error }` ✓）
-  ⇒ 沿用既有 `MetricsStore` 注入樣式 ✓ ⇒ 即可補「PG 失敗 ⇒ counter＋log」的契約測試 ✓（突變：移除 `Add(1)` ⇒ 必紅 ✓）
-- **範圍**：`internal/repository`（低風險 ✓ 該路徑目前休眠 ✓ 呼叫端僅 `internal/bootstrap` ✓）
+- **狀態**：`done`（★ 2026-10-19 root 更正並結案 —— **登記前未先複驗** ✗，本則與 `FU-20261019-02` 同為「先登記後複驗」的兩個反例 ✓）
+- **真相（實測）**：★ **縫早已存在** ✗⇒✓ —— `PostgresRepository` 的欄位 `pool` **已經是介面** `pgPool`
+  （`internal/repository/postgres_metrics.go:18-23`，其註解**自述** "It is satisfied by *pgxpool.Pool and **enables test doubles for unit tests**" ✓），
+  且測試檔**已有**注入器 `fakePGPool`（`internal/repository/postgres_unit_test.go:21`，含 `execFunc`／`queryRowFunc` ✓）。
+  ⇒ 所以 `FU-20261016-06` 的錯誤分支**是可測的**，**零生產程式碼改動** ✓。
+- **交付**：`#2298` 新增 `internal/repository/dual_write_record_pgfail_test.go`（探針成功 ＋ INSERT 失敗 ⇒ 斷言 counter **必須增加** ✓；
+  ＋ 正向對照「健康 pool 不得增加 counter」✓）。★ **真突變負向證明**：移除 `metricsPGErrorTotal.Add(1)` ⇒ 測試**紅在指名缺陷處**
+  （`PG write failure was swallowed: MetricsPGErrorTotal()=0, want > 0`）⇒ 還原為綠 ✓。
+- **★ 本條留存的價值**：① 「**先登記後複驗**」的反例 ✓ ② 一般化教訓：**「不可測」的宣告本身必須先證** ✗
+  （原判斷只看了型別就下結論 ✗，沒查該型別的**欄位**是否已是介面 ✓）
 
 ### FU-20261019-02 — 【**已撤回／前提不成立**】原先宣稱 `CalibrationArtifactStale` 仍為永久誤報
 
@@ -6320,3 +6338,40 @@ C1／C2 是 0–100 ⇒ 直接接會是**單位錯誤**。
 - [local-deploy.md](local-deploy.md) — 部署與 `.env` 分工（prod DSN 為何不放 `.env`）
 
 ---
+
+### FU-20261019-04 — `ci-quick` 對 `go run` 類檢查用**固定 10s 預算** ⇒ 長壽 clone **假紅** ✗（判決取決於 clone 大小／歷史）
+
+- **狀態**：`open`
+- **記錄日期**：2026-10-19
+- **來源**：`compose-dsn-fix` lane 實測提出 ＋ root 於 PR body 覆核採納 ✓（另一 child 的量測亦同）
+- **現況**：`make ci-gate`／`make ci-full` 的 `ci-quick` 內，`scripts/ci/check_channel_consistency.sh`（`go run ./cmd/check-channel-consistency`）
+  與 `scripts/ci/check_constitution.sh`（`grep -rn --include='*.go' .`）皆為**整棵工作樹掃描** ⇒ 在**長壽 clone**
+  （走過 864MB／8132 檔的 `data/` 樹 ✗）需要 **12.5–30.4s** ⇒ 撞 **10s** 上限而逾時（訊息只印 `❌ FAILED` ✗）；
+  同一份內容放進**乾淨 worktree** ⇒ `check_constitution.sh` 僅 **2.44s** ✓。
+- **為何重要**：★ 這是「守門假訊號」的**第四型** —— **判決取決於 clone 的大小／歷史** ✗。
+  同一份樹在不同 clone 上判決相反 ⇒ 開發者會被**假紅**擋住 push ✗（本日實際擋下 `#2299` 的兩次 push ✗），
+  且容易誘使人用 `--no-verify` 繞過 ✗ ⇒ **侵蝕閘門的可信度** ✓。
+- **建議修法**：把該類檢查的預算改成「**預熱後才計時**」✓（例如先跑一次暖機（含 `go build`／page cache 預熱）不計時，
+  再對**第二次**執行計時 ✓）；或改用**增量／限定範圍**掃描（排除 `data/` ✓）＋ 保留整樹掃描為**非計時**的完整性檢查 ✓。
+- **範圍**：`Makefile`（ci-quick 區段）＋ 兩支檢查腳本 ✓（**不得**藉此放寬任何真閘門 ✗）
+- **暫行**：本日兩次繞過皆已**在 PR body 寫明理由與完整量測** ✓（可稽核 ✓）
+
+
+### FU-20261019-05 — runbook 與告警 annotation **同一段文字存在兩份** ⇒ 必然漂移（目前「內文一致性」**無自動守門**）
+
+- **狀態**：`open`
+- **記錄日期**：2026-10-19
+- **來源**：`#2301`（`FU-20260927-03`）落地時由 root 複核發現 ✓ —— 該 PR **主動**在 runbook §9 誠實記載此風險 ✓
+  （「兩份文字的**內文**是否一致目前**沒有自動守門**，靠 review」✓）
+- **現況**：`#2301` 新增的 replay runbook（docs/operations/replay-runbook.md；**該檔隨 #2301 併入 main，故刻意不加反引號以免 markdown-links 誤判**）
+  其 §4~§8 判讀步驟與 monitoring/rules/atlas_replay_alerts.yml 5 條規則的 `description` annotation **逐字重複 58 行**（>25 字元者 ✓，root 實測）。
+  ★ **刻意如此**（annotation 是事件當下**不需連線**即可讀到的文字 ✓）⇒ **不應改成一邊刪除** ✗；
+  但「兩份必須一致」目前**只有 review 把關** ✗ ⇒ 改規則或改 runbook 時，另一份會靜默過期 ✗（＝守門假訊號「**清單過期**」型的文件版 ✓）。
+- **既有守門**（**不足以覆蓋** ✗）：`scripts/ci/check_monitoring_single_source.py` 的 R4 只檢查 in-repo `/blob/<ref>/<path>` 目標**存在** ✓
+  ⇒ **不檢查內容對應** ✗；`monitoring/tests/atlas_replay_alerts_test.yml` 釘住 `runbook_url` **字面值** ✓
+  ⇒ 改 URL 時 fixture 必須同 commit 同步 ✓，但仍**不管內文** ✗。
+- **建議修法**：新增一條**窄**檢查（或掛進既有 monitoring 檢查 ✓）：把 runbook 內標記為「逐字引用」的區塊
+  （建議在 runbook 用明確的起訖標記包住 ✓）與對應規則的 `description` 段落做**逐字比對** ⇒ 不一致即 **fail-loud** ✓。
+  ★ 驗收必須含**負向對照**（突變：改動 annotation 一個字 ⇒ 檢查必紅 ✓；改 runbook 一字 ⇒ 亦必紅 ✓）。
+  ★ **不得**為了讓它變綠而放寬既有檢查 ✗；也不得把 annotation 清空 ✗（那會喪失離線可讀性 ✓）。
+- **範圍**：`scripts/ci/`（新檢查或既有檢查擴充 ✓）＋ runbook（加引用標記 ✓）＋ `monitoring/tests/`（fixture ✓）
