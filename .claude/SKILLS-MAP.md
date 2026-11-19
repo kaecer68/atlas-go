@@ -61,10 +61,9 @@
 │   ├── atlas-strategy-explain/    # 投資策略解釋
 │   └── atlas-risk-status/         # 風險狀態解讀
 │
-└── 🔗 gitnexus/                   # 6 GitNexus 技能（程式碼智慧工具）
-    ├── gitnexus-cli/  gitnexus-guide/
-    ├── gitnexus-exploring/  gitnexus-impact-analysis/
-    └── gitnexus-debugging/  gitnexus-refactoring/
+└── 🌏 自全域遷入（原 ~/.agents/skills，2026-11-19）
+    ├── atlas-platform-guide/       # Atlas 平台使用入口：知識庫導讀、MCP 工具工作流
+    └── investment-strategy-review/ # 策略評審：L1-L5 訊號、Darwinian 權重、回測結果
 ```
 
 ---
@@ -142,16 +141,14 @@ AI Coding 過程中必用的診斷、防護與迭代安全技能。
 
 ### 🔗 第三方工具（Third-party Tools）
 
-GitNexus 程式碼智慧工具技能。
+GitNexus 程式碼智慧工具技能（`gitnexus-cli` / `exploring` / `debugging` / `refactoring` / `guide` / `impact-analysis`）已於 2026-11-19 移除專案層複本，統一由用戶全域 `~/.claude/skills/` 提供（內容以 2026-11-09 最新版同步至 `~/.agents/skills/`）。各專案透過全域層載入，不在本專案重複維護。
+
+#### 🌏 自全域遷入（原 ~/.agents/skills）
 
 | 技能 | 用途 | 觸發範例 |
 |------|------|---------|
-| `gitnexus-exploring` | 程式碼架構理解 | "How does X work?" |
-| `gitnexus-impact-analysis` | 變更影響分析 | "What breaks if I change X?" |
-| `gitnexus-debugging` | 除錯追踪 | "Why is X failing?" |
-| `gitnexus-refactoring` | 安全重構 | "Rename this function" |
-| `gitnexus-guide` | 工具與 Schema 參考 | "What GitNexus tools available?" |
-| `gitnexus-cli` | CLI 命令操作 | "Index this repo" |
+| `atlas-platform-guide` | Atlas 平台使用入口：知識庫導讀、MCP 工具組合、晨報/風控/策略分析工作流 | "怎麼跑晨報"、"壓力指數" |
+| `investment-strategy-review` | 策略評審：L1-L5 訊號策略、Darwinian 權重、資產配置、回測結果比較 | "評估這個策略"、"回測結果怎樣" |
 
 ---
 
